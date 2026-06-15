@@ -1,4 +1,5 @@
 @parser:name(ChannelDemo)
+@parser:start(joined)
 WS: [ \t\r\n]+ -> @IGNORE;
 COMMENT: "#" [a-zA-Z0-9_ ]* -> @COMMENT;
 FOO: "foo" -> @TOK;

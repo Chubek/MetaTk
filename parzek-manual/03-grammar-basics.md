@@ -48,6 +48,21 @@ NUMBER: [0-9]+;
 expr: NUMBER (("+" | "-") ~ NUMBER)*;
 ```
 
-## Parse entrypoint
+## Parse entrypoint (start symbol)
 
-Generated parser entry uses the first declared rule as the default parse start in current implementation. Keep your intended start rule near top of grammar.
+Parzek resolves parser start symbol with this precedence:
+
+1. `@parser:start(rule-name)` if present
+2. otherwise, first user-defined non-terminal (first syntactic rule)
+3. fallback to first rule if no non-terminal exists
+
+Example with explicit override:
+
+```pzg
+@parser:name(MyGrammar)
+@parser:start(main)
+TOKEN: "x";
+main: TOKEN;
+```
+
+If both the top non-terminal and `@parser:start(...)` exist and differ, the directive wins.

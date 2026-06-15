@@ -218,3 +218,43 @@ root: pair;
   const char* compile_generated = "c++ -std=c++20 -I/home/chubakpdp11/nvme/dslutil -c /tmp/parzek-tests/AdjRuntime-Parzek.cpp -o /tmp/parzek-tests/AdjRuntime-Parzek.o";
   REQUIRE(std::system(compile_generated) == 0);
 }
+
+TEST_CASE("default start symbol is first non-terminal") {
+  auto result = compile_text(R"(
+@parser:name(StartDefault)
+WS: [ \t\r\n]+ -> @IGNORE;
+TOKEN: "x";
+entry: TOKEN;
+other: entry;
+)", "StartDefault");
+  REQUIRE(result.success);
+  std::ifstream in("/tmp/parzek-tests/StartDefault-Parzek.cpp");
+  std::string code((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  REQUIRE(code.find("run_parser(parse_entry(), input)") != std::string::npos);
+}
+
+TEST_CASE("@parser:start overrides top non-terminal") {
+  auto result = compile_text(R"(
+@parser:name(StartOverride)
+@parser:start(other)
+WS: [ \t\r\n]+ -> @IGNORE;
+TOKEN: "x";
+entry: TOKEN;
+other: entry;
+)", "StartOverride");
+  REQUIRE(result.success);
+  std::ifstream in("/tmp/parzek-tests/StartOverride-Parzek.cpp");
+  std::string code((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  REQUIRE(code.find("run_parser(parse_other(), input)") != std::string::npos);
+}
+
+TEST_CASE("@parser:start missing target reports diagnostic") {
+  auto result = compile_text(R"(
+@parser:name(StartBad)
+@parser:start(does-not-exist)
+TOKEN: "x";
+entry: TOKEN;
+)", "StartBad");
+  REQUIRE_FALSE(result.success);
+  REQUIRE_FALSE(result.diagnostics.empty());
+}

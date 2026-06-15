@@ -55,6 +55,7 @@ struct Rule {
 
 struct Grammar {
   std::string parser_name{"Generated"};
+  std::optional<std::string> parser_start;
   std::vector<Rule> rules;
 };
 
@@ -460,14 +461,22 @@ class GrammarParser {
       if (peek().kind == Token::Kind::Channel && peek().text == "@parser") {
         auto save = index_;
         advance();
-        if (match_symbol(":") && peek().kind == Token::Kind::Identifier && peek().text == "name") {
-          advance();
+        if (match_symbol(":") && peek().kind == Token::Kind::Identifier) {
+          auto directive = advance().text;
           if (!expect("(")) return std::nullopt;
-          auto name = expect_identifier();
-          if (name.empty()) return std::nullopt;
+          auto value = expect_identifier();
+          if (value.empty()) return std::nullopt;
           if (!expect(")")) return std::nullopt;
-          grammar.parser_name = name;
-          continue;
+          if (directive == "name") {
+            grammar.parser_name = value;
+            continue;
+          }
+          if (directive == "start") {
+            grammar.parser_start = value;
+            continue;
+          }
+          diag_here("Unsupported @parser directive: " + directive);
+          return std::nullopt;
         }
         index_ = save;
       }
@@ -988,7 +997,15 @@ static std::string make_source(const Grammar& grammar, const std::string& header
     out << "}\n\n";
   }
 
-  const auto start_fn = map_rule_name_to_fn(grammar.rules.front().name);
+  std::string resolved_start = grammar.rules.front().name;
+  auto first_nonterminal = std::find_if(grammar.rules.begin(), grammar.rules.end(), [](const Rule& rule) { return !rule.lexical; });
+  if (first_nonterminal != grammar.rules.end()) {
+    resolved_start = first_nonterminal->name;
+  }
+  if (grammar.parser_start.has_value() && !grammar.parser_start->empty()) {
+    resolved_start = *grammar.parser_start;
+  }
+  const auto start_fn = map_rule_name_to_fn(resolved_start);
   out << "dsl::ParseOutcome<std::string> Parser::parse(std::string_view input) {\n";
   out << "  return dsl::run_parser(parse_" << start_fn << "(), input);\n";
   out << "}\n\n";
@@ -1112,6 +1129,15 @@ CompileResult compile_grammar_string(std::string_view grammar_source,
   GrammarParser parser(std::move(tokens), result, source_name);
   auto grammar = parser.parse();
   if (!grammar || !result.diagnostics.empty()) return result;
+  if (grammar->parser_start.has_value()) {
+    auto found = std::find_if(grammar->rules.begin(), grammar->rules.end(), [&](const Rule& rule) {
+      return rule.name == *grammar->parser_start;
+    });
+    if (found == grammar->rules.end()) {
+      push_diag(result, "Configured @parser:start rule not found: " + *grammar->parser_start, source_name, 1, 1);
+      return result;
+    }
+  }
 
   std::filesystem::path out_dir = options.output_directory.empty() ? "." : options.output_directory;
   std::error_code mk_ec;

@@ -27,6 +27,22 @@ Outputs:
 - `NAME-Parzek.cpp`
 - optional visitor header
 
+## Start symbol selection
+
+You can set start symbol explicitly:
+
+```pzg
+@parser:start(my-start-rule)
+```
+
+Precedence:
+
+1. `@parser:start(...)`
+2. first user-defined non-terminal
+3. first rule fallback
+
+This is applied when emitting generated parser `parse(...)` entrypoint.
+
 ## Library API
 
 In `Parzek.hpp`:

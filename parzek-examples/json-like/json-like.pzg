@@ -1,4 +1,5 @@
 @parser:name(JsonLike)
+@parser:start(object)
 WS: [ \t\r\n]+ -> @IGNORE;
 LBRACE: "{";
 RBRACE: "}";
