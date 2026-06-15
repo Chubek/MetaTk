@@ -32,6 +32,6 @@ install(TARGETS parzek parzek_cli
 
 install(FILES Parzek.hpp DSLUtils.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/dslutils.pc.in
-               ${CMAKE_CURRENT_BINARY_DIR}/dslutils.pc @ONLY)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/dslutils.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/metatk.pc.in
+               ${CMAKE_CURRENT_BINARY_DIR}/metatk.pc @ONLY)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/metatk.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)

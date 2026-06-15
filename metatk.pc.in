@@ -3,7 +3,7 @@ exec_prefix=${prefix}
 libdir=${exec_prefix}/@CMAKE_INSTALL_LIBDIR@
 includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
 
-Name: parzek-dslutils
+Name: metatk-parzek
 Description: Parzek parser generator and DSLUtils integration headers
 Version: @PROJECT_VERSION@
 Libs: -L${libdir} -lparzek

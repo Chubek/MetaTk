@@ -1,105 +1,97 @@
-# Parzek
+# MetaTk
 
-Parzek is a PEG-style parser generator for C++20 projects built on top of `DSLUtils.hpp`.
-It compiles `.pzg` grammars into deterministic parser sources:
+**MetaTk** is a C++ metaprogramming toolkit focused on language tooling.
+It currently ships two core components:
+
+- `DSLUtils.hpp`: a parser-combinator and parsing utility library.
+- `Parzek`: a PEG-style parser generator built on top of `DSLUtils.hpp`.
+
+MetaTk is designed for teams that want to define custom grammars, generate readable C++ parsers, and keep parsing logic composable and testable.
+
+## What MetaTk Includes
+
+### 1) DSLUtils.hpp
+`DSLUtils.hpp` provides reusable parser combinator primitives and parsing utilities, including:
+
+- parser construction helpers
+- sequencing, choice, repetition, and optional composition
+- parse input/state abstractions
+- diagnostics-oriented helpers for clearer parse failures
+
+Use it directly when you want full control over parser construction in C++.
+
+### 2) Parzek
+`Parzek` is MetaTk’s grammar-to-C++ parser generator.
+
+With a `.pzg` grammar, Parzek emits deterministic parser sources:
 
 - `Name-Parzek.hpp`
 - `Name-Parzek.cpp`
 
-## Features
+Parzek supports:
 
-- Library API and CLI executable (`parzek`)
-- Grammar compile from file or in-memory string
-- Optional visitor header generation
-- Preprocessor support (`@define`, substitutions, directives)
-- PEG operators (`|`, `*`, `+`, `?`, grouping)
-- Custom adjacency operator (`~`)
-- Channel-aware behavior with built-in `@IGNORE`
-- Structured diagnostics with source location
+- CLI workflow (compile grammar files)
+- library workflow (compile from files or in-memory strings)
+- optional visitor header generation
+- PEG operators, channels, and predicate-oriented grammar features
 
-## Build
+## Typical Workflow
 
-```bash
-cmake -S . -B build
-cmake --build build -j
-```
+1. Write a grammar file, for example `Foo.pzg`.
+2. Compile it with Parzek.
+3. Build the generated C++ parser in your project.
+4. Parse your domain-specific input using the generated parser.
 
-## Test
-
-```bash
-ctest --test-dir build --output-on-failure
-```
-
-## CLI usage
+Example:
 
 ```bash
 parzek compile Foo.pzg
 parzek compile Foo.pzg --create-visitor=FooVisitor.hpp
 ```
 
-Options:
+## Why MetaTk
 
-- `--output-dir=DIR`
-- `--output-base=NAME`
-- `--stdin`
-- `--help`
+- **Composability**: low-level parser combinators + high-level generator.
+- **Determinism**: generated outputs are stable and readable.
+- **C++-native**: integrates directly with modern C++ projects.
+- **Extensibility**: suitable for DSL compilers, config languages, and code tooling.
 
-## Library API
+## Future Plans: MetaTk Roadmap
 
-Include `Parzek.hpp` and call:
+To evolve MetaTk into a metaprogramming powerhouse, the next five strategic plans are:
 
-- `parzek::compile_grammar_string(...)`
-- `parzek::compile_grammar_file(...)`
+1. **Incremental & IDE-Aware Parsing**  
+   Add incremental parse support, source maps, and editor diagnostics APIs for fast LSP integrations.
 
-Both return `CompileResult`, which includes:
+2. **Typed AST Generation Layer**  
+   Extend Parzek codegen to optionally emit strongly-typed AST node classes, builders, and traversal utilities.
 
-- `success`
-- output paths
-- optional visitor path
-- diagnostics list (`message`, `file`, `line`, `column`, severity)
+3. **Semantic Pass Framework**  
+   Introduce a reusable pass pipeline (name resolution, validation, rewriting) for building full DSL compilers.
 
-## Grammar essentials
+4. **Multi-Target Backend Generation**  
+   Expand generators beyond C++ parsers to include JSON IR, C bindings, and optional Rust-compatible outputs.
 
-Required directive:
+5. **Macro/Meta Expansion Engine**  
+   Build a robust compile-time macro and transformation engine with traceable expansion diagnostics and debug views.
 
-```pzg
-@parser:name(MyParser)
-```
+## Project Layout (Current)
 
-Rule naming:
+- `DSLUtils.hpp` — core parser utility header
+- `Parzek.hpp` / `Parzek.cpp` — parser generator library
+- `main.cpp` — CLI entry for `parzek`
+- `parzek-manual/` — detailed chapters and documentation
+- `parzek-examples/` — feature-focused grammar examples
+- `tests/` — smoke and feature tests
 
-- lexical rules: `ALL_CAPS`
-- syntactic rules: `kebab-case`
+## Contributing
 
-Example:
+Contributions are welcome in these areas:
 
-```pzg
-@parser:name(Calc)
-WS: [ \t\r\n]+ -> @IGNORE;
-NUMBER: [0-9]+ when $0 != '0';
-expr: NUMBER (("+" | "-") ~ NUMBER)*;
-```
+- grammar language ergonomics
+- diagnostics quality and error recovery
+- generated code quality/performance
+- documentation and examples
+- testing and fuzzing coverage
 
-## Preprocessor summary
-
-Parzek preprocesses grammar source before AST parsing, including:
-
-- macro definitions (`@define`)
-- parameter replacement (`#n`, `!#n`, `#n!`, `#@`, `#!`, `##`, `#?`, `#*`)
-- hide-set style recursion control
-- directive family (`@system`, `@exec`, `@eval`, `@printf`, `@sprintf`, `@foreach`)
-
-## Channels and adjacency
-
-- `@IGNORE` content is skippable in ordinary flow
-- `~` forbids ignored-material gap between adjacent terms
-- `CHAN` is available in `when` guards
-
-## Generated code relationship to DSLUtils
-
-Generated parsers are built on `DSLUtils.hpp` combinator primitives and include local helper sugar (`many1`, `between`, `sep_by`, `sep_by1`) only in generated/Parzek-owned files.
-
-## Manual and examples
-
-- Detailed chapters: `parser-manual/`
-- Feature examples: `parser-examples/`
+If you are exploring parser generators, DSL compilers, or language tooling in C++, MetaTk is built to be a practical foundation.
