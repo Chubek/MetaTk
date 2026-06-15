@@ -1,0 +1,6 @@
+@parser:name(ChannelDemo)
+WS: [ \t\r\n]+ -> @IGNORE;
+COMMENT: "#" [a-zA-Z0-9_ ]* -> @COMMENT;
+FOO: "foo" -> @TOK;
+BAR: "bar" -> @TOK;
+joined: FOO ~ BAR when CHAN == @IGNORE;
