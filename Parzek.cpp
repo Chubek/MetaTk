@@ -764,9 +764,17 @@ static std::string make_header(const Grammar& grammar, const std::string& stem) 
   out << "#include <optional>\n";
   out << "#include <string>\n";
   out << "#include <string_view>\n";
-  out << "#include <vector>\n\n";
+  out << "#include <vector>\n";
+  out << "#include <memory>\n\n";
   out << "namespace " << sanitize_symbol(grammar.parser_name) << "_parzek {\n";
   out << "\n";
+  out << "struct ASTNode {\n";
+  out << "  std::string rule_name;\n";
+  out << "  std::string text;\n";
+  out << "  std::vector<std::shared_ptr<ASTNode>> children;\n";
+  out << "  size_t line{1};\n";
+  out << "  size_t column{1};\n";
+  out << "};\n\n";
   out << "struct PredicateContext {\n";
   out << "  std::string file;\n";
   out << "  std::size_t line{1};\n";
@@ -789,9 +797,16 @@ static std::string make_header(const Grammar& grammar, const std::string& stem) 
   out << "struct Parser {\n";
   out << "  explicit Parser(std::string source_name = \"<input>\");\n";
   out << "  dsl::ParseOutcome<std::string> parse(std::string_view input);\n";
+  out << "  std::shared_ptr<ASTNode> parse_ast(std::string_view input);\n";
   out << "\n";
   for (const auto& rule : grammar.rules) {
     out << "  dsl::Parser<std::string> parse_" << map_rule_name_to_fn(rule.name) << "();\n";
+  }
+  out << "\n";
+  for (const auto& rule : grammar.rules) {
+    if (!rule.lexical) {
+      out << "  std::shared_ptr<ASTNode> parse_" << map_rule_name_to_fn(rule.name) << "_ast();\n";
+    }
   }
   out << "\n";
   out << " private:\n";
@@ -930,11 +945,13 @@ static std::string make_source(const Grammar& grammar, const std::string& header
   out << "  return dsl::parser([p](dsl::ParsecInput& in)->dsl::ExpectedResult<std::vector<T>>{\n";
   out << "    auto first = p(in);\n";
   out << "    if (!first) return dsl::ExpectedResult<std::vector<T>>::failure(first.error.pos, first.error.kind, first.error.expected);\n";
-  out << "    auto rest = (*p)(in);\n";
-  out << "    if (!rest) return dsl::ExpectedResult<std::vector<T>>::failure(rest.error.pos, rest.error.kind, rest.error.expected);\n";
   out << "    std::vector<T> out;\n";
   out << "    out.push_back(*first);\n";
-  out << "    out.insert(out.end(), rest->begin(), rest->end());\n";
+  out << "    while (true) {\n";
+  out << "      auto next = p(in);\n";
+  out << "      if (!next) break;\n";
+  out << "      out.push_back(*next);\n";
+  out << "    }\n";
   out << "    return out;\n";
   out << "  });\n";
   out << "}\n";
@@ -1009,23 +1026,72 @@ static std::string make_source(const Grammar& grammar, const std::string& header
   out << "dsl::ParseOutcome<std::string> Parser::parse(std::string_view input) {\n";
   out << "  return dsl::run_parser(parse_" << start_fn << "(), input);\n";
   out << "}\n\n";
+  
+  out << "std::shared_ptr<ASTNode> Parser::parse_ast(std::string_view input) {\n";
+  out << "  dsl::ParsecInput in(input);\n";
+  out << "  active_input_ = &in;\n";
+  out << "  auto result = parse_" << start_fn << "_ast();\n";
+  out << "  active_input_ = nullptr;\n";
+  out << "  return result;\n";
+  out << "}\n\n";
+  
+  for (const auto& rule : grammar.rules) {
+    if (!rule.lexical) {
+      out << "std::shared_ptr<ASTNode> Parser::parse_" << map_rule_name_to_fn(rule.name) << "_ast() {\n";
+      out << "  auto node = std::make_shared<ASTNode>();\n";
+      out << "  node->rule_name = \"" << rule.name << "\";\n";
+      out << "  node->line = ctx_.line;\n";
+      out << "  node->column = ctx_.column;\n";
+      out << "  auto result = parse_" << map_rule_name_to_fn(rule.name) << "()(*active_input_);\n";
+      out << "  if (result) {\n";
+      out << "    node->text = *result;\n";
+      out << "  }\n";
+      out << "  return node;\n";
+      out << "}\n\n";
+    }
+  }
 
   out << "}\n";
   return out.str();
 }
 
-static std::string make_visitor_header(const Grammar& grammar, const std::string& visitor_name) {
+static std::string make_visitor_header(const Grammar& grammar, const std::string& visitor_name, const std::string& parser_header_name) {
   std::ostringstream out;
   out << "#pragma once\n\n";
-  out << "#include <string>\n\n";
+  out << "#include \"" << parser_header_name << "\"\n\n";
+  
+  out << "namespace " << sanitize_symbol(grammar.parser_name) << "_parzek {\n\n";
+  
   out << "struct " << sanitize_symbol(visitor_name) << " {\n";
   out << "  virtual ~" << sanitize_symbol(visitor_name) << "() = default;\n";
+  out << "  virtual void visit(const ASTNode& node);\n";
+  out << "  virtual void enter_node(const ASTNode& node) {}\n";
+  out << "  virtual void exit_node(const ASTNode& node) {}\n";
   for (const auto& rule : grammar.rules) {
     if (!rule.lexical) {
-      out << "  virtual void visit_" << map_rule_name_to_fn(rule.name) << "(const std::string&) {}\n";
+      out << "  virtual void visit_" << map_rule_name_to_fn(rule.name) << "(const ASTNode& node) {}\n";
     }
   }
   out << "};\n";
+  
+  out << "\nvoid " << sanitize_symbol(visitor_name) << "::visit(const ASTNode& node) {\n";
+  out << "  enter_node(node);\n";
+  bool first = true;
+  for (const auto& rule : grammar.rules) {
+    if (!rule.lexical) {
+      out << "  " << (first ? "" : "else ") << "if (node.rule_name == \"" << rule.name << "\") {\n";
+      out << "    visit_" << map_rule_name_to_fn(rule.name) << "(node);\n";
+      out << "  }\n";
+      first = false;
+    }
+  }
+  out << "  for (const auto& child : node.children) {\n";
+  out << "    if (child) visit(*child);\n";
+  out << "  }\n";
+  out << "  exit_node(node);\n";
+  out << "}\n\n";
+  
+  out << "}\n";
   return out.str();
 }
 
@@ -1162,7 +1228,7 @@ CompileResult compile_grammar_string(std::string_view grammar_source,
 
   if (options.visitor_header) {
     std::filesystem::path visitor_path = out_dir / *options.visitor_header;
-    auto visitor = make_visitor_header(*grammar, std::filesystem::path(*options.visitor_header).stem().string());
+    auto visitor = make_visitor_header(*grammar, std::filesystem::path(*options.visitor_header).stem().string(), header_path.filename().string());
     if (!write_text_file(visitor_path, visitor, result, source_name)) return result;
     result.visitor_header_path = visitor_path.string();
   }

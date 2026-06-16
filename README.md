@@ -49,6 +49,17 @@ parzek compile Foo.pzg
 parzek compile Foo.pzg --create-visitor=FooVisitor.hpp
 ```
 
+## Visitor Pattern Support
+
+Parzek generates visitor infrastructure for traversing and acting on parsed AST nodes:
+
+- AST nodes include rule name, text, children, and source location
+- Base visitor class with per-rule visit methods
+- Automatic tree traversal with enter/exit hooks
+- Extensible for semantic analysis, transformation, and code generation
+
+See `parzek-examples/ini/README_VISITOR.md` for detailed usage examples.
+
 ## Why MetaTk
 
 - **Composability**: low-level parser combinators + high-level generator.
