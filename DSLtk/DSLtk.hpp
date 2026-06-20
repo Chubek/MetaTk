@@ -1,12 +1,12 @@
 /**
- * @file DSLUtils.hpp
+ * @file DSLtk.hpp
  * @brief Header-only DSL construction toolkit for modern C++ (C++20)
  *
  * ============================================================
  *  OVERVIEW
  * ============================================================
  *
- * DSLUtils.hpp provides a set of composable "feature mixins" that you
+ * DSLtk.hpp provides a set of composable "feature mixins" that you
  * attach to a CRTP base class to build Domain-Specific Languages entirely
  * in headers, with zero runtime overhead where possible.
  *
@@ -38,10 +38,10 @@
  *
  * Step 3 — Expose to users via a thin wrapper header (mydsl.hpp):
  *
- *   #include "DSLUtils.hpp"
+ *   #include "DSLtk.hpp"
  *   struct MathDSL : dsl::DSL<MathDSL, dsl::Pipeline, dsl::Operators> { ... };
  *
- * Users only include mydsl.hpp — they never see DSLUtils.hpp directly.
+ * Users only include mydsl.hpp — they never see DSLtk.hpp directly.
  *
  * ============================================================
  *  FEATURE REFERENCE
@@ -339,7 +339,7 @@
  *
  *   - C++20 or later (uses concepts, NTTPs, constexpr lambdas)
  *   - No external dependencies
- *   - Header-only: just #include "DSLUtils.hpp"
+ *   - Header-only: just #include "DSLtk.hpp"
  * ============================================================
  */
 
