@@ -1,0 +1,1004 @@
+So, this is the `MetaTk` directory structure:
+
+```tree
+.
+├── CMakeLists.txt
+├── DSLtk
+│   ├── CMakeLists.txt
+│   ├── DSLtk.hpp
+│   ├── examples
+│   │   ├── 01-basic-usage.cpp
+│   │   ├── 02-fixed-strings.cpp
+│   │   ├── 03-pattern-simple.cpp
+│   │   ├── 04-pattern-classes.cpp
+│   │   ├── 05-parser-basics.cpp
+│   │   ├── 06-parser-composition.cpp
+│   │   ├── 07-parser-optional-repeat-choice.cpp
+│   │   ├── 08-ast-creation.cpp
+│   │   ├── 09-ast-traversal.cpp
+│   │   ├── 10-rewrite-basics.cpp
+│   │   ├── 11-rewrite-composition.cpp
+│   │   ├── 12-expression-templates.cpp
+│   │   ├── 13-evaluation-flow.cpp
+│   │   ├── 14-small-calculator-dsl.cpp
+│   │   ├── 15-tokenize-parse-integration.cpp
+│   │   ├── 16-diagnostics-errors.cpp
+│   │   ├── 17-compiletime-runtime-tradeoffs.cpp
+│   │   └── 18-mini-dsl.cpp
+│   └── manual
+│       ├── 01-introduction.md
+│       ├── 02-installation-and-layout.md
+│       ├── 03-core-design.md
+│       ├── 04-fixed-strings-and-compile-time-tools.md
+│       ├── 05-pattern-matching-and-static-regex.md
+│       ├── 06-parser-combinators.md
+│       ├── 07-ast-model.md
+│       ├── 08-rewriting.md
+│       ├── 09-expression-templates.md
+│       ├── 10-building-a-small-dsl.md
+│       ├── 11-error-handling-and-diagnostics.md
+│       ├── 12-performance-and-compile-time-costs.md
+│       ├── 13-extension-patterns.md
+│       └── 14-reference-and-cheat-sheet.md
+├── EkippX
+│   ├── CMakeLists.txt
+│   ├── DSLtk.hpp -> ./DSLtk/DSLtk.hpp
+│   ├── EkippX-Batteries.hpp
+│   ├── EkippX-CLI.cpp
+│   ├── EkippX.hpp
+│   ├── EkippX-PluginAPI.hpp
+│   ├── EkippX.syntax
+│   ├── examples
+│   ├── manifests
+│   │   ├── ekippx-api.yaml
+│   │   ├── ekippx-batteries.yaml
+│   │   └── ekippx-plugin-api.yaml
+│   └── manual
+├── LICENSE
+├── metatk.pc.in
+├── Parzek
+│   ├── CMakeLists.txt
+│   ├── DSLtk.hpp -> ./DSLtk/DSLtk.hpp
+│   ├── examples
+│   │   ├── arithmetic
+│   │   │   ├── arithmetic.pzg
+│   │   │   ├── README.md
+│   │   │   └── sample.txt
+│   │   ├── channels
+│   │   │   ├── channels.pzg
+│   │   │   ├── README.md
+│   │   │   └── sample.txt
+│   │   ├── ini
+│   │   │   ├── ini.pzg
+│   │   │   ├── README.md
+│   │   │   └── sample.txt
+│   │   ├── json-like
+│   │   │   ├── json-like.pzg
+│   │   │   ├── README.md
+│   │   │   └── sample.txt
+│   │   └── predicates
+│   │       ├── predicates.pzg
+│   │       ├── README.md
+│   │       └── sample.txt
+│   ├── main.cpp
+│   ├── manual
+│   │   ├── 01-introduction.md
+│   │   ├── 02-installation-and-build.md
+│   │   ├── 03-grammar-basics.md
+│   │   ├── 04-lexical-rules-and-channels.md
+│   │   ├── 05-peg-operators-and-joining.md
+│   │   ├── 06-predicates-meta-variables-and-helpers.md
+│   │   ├── 07-code-generation-cli-and-library-api.md
+│   │   └── 08-visitors-testing-and-bootstrapping.md
+│   ├── Parzek.cpp
+│   └── Parzek.hpp
+├── README.md
+├── tests
+│   ├── fuzz
+│   │   ├── findings
+│   │   │   ├── 1
+│   │   │   │   └── default
+│   │   │   │       ├── cmdline
+│   │   │   │       ├── fastresume.bin
+│   │   │   │       ├── fuzz_bitmap
+│   │   │   │       ├── fuzzer_setup
+│   │   │   │       ├── fuzzer_stats
+│   │   │   │       ├── plot_data
+│   │   │   │       ├── queue
+│   │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+│   │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+│   │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+│   │   │   │       └── target_hash
+│   │   │   ├── 10
+│   │   │   │   └── default
+│   │   │   │       ├── cmdline
+│   │   │   │       ├── fastresume.bin
+│   │   │   │       ├── fuzz_bitmap
+│   │   │   │       ├── fuzzer_setup
+│   │   │   │       ├── fuzzer_stats
+│   │   │   │       ├── plot_data
+│   │   │   │       ├── queue
+│   │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+│   │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+│   │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+│   │   │   │       └── target_hash
+│   │   │   ├── 11
+│   │   │   │   └── default
+│   │   │   │       ├── cmdline
+│   │   │   │       ├── fastresume.bin
+│   │   │   │       ├── fuzz_bitmap
+│   │   │   │       ├── fuzzer_setup
+│   │   │   │       ├── fuzzer_stats
+│   │   │   │       ├── plot_data
+│   │   │   │       ├── queue
+│   │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+│   │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+│   │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+│   │   │   │       └── target_hash
+│   │   │   ├── 12
+│   │   │   │   └── default
+│   │   │   │       ├── cmdline
+│   │   │   │       ├── fastresume.bin
+│   │   │   │       ├── fuzz_bitmap
+│   │   │   │       ├── fuzzer_setup
+│   │   │   │       ├── fuzzer_stats
+│   │   │   │       ├── plot_data
+│   │   │   │       ├── queue
+│   │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+│   │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+│   │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+│   │   │   │       └── target_hash
+│   │   │   ├── 13
+│   │   │   │   └── default
+│   │   │   │       ├── cmdline
+│   │   │   │       ├── fastresume.bin
+│   │   │   │       ├── fuzz_bitmap
+│   │   │   │       ├── fuzzer_setup
+│   │   │   │       ├── fuzzer_stats
+│   │   │   │       ├── plot_data
+│   │   │   │       ├── queue
+│   │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+│   │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+│   │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+│   │   │   │       └── target_hash
+│   │   │   ├── 14
+│   │   │   │   └── default
+│   │   │   │       ├── cmdline
+│   │   │   │       ├── fastresume.bin
+│   │   │   │       ├── fuzz_bitmap
+│   │   │   │       ├── fuzzer_setup
+│   │   │   │       ├── fuzzer_stats
+│   │   │   │       ├── plot_data
+│   │   │   │       ├── queue
+│   │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+│   │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+│   │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+│   │   │   │       └── target_hash
+│   │   │   ├── 15
+│   │   │   │   └── default
+│   │   │   │       ├── cmdline
+│   │   │   │       ├── fastresume.bin
+│   │   │   │       ├── fuzz_bitmap
+│   │   │   │       ├── fuzzer_setup
+│   │   │   │       ├── fuzzer_stats
+│   │   │   │       ├── plot_data
+│   │   │   │       ├── queue
+│   │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+│   │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+│   │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+│   │   │   │       └── target_hash
+│   │   │   ├── 2
+│   │   │   │   └── default
+│   │   │   │       ├── cmdline
+│   │   │   │       ├── fastresume.bin
+│   │   │   │       ├── fuzz_bitmap
+│   │   │   │       ├── fuzzer_setup
+│   │   │   │       ├── fuzzer_stats
+│   │   │   │       ├── plot_data
+│   │   │   │       ├── queue
+│   │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+│   │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+│   │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+│   │   │   │       └── target_hash
+│   │   │   ├── 3
+│   │   │   │   └── default
+│   │   │   │       ├── cmdline
+│   │   │   │       ├── fastresume.bin
+│   │   │   │       ├── fuzz_bitmap
+│   │   │   │       ├── fuzzer_setup
+│   │   │   │       ├── fuzzer_stats
+│   │   │   │       ├── plot_data
+│   │   │   │       ├── queue
+│   │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+│   │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+│   │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+│   │   │   │       └── target_hash
+│   │   │   ├── 4
+│   │   │   │   └── default
+│   │   │   │       ├── cmdline
+│   │   │   │       ├── fastresume.bin
+│   │   │   │       ├── fuzz_bitmap
+│   │   │   │       ├── fuzzer_setup
+│   │   │   │       ├── fuzzer_stats
+│   │   │   │       ├── plot_data
+│   │   │   │       ├── queue
+│   │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+│   │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+│   │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+│   │   │   │       └── target_hash
+│   │   │   ├── 5
+│   │   │   │   └── default
+│   │   │   │       ├── cmdline
+│   │   │   │       ├── fastresume.bin
+│   │   │   │       ├── fuzz_bitmap
+│   │   │   │       ├── fuzzer_setup
+│   │   │   │       ├── fuzzer_stats
+│   │   │   │       ├── plot_data
+│   │   │   │       ├── queue
+│   │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+│   │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+│   │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+│   │   │   │       └── target_hash
+│   │   │   ├── 6
+│   │   │   │   └── default
+│   │   │   │       ├── cmdline
+│   │   │   │       ├── fastresume.bin
+│   │   │   │       ├── fuzz_bitmap
+│   │   │   │       ├── fuzzer_setup
+│   │   │   │       ├── fuzzer_stats
+│   │   │   │       ├── plot_data
+│   │   │   │       ├── queue
+│   │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+│   │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+│   │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+│   │   │   │       └── target_hash
+│   │   │   ├── 7
+│   │   │   │   └── default
+│   │   │   │       ├── cmdline
+│   │   │   │       ├── fastresume.bin
+│   │   │   │       ├── fuzz_bitmap
+│   │   │   │       ├── fuzzer_setup
+│   │   │   │       ├── fuzzer_stats
+│   │   │   │       ├── plot_data
+│   │   │   │       ├── queue
+│   │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+│   │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+│   │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+│   │   │   │       └── target_hash
+│   │   │   ├── 8
+│   │   │   │   └── default
+│   │   │   │       ├── cmdline
+│   │   │   │       ├── fastresume.bin
+│   │   │   │       ├── fuzz_bitmap
+│   │   │   │       ├── fuzzer_setup
+│   │   │   │       ├── fuzzer_stats
+│   │   │   │       ├── plot_data
+│   │   │   │       ├── queue
+│   │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+│   │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+│   │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+│   │   │   │       └── target_hash
+│   │   │   └── 9
+│   │   │       └── default
+│   │   │           ├── cmdline
+│   │   │           ├── fastresume.bin
+│   │   │           ├── fuzz_bitmap
+│   │   │           ├── fuzzer_setup
+│   │   │           ├── fuzzer_stats
+│   │   │           ├── plot_data
+│   │   │           ├── queue
+│   │   │           │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+│   │   │           │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+│   │   │           │   └── id:000002,time:0,execs:0,orig:seed3.txt
+│   │   │           └── target_hash
+│   │   ├── fuzz_parser_10.cpp
+│   │   ├── fuzz_parser_11.cpp
+│   │   ├── fuzz_parser_12.cpp
+│   │   ├── fuzz_parser_13.cpp
+│   │   ├── fuzz_parser_14.cpp
+│   │   ├── fuzz_parser_15.cpp
+│   │   ├── fuzz_parser_1.cpp
+│   │   ├── fuzz_parser_2.cpp
+│   │   ├── fuzz_parser_3.cpp
+│   │   ├── fuzz_parser_4.cpp
+│   │   ├── fuzz_parser_5.cpp
+│   │   ├── fuzz_parser_6.cpp
+│   │   ├── fuzz_parser_7.cpp
+│   │   ├── fuzz_parser_8.cpp
+│   │   ├── fuzz_parser_9.cpp
+│   │   └── seeds
+│   │       ├── seed1.txt
+│   │       ├── seed2.txt
+│   │       └── seed3.txt
+│   ├── test_parzek.cpp
+│   ├── test_parzek_features.cpp
+│   └── unit
+│       └── test_parser.cpp
+└── third_party
+    ├── PikoRL
+    │   ├── bindings
+    │   │   ├── GenerateBindings.py
+    │   │   └── PikoRL.i
+    │   ├── cmake
+    │   │   ├── pikorl.pc.in
+    │   │   └── QaMRppLibraryLinking.cmake
+    │   ├── CMakeLists.txt
+    │   ├── docs
+    │   │   ├── CMakeLists.txt
+    │   │   ├── Doxyfile.in
+    │   │   ├── FrontPage.md
+    │   │   └── manual
+    │   │       ├── Chapter-1.md
+    │   │       ├── Chapter-2.md
+    │   │       ├── Chapter-3.md
+    │   │       ├── Chapter-4.md
+    │   │       ├── Chapter-5.md
+    │   │       ├── Chapter-6.md
+    │   │       ├── Chapter-7.md
+    │   │       └── Chapter-8.md
+    │   ├── examples
+    │   │   ├── bundle
+    │   │   │   ├── demo_bundle
+    │   │   │   │   ├── bundle.pikorl
+    │   │   │   │   ├── colors.lua
+    │   │   │   │   ├── demo.run
+    │   │   │   │   ├── entrypoint.sh
+    │   │   │   │   ├── history.lua
+    │   │   │   │   ├── macros.lua
+    │   │   │   │   ├── MANIFEST.json
+    │   │   │   │   ├── package.sh
+    │   │   │   │   ├── syntax.lua
+    │   │   │   │   ├── theme.lua
+    │   │   │   │   └── web.lua
+    │   │   │   ├── demo_bundle2
+    │   │   │   │   ├── bundle.pikorl
+    │   │   │   │   ├── colors.lua
+    │   │   │   │   ├── demo.run
+    │   │   │   │   ├── entrypoint.sh
+    │   │   │   │   ├── history.lua
+    │   │   │   │   ├── macros.lua
+    │   │   │   │   ├── MANIFEST.json
+    │   │   │   │   ├── package.sh
+    │   │   │   │   ├── syntax.lua
+    │   │   │   │   ├── theme.lua
+    │   │   │   │   └── web.lua
+    │   │   │   └── demo_bundle3
+    │   │   │       ├── colors.lua
+    │   │   │       ├── ddrv
+    │   │   │       ├── demo.run
+    │   │   │       ├── entrypoint.sh
+    │   │   │       ├── history.lua
+    │   │   │       ├── macros.lua
+    │   │   │       ├── MANIFEST.json
+    │   │   │       ├── package.sh
+    │   │   │       ├── syntax.lua
+    │   │   │       ├── theme.lua
+    │   │   │       └── web.lua
+    │   │   ├── PythonRL
+    │   │   │   ├── completions.lua
+    │   │   │   ├── directives.lua
+    │   │   │   ├── MANIFEST.json
+    │   │   │   ├── menu.lua
+    │   │   │   ├── Python.idl
+    │   │   │   └── syntax.lua
+    │   │   └── RubyRL
+    │   │       ├── colors.lua
+    │   │       ├── history.lua
+    │   │       ├── macros.lua
+    │   │       ├── MANIFEST.json
+    │   │       ├── syntax.lua
+    │   │       ├── theme.lua
+    │   │       └── web.lua
+    │   ├── pikorl-cli.cpp
+    │   ├── PikoRL.hpp
+    │   ├── qamrpp-lpikorl
+    │   │   ├── CMakeLists.txt
+    │   │   ├── colors.c
+    │   │   ├── completion.c
+    │   │   ├── directive.c
+    │   │   ├── help.c
+    │   │   ├── history.c
+    │   │   ├── idl.c
+    │   │   ├── lpikorl.c
+    │   │   ├── lpikorl.h
+    │   │   ├── macros.c
+    │   │   ├── menu.c
+    │   │   ├── page.c
+    │   │   ├── prompt.c
+    │   │   ├── sandboxing.c
+    │   │   ├── syntax.c
+    │   │   ├── theme.c
+    │   │   └── web.c
+    │   ├── README.md
+    │   ├── syntax-generator.py
+    │   └── third_party
+    │       ├── DSLUtils
+    │       │   ├── Doxyfile
+    │       │   ├── DSLUtils.hpp
+    │       │   ├── examples
+    │       │   │   ├── 01-basic-usage.cpp
+    │       │   │   ├── 02-fixed-strings.cpp
+    │       │   │   ├── 03-pattern-simple.cpp
+    │       │   │   ├── 04-pattern-classes.cpp
+    │       │   │   ├── 05-parser-basics.cpp
+    │       │   │   ├── 06-parser-composition.cpp
+    │       │   │   ├── 07-parser-optional-repeat-choice.cpp
+    │       │   │   ├── 08-ast-creation.cpp
+    │       │   │   ├── 09-ast-traversal.cpp
+    │       │   │   ├── 10-rewrite-basics.cpp
+    │       │   │   ├── 11-rewrite-composition.cpp
+    │       │   │   ├── 12-expression-templates.cpp
+    │       │   │   ├── 13-evaluation-flow.cpp
+    │       │   │   ├── 14-small-calculator-dsl.cpp
+    │       │   │   ├── 15-tokenize-parse-integration.cpp
+    │       │   │   ├── 16-diagnostics-errors.cpp
+    │       │   │   ├── 17-compiletime-runtime-tradeoffs.cpp
+    │       │   │   └── 18-mini-dsl.cpp
+    │       │   ├── LICENSE
+    │       │   ├── manual
+    │       │   │   ├── 01-introduction.md
+    │       │   │   ├── 02-installation-and-layout.md
+    │       │   │   ├── 03-core-design.md
+    │       │   │   ├── 04-fixed-strings-and-compile-time-tools.md
+    │       │   │   ├── 05-pattern-matching-and-static-regex.md
+    │       │   │   ├── 06-parser-combinators.md
+    │       │   │   ├── 07-ast-model.md
+    │       │   │   ├── 08-rewriting.md
+    │       │   │   ├── 09-expression-templates.md
+    │       │   │   ├── 10-building-a-small-dsl.md
+    │       │   │   ├── 11-error-handling-and-diagnostics.md
+    │       │   │   ├── 12-performance-and-compile-time-costs.md
+    │       │   │   ├── 13-extension-patterns.md
+    │       │   │   └── 14-reference-and-cheat-sheet.md
+    │       │   ├── README.md
+    │       │   └── tests
+    │       │       ├── fuzz
+    │       │       │   ├── findings
+    │       │       │   │   ├── 1
+    │       │       │   │   │   └── default
+    │       │       │   │   │       ├── cmdline
+    │       │       │   │   │       ├── fastresume.bin
+    │       │       │   │   │       ├── fuzz_bitmap
+    │       │       │   │   │       ├── fuzzer_setup
+    │       │       │   │   │       ├── fuzzer_stats
+    │       │       │   │   │       ├── plot_data
+    │       │       │   │   │       ├── queue
+    │       │       │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+    │       │       │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+    │       │       │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+    │       │       │   │   │       └── target_hash
+    │       │       │   │   ├── 10
+    │       │       │   │   │   └── default
+    │       │       │   │   │       ├── cmdline
+    │       │       │   │   │       ├── fastresume.bin
+    │       │       │   │   │       ├── fuzz_bitmap
+    │       │       │   │   │       ├── fuzzer_setup
+    │       │       │   │   │       ├── fuzzer_stats
+    │       │       │   │   │       ├── plot_data
+    │       │       │   │   │       ├── queue
+    │       │       │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+    │       │       │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+    │       │       │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+    │       │       │   │   │       └── target_hash
+    │       │       │   │   ├── 11
+    │       │       │   │   │   └── default
+    │       │       │   │   │       ├── cmdline
+    │       │       │   │   │       ├── fastresume.bin
+    │       │       │   │   │       ├── fuzz_bitmap
+    │       │       │   │   │       ├── fuzzer_setup
+    │       │       │   │   │       ├── fuzzer_stats
+    │       │       │   │   │       ├── plot_data
+    │       │       │   │   │       ├── queue
+    │       │       │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+    │       │       │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+    │       │       │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+    │       │       │   │   │       └── target_hash
+    │       │       │   │   ├── 12
+    │       │       │   │   │   └── default
+    │       │       │   │   │       ├── cmdline
+    │       │       │   │   │       ├── fastresume.bin
+    │       │       │   │   │       ├── fuzz_bitmap
+    │       │       │   │   │       ├── fuzzer_setup
+    │       │       │   │   │       ├── fuzzer_stats
+    │       │       │   │   │       ├── plot_data
+    │       │       │   │   │       ├── queue
+    │       │       │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+    │       │       │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+    │       │       │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+    │       │       │   │   │       └── target_hash
+    │       │       │   │   ├── 13
+    │       │       │   │   │   └── default
+    │       │       │   │   │       ├── cmdline
+    │       │       │   │   │       ├── fastresume.bin
+    │       │       │   │   │       ├── fuzz_bitmap
+    │       │       │   │   │       ├── fuzzer_setup
+    │       │       │   │   │       ├── fuzzer_stats
+    │       │       │   │   │       ├── plot_data
+    │       │       │   │   │       ├── queue
+    │       │       │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+    │       │       │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+    │       │       │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+    │       │       │   │   │       └── target_hash
+    │       │       │   │   ├── 14
+    │       │       │   │   │   └── default
+    │       │       │   │   │       ├── cmdline
+    │       │       │   │   │       ├── fastresume.bin
+    │       │       │   │   │       ├── fuzz_bitmap
+    │       │       │   │   │       ├── fuzzer_setup
+    │       │       │   │   │       ├── fuzzer_stats
+    │       │       │   │   │       ├── plot_data
+    │       │       │   │   │       ├── queue
+    │       │       │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+    │       │       │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+    │       │       │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+    │       │       │   │   │       └── target_hash
+    │       │       │   │   ├── 15
+    │       │       │   │   │   └── default
+    │       │       │   │   │       ├── cmdline
+    │       │       │   │   │       ├── fastresume.bin
+    │       │       │   │   │       ├── fuzz_bitmap
+    │       │       │   │   │       ├── fuzzer_setup
+    │       │       │   │   │       ├── fuzzer_stats
+    │       │       │   │   │       ├── plot_data
+    │       │       │   │   │       ├── queue
+    │       │       │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+    │       │       │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+    │       │       │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+    │       │       │   │   │       └── target_hash
+    │       │       │   │   ├── 2
+    │       │       │   │   │   └── default
+    │       │       │   │   │       ├── cmdline
+    │       │       │   │   │       ├── fastresume.bin
+    │       │       │   │   │       ├── fuzz_bitmap
+    │       │       │   │   │       ├── fuzzer_setup
+    │       │       │   │   │       ├── fuzzer_stats
+    │       │       │   │   │       ├── plot_data
+    │       │       │   │   │       ├── queue
+    │       │       │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+    │       │       │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+    │       │       │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+    │       │       │   │   │       └── target_hash
+    │       │       │   │   ├── 3
+    │       │       │   │   │   └── default
+    │       │       │   │   │       ├── cmdline
+    │       │       │   │   │       ├── fastresume.bin
+    │       │       │   │   │       ├── fuzz_bitmap
+    │       │       │   │   │       ├── fuzzer_setup
+    │       │       │   │   │       ├── fuzzer_stats
+    │       │       │   │   │       ├── plot_data
+    │       │       │   │   │       ├── queue
+    │       │       │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+    │       │       │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+    │       │       │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+    │       │       │   │   │       └── target_hash
+    │       │       │   │   ├── 4
+    │       │       │   │   │   └── default
+    │       │       │   │   │       ├── cmdline
+    │       │       │   │   │       ├── fastresume.bin
+    │       │       │   │   │       ├── fuzz_bitmap
+    │       │       │   │   │       ├── fuzzer_setup
+    │       │       │   │   │       ├── fuzzer_stats
+    │       │       │   │   │       ├── plot_data
+    │       │       │   │   │       ├── queue
+    │       │       │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+    │       │       │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+    │       │       │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+    │       │       │   │   │       └── target_hash
+    │       │       │   │   ├── 5
+    │       │       │   │   │   └── default
+    │       │       │   │   │       ├── cmdline
+    │       │       │   │   │       ├── fastresume.bin
+    │       │       │   │   │       ├── fuzz_bitmap
+    │       │       │   │   │       ├── fuzzer_setup
+    │       │       │   │   │       ├── fuzzer_stats
+    │       │       │   │   │       ├── plot_data
+    │       │       │   │   │       ├── queue
+    │       │       │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+    │       │       │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+    │       │       │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+    │       │       │   │   │       └── target_hash
+    │       │       │   │   ├── 6
+    │       │       │   │   │   └── default
+    │       │       │   │   │       ├── cmdline
+    │       │       │   │   │       ├── fastresume.bin
+    │       │       │   │   │       ├── fuzz_bitmap
+    │       │       │   │   │       ├── fuzzer_setup
+    │       │       │   │   │       ├── fuzzer_stats
+    │       │       │   │   │       ├── plot_data
+    │       │       │   │   │       ├── queue
+    │       │       │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+    │       │       │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+    │       │       │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+    │       │       │   │   │       └── target_hash
+    │       │       │   │   ├── 7
+    │       │       │   │   │   └── default
+    │       │       │   │   │       ├── cmdline
+    │       │       │   │   │       ├── fastresume.bin
+    │       │       │   │   │       ├── fuzz_bitmap
+    │       │       │   │   │       ├── fuzzer_setup
+    │       │       │   │   │       ├── fuzzer_stats
+    │       │       │   │   │       ├── plot_data
+    │       │       │   │   │       ├── queue
+    │       │       │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+    │       │       │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+    │       │       │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+    │       │       │   │   │       └── target_hash
+    │       │       │   │   ├── 8
+    │       │       │   │   │   └── default
+    │       │       │   │   │       ├── cmdline
+    │       │       │   │   │       ├── fastresume.bin
+    │       │       │   │   │       ├── fuzz_bitmap
+    │       │       │   │   │       ├── fuzzer_setup
+    │       │       │   │   │       ├── fuzzer_stats
+    │       │       │   │   │       ├── plot_data
+    │       │       │   │   │       ├── queue
+    │       │       │   │   │       │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+    │       │       │   │   │       │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+    │       │       │   │   │       │   └── id:000002,time:0,execs:0,orig:seed3.txt
+    │       │       │   │   │       └── target_hash
+    │       │       │   │   └── 9
+    │       │       │   │       └── default
+    │       │       │   │           ├── cmdline
+    │       │       │   │           ├── fastresume.bin
+    │       │       │   │           ├── fuzz_bitmap
+    │       │       │   │           ├── fuzzer_setup
+    │       │       │   │           ├── fuzzer_stats
+    │       │       │   │           ├── plot_data
+    │       │       │   │           ├── queue
+    │       │       │   │           │   ├── id:000000,time:0,execs:0,orig:seed1.txt
+    │       │       │   │           │   ├── id:000001,time:0,execs:0,orig:seed2.txt
+    │       │       │   │           │   └── id:000002,time:0,execs:0,orig:seed3.txt
+    │       │       │   │           └── target_hash
+    │       │       │   ├── fuzz_parser_10.cpp
+    │       │       │   ├── fuzz_parser_11.cpp
+    │       │       │   ├── fuzz_parser_12.cpp
+    │       │       │   ├── fuzz_parser_13.cpp
+    │       │       │   ├── fuzz_parser_14.cpp
+    │       │       │   ├── fuzz_parser_15.cpp
+    │       │       │   ├── fuzz_parser_1.cpp
+    │       │       │   ├── fuzz_parser_2.cpp
+    │       │       │   ├── fuzz_parser_3.cpp
+    │       │       │   ├── fuzz_parser_4.cpp
+    │       │       │   ├── fuzz_parser_5.cpp
+    │       │       │   ├── fuzz_parser_6.cpp
+    │       │       │   ├── fuzz_parser_7.cpp
+    │       │       │   ├── fuzz_parser_8.cpp
+    │       │       │   ├── fuzz_parser_9.cpp
+    │       │       │   └── seeds
+    │       │       │       ├── seed1.txt
+    │       │       │       ├── seed2.txt
+    │       │       │       └── seed3.txt
+    │       │       └── unit
+    │       │           └── test_parser.cpp
+    │       ├── IPCtk
+    │       │   ├── dest
+    │       │   │   ├── C.itkd
+    │       │   │   ├── Python.itkd
+    │       │   │   └── Ruby.itkd
+    │       │   ├── DSLUtils.hpp
+    │       │   ├── IPCtk.hpp
+    │       │   ├── LICENSE
+    │       │   ├── manual
+    │       │   │   └── Manual.md
+    │       │   ├── README.md
+    │       │   └── tests
+    │       │       ├── fuzz
+    │       │       │   ├── fuzz_case_10.cpp
+    │       │       │   ├── fuzz_case_11.cpp
+    │       │       │   ├── fuzz_case_12.cpp
+    │       │       │   ├── fuzz_case_13.cpp
+    │       │       │   ├── fuzz_case_14.cpp
+    │       │       │   ├── fuzz_case_15.cpp
+    │       │       │   ├── fuzz_case_16.cpp
+    │       │       │   ├── fuzz_case_17.cpp
+    │       │       │   ├── fuzz_case_18.cpp
+    │       │       │   ├── fuzz_case_19.cpp
+    │       │       │   ├── fuzz_case_1.cpp
+    │       │       │   ├── fuzz_case_20.cpp
+    │       │       │   ├── fuzz_case_2.cpp
+    │       │       │   ├── fuzz_case_3.cpp
+    │       │       │   ├── fuzz_case_4.cpp
+    │       │       │   ├── fuzz_case_5.cpp
+    │       │       │   ├── fuzz_case_6.cpp
+    │       │       │   ├── fuzz_case_7.cpp
+    │       │       │   ├── fuzz_case_8.cpp
+    │       │       │   ├── fuzz_case_9.cpp
+    │       │       │   ├── fuzz_target.cpp
+    │       │       │   ├── seed_10.txt
+    │       │       │   ├── seed_11.txt
+    │       │       │   ├── seed_12.txt
+    │       │       │   ├── seed_13.txt
+    │       │       │   ├── seed_14.txt
+    │       │       │   ├── seed_15.txt
+    │       │       │   ├── seed_16.txt
+    │       │       │   ├── seed_17.txt
+    │       │       │   ├── seed_18.txt
+    │       │       │   ├── seed_19.txt
+    │       │       │   ├── seed_1.txt
+    │       │       │   ├── seed_20.txt
+    │       │       │   ├── seed_2.txt
+    │       │       │   ├── seed_3.txt
+    │       │       │   ├── seed_4.txt
+    │       │       │   ├── seed_5.txt
+    │       │       │   ├── seed_6.txt
+    │       │       │   ├── seed_7.txt
+    │       │       │   ├── seed_8.txt
+    │       │       │   └── seed_9.txt
+    │       │       └── unit
+    │       │           ├── test_10.cpp
+    │       │           ├── test_11.cpp
+    │       │           ├── test_12.cpp
+    │       │           ├── test_13.cpp
+    │       │           ├── test_14.cpp
+    │       │           ├── test_15.cpp
+    │       │           ├── test_16.cpp
+    │       │           ├── test_17.cpp
+    │       │           ├── test_18.cpp
+    │       │           ├── test_19.cpp
+    │       │           ├── test_1.cpp
+    │       │           ├── test_20.cpp
+    │       │           ├── test_21.cpp
+    │       │           ├── test_22.cpp
+    │       │           ├── test_23.cpp
+    │       │           ├── test_24.cpp
+    │       │           ├── test_25.cpp
+    │       │           ├── test_2.cpp
+    │       │           ├── test_3.cpp
+    │       │           ├── test_4.cpp
+    │       │           ├── test_5.cpp
+    │       │           ├── test_6.cpp
+    │       │           ├── test_7.cpp
+    │       │           ├── test_8.cpp
+    │       │           ├── test_9.cpp
+    │       │           └── test_main.cpp
+    │       ├── libarchive
+    │       ├── makeself
+    │       ├── mpc-parsec
+    │       │   ├── examples
+    │       │   │   ├── book.doge
+    │       │   │   ├── doge.c
+    │       │   │   ├── fib.smallc
+    │       │   │   ├── foobar.c
+    │       │   │   ├── line_reader.c
+    │       │   │   ├── lispy.c
+    │       │   │   ├── maths.c
+    │       │   │   ├── minimal.smallc
+    │       │   │   ├── prelude.lspy
+    │       │   │   ├── readme.maths
+    │       │   │   ├── simple.maths
+    │       │   │   ├── smallc.c
+    │       │   │   ├── so_c.doge
+    │       │   │   └── tree_traversal.c
+    │       │   ├── LICENSE.md
+    │       │   ├── Makefile
+    │       │   ├── mpc.c
+    │       │   ├── mpc.h
+    │       │   ├── mpc.pc
+    │       │   ├── package.json
+    │       │   ├── README.md
+    │       │   └── tests
+    │       │       ├── combinators.c
+    │       │       ├── digits.txt
+    │       │       ├── grammar.c
+    │       │       ├── maths.grammar
+    │       │       ├── ptest.c
+    │       │       ├── ptest.h
+    │       │       ├── regex.c
+    │       │       └── test.c
+    │       ├── QaMRpp
+    │       │   ├── cli
+    │       │   │   ├── CMakeLists.txt
+    │       │   │   ├── qamrpp-assembler.cpp
+    │       │   │   ├── qamrpp-cli.cpp
+    │       │   │   ├── qamrpp.cpp
+    │       │   │   └── qamrpp-linker.cpp
+    │       │   ├── cmake
+    │       │   │   └── qamrpp.pc.in
+    │       │   ├── CMakeLists.txt
+    │       │   ├── docs
+    │       │   │   ├── ABI-Checklist.md
+    │       │   │   └── QaMRpp-Guide.md
+    │       │   ├── examples
+    │       │   │   ├── api_linker.cpp
+    │       │   │   ├── api_load_stdlib.cpp
+    │       │   │   ├── api_plugins.cpp
+    │       │   │   ├── api_register_native.cpp
+    │       │   │   ├── api_run_string.cpp
+    │       │   │   ├── lua_hello.lua
+    │       │   │   ├── lua_math.lua
+    │       │   │   └── lua_require_like.lua
+    │       │   ├── LICENSE
+    │       │   ├── plugins
+    │       │   │   ├── QaMRpp-CCBackend.hpp
+    │       │   │   ├── QaMRpp-Compile2Bytecode.cpp
+    │       │   │   ├── QaMRpp-Compile2Bytecode.hpp
+    │       │   │   ├── QaMRpp-Compile2C.cpp
+    │       │   │   ├── QaMRpp-Compile2C.hpp
+    │       │   │   ├── QaMRpp-Dump.hpp
+    │       │   │   ├── QaMRpp-PrintAST.hpp
+    │       │   │   ├── QaMRpp-QBF.hpp
+    │       │   │   ├── QaMRpp-Readline.hpp
+    │       │   │   └── QaMRpp-Serialize2JSON.hpp
+    │       │   ├── QaMRpp.hpp
+    │       │   ├── QaMRpp-Library.c
+    │       │   ├── QaMRpp-Library.h
+    │       │   ├── QaMRpp-Plugin.hpp
+    │       │   ├── README.md
+    │       │   ├── stdlib
+    │       │   │   ├── coroutine.c
+    │       │   │   ├── coroutine.cpp
+    │       │   │   ├── debug.c
+    │       │   │   ├── debug.cpp
+    │       │   │   ├── io.c
+    │       │   │   ├── io.cpp
+    │       │   │   ├── MANIFEST.json
+    │       │   │   ├── math.c
+    │       │   │   ├── math.cpp
+    │       │   │   ├── os.c
+    │       │   │   ├── os.cpp
+    │       │   │   ├── package.c
+    │       │   │   ├── package.cpp
+    │       │   │   ├── string.c
+    │       │   │   ├── string.cpp
+    │       │   │   ├── table.c
+    │       │   │   ├── table.cpp
+    │       │   │   ├── utf8.c
+    │       │   │   └── utf8.cpp
+    │       │   ├── tests
+    │       │   │   ├── a.lua
+    │       │   │   ├── b.lua
+    │       │   │   ├── linker_tests
+    │       │   │   ├── linker_tests.cpp
+    │       │   │   ├── no_lib_tests
+    │       │   │   ├── no_lib_tests.cpp
+    │       │   │   ├── scripts
+    │       │   │   │   ├── 01_arith.lua
+    │       │   │   │   ├── 02_logic.lua
+    │       │   │   │   ├── 03_compare.lua
+    │       │   │   │   ├── 04_table_literal.lua
+    │       │   │   │   ├── 05_table_set.lua
+    │       │   │   │   ├── 06_if_elseif.lua
+    │       │   │   │   ├── 07_while.lua
+    │       │   │   │   ├── 08_for_numeric.lua
+    │       │   │   │   ├── 09_for_step.lua
+    │       │   │   │   ├── 10_local_scope.lua
+    │       │   │   │   ├── 11_fn_def.lua
+    │       │   │   │   ├── 12_fn_expr.lua
+    │       │   │   │   ├── 13_method_call.lua
+    │       │   │   │   ├── 14_call_sugar_string.lua
+    │       │   │   │   ├── 15_call_sugar_table.lua
+    │       │   │   │   ├── 16_return_multi.lua
+    │       │   │   │   ├── 17_multi_assign.lua
+    │       │   │   │   ├── 18_multi_assign_expand_last.lua
+    │       │   │   │   ├── 19_generic_for_table.lua
+    │       │   │   │   ├── 20_generic_for_singlevar.lua
+    │       │   │   │   ├── 21_metatable_index.lua
+    │       │   │   │   ├── 22_metatable_newindex.lua
+    │       │   │   │   ├── 23_metamethod_add.lua
+    │       │   │   │   ├── 24_metamethod_call.lua
+    │       │   │   │   └── 25_require_linker.lua
+    │       │   │   ├── stdlib_load_tests
+    │       │   │   ├── stdlib_load_tests.cpp
+    │       │   │   └── tmp_link.lua
+    │       │   └── tests.cpp
+    │       └── SerdeTk
+    │           ├── cmake
+    │           │   └── serdetk.pc.in
+    │           ├── CMakeLists.txt
+    │           ├── docs
+    │           │   ├── chapter01-overview.rst
+    │           │   ├── chapter02-data-model.rst
+    │           │   ├── chapter03-formats-io.rst
+    │           │   ├── chapter04-create-edit.rst
+    │           │   ├── chapter05-print-minify.rst
+    │           │   ├── chapter06-query-engines.rst
+    │           │   ├── chapter07-validation.rst
+    │           │   ├── chapter08-convert-binarize.rst
+    │           │   ├── chapter09-json-reference.rst
+    │           │   ├── chapter10-other-formats.rst
+    │           │   ├── chapter11-sktl-itkd.rst
+    │           │   ├── chapter12-extensibility-testing.rst
+    │           │   ├── CMakeLists.txt
+    │           │   └── index.rst
+    │           ├── DSLUtils.hpp
+    │           ├── samples
+    │           │   ├── JSON
+    │           │   │   ├── infrstructure-config.json
+    │           │   │   ├── scientific-dataset.json
+    │           │   │   └── weird-edge-cases.json
+    │           │   ├── S-Expr
+    │           │   │   ├── compiler-ir.sexp
+    │           │   │   ├── config-format.sexp
+    │           │   │   └── lisp-ast.sexp
+    │           │   └── XML
+    │           │       ├── enterprise-data.xml
+    │           │       ├── mixed-content-cdata.xml
+    │           │       └── namespaces.xml
+    │           ├── SerdeTk.hpp
+    │           ├── std
+    │           │   ├── binary
+    │           │   │   ├── BSON.sktl
+    │           │   │   └── MessagePack.sktl
+    │           │   └── textual
+    │           │       ├── JSON.sktl
+    │           │       ├── S-Expr.sktl
+    │           │       ├── XML.sktl
+    │           │       └── YAML.sktl
+    │           └── test
+    │               ├── CMakeLists.txt
+    │               ├── corpus
+    │               │   └── parser
+    │               │       ├── xml_attr_slash.xml
+    │               │       ├── xml_cdata.xml
+    │               │       ├── xml_doctype.xml
+    │               │       └── xml_pi_inside.xml
+    │               ├── fuzz
+    │               │   └── fuzz_azmaidl_parser.c
+    │               └── unit
+    │                   └── test_parser_workflow.cpp
+    └── SerdeTk
+        ├── AzmaTest
+        ├── cmake
+        │   └── serdetk.pc.in
+        ├── CMakeLists.txt
+        ├── docs
+        │   ├── chapter01-overview.rst
+        │   ├── chapter02-data-model.rst
+        │   ├── chapter03-formats-io.rst
+        │   ├── chapter04-create-edit.rst
+        │   ├── chapter05-print-minify.rst
+        │   ├── chapter06-query-engines.rst
+        │   ├── chapter07-validation.rst
+        │   ├── chapter08-convert-binarize.rst
+        │   ├── chapter09-json-reference.rst
+        │   ├── chapter10-other-formats.rst
+        │   ├── chapter11-sktl-itkd.rst
+        │   ├── chapter12-extensibility-testing.rst
+        │   ├── CMakeLists.txt
+        │   └── index.rst
+        ├── DSLUtils.hpp
+        ├── samples
+        │   ├── JSON
+        │   │   ├── infrstructure-config.json
+        │   │   ├── scientific-dataset.json
+        │   │   └── weird-edge-cases.json
+        │   ├── S-Expr
+        │   │   ├── compiler-ir.sexp
+        │   │   ├── config-format.sexp
+        │   │   └── lisp-ast.sexp
+        │   └── XML
+        │       ├── enterprise-data.xml
+        │       ├── mixed-content-cdata.xml
+        │       └── namespaces.xml
+        ├── SerdeTk.hpp
+        ├── std
+        │   ├── binary
+        │   │   ├── BSON.sktl
+        │   │   ├── CBOR.sktl
+        │   │   └── MessagePack.sktl
+        │   └── textual
+        │       ├── JSON.sktl
+        │       ├── S-Expr.sktl
+        │       ├── XML.sktl
+        │       └── YAML.sktl
+        └── test
+            ├── CMakeLists.txt
+            ├── corpus
+            │   └── parser
+            │       ├── xml_attr_slash.xml
+            │       ├── xml_cdata.xml
+            │       ├── xml_doctype.xml
+            │       └── xml_pi_inside.xml
+            ├── fuzz
+            │   └── fuzz_azmaidl_parser.c
+            └── unit
+                ├── test_parser_workflow.cpp
+                └── test_serdetk_regressions.cpp
+
+185 directories, 808 files
+```
+
+I want you to write me `AGENTS.md` for implementing:
+- `EkippX/EkippX.hpp`
+- `EkippX/EkippX-Plugin.hpp`
+- `Ek`
