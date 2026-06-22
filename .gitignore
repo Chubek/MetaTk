@@ -236,10 +236,6 @@ site/
 
 bazel-*
 
-*.yaml
-*.json
-*.xml
-
 AGENTS.md
 html
 latex
