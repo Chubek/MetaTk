@@ -70,3 +70,10 @@ Testing/
 
 AGENTS.md
 *.sarif
+
+# Doc builds
+docs/build
+docs/generated
+docs/build_*
+docs/build-*
+docs/sphinx

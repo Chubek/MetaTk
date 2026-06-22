@@ -1,0 +1,9 @@
+PROJECT_NAME           = "EkippX"
+OUTPUT_DIRECTORY       = @CMAKE_CURRENT_BINARY_DIR@/doxygen
+GENERATE_XML           = YES
+XML_OUTPUT             = xml
+GENERATE_HTML          = NO
+INPUT                  = @CMAKE_CURRENT_SOURCE_DIR@/../EkippX.hpp @CMAKE_CURRENT_SOURCE_DIR@/../EkippX-Batteries.hpp @CMAKE_CURRENT_SOURCE_DIR@/../EkippX-PluginAPI.hpp @CMAKE_CURRENT_SOURCE_DIR@/../EkippX-Plugin.hpp
+RECURSIVE              = NO
+EXTRACT_ALL            = YES
+QUIET                  = YES

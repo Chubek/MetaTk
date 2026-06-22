@@ -88,23 +88,23 @@ public:
 
     // Bootstrap the lpicorl table in Lua space
     ctx.run (
-        "local function __lpikorl_nil() return nil end "
+        "function __lpikorl_nil() return nil end "
         "lpicorl = {"
         " prompt = lpicorl_prompt or __lpikorl_nil,"
         " plugin = lpicorl_plugin,"
-        " syntax = lpicorl_syntax or __lpikorl_nil,"
+        " syntax = __lpikorl_nil,"
         " directive = lpicorl_directive or __lpikorl_nil,"
-        " completion = lpicorl_completion or __lpikorl_nil,"
-        " help = lpicorl_help or __lpikorl_nil,"
-        " history = lpicorl_history or __lpikorl_nil,"
-        " menu = lpicorl_menu or __lpikorl_nil,"
-        " page = lpicorl_page or __lpikorl_nil,"
-        " idl = lpicorl_idl or __lpikorl_nil,"
-        " theme = lpicorl_theme or __lpikorl_nil,"
-        " colors = lpicorl_colors or __lpikorl_nil,"
-        " macros = lpicorl_macros or __lpikorl_nil,"
-        " web = lpicorl_web or __lpikorl_nil,"
-        " sandboxing = lpicorl_sandboxing or __lpikorl_nil"
+        " completion = __lpikorl_nil,"
+        " help = __lpikorl_nil,"
+        " history = __lpikorl_nil,"
+        " menu = __lpikorl_nil,"
+        " page = __lpikorl_nil,"
+        " idl = __lpikorl_nil,"
+        " theme = __lpikorl_nil,"
+        " colors = __lpikorl_nil,"
+        " macros = __lpikorl_nil,"
+        " web = __lpikorl_nil,"
+        " sandboxing = __lpikorl_nil"
         " }");
 
     (void)load_example_bundle ("examples/PythonRL");
