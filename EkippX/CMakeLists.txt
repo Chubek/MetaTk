@@ -10,27 +10,31 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(NOT TARGET DSLtk::dsltk)
+  add_subdirectory(../DSLtk ${CMAKE_CURRENT_BINARY_DIR}/_deps/DSLtk)
+endif()
+
 add_library(ekippx INTERFACE)
 target_include_directories(ekippx
   INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../DSLtk>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../third_party/Klyspec>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../third_party/SerdeTk/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../third_party/PikoRL>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../third_party/PikoRL/third_party>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
+target_link_libraries(ekippx INTERFACE DSLtk::dsltk)
 target_compile_features(ekippx INTERFACE cxx_std_20)
 add_library(EkippX::ekippx ALIAS ekippx)
+add_library(EkippX::EkippX ALIAS ekippx)
 
 add_executable(ekippx-cli EkippX-CLI.cpp KlyspecBridge.cpp PikoRLBridge.cpp)
 target_link_libraries(ekippx-cli PRIVATE ekippx)
 target_include_directories(ekippx-cli PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/..
-  ${CMAKE_CURRENT_SOURCE_DIR}/../DSLtk
   ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/Klyspec
   ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/SerdeTk/include
   ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/PikoRL
@@ -53,18 +57,15 @@ set(EKIPPX_PLUGIN_HEADERS
   ${CMAKE_CURRENT_SOURCE_DIR}/plugins/TextPlugin.hpp
 )
 
-install(TARGETS ekippx-cli RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(TARGETS ekippx EXPORT EkippXTargets)
+install(TARGETS ekippx-cli
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+install(TARGETS ekippx
+  EXPORT EkippXTargets
+  INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
 install(FILES ${EKIPPX_PUBLIC_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/EkippX)
 install(FILES ${EKIPPX_PLUGIN_HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/EkippX/plugins)
-install(FILES
-  ${CMAKE_CURRENT_SOURCE_DIR}/../DSLtk/DSLtk.hpp
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/DSLtk
-)
-install(FILES
-  ${CMAKE_CURRENT_SOURCE_DIR}/../DSLtk/DSLtk.hpp
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
 install(FILES
   ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/SerdeTk/include/SerdeTk.hpp
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
