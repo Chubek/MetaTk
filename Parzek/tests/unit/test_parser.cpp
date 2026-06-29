@@ -1,4 +1,4 @@
-#include "../../DSLUtils.hpp"
+#include "DSLUtils.hpp"
 #include <catch2/catch_test_macros.hpp>
 
 TEST_CASE("ParsecInput primitives") {
