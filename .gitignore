@@ -245,3 +245,5 @@ def
 markdown
 
 *.diff
+
+_agents_old/
