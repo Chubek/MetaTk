@@ -1,3 +1,11 @@
+/**
+ * @file KlyspecBridge.cpp
+ * @brief Small adapter between EkippX CLI option structures and Klyspec argument parsing.
+ *
+ * The bridge centralizes command-line vocabulary so the CLI, tests, and manual
+ * describe one option model. Parsing errors are surfaced as structured values for
+ * the caller to render.
+ */
 #include "KlyspecBridge.hpp"
 
 #include "Klyspec.hpp"

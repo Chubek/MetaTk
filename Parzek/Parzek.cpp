@@ -1,3 +1,12 @@
+/**
+ * @file Parzek.cpp
+ * @brief Parzek grammar tokenizer, parser, preprocessor, code generator, and CLI implementation.
+ *
+ * This translation unit contains the internal grammar AST, preprocessor state,
+ * parser combinators, C++ emitter, and command-line entry point used by the
+ * public functions declared in Parzek.hpp. Internal helpers report errors through
+ * CompileResult diagnostics instead of terminating the process.
+ */
 #include "Parzek.hpp"
 
 #include "DSLtk.hpp"

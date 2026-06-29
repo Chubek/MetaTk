@@ -1,3 +1,17 @@
+/**
+ * @file EkippX-Batteries.hpp
+ * @brief Standard EkippX directives, functions, expanders, and conditionals.
+ *
+ * The batteries layer installs portable text, numeric, path, CSV, conditional,
+ * include, symbol, and diagnostic helpers into a caller-supplied Context. It is
+ * the canonical baseline used by examples, tests, the CLI, and the REPL. Hosts
+ * that require a smaller trusted surface may register individual functions
+ * manually instead of calling register_all().
+ *
+ * @section ekippx_batteries_policy Policy
+ * Batteries obey CompileOptions limits and include policy. Filesystem-facing
+ * helpers reject traversal outside configured roots when sandboxing is active.
+ */
 #pragma once
 
 #include "EkippX-Plugin.hpp"

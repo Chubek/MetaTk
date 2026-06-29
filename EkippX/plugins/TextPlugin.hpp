@@ -1,3 +1,11 @@
+/**
+ * @file TextPlugin.hpp
+ * @brief Example EkippX plugin implementing the text macro pack.
+ *
+ * The plugin exposes a descriptor plus registration function for static loading.
+ * Handlers register through the public PluginAPI and operate on the host-owned
+ * Context without taking ownership of runtime state.
+ */
 #pragma once
 
 #include "EkippX/EkippX-Plugin.hpp"

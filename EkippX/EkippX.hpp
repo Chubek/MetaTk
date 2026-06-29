@@ -1,3 +1,24 @@
+/**
+ * @file EkippX.hpp
+ * @brief Core EkippX macro-expansion runtime, parser facade, diagnostics, and context API.
+ *
+ * This header defines the value model, source-location model, diagnostics,
+ * invocation descriptors, macro registry, expansion context, tracing records,
+ * serialization helpers, and convenience entry points used by both embedders and
+ * the command-line executable. The API is intentionally host-owned: callers keep
+ * control of input buffers, filesystem policy, include roots, plugin loading,
+ * recursion limits, and diagnostic collection.
+ *
+ * @section ekippx_core_lifetime Lifetime
+ * Context objects own registered directives, functions, expanders, conditionals,
+ * symbols, and macros. Invocations borrow their argument strings for the duration
+ * of a callback. Returned strings are value-owned by the caller.
+ *
+ * @section ekippx_core_errors Error behavior
+ * Recoverable failures are reported through Diagnostic values and status codes.
+ * Programming or policy violations may throw Error-derived exceptions. Public
+ * helpers prefer deterministic diagnostics over process termination.
+ */
 #pragma once
 
 #include "DSLtk/DSLtk.hpp"

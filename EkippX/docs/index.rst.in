@@ -1,0 +1,16 @@
+EkippX Documentation
+====================
+
+.. mdinclude:: frontpage.md
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Manual
+
+   manual/index.md
+
+.. toctree::
+   :maxdepth: 2
+   :caption: API
+
+   api/library_root

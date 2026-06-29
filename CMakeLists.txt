@@ -39,6 +39,8 @@ if(METATK_ENABLE_EKIPPX)
   add_subdirectory(EkippX)
 endif()
 
+add_subdirectory(docs)
+
 set(METATK_INSTALL_CMAKEDIR ${CMAKE_INSTALL_LIBDIR}/cmake/MetaTk)
 
 set(METATK_AVAILABLE_COMPONENTS)

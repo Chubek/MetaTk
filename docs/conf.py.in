@@ -1,0 +1,17 @@
+import os
+import sys
+project = "MetaTk"
+extensions = ["breathe", "exhale"]
+source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
+master_doc = "index"
+html_theme = "alabaster"
+breathe_projects = {"MetaTk": os.path.join(r"@CMAKE_CURRENT_BINARY_DIR@", "doxygen", "xml")}
+breathe_default_project = "MetaTk"
+exhale_args = {
+    "containmentFolder": "./api",
+    "rootFileName": "library_root.rst",
+    "rootFileTitle": "MetaTk API Reference",
+    "doxygenStripFromPath": r"@CMAKE_CURRENT_SOURCE_DIR@/..",
+    "createTreeView": True,
+}
+exclude_patterns = ["_build"]

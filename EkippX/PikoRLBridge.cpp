@@ -1,3 +1,10 @@
+/**
+ * @file PikoRLBridge.cpp
+ * @brief PikoRL integration layer for the EkippX interactive REPL.
+ *
+ * The bridge exposes expansion, trace inspection, and symbol-table inspection as
+ * host callbacks while preserving the same Context used by batch execution.
+ */
 #include "EkippX-Batteries.hpp"
 
 #include "PikoRL.hpp"

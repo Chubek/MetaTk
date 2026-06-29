@@ -1,3 +1,17 @@
+/**
+ * @file EkippX-PluginAPI.hpp
+ * @brief Static plugin registration API for extending EkippX contexts.
+ *
+ * The plugin API separates descriptor metadata, compatibility checks, capability
+ * negotiation, atomic handlers, hook handlers, and runtime registration. Plugins
+ * receive a Registrar and PluginContext during initialization and never own the
+ * host Context. This keeps lifecycle, diagnostics, and policy enforcement in the
+ * embedding application.
+ *
+ * @section ekippx_plugin_errors Error behavior
+ * Registration conflicts and rejected capabilities throw PluginError-derived
+ * exceptions. Compatibility reports should be used for user-facing load errors.
+ */
 #pragma once
 
 #include "EkippX.hpp"

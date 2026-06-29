@@ -127,3 +127,5 @@ if(BUILD_TESTING)
   target_link_libraries(ekippx-tests PRIVATE ekippx)
   add_test(NAME ekippx-tests COMMAND ekippx-tests)
 endif()
+
+add_subdirectory(docs)

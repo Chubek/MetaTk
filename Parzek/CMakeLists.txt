@@ -92,3 +92,5 @@ if(BUILD_TESTING)
   add_test(NAME parzek-tests COMMAND parzek-tests)
 
 endif()
+
+add_subdirectory(docs)

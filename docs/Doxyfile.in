@@ -1,7 +1,7 @@
-PROJECT_NAME           = "EkippX"
-PROJECT_BRIEF          = "EkippX API and manual reference"
+PROJECT_NAME           = "MetaTk"
+PROJECT_BRIEF          = "MetaTk API and manual reference"
 OUTPUT_DIRECTORY       = @CMAKE_CURRENT_BINARY_DIR@/doxygen
-INPUT                  = @CMAKE_CURRENT_SOURCE_DIR@/frontpage.md @CMAKE_CURRENT_SOURCE_DIR@/../EkippX.hpp @CMAKE_CURRENT_SOURCE_DIR@/../EkippX-Batteries.hpp @CMAKE_CURRENT_SOURCE_DIR@/../EkippX-PluginAPI.hpp @CMAKE_CURRENT_SOURCE_DIR@/../EkippX-Plugin.hpp @CMAKE_CURRENT_SOURCE_DIR@/../EkippX-CLI.cpp @CMAKE_CURRENT_SOURCE_DIR@/../KlyspecBridge.hpp @CMAKE_CURRENT_SOURCE_DIR@/../KlyspecBridge.cpp @CMAKE_CURRENT_SOURCE_DIR@/../PikoRLBridge.cpp @CMAKE_CURRENT_SOURCE_DIR@/../plugins @CMAKE_CURRENT_SOURCE_DIR@/manual
+INPUT                  = @CMAKE_CURRENT_SOURCE_DIR@/frontpage.md @CMAKE_CURRENT_SOURCE_DIR@/../DSLtk @CMAKE_CURRENT_SOURCE_DIR@/../EkippX @CMAKE_CURRENT_SOURCE_DIR@/../Parzek @CMAKE_CURRENT_SOURCE_DIR@/manual
 RECURSIVE              = YES
 FILE_PATTERNS          = *.hpp *.h *.cpp *.md
 USE_MDFILE_AS_MAINPAGE = @CMAKE_CURRENT_SOURCE_DIR@/frontpage.md

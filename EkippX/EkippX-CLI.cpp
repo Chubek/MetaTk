@@ -1,3 +1,13 @@
+/**
+ * @file EkippX-CLI.cpp
+ * @brief Command-line driver for batch expansion, evaluation, tracing, symbol dumps, and REPL mode.
+ *
+ * The executable constructs a batteries-enabled Context, applies Klyspec-backed
+ * command-line options, optionally loads static example plugins, expands input
+ * from files or inline expressions, and delegates interactive sessions to the
+ * PikoRL bridge. All user-visible failures are translated into diagnostics and
+ * non-zero process status codes.
+ */
 #include "EkippX-Batteries.hpp"
 #include "KlyspecBridge.hpp"
 
