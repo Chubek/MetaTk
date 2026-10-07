@@ -1,12 +1,12 @@
 # DSLtk — A Manual
 
-This directory contains the complete twenty-eight-chapter manual for **DSLtk**,
+This directory contains the complete twenty-nine-chapter manual for **DSLtk**,
 the header-only Domain-Specific Language construction toolkit for modern C++
 (C++20). The library is distributed as a single header, `DSLtk.hpp`, and the
 manual documents every public type, free function, feature tag, and helper it
 exposes.
 
-The manual is organised into twelve parts that progress from foundational
+The manual is organised into thirteen parts that progress from foundational
 concepts through to the most advanced subsystems. Readers new to the library
 should begin with Chapter 1 and read sequentially; experienced readers may use
 the table of contents below to jump directly to the feature they need.
@@ -76,6 +76,10 @@ the table of contents below to jump directly to the feature they need.
 
 - [Chapter 27 — The PEG Definition Grammar: Rules and Channels](ch27-peg-definition.md)
 - [Chapter 28 — PEG Combinators, `PEGMatch`, and the `PEGMatcher`](ch28-peg-combinators-matcher.md)
+
+### Part XIII — Enum Reflection
+
+- [Chapter 29 — Enum Reflection, Flags, Dispatch, and Containers](ch29-enum-reflection.md)
 
 ## Building the Manual
 

@@ -13,6 +13,16 @@ target_include_directories(DSLtk
 
 target_compile_features(DSLtk INTERFACE cxx_std_20)
 
+if(BUILD_TESTING)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
+
+if(BUILD_EXAMPLES)
+    add_executable(dsltk_enum_reflection_example examples/25-enum-reflection.cpp)
+    target_link_libraries(dsltk_enum_reflection_example PRIVATE DSLtk)
+endif()
+
 install(
     FILES DSLtk.hpp
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
@@ -90,4 +100,3 @@ install(
         "${CMAKE_CURRENT_BINARY_DIR}/DSLtkConfig.cmake"
     DESTINATION lib/cmake/DSLtk
 )
-
