@@ -1,15 +1,28 @@
 # DSLtk — A Manual
 
-This directory contains the thirty-chapter manual for **DSLtk**,
-the header-only Domain-Specific Language construction toolkit for modern C++
-(C++20). The library is distributed as a single header, `DSLtk.hpp`, and the
-manual documents every public type, free function, feature tag, and helper it
-exposes.
+This directory contains the thirty-six-chapter manual for **DSLtk**, the
+Domain-Specific Language construction toolkit for C++20 and D. The two
+implementations are distributed as one C++ header, `DSLtk.hpp`, and one D
+module, `DSLtk.d`. The manual explains the established toolkit, the D port,
+and the shared language facilities added to both implementations.
 
-The manual is organised into fourteen parts that progress from foundational
+The manual is organised into twenty parts that progress from foundational
 concepts through to the most advanced subsystems. Readers new to the library
 should begin with Chapter 1 and read sequentially; experienced readers may use
 the table of contents below to jump directly to the feature they need.
+
+## Reading Paths and Development Progression
+
+- **C++ foundations:** Chapters 1–29 introduce feature composition and the
+  established C++ toolkit, including the embedded `magic_enum` API.
+- **D foundations:** Chapter 31 maps every established feature family to D,
+  with mixins, alias callables, CTFE, native reflection, and build instructions.
+- **Shared extensions:** Chapter 30 is an overview; Chapters 32–36 provide
+  focused tutorials, API contracts and examples for both languages.
+- **Full development record:** [DSLtk Development Progression](progression.md)
+  records the milestones from the C++ toolkit through the D translation,
+  equality saturation, user backends, visitors, binary streams, preprocessing,
+  optional Lua, explicit CFGs, packaging and verification.
 
 ## Table of Contents
 
@@ -85,32 +98,58 @@ the table of contents below to jump directly to the feature they need.
 
 - [Chapter 30 — Equality Saturation and Language Facilities](ch30-language-facilities.md)
 
+### Part XV — The D Toolkit
+
+- [Chapter 31 — The D Toolkit: Templates, Mixins and CTFE](ch31-d-toolkit.md)
+
+### Part XVI — Equality-Based Rewriting
+
+- [Chapter 32 — S-expressions, E-graphs and Equality Saturation](ch32-egraphs-and-sexpressions.md)
+
+### Part XVII — Data Boundaries and Binary Matching
+
+- [Chapter 33 — User Codecs, Abstract I/O and Static Binary Streams](ch33-codecs-io-and-binary-streams.md)
+
+### Part XVIII — Visitor Generation
+
+- [Chapter 34 — Deriving Visitors from AST Schemas](ch34-ast-derived-visitors.md)
+
+### Part XIX — Preprocessing and Embedded Scripting
+
+- [Chapter 35 — Built-in Preprocessing and Optional Lua](ch35-preprocessor-and-lua.md)
+
+### Part XX — Context-Free Language Definition
+
+- [Chapter 36 — Explicit Context-Free Grammars and Earley Parsing](ch36-context-free-grammars.md)
+
 ## Building the Manual
 
-The manual is authored in GitHub-Flavored Markdown, one file per chapter, so
-that it is readable directly in any text editor or source repository. A build
-script named `build.sh` is intended to live alongside this `README.md` and
-compiles the whole manual into four output formats:
+The manual is GitHub-Flavored Markdown, one file per chapter. It is directly
+readable in a text editor or repository browser. To export the numbered
+chapters with [Pandoc](https://pandoc.org/), run from this directory:
 
-- **HTML** — a single navigable web page (or one page per chapter).
-- **PDF** — a typeset, printable document.
-- **LaTeX** — the intermediate LaTeX source, suitable for further typesetting.
-- **XML** — a structured representation for tooling and indexing.
+```sh
+pandoc ch[0-9][0-9]-*.md --standalone --toc -o DSLtk-manual.html
+pandoc ch[0-9][0-9]-*.md --standalone --toc --pdf-engine=xelatex -o DSLtk-manual.pdf
+pandoc ch[0-9][0-9]-*.md --standalone -t latex -o DSLtk-manual.tex
+pandoc ch[0-9][0-9]-*.md --standalone -t docbook -o DSLtk-manual.xml
+```
 
-Each format is produced from the same Markdown sources, so the prose, code
-listings, and cross-references remain identical across every output. The
-canonical toolchain for the conversion is [Pandoc](https://pandoc.org/) with a
-LaTeX engine (such as `xelatex`) backing the PDF output.
+The two-digit filenames preserve chapter ordering. PDF export requires the
+selected TeX engine. The progression record is a separate reading aid; append
+`progression.md` to an export command to include it.
 
 ## Conventions Used in This Manual
 
-Code listings are presented in fenced blocks and use the actual `dsl::` API.
-Every example is written to be compilable against `DSLtk.hpp` with a C++20
-compiler. Throughout the text, the names of types and functions are set in
+Code listings are fenced and marked `cpp`, `d`, `lisp`, `ebnf`, or `sh` as
+appropriate. C++ uses `dsl::` names; D uses `import DSLtk`, native `!` template
+arguments and CTFE. Fragments assume the corresponding header/import and
+surrounding example variables; complete programs show their entry point.
+Throughout the text, the names of types and functions are set in
 backticks (for example, `dsl::DSL`, `dsl::leaf`), and chapter cross-references
 appear as “Chapter 6, *The Pipeline Feature*”.
 
-The manual describes the library as implemented; it is a user's guide, not a
-change log or a critique. Behaviour is documented faithfully against the
-header, and design notes explain *why* a feature works the way it does rather
-than how it might be changed.
+The numbered chapters describe implemented behavior and supported syntax.
+The separate progression record captures the development milestones and
+recorded verification. Protocol examples explicitly identify operations and
+syntax supplied by user backends.

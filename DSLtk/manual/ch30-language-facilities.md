@@ -6,6 +6,18 @@ Their feature tags are `SExpressions`, `EqualitySaturation`, `Serialization`,
 `AbstractIO`, `Visitors`, `StaticRegularExpressions`, `Preprocessing`, and
 `ContextFreeGrammar`. They can also be used directly, without a DSL base/mixin.
 
+This chapter is the shared overview. Continue with:
+
+* [Chapter 31: the D port and established feature families](ch31-d-toolkit.md);
+* [Chapter 32: S-expressions, e-matching and saturation](ch32-egraphs-and-sexpressions.md);
+* [Chapter 33: codecs, abstract I/O, static regexes and binary streams](ch33-codecs-io-and-binary-streams.md);
+* [Chapter 34: AST-schema-derived visitors](ch34-ast-derived-visitors.md);
+* [Chapter 35: preprocessing and optional native Lua](ch35-preprocessor-and-lua.md);
+* [Chapter 36: explicit CFGs and Earley parsing](ch36-context-free-grammars.md).
+
+The [development progression record](progression.md) ties the implementation
+milestones, packaging, examples and verification together.
+
 ## S-expressions
 
 `SExpr` is a value containing an atom or a list. `SExpr.atom` / `SExpr::atom`
@@ -223,11 +235,13 @@ replace the C++ stream/operator integrations.
 
 ## Verification
 
+From the DSLtk directory:
+
 ```sh
-cmake -S DSLtk/tests -B build/dsltk-tests -DDSLtk_TEST_LUA=ON
+cmake -S tests -B build/dsltk-tests -DDSLtk_TEST_LUA=ON
 cmake --build build/dsltk-tests
 ctest --test-dir build/dsltk-tests --output-on-failure
-ldc2 -unittest -main DSLtk/DSLtk.d -of=dsltk-test
+ldc2 -unittest -main DSLtk.d -of=dsltk-test
 ./dsltk-test
 ```
 

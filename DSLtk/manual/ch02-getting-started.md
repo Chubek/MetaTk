@@ -1,8 +1,10 @@
 # Chapter 2: Getting Started: Installation, Build, and First Program
 
 This chapter takes you from an empty directory to a compiled, running DSLtk
-program. Because DSLtk is a single header with no dependencies, installation is
-mostly a matter of making one file visible to your compiler.
+program. The C++ header and D module are individually self-contained;
+installation means making the chosen implementation visible to its compiler.
+Default builds need only the corresponding standard library. Native Lua
+embedding is an optional build described in Chapter 35.
 
 We will cover the requirements, how to obtain and include the header, and how
 to compile a program directly with `g++` or `clang++`. We will then look at how
@@ -15,7 +17,7 @@ have a working DSLtk program and the confidence to read the rest of the manual.
 
 ## Requirements
 
-The single hard requirement is a C++20 compiler. DSLtk relies on language
+For `DSLtk.hpp`, the language requirement is C++20. DSLtk relies on language
 features that did not exist before C++20. It uses concepts, both in real
 constraints and in `requires`-expressions.
 
@@ -27,15 +29,46 @@ Any recent release of GCC, Clang, or MSVC that advertises C++20 support will
 do. If you are unsure of your toolchain, compile any small program with
 `-std=c++20` first. Confirm the toolchain accepts it before reaching for DSLtk.
 
-There are no third-party dependencies. The header includes only standard
-library facilities. The full list is `algorithm`, `array`, `concepts`,
-`fstream`, `functional`, `memory`, `optional`, `sstream`, `stdexcept`,
-`string`, `string_view`, `tuple`, `type_traits`, `unordered_map`, `utility`,
-`variant`, and `vector`.
+Default header builds use standard C++ facilities and the embedded
+`magic_enum` headers. The byte-stream and language facilities also use spans,
+fixed-width integers and standard containers. Enabling `DSLTK_ENABLE_LUA`
+requires Lua headers and linkage supplied by the user.
 
-All of these ship with every conforming C++20 implementation. You will never
-need to fetch a package, run a package manager, or link a system library to use
-DSLtk.
+For `DSLtk.d`, use a D compiler with Phobos and support for template mixins,
+`static foreach`, and CTFE. The module has been exercised with LDC, DMD and
+GDC. Its optional native bridge is selected with the `DSLtkLua` version
+identifier and Lua linkage.
+
+## A First D Program
+
+Save this as `hello.d` alongside `DSLtk.d`:
+
+```d
+import DSLtk;
+import std.stdio : writeln;
+
+struct BasicDSL { mixin DSL!(Pipeline, Operators); }
+
+void main()
+{
+    auto result = BasicDSL.wrap(5)
+        | pipe((int x) => x + 3)
+        | pipe((int x) => x * 2);
+    writeln(result); // 16
+}
+```
+
+```sh
+ldc2 hello.d DSLtk.d -of=hello
+./hello
+# Equivalent compiler invocations:
+dmd hello.d DSLtk.d -of=hello
+gdc hello.d DSLtk.d -o hello
+```
+
+Supply the module directory through `-I` when it is elsewhere. The CMake
+installation includes both implementation files; its `INTERFACE` target
+exports the C++ usage requirements. Chapter 31 provides the D feature guide.
 
 ## Obtaining the Header
 
@@ -206,9 +239,9 @@ The examples are plain `.cpp` files that `#include "DSLtk.hpp"` and define a
 `main`. You can compile any one of them directly:
 
 ```sh
-g++ -std=c++20 examples/01-basic-usage.cpp -o ex01 && ./ex01
-g++ -std=c++20 examples/12-expression-templates.cpp -o ex12 && ./ex12
-g++ -std=c++20 examples/23-peg-definition.cpp -o ex23 && ./ex23
+g++ -std=c++20 -I. examples/01-basic-usage.cpp -o ex01 && ./ex01
+g++ -std=c++20 -I. examples/12-expression-templates.cpp -o ex12 && ./ex12
+g++ -std=c++20 -I. examples/23-peg-definition.cpp -o ex23 && ./ex23
 ```
 
 A convenient way to build them all at once is a tiny shell loop. This is also a
@@ -217,7 +250,7 @@ handy smoke test for your toolchain:
 ```sh
 mkdir -p build
 for f in examples/*.cpp; do
-  g++ -std=c++20 "$f" -o "build/$(basename "$f" .cpp)" || echo "failed: $f"
+  g++ -std=c++20 -I. "$f" -o "build/$(basename "$f" .cpp)" || echo "failed: $f"
 done
 ```
 
@@ -228,6 +261,42 @@ match the AST chapters in Part IV.
 The `22-` through `24-` examples correspond to the PEG chapters in Part XII.
 Browsing the examples in parallel with the relevant chapter is an effective way
 to learn, because each example is small enough to read in full.
+
+## Shared Language-Facility Examples and Tests
+
+The matching C++/D equality-saturation examples combine preprocessing,
+S-expression rule loading, e-graphs, equality-triggered visitors, explicit
+CFGs and static regexes. From the DSLtk directory:
+
+```sh
+g++ -std=c++20 -I. examples/26-equality-saturation.cpp -o eqsat-cpp
+./eqsat-cpp
+ldc2 -I. DSLtk.d examples/26-equality-saturation.d -of=eqsat-d
+./eqsat-d
+```
+
+The CMake example target is `dsltk_equality_saturation_example`, enabled by
+`BUILD_EXAMPLES`. `dsltk_enum_reflection_example` illustrates C++ reflection.
+
+The standalone C++ test project provides enum and language-facility coverage:
+
+```sh
+cmake -S tests -B build/dsltk-tests
+cmake --build build/dsltk-tests
+ctest --test-dir build/dsltk-tests --output-on-failure
+```
+
+Set `-DDSLtk_TEST_LUA=ON` at configuration to include native Lua preprocessing
+tests. Lua discovery supplies the test target's include and link flags.
+D regression tests live in the source module:
+
+```sh
+ldc2 -unittest -main DSLtk.d -of=dsltk-test
+./dsltk-test
+```
+
+Chapter 31 includes DMD/GDC verification commands, and Chapter 35 includes
+native Lua builds in both languages. Chapter 30 introduces all shared APIs.
 
 ## Walking Through the First Example
 
@@ -398,9 +467,11 @@ hardware.
 
 ## Summary
 
-The workflow is simple. Put `DSLtk.hpp` on your include path, compile with
-`-std=c++20`, and link nothing. If you use CMake, link the `DSLtk` `INTERFACE`
-target and inherit its usage requirements.
+Put `DSLtk.hpp` on your include path and compile with `-std=c++20`; default
+builds need no extra library linkage. With CMake, link the `DSLtk` `INTERFACE`
+target and inherit its usage requirements. For D, place `DSLtk.d` on the import
+path and compile it alongside the application. Optional native Lua builds
+add the Lua dependency described in Chapter 35.
 
 Build a bundled example first to confirm the toolchain, then write your own
 `dsl::DSL` subclass. The next chapter opens the black box of that base class.

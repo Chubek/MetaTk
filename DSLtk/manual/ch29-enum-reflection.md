@@ -6,6 +6,13 @@ reflection, flags, utility functions, fusion, constexpr switch dispatch,
 containers, stream operators, and formatting. It remains a self-contained
 C++20 header; no magic_enum installation or link dependency is required.
 
+The D module provides the same core reflection capability through native enum
+member discovery: names, values, entries, casts, indexing, adjacency, flags,
+compile-time dispatch/fusion and enum-indexed containers. Its customization
+uses `EnumOptions` and `EnumNames` UDAs, with no numeric search interval.
+[Chapter 31](ch31-d-toolkit.md#native-enum-reflection) documents the D API and
+the language-specific differences. This chapter covers the embedded C++ API.
+
 ## Namespaces and feature composition
 
 Reflection functions and traits are exposed directly in `dsl::` with using

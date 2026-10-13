@@ -1,9 +1,10 @@
 # Chapter 1: Introduction and Design Philosophy
 
-DSLtk is a single-header, header-only library for building Domain-Specific
-Languages in modern C++. Its entire public surface lives in the `dsl`
-namespace inside one file, `DSLtk.hpp`. It requires nothing beyond a C++20
-compiler. There is no library to link and no package to fetch.
+DSLtk builds Domain-Specific Languages in C++20 and D. The C++ implementation
+is a single header, `DSLtk.hpp`, exposing the `dsl` namespace. The D
+implementation is a single module, `DSLtk.d`, imported with `import DSLtk`.
+Default builds use the host language's standard library. Optional native Lua
+embedding adds a user-supplied Lua library dependency.
 
 This chapter introduces the library's purpose, the design ideas that shape
 every feature, and the mental model you will carry through the rest of the
@@ -44,6 +45,18 @@ That single line of inheritance is the whole entry point. `MyDSL` is your
 language class. The first template argument is the class itself — a recursive
 technique known as CRTP, the Curiously Recurring Template Pattern.
 
+The D entry point injects features with a template mixin:
+
+```d
+import DSLtk;
+struct MyDSL { mixin DSL!(Pipeline, Operators); }
+```
+
+D uses native string template parameters, operator templates, alias callables
+and compile-time function evaluation. [Chapter 31](ch31-d-toolkit.md) maps
+the established toolkit to D. The C++ foundations below explain the CRTP
+implementation used by Chapters 3–29.
+
 Every remaining argument is a *feature tag*: `dsl::Pipeline`, `dsl::Operators`,
 and so on. Each feature injects a small set of methods, operators, or nested
 types into your class through a mixin. The result is a fully concrete object
@@ -63,6 +76,13 @@ The custom-literals feature registers string suffixes. Several supporting
 utilities round out the toolkit: memoization, lazy values, monadic optionals, a
 `Result` type, parser combinators, task pipelines, and a Parsing Expression
 Grammar engine.
+
+Both implementations also provide a shared S-expression substrate, e-graphs
+and equality saturation, user codec/I/O protocols, AST-derived visitors,
+static byte regular expressions and binary streams, preprocessing with
+optional Lua hooks, and explicit context-free grammars. These facilities
+compose into a source-to-AST-to-optimized-representation pipeline. Chapter 30
+introduces them; Chapters 32–36 provide focused tutorials.
 
 Because every feature is a mixin, features combine without interfering. Adding
 `dsl::Pipeline` to a class does not change how `dsl::Operators` behaves, and
