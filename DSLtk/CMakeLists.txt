@@ -21,10 +21,12 @@ endif()
 if(BUILD_EXAMPLES)
     add_executable(dsltk_enum_reflection_example examples/25-enum-reflection.cpp)
     target_link_libraries(dsltk_enum_reflection_example PRIVATE DSLtk)
+    add_executable(dsltk_equality_saturation_example examples/26-equality-saturation.cpp)
+    target_link_libraries(dsltk_equality_saturation_example PRIVATE DSLtk)
 endif()
 
 install(
-    FILES DSLtk.hpp
+    FILES DSLtk.hpp DSLtk.d
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
