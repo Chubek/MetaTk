@@ -1,0 +1,47 @@
+-- Classic 16-bit MSP430, little endian, TI EABI (not MSP430X).
+-- Resolved TableGen records and DomSleigh p-code are emitted in backend.
+-- Register-direct encoders use rd/rs; source precedes destination in assembly.
+local symas = require("backend").new("msp430")
+symas.target{ arch = "msp430", subarch = "msp430", addr_size = 16,
+    op_size = 16, addr_def = 16, align = 2, byte_order = "little",
+    obj_format = "ELF32", abi = "TI-EABI", calling_conv = "msp430",
+    features = { "base" } }
+symas.feature{ name = "base", desc = "Classic MSP430; 16-bit addresses and registers" }
+for i = 0, 15 do
+    symas.register{ name = "r" .. i, class = "gpr", width = 16, enc = i,
+        flags = { "readable", "writable" } }
+    symas.register{ name = "r" .. i .. "b", class = "gpr", width = 8, enc = i,
+        parent = "r" .. i, sub_lo = 0, sub_hi = 8, flags = { "readable", "writable" } }
+end
+for _, a in ipairs({ { "pc", 0 }, { "sp", 1 }, { "sr", 2 }, { "cg", 3 }, { "fp", 4 } }) do
+    symas.register{ name = a[1], class = "special", width = 16, enc = a[2],
+        parent = "r" .. a[2], sub_lo = 0, sub_hi = 16 }
+end
+local function r(access)
+    return { kind = "reg", class = "gpr", width = 16, access = access,
+        constraint = "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics" }
+end
+for _, op in ipairs({ { "mov", 16384 }, { "add", 20480 }, { "addc", 24576 },
+    { "subc", 28672 }, { "sub", 32768 }, { "cmp", 36864 }, { "bit", 45056 },
+    { "bic", 49152 }, { "bis", 53248 }, { "xor", 57344 }, { "and", 61440 } }) do
+    local m = op[1]
+    symas.mnemonic{ name = m }
+    symas.encoder{ name = m .. "_rr", max_bytes = 2,
+        source = "require(rd >= 4); require(rd <= 15); require(rs >= 4); require(rs <= 15); emit16le(" .. op[2] .. " + rs*256 + rd);" }
+    local access = "readwrite"
+    if m == "mov" then access = "write" end
+    if m == "cmp" or m == "bit" then access = "read" end
+    symas.form{ mnemonic = m, encoder = m .. "_rr", operands = { r("read"), r(access) } }
+end
+symas.mnemonic{ name = "ret" }
+symas.encoder{ name = "ret", source = "emit16le(0x4130);", max_bytes = 2 }
+symas.form{ mnemonic = "ret", encoder = "ret", flags = { "return", "terminator", "reads_mem", "implicit_ops" } }
+symas.mnemonic{ name = "nop" }
+symas.encoder{ name = "nop", source = "emit16le(0x4303);", max_bytes = 2 }
+symas.form{ mnemonic = "nop", encoder = "nop" }
+symas.syntax{ name = "default", comment = ";", separator = ", " }
+symas.section{ name = ".text", flags = { "exec", "alloc", "code" }, align = 2, content = "code" }
+symas.section{ name = ".data", flags = { "write", "alloc", "data" }, align = 2, content = "data" }
+symas.section{ name = ".bss", flags = { "write", "alloc", "zerofill", "data" }, align = 2, content = "data" }
+symas.reloc{ name = "R_MSP430_16", width = 16, addend = "explicit", expr = "S + A" }
+print(symas.emit())

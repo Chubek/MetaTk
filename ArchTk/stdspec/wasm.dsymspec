@@ -1,0 +1,176 @@
+-- wasm.dsymspec — WebAssembly 2.0 (wasm32/wasm64), stack/value-type model.
+-- Note: WebAssembly is a structured stack machine, not a register machine;
+-- operands are LEB128 indices/immediates (modelled as fixed-width imm here).
+-- Data: isa_reference wasm quick spec (i32/i64/f32/f64/v128 + sections +
+-- block/loop/if/br/call + load/store align+offset), wasm_oracle litdir
+-- (wasm-spec.txt, wasm-2-specs.txt, art-of-wasm.txt).
+-- Strata: base(mvp) | simd | bulk-memory | multi-value | reference-types |
+--   tail-calls | threads | sign-ext | gc.
+local symas = require("backend").new("wasm")
+
+symas.target{
+    arch = "wasm", subarch = "wasm32",
+    addr_size = 32, op_size = 32, addr_def = 32, align = 1,
+    byte_order = "little", obj_format = "wasm", abi = "wasm-stack",
+    calling_conv = "wasm-c-abi",
+    features = { "mvp", "sign-ext", "bulk-memory" },
+}
+
+symas.feature{ name = "mvp", desc = "WebAssembly 1.0 MVP" }
+symas.feature{ name = "simd", desc = "128-bit fixed-width SIMD" }
+symas.feature{ name = "bulk-memory", desc = "bulk memory operations" }
+symas.feature{ name = "multi-value", desc = "multi-value returns" }
+symas.feature{ name = "reference-types", desc = "reference types (funcref/externref)" }
+symas.feature{ name = "tail-calls", desc = "tail calls" }
+symas.feature{ name = "threads", desc = "threads/atomics" }
+symas.feature{ name = "sign-ext", desc = "sign-extension operators" }
+symas.feature{ name = "nontrapping-fptoint", desc = "non-trapping float-to-int" }
+symas.feature{ name = "gc", desc = "garbage collection (struct/array)" }
+symas.feature{ name = "priv", desc = "privileged host imports (wasi)" }
+
+-- No GPR file: typed operand stack + locals/globals modelled as specials.
+symas.register{ name = "stack", class = "special", width = 32, enc = 0 }
+symas.register{ name = "memory0", class = "special", width = 32, enc = 0 }
+symas.register{ name = "table0", class = "special", width = 32, enc = 0 }
+symas.register{ name = "global0", class = "special", width = 32, enc = 0 }
+
+-- Single-byte opcodes + LEB128 immediates (modelled as emit8 + emit_imm).
+symas.encoder{ name = "unreachable", source = "emit8(0x00);", max_bytes = 1 }
+symas.encoder{ name = "nop",  source = "emit8(0x01);", max_bytes = 1 }
+symas.encoder{ name = "block", source = "emit8(0x02); emit_imm(1, type);", max_bytes = 2 }
+symas.encoder{ name = "loop", source = "emit8(0x03); emit_imm(1, type);", max_bytes = 2 }
+symas.encoder{ name = "if",   source = "emit8(0x04); emit_imm(1, type);", max_bytes = 2 }
+symas.encoder{ name = "else", source = "emit8(0x05);", max_bytes = 1 }
+symas.encoder{ name = "end",  source = "emit8(0x0B);", max_bytes = 1 }
+symas.encoder{ name = "br",   source = "emit8(0x0C); emit_imm(4, label);", max_bytes = 5 }
+symas.encoder{ name = "br_if", source = "emit8(0x0D); emit_imm(4, label);", max_bytes = 5 }
+symas.encoder{ name = "return", source = "emit8(0x0F);", max_bytes = 1 }
+symas.encoder{ name = "call", source = "emit8(0x10); emit_imm(4, fn); emit_relocation(sym, R_WASM_FUNCTION_INDEX_LEB);", max_bytes = 5, max_relocs = 1 }
+symas.encoder{ name = "call_indirect", source = "emit8(0x11); emit_imm(4, type); emit_imm(4, table);", max_bytes = 9 }
+symas.encoder{ name = "drop", source = "emit8(0x1A);", max_bytes = 1 }
+symas.encoder{ name = "select", source = "emit8(0x1B);", max_bytes = 1 }
+symas.encoder{ name = "localget", source = "emit8(0x20); emit_imm(4, idx);", max_bytes = 5 }
+symas.encoder{ name = "localset", source = "emit8(0x21); emit_imm(4, idx);", max_bytes = 5 }
+symas.encoder{ name = "localtee", source = "emit8(0x22); emit_imm(4, idx);", max_bytes = 5 }
+symas.encoder{ name = "globalget", source = "emit8(0x23); emit_imm(4, idx);", max_bytes = 5 }
+symas.encoder{ name = "i32load", source = "emit8(0x28); emit_imm(4, align); emit_imm(4, off);", max_bytes = 9 }
+symas.encoder{ name = "i64load", source = "emit8(0x29); emit_imm(4, align); emit_imm(4, off);", max_bytes = 9 }
+symas.encoder{ name = "i32store", source = "emit8(0x36); emit_imm(4, align); emit_imm(4, off);", max_bytes = 9 }
+symas.encoder{ name = "i64store", source = "emit8(0x37); emit_imm(4, align); emit_imm(4, off);", max_bytes = 9 }
+symas.encoder{ name = "memsize", source = "emit8(0x3F); emit8(0x00);", max_bytes = 2 }
+symas.encoder{ name = "memgrow", source = "emit8(0x40); emit8(0x00);", max_bytes = 2 }
+symas.encoder{ name = "memcopy", source = "emit8(0xFC); emit8(0x0A);", max_bytes = 2 }
+symas.encoder{ name = "memfill", source = "emit8(0xFC); emit8(0x0B);", max_bytes = 2 }
+symas.encoder{ name = "i32const", source = "emit8(0x41); emit_imm(4, imm);", max_bytes = 5 }
+symas.encoder{ name = "i64const", source = "emit8(0x42); emit_imm(8, imm);", max_bytes = 9 }
+symas.encoder{ name = "i32add", source = "emit8(0x6A);", max_bytes = 1 }
+symas.encoder{ name = "i32sub", source = "emit8(0x6B);", max_bytes = 1 }
+symas.encoder{ name = "i32mul", source = "emit8(0x6C);", max_bytes = 1 }
+symas.encoder{ name = "i32div", source = "emit8(0x6D);", max_bytes = 1 }
+symas.encoder{ name = "i32and", source = "emit8(0x71);", max_bytes = 1 }
+symas.encoder{ name = "i32or",  source = "emit8(0x72);", max_bytes = 1 }
+symas.encoder{ name = "i32xor", source = "emit8(0x73);", max_bytes = 1 }
+symas.encoder{ name = "i32eqz", source = "emit8(0x45);", max_bytes = 1 }
+symas.encoder{ name = "i64add", source = "emit8(0x7C);", max_bytes = 1 }
+symas.encoder{ name = "f32add", source = "emit8(0x92);", max_bytes = 1 }
+symas.encoder{ name = "f64add", source = "emit8(0xA0);", max_bytes = 1 }
+symas.encoder{ name = "i32wrap", source = "emit8(0xA7);", max_bytes = 1 }
+symas.encoder{ name = "i32extend", source = "emit8(0xC0);", max_bytes = 1 }
+symas.encoder{ name = "v128load", source = "emit8(0xFD); emit8(0x00); emit_imm(4, align); emit_imm(4, off);", max_bytes = 10 }
+symas.encoder{ name = "i32x4add", source = "emit8(0xFD); emit8(0x4E);", max_bytes = 2 }
+symas.encoder{ name = "atomicadd", source = "emit8(0xFE); emit8(0x1E); emit_imm(4, align); emit_imm(4, off);", max_bytes = 10 }
+symas.encoder{ name = "returncall", source = "emit8(0x12); emit_imm(4, fn);", max_bytes = 5 }
+
+local function idx() return { kind = "imm", width = 32, signed = false, imm_min = 0, imm_max = 4294967295 } end
+
+for _, m in ipairs({ "unreachable", "nop", "block", "loop", "if", "else",
+    "end", "br", "br_if", "return", "call", "call_indirect", "drop",
+    "select", "local.get", "local.set", "local.tee", "global.get",
+    "i32.load", "i64.load", "i32.store", "i64.store", "memory.size",
+    "memory.grow", "memory.copy", "memory.fill", "i32.const", "i64.const",
+    "i32.add", "i32.sub", "i32.mul", "i32.div_s", "i32.and", "i32.or",
+    "i32.xor", "i32.eqz", "i64.add", "f32.add", "f64.add", "i32.wrap_i64",
+    "i32.extend8_s", "v128.load", "i32x4.add", "i32.atomic.add",
+    "return_call" }) do
+    symas.mnemonic{ name = m }
+end
+symas.form{ mnemonic = "unreachable", encoder = "unreachable", flags = { "terminator", "may_trap" } }
+symas.form{ mnemonic = "nop", encoder = "nop" }
+symas.form{ mnemonic = "block", encoder = "block", operands = { idx() } }
+symas.form{ mnemonic = "loop", encoder = "loop", operands = { idx() } }
+symas.form{ mnemonic = "if", encoder = "if", flags = { "cond_branch" }, operands = { idx() } }
+symas.form{ mnemonic = "else", encoder = "else" }
+symas.form{ mnemonic = "end", encoder = "end" }
+symas.form{ mnemonic = "br", encoder = "br", flags = { "branch", "terminator" }, operands = { idx() } }
+symas.form{ mnemonic = "br_if", encoder = "br_if", flags = { "cond_branch" }, operands = { idx() } }
+symas.form{ mnemonic = "return", encoder = "return", flags = { "return", "terminator" } }
+symas.form{ mnemonic = "call", encoder = "call", flags = { "branch", "reloc" }, operands = { { kind = "sym", width = 32 } } }
+symas.form{ mnemonic = "call_indirect", encoder = "call_indirect", flags = { "branch" }, operands = { idx(), idx() } }
+symas.form{ mnemonic = "drop", encoder = "drop" }
+symas.form{ mnemonic = "select", encoder = "select" }
+symas.form{ mnemonic = "local.get", encoder = "localget", operands = { idx() } }
+symas.form{ mnemonic = "local.set", encoder = "localset", operands = { idx() } }
+symas.form{ mnemonic = "local.tee", encoder = "localtee", operands = { idx() } }
+symas.form{ mnemonic = "global.get", encoder = "globalget", operands = { idx() } }
+symas.form{ mnemonic = "i32.load", encoder = "i32load", flags = { "reads_mem" }, operands = { idx(), idx() } }
+symas.form{ mnemonic = "i64.load", encoder = "i64load", flags = { "reads_mem" }, operands = { idx(), idx() } }
+symas.form{ mnemonic = "i32.store", encoder = "i32store", flags = { "writes_mem" }, operands = { idx(), idx() } }
+symas.form{ mnemonic = "i64.store", encoder = "i64store", flags = { "writes_mem" }, operands = { idx(), idx() } }
+symas.form{ mnemonic = "memory.size", encoder = "memsize", flags = { "reads_mem" } }
+symas.form{ mnemonic = "memory.grow", encoder = "memgrow", flags = { "writes_mem" } }
+symas.form{ mnemonic = "memory.copy", encoder = "memcopy", required = { "bulk-memory" }, flags = { "reads_mem", "writes_mem" } }
+symas.form{ mnemonic = "memory.fill", encoder = "memfill", required = { "bulk-memory" }, flags = { "writes_mem" } }
+symas.form{ mnemonic = "i32.const", encoder = "i32const", operands = {
+    { kind = "imm", width = 32, signed = true, imm_min = -2147483648, imm_max = 2147483647 } } }
+symas.form{ mnemonic = "i64.const", encoder = "i64const", operands = {
+    { kind = "imm", width = 32, signed = true, imm_min = -2147483648, imm_max = 2147483647 } } }
+symas.form{ mnemonic = "i32.add", encoder = "i32add" }
+symas.form{ mnemonic = "i32.sub", encoder = "i32sub" }
+symas.form{ mnemonic = "i32.mul", encoder = "i32mul" }
+symas.form{ mnemonic = "i32.div_s", encoder = "i32div", flags = { "may_trap" } }
+symas.form{ mnemonic = "i32.and", encoder = "i32and" }
+symas.form{ mnemonic = "i32.or", encoder = "i32or" }
+symas.form{ mnemonic = "i32.xor", encoder = "i32xor" }
+symas.form{ mnemonic = "i32.eqz", encoder = "i32eqz" }
+symas.form{ mnemonic = "i64.add", encoder = "i64add" }
+symas.form{ mnemonic = "f32.add", encoder = "f32add" }
+symas.form{ mnemonic = "f64.add", encoder = "f64add" }
+symas.form{ mnemonic = "i32.wrap_i64", encoder = "i32wrap" }
+symas.form{ mnemonic = "i32.extend8_s", encoder = "i32extend", required = { "sign-ext" } }
+symas.form{ mnemonic = "v128.load", encoder = "v128load", required = { "simd" }, flags = { "reads_mem" },
+    operands = { idx(), idx() } }
+symas.form{ mnemonic = "i32x4.add", encoder = "i32x4add", required = { "simd" } }
+symas.form{ mnemonic = "i32.atomic.add", encoder = "atomicadd", required = { "threads" },
+    flags = { "reads_mem", "writes_mem" }, operands = { idx(), idx() } }
+symas.form{ mnemonic = "return_call", encoder = "returncall", required = { "tail-calls" },
+    flags = { "branch", "terminator" }, operands = { { kind = "sym", width = 32 } } }
+
+symas.syntax{ name = "default", comment = ";;", separator = " " }
+symas.syntax{ name = "wat", comment = ";;", separator = " " }
+
+symas.section{ name = "wasm.type", flags = { "alloc", "readonly", "meta" }, align = 1, content = "meta" }
+symas.section{ name = "wasm.import", flags = { "alloc", "readonly", "meta" }, align = 1, content = "meta" }
+symas.section{ name = "wasm.function", flags = { "alloc", "code" }, align = 1, content = "code" }
+symas.section{ name = "wasm.table", flags = { "alloc", "readonly", "meta" }, align = 1, content = "meta" }
+symas.section{ name = "wasm.memory", flags = { "write", "alloc", "data" }, align = 1, content = "data" }
+symas.section{ name = "wasm.global", flags = { "write", "alloc", "data" }, align = 1, content = "data" }
+symas.section{ name = "wasm.export", flags = { "alloc", "readonly", "meta" }, align = 1, content = "meta" }
+symas.section{ name = "wasm.code", flags = { "exec", "alloc", "code" }, align = 1, content = "code" }
+symas.section{ name = "wasm.data", flags = { "write", "alloc", "data" }, align = 1, content = "data" }
+
+symas.linkage{ name = "func_export", binding = "global", visibility = "default", symtype = "func" }
+symas.linkage{ name = "memory_export", binding = "global", visibility = "default", symtype = "object" }
+symas.linkage{ name = "local_func", binding = "local", visibility = "default", symtype = "func" }
+
+symas.reloc{ name = "R_WASM_FUNCTION_INDEX_LEB", width = 32, expr = "S + A" }
+symas.reloc{ name = "R_WASM_TABLE_INDEX_SLEB", width = 32, signed = true, expr = "S + A" }
+symas.reloc{ name = "R_WASM_MEMORY_ADDR_LEB", width = 32, expr = "S + A" }
+symas.reloc{ name = "R_WASM_TYPE_INDEX_LEB", width = 32, expr = "S + A" }
+symas.reloc{ name = "R_WASM_GLOBAL_INDEX_LEB", width = 32, expr = "S + A" }
+symas.reloc{ name = "R_WASM_FUNCTION_OFFSET_I32", width = 32, expr = "S + A" }
+
+symas.debug{ msg = "wasm stack machine: mvp+simd+bulk+threads+tail stratification", kind = "target", ref = "" }
+symas.debug{ msg = "simd forms require simd", kind = "form", ref = "v128.load" }
+symas.debug{ msg = "atomic forms require threads", kind = "form", ref = "i32.atomic.add" }
+
+print(symas.emit())

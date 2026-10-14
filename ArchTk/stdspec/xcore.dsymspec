@@ -1,0 +1,47 @@
+-- XCore/XS1: 32-bit registers, 16/32-bit instructions, little endian.
+-- TableGen contains custom-packed ALU forms: backend records preserve them,
+-- while the assembler forms below use completely resolved ru6/u6 encodings.
+local symas = require("backend").new("xcore")
+symas.target{ arch = "xcore", subarch = "xs1", addr_size = 32, op_size = 32,
+    addr_def = 32, align = 2, byte_order = "little", obj_format = "ELF32",
+    abi = "XCore", calling_conv = "xcore", features = { "base" } }
+symas.feature{ name = "base", desc = "XS1 XCore integer and resource ISA" }
+for i = 0, 11 do
+    symas.register{ name = "r" .. i, class = "gpr", width = 32, enc = i,
+        flags = { "readable", "writable" } }
+end
+for _, a in ipairs({ { "cp", 12 }, { "dp", 13 }, { "sp", 14 }, { "lr", 15 } }) do
+    symas.register{ name = a[1], class = "special", width = 32, enc = a[2],
+        flags = { "readable", "writable" } }
+end
+for _, op in ipairs({ { "ldw", 23552, "write", "reads_mem" },
+    { "stw", 21504, "read", "writes_mem" }, { "ldc", 26624, "write", "" } }) do
+    symas.mnemonic{ name = op[1] }
+    symas.encoder{ name = op[1] .. "_ru6", max_bytes = 2,
+        source = "require(a >= 0); require(a <= 11); require(b >= 0); require(b <= 63); emit16le(" .. op[2] .. " + a*64 + b);" }
+    local flags = {}
+    if op[4] ~= "" then flags = { op[4], "implicit_ops" } end
+    symas.form{ mnemonic = op[1], encoder = op[1] .. "_ru6", flags = flags, operands = {
+        { kind = "reg", class = "gpr", width = 32, access = op[3], constraint = "r0-r11" },
+        { kind = "imm", width = 8, signed = false, imm_min = 0, imm_max = 63,
+          constraint = "ldw/stw: sp-relative offset in 4-byte words; ldc: unsigned constant" } } }
+end
+for _, op in ipairs({ { "entsp", 30528 }, { "retsp", 30656 } }) do
+    symas.mnemonic{ name = op[1] }
+    symas.encoder{ name = op[1] .. "_u6", max_bytes = 2,
+        source = "require(a >= 0); require(a <= 63); emit16le(" .. op[2] .. " + a);" }
+    local flags = { "implicit_ops" }
+    if op[1] == "retsp" then flags = { "return", "terminator", "implicit_ops" } end
+    symas.form{ mnemonic = op[1], encoder = op[1] .. "_u6", flags = flags, operands = {
+        { kind = "imm", width = 8, imm_min = 0, imm_max = 63, signed = false,
+          constraint = "stack adjustment in 4-byte words" } } }
+end
+-- Compiler selection coverage, including forms requiring LLVM custom packing.
+for _, m in ipairs({ "add", "sub", "and", "or", "xor", "mul", "divs", "divu", "bl", "bru", "in", "out", "syncr", "waiteu" }) do
+    symas.mnemonic{ name = m }
+end
+symas.syntax{ name = "default", comment = "#", separator = ", " }
+symas.section{ name = ".text", flags = { "exec", "alloc", "code" }, align = 2, content = "code" }
+symas.section{ name = ".data", flags = { "write", "alloc", "data" }, align = 4, content = "data" }
+symas.section{ name = ".bss", flags = { "write", "alloc", "zerofill", "data" }, align = 4, content = "data" }
+print(symas.emit())

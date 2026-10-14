@@ -1,0 +1,152 @@
+-- tricore.dsymspec — Infineon TriCore (v1.6.x), EABI, little-endian.
+-- 16/32-bit mixed instructions. Register file (D0-D15 data, A0-A15 address,
+-- PSW/PCXI/PC + CSFR), features (FPU/SIMD/PCP/saturation), and TriCore ELF
+-- relocations (R_TRICORE_*) are accurate; encodings are representative.
+-- Cross-checked via arch_oracle + ccbe_oracle (ABI/frame lowering) +
+-- toolchain_orace (TriCore ELF).
+-- Strata: base | fpu | simd | saturation | pcp | priv.
+local symas = require("backend").new("tricore")
+
+symas.target{
+    arch = "tricore", subarch = "tc1.6",
+    addr_size = 32, op_size = 32, addr_def = 32, align = 2,
+    byte_order = "little", obj_format = "ELF32", abi = "TriCore-EABI",
+    calling_conv = "tricore-eabi",
+    features = { "base", "fpu" },
+}
+
+symas.feature{ name = "base", desc = "TriCore base integer" }
+symas.feature{ name = "fpu", desc = "floating-point unit" }
+symas.feature{ name = "simd1", desc = "SIMD packed arithmetic 1" }
+symas.feature{ name = "simd2", desc = "SIMD packed arithmetic 2" }
+symas.feature{ name = "pcp", desc = "Peripheral Control Processor" }
+symas.feature{ name = "saturation", desc = "saturating arithmetic" }
+symas.feature{ name = "bitops", desc = "bit operations (extr/ins)" }
+symas.feature{ name = "loops", desc = "zero-overhead loops" }
+symas.feature{ name = "mmu", desc = "MMU (vm/vmt)" }
+symas.feature{ name = "priv", desc = "privileged (PSW/CSFR access)" }
+
+for i = 0, 15 do
+    symas.register{ name = "d" .. i, class = "gpr", width = 32, enc = i, flags = { "readable", "writable" } }
+end
+for i = 0, 15 do
+    symas.register{ name = "a" .. i, class = "gpr", width = 32, enc = i, flags = { "readable", "writable" } }
+end
+symas.register{ name = "sp", class = "gpr", width = 32, enc = 10, flags = { "readable", "writable" } }
+symas.register{ name = "pc", class = "special", width = 32, enc = 0 }
+symas.register{ name = "psw", class = "status", width = 32, enc = 0 }
+symas.register{ name = "pcxi", class = "ctrl", width = 32, enc = 0, flags = { "modedep" } }
+symas.register{ name = "fcx", class = "ctrl", width = 32, enc = 0, flags = { "modedep" } }
+symas.register{ name = "lcx", class = "ctrl", width = 32, enc = 0, flags = { "modedep" } }
+symas.register{ name = "isp", class = "ctrl", width = 32, enc = 0, flags = { "modedep" } }
+
+symas.encoder{ name = "nop",  source = "emit16le(0x0000);", max_bytes = 2 }
+symas.encoder{ name = "mov",  source = "emit32le(0x1B000000 + rd*4096 + rs*65536);", max_bytes = 4 }
+symas.encoder{ name = "add",  source = "emit32le(0x0B000000 + rd*4096 + ra*65536 + rb*256);", max_bytes = 4 }
+symas.encoder{ name = "sub",  source = "emit32le(0x0B800000 + rd*4096 + ra*65536 + rb*256);", max_bytes = 4 }
+symas.encoder{ name = "and",  source = "emit32le(0x0F000000 + rd*4096 + ra*65536 + rb*256);", max_bytes = 4 }
+symas.encoder{ name = "or",   source = "emit32le(0x0F800000 + rd*4096 + ra*65536 + rb*256);", max_bytes = 4 }
+symas.encoder{ name = "xor",  source = "emit32le(0x0F400000 + rd*4096 + ra*65536 + rb*256);", max_bytes = 4 }
+symas.encoder{ name = "addi", source = "emit32le(0x1D000000 + rd*4096 + ((imm + 32768) % 65536));", max_bytes = 4 }
+symas.encoder{ name = "mul",  source = "emit32le(0x13000000 + rd*4096 + ra*65536 + rb*256);", max_bytes = 4 }
+symas.encoder{ name = "madd", source = "emit32le(0x17000000 + rd*4096 + ra*65536 + rb*256);", max_bytes = 4 }
+symas.encoder{ name = "sh",   source = "emit32le(0x21000000 + rd*4096 + ra*65536 + rb*256);", max_bytes = 4 }
+symas.encoder{ name = "extr", source = "emit32le(0x2B000000 + rd*4096 + ra*65536 + ((imm + 65536) % 65536));", max_bytes = 4 }
+symas.encoder{ name = "ldw",  source = "emit32le(0x91000000 + rd*4096 + ra*65536);", max_bytes = 4 }
+symas.encoder{ name = "stw",  source = "emit32le(0xB1000000 + ra*65536 + rb*4096);", max_bytes = 4 }
+symas.encoder{ name = "ldb",  source = "emit32le(0x90000000 + rd*4096 + ra*65536);", max_bytes = 4 }
+symas.encoder{ name = "stb",  source = "emit32le(0xB0000000 + ra*65536 + rb*4096);", max_bytes = 4 }
+symas.encoder{ name = "lea",  source = "emit32le(0x49000000 + rd*4096 + ra*65536);", max_bytes = 4 }
+symas.encoder{ name = "j",    source = "emit32le(0x1D000000); emit_relocation(sym, R_TRICORE_PC22);", max_bytes = 4, max_relocs = 1 }
+symas.encoder{ name = "jl",   source = "emit32le(0x5D000000); emit_relocation(sym, R_TRICORE_PC22);", max_bytes = 4, max_relocs = 1 }
+symas.encoder{ name = "ji",   source = "emit32le(0xDC000000 + ra*65536);", max_bytes = 4 }
+symas.encoder{ name = "jli",  source = "emit32le(0xEC000000 + ra*65536);", max_bytes = 4 }
+symas.encoder{ name = "ret",  source = "emit32le(0x80000000);", max_bytes = 4 }
+symas.encoder{ name = "bisr", source = "emit16le(0x0400 + (imm % 256));", max_bytes = 2 }
+symas.encoder{ name = "syscall", source = "emit32le(0x01000000 + (imm % 65536));", max_bytes = 4 }
+symas.encoder{ name = "isync", source = "emit16le(0x000C);", max_bytes = 2 }
+symas.encoder{ name = "dsync", source = "emit16le(0x000D);", max_bytes = 2 }
+symas.encoder{ name = "rslcx", source = "emit32le(0x80000100);", max_bytes = 4 }
+symas.encoder{ name = "fadd", source = "emit32le(0x43000000 + rd*4096 + ra*65536 + rb*256);", max_bytes = 4 }
+symas.encoder{ name = "addh", source = "emit32le(0x4B000000 + rd*4096 + ra*65536 + rb*256);", max_bytes = 4 }
+symas.encoder{ name = "adds", source = "emit32le(0x0B000100 + rd*4096 + ra*65536 + rb*256);", max_bytes = 4 }
+symas.encoder{ name = "loop", source = "emit32le(0x7D000000 + ra*65536); emit_relocation(sym, R_TRICORE_PC16);", max_bytes = 4, max_relocs = 1 }
+
+local function dd() return { kind = "reg", class = "gpr", width = 32 } end
+local function wd() return { kind = "reg", class = "gpr", width = 32, access = "write" } end
+
+for _, m in ipairs({ "nop", "mov", "add", "sub", "and", "or", "xor",
+    "addi", "mul", "madd", "sh", "extr", "ld.w", "st.w", "ld.b", "st.b",
+    "lea", "j", "jl", "ji", "jli", "ret", "bisr", "syscall", "isync",
+    "dsync", "rslcx", "fadd", "add.h", "adds", "loop" }) do
+    symas.mnemonic{ name = m }
+end
+symas.form{ mnemonic = "nop", encoder = "nop" }
+symas.form{ mnemonic = "mov", encoder = "mov", operands = { wd(), dd() } }
+symas.form{ mnemonic = "add", encoder = "add", operands = { wd(), dd(), dd() } }
+symas.form{ mnemonic = "sub", encoder = "sub", operands = { wd(), dd(), dd() } }
+symas.form{ mnemonic = "and", encoder = "and", operands = { wd(), dd(), dd() } }
+symas.form{ mnemonic = "or",  encoder = "or",  operands = { wd(), dd(), dd() } }
+symas.form{ mnemonic = "xor", encoder = "xor", operands = { wd(), dd(), dd() } }
+symas.form{ mnemonic = "addi", encoder = "addi", operands = { wd(),
+    { kind = "imm", width = 16, signed = true, imm_min = -32768, imm_max = 32767 } } }
+symas.form{ mnemonic = "mul", encoder = "mul", operands = { wd(), dd(), dd() } }
+symas.form{ mnemonic = "madd", encoder = "madd", operands = { wd(), dd(), dd(), dd() } }
+symas.form{ mnemonic = "sh", encoder = "sh", operands = { wd(), dd(), dd() } }
+symas.form{ mnemonic = "extr", encoder = "extr", required = { "bitops" }, operands = { wd(), dd(),
+    { kind = "imm", width = 16, signed = false, imm_min = 0, imm_max = 65535 } } }
+symas.form{ mnemonic = "ld.w", encoder = "ldw", flags = { "reads_mem" }, operands = { wd(), { kind = "mem", width = 32 } } }
+symas.form{ mnemonic = "st.w", encoder = "stw", flags = { "writes_mem" }, operands = { dd(), { kind = "mem", width = 32 } } }
+symas.form{ mnemonic = "ld.b", encoder = "ldb", flags = { "reads_mem" }, operands = { wd(), { kind = "mem", width = 8 } } }
+symas.form{ mnemonic = "st.b", encoder = "stb", flags = { "writes_mem" }, operands = { dd(), { kind = "mem", width = 8 } } }
+symas.form{ mnemonic = "lea", encoder = "lea", operands = { wd(), { kind = "mem", width = 32 } } }
+symas.form{ mnemonic = "j", encoder = "j", flags = { "branch", "terminator", "reloc" }, operands = { { kind = "sym", width = 32 } } }
+symas.form{ mnemonic = "jl", encoder = "jl", flags = { "branch", "reloc" }, operands = { { kind = "sym", width = 32 } } }
+symas.form{ mnemonic = "ji", encoder = "ji", flags = { "branch", "terminator" }, operands = { dd() } }
+symas.form{ mnemonic = "jli", encoder = "jli", flags = { "branch" }, operands = { dd() } }
+symas.form{ mnemonic = "ret", encoder = "ret", flags = { "return", "terminator" } }
+symas.form{ mnemonic = "bisr", encoder = "bisr", operands = {
+    { kind = "imm", width = 8, signed = false, imm_min = 0, imm_max = 255 } } }
+symas.form{ mnemonic = "syscall", encoder = "syscall", flags = { "may_trap" }, operands = {
+    { kind = "imm", width = 16, signed = false, imm_min = 0, imm_max = 65535 } } }
+symas.form{ mnemonic = "isync", encoder = "isync" }
+symas.form{ mnemonic = "dsync", encoder = "dsync" }
+symas.form{ mnemonic = "rslcx", encoder = "rslcx", required = { "priv" }, flags = { "privileged" } }
+symas.form{ mnemonic = "fadd", encoder = "fadd", required = { "fpu" }, operands = { wd(), dd(), dd() } }
+symas.form{ mnemonic = "add.h", encoder = "addh", required = { "simd1" }, operands = { wd(), dd(), dd() } }
+symas.form{ mnemonic = "adds", encoder = "adds", required = { "saturation" }, operands = { wd(), dd(), dd() } }
+symas.form{ mnemonic = "loop", encoder = "loop", required = { "loops" }, flags = { "cond_branch", "reloc" },
+    operands = { dd(), { kind = "sym", width = 32 } } }
+
+symas.syntax{ name = "default", comment = ";", separator = ", " }
+
+symas.section{ name = ".text", flags = { "exec", "alloc", "code" }, align = 2, content = "code" }
+symas.section{ name = ".rodata", flags = { "alloc", "readonly", "data" }, align = 4, content = "data" }
+symas.section{ name = ".data", flags = { "write", "alloc", "data" }, align = 4, content = "data" }
+symas.section{ name = ".bss", flags = { "write", "alloc", "zerofill", "data" }, align = 4, content = "data" }
+symas.section{ name = ".csa", flags = { "write", "alloc", "data" }, align = 8, content = "data" }
+
+symas.linkage{ name = "func_global", binding = "global", visibility = "default", symtype = "func" }
+symas.linkage{ name = "object_global", binding = "global", visibility = "default", symtype = "object" }
+symas.linkage{ name = "local_sym", binding = "local", visibility = "default", symtype = "none" }
+
+symas.reloc{ name = "R_TRICORE_NONE", width = 32, expr = "S + A" }
+symas.reloc{ name = "R_TRICORE_32", width = 32, expr = "S + A" }
+symas.reloc{ name = "R_TRICORE_16", width = 16, expr = "S + A" }
+symas.reloc{ name = "R_TRICORE_8", width = 8, expr = "S + A" }
+symas.reloc{ name = "R_TRICORE_PC22", width = 32, signed = true, pcrel = true, expr = "S + A - P" }
+symas.reloc{ name = "R_TRICORE_PC16", width = 32, signed = true, pcrel = true, expr = "S + A - P" }
+symas.reloc{ name = "R_TRICORE_HI16", width = 16, expr = "S + A" }
+symas.reloc{ name = "R_TRICORE_LO16", width = 16, expr = "S + A" }
+symas.reloc{ name = "R_TRICORE_GOT_HI16", width = 16, expr = "GOT(S) + A" }
+symas.reloc{ name = "R_TRICORE_GOT_LO16", width = 16, expr = "GOT(S) + A" }
+symas.reloc{ name = "R_TRICORE_TLS_GD", width = 32, expr = "TLS(S) + A" }
+symas.reloc{ name = "R_TRICORE_GLOB_DAT", width = 32, expr = "S" }
+symas.reloc{ name = "R_TRICORE_JMP_SLOT", width = 32, expr = "S" }
+symas.reloc{ name = "R_TRICORE_RELATIVE", width = 32, expr = "B + A" }
+
+symas.debug{ msg = "tricore base+fpu/simd/saturation+pcp+priv stratification", kind = "target", ref = "" }
+symas.debug{ msg = "simd forms require simd1", kind = "form", ref = "add.h" }
+symas.debug{ msg = "context forms require priv", kind = "form", ref = "rslcx" }
+
+print(symas.emit())

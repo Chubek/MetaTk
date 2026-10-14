@@ -1,0 +1,126 @@
+{
+  "aarch64": {
+    "sources": ["https://github.com/ARM-software/abi-aa/blob/main/aapcs64/aapcs64.rst"],
+    "abi_scope": "AAPCS64 base PCS; platform and SVE/SME variants require their own preservation rules",
+    "allocation": {
+      "reserved": ["SP", "WSP", "XZR", "WZR"],
+      "conditional_reserved": [
+        {"when": "has_frame_pointer", "registers": ["FP", "W29"]},
+        {"when": "platform_reserves_x18", "registers": ["X18", "W18"]}
+      ],
+      "callee_saved": ["X19", "X20", "X21", "X22", "X23", "X24", "X25", "X26", "X27", "X28", "FP"],
+      "partial_callee_saved": [{"registers": ["D8", "D9", "D10", "D11", "D12", "D13", "D14", "D15"], "preserved_bits": 64, "note": "upper halves of corresponding Q/Z registers are not preserved by the base PCS"}],
+      "argument_registers": ["X0", "X1", "X2", "X3", "X4", "X5", "X6", "X7"],
+      "indirect_result_register": "X8",
+      "return_address_register": "LR",
+      "linker_scratch_registers": ["X16", "X17"],
+      "stack_alignment_bytes": 16,
+      "alias_write": "W-register definitions zero the upper 32 bits of the corresponding X register"
+    }
+  },
+  "riscv": {
+    "sources": ["https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-cc.adoc"],
+    "abi_scope": "standard full-register ILP32/LP64 ABI families; excludes ILP32E",
+    "allocation": {
+      "reserved": ["X0", "X2", "X3", "X4"],
+      "conditional_reserved": [{"when": "has_frame_pointer", "registers": ["X8"]}],
+      "callee_saved": ["X8", "X9", "X18", "X19", "X20", "X21", "X22", "X23", "X24", "X25", "X26", "X27"],
+      "argument_registers": ["X10", "X11", "X12", "X13", "X14", "X15", "X16", "X17"],
+      "return_registers": ["X10", "X11"],
+      "return_address_register": "X1",
+      "stack_alignment_bytes": 16,
+      "floating_preservation": "fs0-fs11 are preserved only for values no wider than ABI_FLEN under a hardware FP ABI; base integer ABI preserves no FP registers",
+      "vector_preservation": "standard ABI clobbers v0-v31; vector_cc preserves v1-v7 and v24-v31",
+      "vector_group_constraint": "LMUL register groups begin at a register number divisible by max(1, LMUL); tuple groups are consecutive"
+    }
+  },
+  "msp430": {
+    "sources": [
+      "https://github.com/llvm/llvm-project/blob/llvmorg-22.1.8/llvm/lib/Target/MSP430/MSP430RegisterInfo.cpp",
+      "https://github.com/llvm/llvm-project/blob/llvmorg-22.1.8/llvm/lib/Target/MSP430/MSP430CallingConv.td"
+    ],
+    "allocation": {
+      "reserved": ["PC", "SP", "SR", "CG", "PCB", "SPB", "SRB", "CGB"],
+      "conditional_reserved": [{"when": "has_frame_pointer", "registers": ["R4", "R4B"]}],
+      "callee_saved": ["R4", "R5", "R6", "R7", "R8", "R9", "R10"],
+      "interrupt_callee_saved": ["R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"],
+      "frame_pointer": "R4",
+      "spill_size_bytes": 2,
+      "spill_alignment_bytes": 2,
+      "byte_write": "register-direct byte results clear the upper byte; GR8 and GR16 views interfere"
+    },
+    "selection": {
+      "constant_generator_values": [-1, 0, 1, 2, 4, 8],
+      "two_address": "honor Constraints ties between src2 and rd; insert/coalesce copies before selection",
+      "flags": "SR defs serialize comparisons and arithmetic; ADDC/SUBC also consume carry",
+      "frame_address": "ADDframe expands to MOV16rr plus ADD16ri/SUB16ri when offset is nonzero"
+    },
+    "scheduling": {
+      "numeric_timing": null,
+      "timing_status": "LLVM target supplies no complete cycle/resource model; timing depends on addressing mode and device memory waits",
+      "hazards": ["respect SR carry/condition dependencies", "preserve SP and memory ordering across calls, push/pop and returns", "do not treat unresolved mayLoad/mayStore/hasSideEffects as false"]
+    }
+  },
+  "xcore": {
+    "sources": [
+      "https://github.com/llvm/llvm-project/blob/llvmorg-22.1.8/llvm/lib/Target/XCore/XCoreRegisterInfo.cpp",
+      "https://github.com/llvm/llvm-project/blob/llvmorg-22.1.8/llvm/lib/Target/XCore/XCoreCallingConv.td"
+    ],
+    "allocation": {
+      "reserved": ["CP", "DP", "SP", "LR"],
+      "conditional_reserved": [{"when": "has_frame_pointer", "registers": ["R10"]}],
+      "callee_saved": ["R4", "R5", "R6", "R7", "R8", "R9", "R10"],
+      "frame_pointer": "R10",
+      "prologue_managed": ["LR", "R10"],
+      "argument_registers": ["R0", "R1", "R2", "R3"],
+      "return_registers": ["R0", "R1", "R2", "R3"],
+      "static_chain_register": "R11",
+      "spill_size_bytes": 4,
+      "spill_alignment_bytes": 4,
+      "requires_register_scavenging": true
+    },
+    "selection": {
+      "sp_relative_word_offset": {"short_unsigned_bits": 6, "long_unsigned_bits": 16, "scale_bytes": 4},
+      "fp_relative_short_word_offset": {"minimum": 0, "maximum": 11, "scale_bytes": 4},
+      "large_spill_offsets": "materialize offset and scavenge GRRegs scratch registers",
+      "custom_encoding": "3r/2rus ALU forms have unresolved operand bits in TableGen; use LLVM's custom packing rather than assuming ordinary bitfields"
+    },
+    "scheduling": {
+      "numeric_timing": null,
+      "timing_status": "LLVM target has no complete per-instruction cycle/resource model",
+      "hazards": ["resource I/O and synchronization may block; preserve side effects", "track CP/DP/SP/LR implicit dependencies", "do not assign ISA-wide latencies to a hardware-multithreaded implementation"]
+    }
+  },
+  "lanai": {
+    "sources": [
+      "https://github.com/llvm/llvm-project/blob/llvmorg-22.1.8/llvm/lib/Target/Lanai/LanaiRegisterInfo.cpp",
+      "https://github.com/llvm/llvm-project/blob/llvmorg-22.1.8/llvm/lib/Target/Lanai/LanaiCallingConv.td",
+      "https://github.com/llvm/llvm-project/blob/llvmorg-22.1.8/llvm/lib/Target/Lanai/LanaiSchedule.td"
+    ],
+    "allocation": {
+      "reserved": ["R0", "R1", "R2", "PC", "R4", "SP", "R5", "FP", "R10", "RR1", "R11", "RR2", "R15", "RCA"],
+      "conditional_reserved": [{"when": "stack_realign_and_dynamic_alloca", "registers": ["R14"]}],
+      "callee_saved": [],
+      "frame_pointer": "FP",
+      "base_pointer": "R14",
+      "return_address_register": "RCA",
+      "requires_register_scavenging": true,
+      "constant_registers": {"R0": 0, "R1": 4294967295},
+      "spill_size_bytes": 4,
+      "spill_alignment_bytes": 4
+    },
+    "selection": {
+      "c_arguments": "stack by default; inreg non-vararg operands can use R6/R7/R18/R19",
+      "fast_arguments": "non-vararg arguments use R6/R7/R18/R19 before stack",
+      "return_registers": ["RV", "R9"],
+      "frame_offsets": "signed 10 bits for SPLS or signed 16 bits for other directly addressed frame operations",
+      "large_offsets": "scavenge GPR; materialize using MOVHI + OR_I_LO; choose register-indexed load/store",
+      "negative_alu_immediate": "ALU immediates are unsigned; replace ADD with SUB and negate the offset"
+    },
+    "scheduling": {
+      "model": "LanaiSchedModel",
+      "complete": false,
+      "hazards": ["respect SR dependencies between flag-setting ALU operations and conditional instructions", "match SchedRW/Itinerary to the selected processor model"]
+    }
+  }
+}
