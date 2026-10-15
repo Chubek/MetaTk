@@ -183,22 +183,23 @@ corresponding ISA manuals and are cross-checked with the `arch_oracle` /
 
 ## Compiler backend extension
 
-All 27 specifications load `require("backend").new("<arch>")`.
+All 28 specifications load `require("backend").new("<arch>")`.
 `backend.lua` delegates to the existing DSL builder and adds the generated
 JSON object from `backend/<arch>.lua` to `emit()`. This preserves JSON
 `null`, empty arrays, and structured TableGen DAGs without requiring file
 I/O or a JSON parser in DomMune. Put this directory **before** the existing
 compiler DSL directory on the Lua module search path.
 
-The three additional architectures are:
+The four additional architectures are:
 
 | Key | Target | Compiler-specific information |
 | --- | --- | --- |
 | `msp430` | Classic 16-bit MSP430, TI EABI | GR8/GR16 overlap, reserved PC/SP/SR/CG, conditional R4 frame pointer, normal/interrupt save sets, tied two-address operands, carry dependencies, constant-generator selection, SLEIGH p-code |
 | `lanai` | 32-bit big-endian Lanai | Constant registers, reserved aliases, conditional R14 base pointer, stack/inreg/fast argument rules, spill-offset expansion, ALU/load-store resources and LLVM scheduling model |
 | `xcore` | XS1 XCore | GRRegs allocation class, reserved CP/DP/SP/LR, conditional R10 frame pointer, argument/return registers, register scavenging, scaled short/long spill offsets, resource-I/O ordering |
+| `arc` | ARCv2 EM/HS, ARC EABI | GPR32 r0-r63 + STATUS32, reserved SP/GP/FP/ILINK/BLINK, callee-saved r13-r25+gp+fp, args r0-r7/rets r0-r3, LIMM/compact immediates, STATUS32 .f/.cc dependencies, NoItineraries hazards |
 
-The assembler subsets are intentionally representative; the three new
+The assembler subsets are intentionally representative; the four new
 targets export **all target TableGen instruction records** for compiler
 selection, including pseudos and custom-packed encodings. For existing
 targets, instruction records cover every TableGen form matching a declared

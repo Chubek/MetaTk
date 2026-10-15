@@ -88,9 +88,9 @@ void malformed_and_roundtrip() {
 
 void integration(const Path& root, const Path& dsl_directory, const Path& temporary) {
     Repository repository(root);
-    check(take(repository.architectures()).size() == 27, "source architecture discovery failed");
+    check(take(repository.architectures()).size() == 28, "source architecture discovery failed");
     auto architectures = take(repository.architectures(LoadMode::backend));
-    check(architectures.size() == 27, "backend architecture discovery failed");
+    check(architectures.size() == 28, "backend architecture discovery failed");
     check(!repository.load("../bad"), "invalid architecture key accepted");
     check(!Spec::load(temporary / "does-not-exist.json"), "missing input accepted");
     // Validate the complete bank, loading one architecture at a time.
@@ -103,7 +103,7 @@ void integration(const Path& root, const Path& dsl_directory, const Path& tempor
         check(take(Spec::from_json(serialized)).json() == backend.json(), "real backend roundtrip failed");
         instructions += backend.records(Group::instructions)->size();
     }
-    check(instructions == 7945, "instruction records were lost");
+    check(instructions == 8393, "instruction records were lost");
     auto msp = take(repository.load("msp430"));
     auto add = take(msp.record("ADD16rr"));
     check(text(add.get("Constraints")) == "$src2 = $rd", "instruction tie lost");

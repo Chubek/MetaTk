@@ -16,7 +16,7 @@ import tempfile
 
 TARGETS = {
     "aarch64": "AArch64", "amd64": "X86", "x86": "X86",
-    "amdgpu": "AMDGPU", "arm32": "ARM", "avr": "AVR", "bpf": "BPF",
+    "amdgpu": "AMDGPU", "arc": "ARC", "arm32": "ARM", "avr": "AVR", "bpf": "BPF",
     "directx": "DirectX", "hexagon": "Hexagon", "loongarch32": "LoongArch",
     "loongarch64": "LoongArch", "m68k": "M68k", "mips32": "Mips",
     "mips64": "Mips", "nvptx": "NVPTX", "ppc32": "PowerPC",
@@ -244,7 +244,7 @@ def main():
                                     "-I", str(entry.parent), str(entry), "-o", str(output)], check=True)
                     cache[target] = json.loads(output.read_text())
             metadata.update(extract(cache[target], mnemonics,
-                                    arch in {"msp430", "lanai", "xcore", "spirv", "directx"},
+                                    arch in {"msp430", "lanai", "xcore", "spirv", "directx", "arc"},
                                     SCHEDULE_MODELS.get(target)))
             metadata["provenance"] = {
                 "tool": version, "target": target,
