@@ -1,0 +1,603 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://texscrape/CodeYaml.schema.json",
+  "title": "ConcreteAST-PascalW/1",
+  "description": "JSON Schema for the Concrete-AST YAML intermediate representation emitted by tex_to_yaml.py. Every node is an object discriminated by its `kind` field. Source `line` numbers are attached to declarations and statements (and to record field declarations); they are omitted from pure expression/type nodes. Pascal-W (Knuth's TeX82 Pascal dialect) is the source language; WEB section markers ({N:}/{:N}/[N:]/[:N]) and all comments are elided as trivia during lexing, so they never appear here.",
+  "type": "object",
+  "$ref": "#/$defs/Program",
+
+  "$defs": {
+
+    "Program": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "path", "schema", "block"],
+      "properties": {
+        "kind": {"const": "Program"},
+        "name": {"type": "string"},
+        "path": {"type": "string"},
+        "schema": {"const": "ConcreteAST-PascalW/1"},
+        "block": {"$ref": "#/$defs/Block"}
+      }
+    },
+
+    "Block": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["labels", "constants", "types", "variables", "subprograms", "body"],
+      "description": "A Pascal declaration section followed by a compound body. Declaration groups appear in source order; each is a (possibly empty) list.",
+      "properties": {
+        "labels": {"type": "array", "items": {"type": "integer"}},
+        "constants": {"type": "array", "items": {"$ref": "#/$defs/ConstDecl"}},
+        "types": {"type": "array", "items": {"$ref": "#/$defs/TypeDecl"}},
+        "variables": {"type": "array", "items": {"$ref": "#/$defs/VarDecl"}},
+        "subprograms": {"type": "array", "items": {"$ref": "#/$defs/Subprogram"}},
+        "body": {"$ref": "#/$defs/Compound"}
+      }
+    },
+
+    "Subprogram": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "path", "category", "parameters", "forward"],
+      "description": "A procedure or function. `forward` declarations carry no `block`; functions additionally carry `return_type`.",
+      "properties": {
+        "kind": {"const": "Subprogram"},
+        "name": {"type": "string"},
+        "path": {"type": "string", "description": "Dotted qualified name, e.g. outer.inner."},
+        "category": {"enum": ["procedure", "function"]},
+        "parameters": {"type": "array", "items": {"$ref": "#/$defs/ParamDecl"}},
+        "forward": {"type": "boolean"},
+        "return_type": {"$ref": "#/$defs/Type"},
+        "block": {"$ref": "#/$defs/Block"},
+        "line": {"type": "integer"}
+      }
+    },
+
+    "ParamDecl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "mode"],
+      "description": "A formal parameter. `type` is absent for procedure/function parameters (mode 'procedure'/'function').",
+      "properties": {
+        "kind": {"const": "ParamDecl"},
+        "name": {"type": "string"},
+        "type": {"$ref": "#/$defs/Type"},
+        "mode": {"enum": ["value", "var", "procedure", "function"]},
+        "line": {"type": "integer"}
+      }
+    },
+
+    "ConstDecl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "value"],
+      "properties": {
+        "kind": {"const": "ConstDecl"},
+        "name": {"type": "string"},
+        "value": {"$ref": "#/$defs/ConstValue"},
+        "line": {"type": "integer"}
+      }
+    },
+
+    "VarDecl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "names", "type"],
+      "description": "One or more names sharing a type.",
+      "properties": {
+        "kind": {"const": "VarDecl"},
+        "names": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "type": {"$ref": "#/$defs/Type"},
+        "line": {"type": "integer"}
+      }
+    },
+
+    "TypeDecl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "type"],
+      "properties": {
+        "kind": {"const": "TypeDecl"},
+        "name": {"type": "string"},
+        "type": {"$ref": "#/$defs/Type"},
+        "line": {"type": "integer"}
+      }
+    },
+
+    "Type": {
+      "oneOf": [
+        {"$ref": "#/$defs/NamedType"},
+        {"$ref": "#/$defs/PointerType"},
+        {"$ref": "#/$defs/ArrayType"},
+        {"$ref": "#/$defs/RecordType"},
+        {"$ref": "#/$defs/SetType"},
+        {"$ref": "#/$defs/FileType"},
+        {"$ref": "#/$defs/EnumeratedType"},
+        {"$ref": "#/$defs/SubrangeType"}
+      ]
+    },
+
+    "NamedType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name"],
+      "properties": {
+        "kind": {"const": "NamedType"},
+        "name": {"type": "string"}
+      }
+    },
+
+    "PointerType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "base"],
+      "properties": {
+        "kind": {"const": "PointerType"},
+        "base": {"$ref": "#/$defs/Type"}
+      }
+    },
+
+    "ArrayType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "index_types", "element_type", "packed"],
+      "properties": {
+        "kind": {"const": "ArrayType"},
+        "index_types": {"type": "array", "items": {"$ref": "#/$defs/Type"}, "minItems": 1},
+        "element_type": {"$ref": "#/$defs/Type"},
+        "packed": {"type": "boolean"}
+      }
+    },
+
+    "RecordType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "fixed", "packed"],
+      "description": "A record. `fixed` is the list of fixed (non-variant) field sections; `variant` is present only when the record has a variant part.",
+      "properties": {
+        "kind": {"const": "RecordType"},
+        "fixed": {"type": "array", "items": {"$ref": "#/$defs/FieldDecl"}},
+        "variant": {"$ref": "#/$defs/VariantPart"},
+        "packed": {"type": "boolean"}
+      }
+    },
+
+    "FieldDecl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fields", "type"],
+      "description": "A record field section: one or more field names sharing a type. Note: field sections are not `kind`-tagged (they only ever appear inside record field lists).",
+      "properties": {
+        "fields": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "type": {"$ref": "#/$defs/Type"},
+        "line": {"type": "integer"}
+      }
+    },
+
+    "VariantPart": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tag", "variants"],
+      "description": "The `case` variant part of a record. `tag.name` is null when the tag has no name (then absent after pruning).",
+      "properties": {
+        "tag": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["type"],
+          "properties": {
+            "name": {"type": ["string", "null"]},
+            "type": {"$ref": "#/$defs/Type"}
+          }
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["labels", "fields"],
+            "properties": {
+              "labels": {"type": "array", "items": {"$ref": "#/$defs/ConstValue"}, "minItems": 1},
+              "fields": {"$ref": "#/$defs/FieldList"}
+            }
+          }
+        }
+      }
+    },
+
+    "FieldList": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fixed"],
+      "description": "A nested field list inside a variant. `variant` is present only for nested variant parts.",
+      "properties": {
+        "fixed": {"type": "array", "items": {"$ref": "#/$defs/FieldDecl"}},
+        "variant": {"$ref": "#/$defs/VariantPart"}
+      }
+    },
+
+    "SetType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "element_type", "packed"],
+      "properties": {
+        "kind": {"const": "SetType"},
+        "element_type": {"$ref": "#/$defs/Type"},
+        "packed": {"type": "boolean"}
+      }
+    },
+
+    "FileType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "element_type", "packed"],
+      "properties": {
+        "kind": {"const": "FileType"},
+        "element_type": {"$ref": "#/$defs/Type"},
+        "packed": {"type": "boolean"}
+      }
+    },
+
+    "EnumeratedType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "values"],
+      "properties": {
+        "kind": {"const": "EnumeratedType"},
+        "values": {"type": "array", "items": {"type": "string"}, "minItems": 1}
+      }
+    },
+
+    "SubrangeType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "lower", "upper"],
+      "properties": {
+        "kind": {"const": "SubrangeType"},
+        "lower": {"$ref": "#/$defs/ConstValue"},
+        "upper": {"$ref": "#/$defs/ConstValue"}
+      }
+    },
+
+    "Statement": {
+      "oneOf": [
+        {"$ref": "#/$defs/Compound"},
+        {"$ref": "#/$defs/Empty"},
+        {"$ref": "#/$defs/Assignment"},
+        {"$ref": "#/$defs/ProcedureCall"},
+        {"$ref": "#/$defs/If"},
+        {"$ref": "#/$defs/While"},
+        {"$ref": "#/$defs/Repeat"},
+        {"$ref": "#/$defs/For"},
+        {"$ref": "#/$defs/Case"},
+        {"$ref": "#/$defs/With"},
+        {"$ref": "#/$defs/Goto"},
+        {"$ref": "#/$defs/Labeled"}
+      ]
+    },
+
+    "Compound": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "statements"],
+      "properties": {
+        "kind": {"const": "Compound"},
+        "statements": {"type": "array", "items": {"$ref": "#/$defs/Statement"}},
+        "line": {"type": "integer"}
+      }
+    },
+
+    "Empty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "description": "The empty statement (e.g. a bare `;` or the slot before `end`/`else`/`until`).",
+      "properties": {
+        "kind": {"const": "Empty"},
+        "line": {"type": "integer"}
+      }
+    },
+
+    "Assignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "target", "value"],
+      "properties": {
+        "kind": {"const": "Assignment"},
+        "target": {"$ref": "#/$defs/Designator"},
+        "value": {"$ref": "#/$defs/Expression"},
+        "line": {"type": "integer"}
+      }
+    },
+
+    "ProcedureCall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "arguments"],
+      "description": "A call statement. `arguments` may contain WriteField nodes when calling write/writeln with field-width specifiers.",
+      "properties": {
+        "kind": {"const": "ProcedureCall"},
+        "name": {"type": "string"},
+        "arguments": {"type": "array", "items": {"$ref": "#/$defs/Argument"}},
+        "line": {"type": "integer"}
+      }
+    },
+
+    "If": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "condition", "then"],
+      "properties": {
+        "kind": {"const": "If"},
+        "condition": {"$ref": "#/$defs/Expression"},
+        "then": {"$ref": "#/$defs/Statement"},
+        "else": {"$ref": "#/$defs/Statement"},
+        "line": {"type": "integer"}
+      }
+    },
+
+    "While": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "condition", "body"],
+      "properties": {
+        "kind": {"const": "While"},
+        "condition": {"$ref": "#/$defs/Expression"},
+        "body": {"$ref": "#/$defs/Statement"},
+        "line": {"type": "integer"}
+      }
+    },
+
+    "Repeat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "statements", "condition"],
+      "description": "repeat ... until. `statements` is the loop body (a list, since repeat takes a statement sequence).",
+      "properties": {
+        "kind": {"const": "Repeat"},
+        "statements": {"type": "array", "items": {"$ref": "#/$defs/Statement"}},
+        "condition": {"$ref": "#/$defs/Expression"},
+        "line": {"type": "integer"}
+      }
+    },
+
+    "For": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "variable", "direction", "initial", "final", "body"],
+      "properties": {
+        "kind": {"const": "For"},
+        "variable": {"type": "string"},
+        "direction": {"enum": ["to", "downto"]},
+        "initial": {"$ref": "#/$defs/Expression"},
+        "final": {"$ref": "#/$defs/Expression"},
+        "body": {"$ref": "#/$defs/Statement"},
+        "line": {"type": "integer"}
+      }
+    },
+
+    "Case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "selector", "arms"],
+      "properties": {
+        "kind": {"const": "Case"},
+        "selector": {"$ref": "#/$defs/Expression"},
+        "arms": {"type": "array", "items": {"$ref": "#/$defs/CaseArm"}},
+        "line": {"type": "integer"}
+      }
+    },
+
+    "CaseArm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["labels", "statement"],
+      "description": "A case arm. `labels` is either the literal string \"others\" or a list of constant labels.",
+      "properties": {
+        "labels": {
+          "oneOf": [
+            {"const": "others"},
+            {"type": "array", "items": {"$ref": "#/$defs/ConstValue"}, "minItems": 1}
+          ]
+        },
+        "statement": {"$ref": "#/$defs/Statement"}
+      }
+    },
+
+    "With": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "records", "body"],
+      "properties": {
+        "kind": {"const": "With"},
+        "records": {"type": "array", "items": {"$ref": "#/$defs/Designator"}, "minItems": 1},
+        "body": {"$ref": "#/$defs/Statement"},
+        "line": {"type": "integer"}
+      }
+    },
+
+    "Goto": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "label"],
+      "properties": {
+        "kind": {"const": "Goto"},
+        "label": {"type": "integer"},
+        "line": {"type": "integer"}
+      }
+    },
+
+    "Labeled": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "label", "statement"],
+      "properties": {
+        "kind": {"const": "Labeled"},
+        "label": {"type": "integer"},
+        "statement": {"$ref": "#/$defs/Statement"},
+        "line": {"type": "integer"}
+      }
+    },
+
+    "Designator": {
+      "description": "An lvalue / call-target shape: a (possibly chained) Identifier with FieldAccess, Deref, Index, and Call postfixes. A bare Identifier is also a valid Designator.",
+      "$ref": "#/$defs/Expression"
+    },
+
+    "Argument": {
+      "oneOf": [
+        {"$ref": "#/$defs/Expression"},
+        {"$ref": "#/$defs/WriteField"}
+      ]
+    },
+
+    "Expression": {
+      "oneOf": [
+        {"$ref": "#/$defs/BinaryOp"},
+        {"$ref": "#/$defs/UnaryOp"},
+        {"$ref": "#/$defs/Literal"},
+        {"$ref": "#/$defs/Identifier"},
+        {"$ref": "#/$defs/Call"},
+        {"$ref": "#/$defs/Index"},
+        {"$ref": "#/$defs/FieldAccess"},
+        {"$ref": "#/$defs/Deref"}
+      ]
+    },
+
+    "ConstValue": {
+      "description": "A compile-time constant as used in const declarations, subrange bounds, and case labels. May be a signed literal (UnaryOp).",
+      "oneOf": [
+        {"$ref": "#/$defs/Literal"},
+        {"$ref": "#/$defs/Identifier"},
+        {"$ref": "#/$defs/UnaryOp"}
+      ]
+    },
+
+    "BinaryOp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "operator", "left", "right"],
+      "properties": {
+        "kind": {"const": "BinaryOp"},
+        "operator": {
+          "enum": ["=", "<>", "<", "<=", ">", ">=", "in", "+", "-", "or", "*", "/", "div", "mod", "and"]
+        },
+        "left": {"$ref": "#/$defs/Expression"},
+        "right": {"$ref": "#/$defs/Expression"}
+      }
+    },
+
+    "UnaryOp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "operator", "operand"],
+      "properties": {
+        "kind": {"const": "UnaryOp"},
+        "operator": {"enum": ["-", "+", "not"]},
+        "operand": {"$ref": "#/$defs/Expression"}
+      }
+    },
+
+    "Literal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value", "literal_type"],
+      "description": "A literal constant. The Python/YAML type of `value` follows `literal_type`: integer->int, real->float, string->str, boolean->bool, nil->null.",
+      "properties": {
+        "kind": {"const": "Literal"},
+        "value": {},
+        "literal_type": {"enum": ["integer", "real", "string", "boolean", "nil"]}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"literal_type": {"const": "integer"}}},
+          "then": {"properties": {"value": {"type": "integer"}}}
+        },
+        {
+          "if": {"properties": {"literal_type": {"const": "real"}}},
+          "then": {"properties": {"value": {"type": "number"}}}
+        },
+        {
+          "if": {"properties": {"literal_type": {"const": "string"}}},
+          "then": {"properties": {"value": {"type": "string"}}}
+        },
+        {
+          "if": {"properties": {"literal_type": {"const": "boolean"}}},
+          "then": {"properties": {"value": {"type": "boolean"}}}
+        },
+        {
+          "if": {"properties": {"literal_type": {"const": "nil"}}},
+          "then": {"properties": {"value": {"type": "null"}}}
+        }
+      ]
+    },
+
+    "Identifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name"],
+      "properties": {
+        "kind": {"const": "Identifier"},
+        "name": {"type": "string"}
+      }
+    },
+
+    "Call": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "base", "arguments"],
+      "description": "A function call or array-constructor-like postfix `(args)`. `arguments` may contain WriteField nodes for write/writeln.",
+      "properties": {
+        "kind": {"const": "Call"},
+        "base": {"$ref": "#/$defs/Expression"},
+        "arguments": {"type": "array", "items": {"$ref": "#/$defs/Argument"}}
+      }
+    },
+
+    "Index": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "base", "indices"],
+      "properties": {
+        "kind": {"const": "Index"},
+        "base": {"$ref": "#/$defs/Expression"},
+        "indices": {"type": "array", "items": {"$ref": "#/$defs/Expression"}, "minItems": 1}
+      }
+    },
+
+    "FieldAccess": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "base", "field"],
+      "properties": {
+        "kind": {"const": "FieldAccess"},
+        "base": {"$ref": "#/$defs/Expression"},
+        "field": {"type": "string"}
+      }
+    },
+
+    "Deref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "base"],
+      "description": "Pointer dereference, the `^` postfix operator.",
+      "properties": {
+        "kind": {"const": "Deref"},
+        "base": {"$ref": "#/$defs/Expression"}
+      }
+    },
+
+    "WriteField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value", "width"],
+      "description": "A write/writeln argument carrying a field-width (and optional fractional-length) specifier: `value:width` or `value:width:decimals`.",
+      "properties": {
+        "kind": {"const": "WriteField"},
+        "value": {"$ref": "#/$defs/Expression"},
+        "width": {"$ref": "#/$defs/Expression"},
+        "decimals": {"$ref": "#/$defs/Expression"}
+      }
+    }
+  }
+}
