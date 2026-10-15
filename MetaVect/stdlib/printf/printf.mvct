@@ -1,0 +1,11 @@
+-- MetaVect standard module: printf
+-- Interface scaffold; implementation lives in the runtime module registry.
+module printf
+export module_name : String = "printf"
+export abi_version : Int = 1
+
+-- Public contract:
+-- * Validate arguments at the module boundary.
+-- * Return structured errors for invalid inputs.
+-- * Keep effects explicit in function types.
+-- * Add examples and tests when operations are implemented.

@@ -1,0 +1,11 @@
+-- MetaVect standard module: os
+-- Interface scaffold; implementation lives in the runtime module registry.
+module os
+export module_name : String = "os"
+export abi_version : Int = 1
+
+-- Public contract:
+-- * Validate arguments at the module boundary.
+-- * Return structured errors for invalid inputs.
+-- * Keep effects explicit in function types.
+-- * Add examples and tests when operations are implemented.

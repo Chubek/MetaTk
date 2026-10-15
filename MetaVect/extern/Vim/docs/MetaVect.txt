@@ -1,0 +1,20 @@
+*metavect.txt*  MetaVect filetype support
+
+Filetype
+--------
+Files ending in .mv, .mvec, or .mvct are detected as MetaVect.
+
+Syntax
+------
+The syntax file highlights core keywords, primitive types, numbers, strings,
+operators, and line/block comments. The editor syntax is intentionally a
+best-effort mirror of the lexer; the compiler lexer remains authoritative.
+
+Indentation
+-----------
+Automatic indentation is enabled. This scaffold does not yet implement
+syntax-aware indentation or formatting.
+
+Install
+-------
+Add the extern/Vim directory to your Vim runtime path.

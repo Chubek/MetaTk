@@ -1,0 +1,33 @@
+%YAML 1.2
+---
+name: MetaVect
+file_extensions: [mv, mvec, mvct]
+scope: source.metavect
+contexts:
+  main:
+    - include: comments
+    - match: '\b(let|in|fun|fn|type|forall|if|then|else|match|with|module|import|export|true|false)\b'
+      scope: keyword.control.metavect
+    - match: '\b(Int|Float|Bool|String|Unit|Path|Color|Vector|Matrix)\b'
+      scope: storage.type.metavect
+    - match: '"([^"\\]|\\.)*"'
+      scope: string.quoted.double.metavect
+    - match: '-?\b[0-9]+(\.[0-9]+)?([eE][+-]?[0-9]+)?\b'
+      scope: constant.numeric.metavect
+    - match: '\b[A-Z][A-Za-z0-9_]*\b'
+      scope: entity.name.type.metavect
+    - match: '\b[a-z_][A-Za-z0-9_]*\b'
+      scope: variable.other.metavect
+    - match: '->|=>|::|==|!=|<=|>=|&&|\|\|'
+      scope: keyword.operator.metavect
+    - match: '[+\-*/=<>!|&:.]'
+      scope: keyword.operator.metavect
+  comments:
+    - match: '--.*$'
+      scope: comment.line.double-dash.metavect
+    - match: '\{-'
+      push: block-comment
+  block-comment:
+    - meta_scope: comment.block.metavect
+    - match: '-\}'
+      pop: true

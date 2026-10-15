@@ -1,0 +1,7 @@
+# MetaVect backend selector: MVBE-LaTeXPicture
+# Declarative metadata; selectors must be interpreted by CSelReader, not eval'd as host code.
+backend = "latexpicture"
+priority = 100
+requires = ["vector-paths"]
+supports = ["path", "stroke", "fill", "transform"]
+fallback = "generic-vector"
