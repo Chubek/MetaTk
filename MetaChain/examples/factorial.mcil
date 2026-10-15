@@ -1,0 +1,10 @@
+; Six factorial. All branch targets are instruction indices after parsing.
+const r0, 1
+const r1, 6
+const r2, 1
+loop:
+mul r0, r0, r1
+sub r1, r1, r2
+jnz r1, loop
+print r0
+halt r0
