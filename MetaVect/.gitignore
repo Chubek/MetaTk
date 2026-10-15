@@ -1,0 +1,21 @@
+/build/
+
+# The parent workspace treats *.d as generated dependency files. These are D
+# source modules, not build artifacts; expose only this implemented tranche.
+!/MetaVect.d
+!/frontend/Input.d
+!/frontend/Token.d
+!/frontend/SyntaxError.d
+!/frontend/Lexer.d
+!/frontend/AST.d
+!/frontend/Parser.d
+!/driver/mvect.d
+!/driver/mvect-cli.d
+!/tests/test_frontend.d
+!/tests/test-vim.vim
+!/tests/test-vim-indent.vim
+!/tests/check-vim.py
+!/tests/check-sublime.py
+!/tests/check-tex.py
+!/extern/README.md
+!/cmake/build-d.cmake

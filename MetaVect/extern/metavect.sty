@@ -1,5 +1,49 @@
+%%
+%% This is file `metavect.sty',
+%% generated with the docstrip utility.
+%%
+%% The original source files were:
+%%
+%% metavect.dtx  (with options: `package')
+%% Copyright (C) 2026 MetaVect.
+%% MetaVect LaTeX support: figure inclusion and source listings.
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{metavect}[2026/10/15 MetaVect graphics integration]
+\ProvidesPackage{metavect}[2026/10/15 v0.1.0 MetaVect graphics integration]
+%% MetaVect figure integration and code listing support.
+%% The compiler pipeline is under development: this package includes rendered
+%% figures (PDF/PNG) and highlights MetaVect source; it never executes it.
 \RequirePackage{graphicx}
-% Include a generated PDF/SVG-converted-to-PDF output file.
+\RequirePackage{listings}
+
+%% Package options are forwarded to graphicx (e.g. draft/final).
+\DeclareOption*{\PassOptionsToPackage{\CurrentOption}{graphicx}}
+\ProcessOptions\relax
+
+%% Version reported by MetaVect.h / MetaVect.d (0.1.0); keep in sync.
+\newcommand{\MetaVectVersion}{0.1.0}
+
+%% Include a rendered MetaVect figure. The argument is a graphics file
+%% produced outside LaTeX (e.g. backend PDF output converted as needed).
 \newcommand{\MetaVectInput}[1]{\includegraphics{#1}}
+\newcommand{\MetaVectInputOpt}[2][]{\includegraphics[#1]{#2}}
+
+%% Listings language mirroring frontend/Lexer.d on a best-effort basis:
+%% keywords, conventional type names, booleans, `--` line comments,
+%% `{- ... -}` block comments (listings does not nest them), and
+%% double-quoted strings. Number and escape details follow the manual.
+\lstdefinelanguage{MetaVect}{%
+  sensitive=true,%
+  morekeywords={let,in,fun,fn,type,forall,if,then,else,match,with,module,import,export},%
+  morekeywords=[2]{Int,Float,Bool,String,Unit,Path,Color,Vector,Matrix},%
+  morekeywords=[3]{true,false},%
+  morecomment=[l]{--},%
+  morecomment=[s]{\{-}{-\}},%
+  morestring=[b]",%
+  keywordstyle=\bfseries,%
+  keywordstyle=[2]\bfseries,%
+  keywordstyle=[3]\bfseries%
+}
+\lstnewenvironment{metavectcode}[1][]{\lstset{language=MetaVect,#1}}{}
+\endinput
+%%
+%% End of file `metavect.sty'.

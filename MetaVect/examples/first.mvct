@@ -1,0 +1,9 @@
+-- First milestone: parse only; none of these expressions are evaluated.
+module examples.first
+import prelude
+
+export identity : Int -> Int = fn(value: Int) => value
+let scale = fun(value: Float, factor: Float) => value * factor
+export size : Int = let base : Int = 20 in
+    if base > 0 then identity(base + 2 * 3) else 0
+export label : String = "MetaVect\nsyntax frontend"

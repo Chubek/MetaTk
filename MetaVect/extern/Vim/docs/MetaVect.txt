@@ -1,20 +1,72 @@
-*metavect.txt*  MetaVect filetype support
+*metavect.txt*  MetaVect filetype support                      *metavect*
 
-Filetype
---------
-Files ending in .mv, .mvec, or .mvct are detected as MetaVect.
+MetaVect is a functional vector-graphics language under development. This
+plugin provides filetype detection, syntax highlighting, indentation, and
+TeX/LaTeX integration for MetaVect sources (`.mv`, `.mvec`, `.mvct`).
+The compiler lexer (frontend/Lexer.d) is authoritative; the editor files
+mirror it on a best-effort basis.
 
-Syntax
-------
-The syntax file highlights core keywords, primitive types, numbers, strings,
-operators, and line/block comments. The editor syntax is intentionally a
-best-effort mirror of the lexer; the compiler lexer remains authoritative.
+CONTENTS                                             *metavect-contents*
+  1. Filetype .............. |metavect-filetype|
+  2. Syntax ................ |metavect-syntax|
+  3. Indentation ........... |metavect-indent|
+  4. TeX/LaTeX ............. |metavect-tex|
+  5. Commands .............. |metavect-commands|
+  6. Install ............... |metavect-install|
 
-Indentation
------------
-Automatic indentation is enabled. This scaffold does not yet implement
-syntax-aware indentation or formatting.
+1. FILETYPE                                          *metavect-filetype*
+Files ending in `.mv`, `.mvec`, or `.mvct` are detected as MetaVect
+(see extern/Vim/ftdetect/MetaVect.vim). The filetype sets:
+  - `commentstring` to `-- %s`
+  - `comments` to nested `{-` `-}` blocks plus `--` lines
+  - `suffixesadd` to `.mvct,.mv,.mvec`
+  - `matchpairs` to `(:),[:],{:}`
+  - `makeprg` to `mvect --check-syntax %` with a matching `errorformat`
+    (`file:line:col: error: message`) when `mvect` is on PATH
 
-Install
--------
-Add the extern/Vim directory to your Vim runtime path.
+2. SYNTAX                                            *metavect-syntax*
+Groups (see extern/Vim/syntax/MetaVect.vim):
+  mvKeyword ...... `let in fun fn type forall if then else match with`
+                   `module import export`
+  mvBoolean ...... `true false` (boolean literals)
+  mvType ......... `Int Float Bool String Unit Path Color Vector Matrix`
+                   (conventional names; the lexer sees identifiers)
+  mvNumber ....... integers `42`, floats `1.25 1e3 4.5E-2`
+  mvNumberError .. lexer-invalid numbers (`12abc`, `1e`, `1.0E-`)
+  mvString ....... `"..."` (one line; escapes `\n \r \t \" \\`)
+  mvStringEscape . valid escape inside a string
+  mvStringError .. invalid escape (`\q`) inside a string
+  mvOperator ..... `-> => :: == != <= >= && || + - * / = ! < > | & : .`
+  mvDelimiter .... `( ) [ ] { } , ;` (`()` is two delimiters here; only
+                   the parser reads the pair as a unit literal)
+  mvLineComment .. `--` to end of line (`x--1` is `x` plus a comment)
+  mvBlockComment . nestable `{- ... -}`
+
+3. INDENTATION                                        *metavect-indent*
+`GetMetaVectIndent()` (extern/Vim/indent/MetaVect.vim) is lexical only:
+  - one level per net open delimiter on the previous code line
+  - one extra level after a line ending in `=`, `=>`, `then`, `else`, `in`
+  - dedent when the new line starts with `]` `}` `)`
+Strings and comments are stripped before counting, so their brackets do
+not indent. Continuation example: >
+  export size : Int = let base : Int = 20 in
+      if base > 0 then identity(base + 2 * 3) else 0
+
+4. TEX/LATEX                                          *metavect-tex*
+  - LaTeX package: `\usepackage{metavect}` provides `\MetaVectInput`,
+    `\MetaVectInputOpt`, the `metavectcode` listing, and
+    `\MetaVectVersion` (currently 0.1.0). Source: extern/LaTeX/metavect.dtx.
+  - Plain/LaTeX input: `\input{MetaVect.tex}` (extern/TeX) defines
+    `\MetaVectVersion` and `\MetaVectGraphic`.
+  - Example document: extern/TeX/Build.tex shows both inclusion and a
+    `listings` code sample.
+
+5. COMMANDS                                        *metavect-commands*
+`:make` runs the syntax check on the current buffer (when configured). >
+
+6. INSTALL                                          *metavect-install*
+Add `extern/Vim` to your runtime path: >
+  set runtimepath+=/path/to/MetaVect/extern/Vim
+<
+
+vim:tw=78:ts=8:ft=help:norl:

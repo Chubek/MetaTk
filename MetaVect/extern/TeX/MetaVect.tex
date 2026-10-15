@@ -1,3 +1,6 @@
-\usepackage{graphicx}
-\newcommand{\MetaVectVersion}{0.1.0}
-\newcommand{\MetaVectGraphic}[1]{\includegraphics{#1}}
+% MetaVect TeX input: version and figure helpers for LaTeX documents.
+% Usage (preamble): \usepackage{graphicx} \input{MetaVect.tex}
+% For listings support and package options, prefer \usepackage{metavect}.
+\providecommand{\MetaVectVersion}{0.1.0}
+\providecommand{\MetaVectGraphic}[1]{\includegraphics{#1}}
+\providecommand{\MetaVectGraphicOpt}[2][]{\includegraphics[#1]{#2}}

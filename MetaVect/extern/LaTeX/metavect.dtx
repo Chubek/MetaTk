@@ -1,18 +1,75 @@
-% \ProvidesFile{metavect.dtx}[2026/10/15 MetaVect documentation and package]
+% \iffalse meta-comment
+% MetaVect LaTeX support: documentation and package source.
+% Run `latex metavect.ins` to extract metavect.sty, or use l3build.
+% \fi
 % \iffalse
 %<*driver>
 \documentclass{ltxdoc}
 \usepackage{metavect}
-\begin{document}\DocInput{metavect.dtx}\end{document}
+\EnableCrossrefs
+\CodelineIndex
+\RecordChanges
+\begin{document}
+  \DocInput{metavect.dtx}
+\end{document}
 %</driver>
 % \fi
-% \ProvidesPackage{metavect}[2026/10/15 MetaVect graphics placeholders]
+%
+% \GetFileInfo{metavect.sty}
+% \title{MetaVect graphics integration}
+% \author{MetaVect}
+% \date{2026/10/15 v0.1.0}
+% \maketitle
+%
+% \section{Usage}
+% Include a rendered MetaVect figure with |\MetaVectInput{file}| or
+% |\MetaVectInputOpt[width=\linewidth]{file}|, where |file| is backend output
+% produced outside \LaTeX. Highlight source with the |metavectcode|
+% environment (a |listings| language mirroring the compiler lexer on a
+% best-effort basis). |\MetaVectVersion| expands to the package version.
+%
+% \StopEventually{\PrintChanges\PrintIndex}
+%
+% \section{Implementation}
 % \begin{macrocode}
 %<*package>
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{metavect}[2026/10/15 MetaVect graphics placeholders]
+\ProvidesPackage{metavect}[2026/10/15 v0.1.0 MetaVect graphics integration]
+%% MetaVect figure integration and code listing support.
+%% The compiler pipeline is under development: this package includes rendered
+%% figures (PDF/PNG) and highlights MetaVect source; it never executes it.
 \RequirePackage{graphicx}
+\RequirePackage{listings}
+
+%% Package options are forwarded to graphicx (e.g. draft/final).
+\DeclareOption*{\PassOptionsToPackage{\CurrentOption}{graphicx}}
+\ProcessOptions\relax
+
+%% Version reported by MetaVect.h / MetaVect.d (0.1.0); keep in sync.
+\newcommand{\MetaVectVersion}{0.1.0}
+
+%% Include a rendered MetaVect figure. The argument is a graphics file
+%% produced outside LaTeX (e.g. backend PDF output converted as needed).
 \newcommand{\MetaVectInput}[1]{\includegraphics{#1}}
+\newcommand{\MetaVectInputOpt}[2][]{\includegraphics[#1]{#2}}
+
+%% Listings language mirroring frontend/Lexer.d on a best-effort basis:
+%% keywords, conventional type names, booleans, `--` line comments,
+%% `{- ... -}` block comments (listings does not nest them), and
+%% double-quoted strings. Number and escape details follow the manual.
+\lstdefinelanguage{MetaVect}{%
+  sensitive=true,%
+  morekeywords={let,in,fun,fn,type,forall,if,then,else,match,with,module,import,export},%
+  morekeywords=[2]{Int,Float,Bool,String,Unit,Path,Color,Vector,Matrix},%
+  morekeywords=[3]{true,false},%
+  morecomment=[l]{--},%
+  morecomment=[s]{\{-}{-\}},%
+  morestring=[b]",%
+  keywordstyle=\bfseries,%
+  keywordstyle=[2]\bfseries,%
+  keywordstyle=[3]\bfseries%
+}
+\lstnewenvironment{metavectcode}[1][]{\lstset{language=MetaVect,#1}}{}
 %</package>
 % \end{macrocode}
 % \Finale

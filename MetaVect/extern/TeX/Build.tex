@@ -1,3 +1,30 @@
-% Build helper: compile MetaVect documentation with a standard LaTeX engine.
+% Build helper and usage example: compile with `pdflatex Build.tex`.
+% Demonstrates figure inclusion via MetaVect.tex and source highlighting via
+% the metavect listings language. Replace `example-figure.pdf` with real
+% backend output; the placeholder rule below keeps the example compilable.
 \documentclass{article}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{metavect}
+% Loaded after the package: \providecommand definitions below are no-ops
+% for macros the package already provides, so there is no redefinition.
 \input{MetaVect.tex}
+\begin{document}
+\section*{MetaVect \MetaVectVersion\ example}
+
+\begin{metavectcode}
+-- First milestone: parse only; none of these expressions are evaluated.
+module examples.first
+import prelude
+
+export identity : Int -> Int = fn(value: Int) => value
+export size : Int = let base : Int = 20 in
+    if base > 0 then identity(base + 2 * 3) else 0
+\end{metavectcode}
+
+Figure inclusion (expects a backend-rendered file):
+\begin{center}
+  \IfFileExists{example-figure.pdf}{\MetaVectGraphic{example-figure.pdf}}{%
+    \fbox{\parbox{0.7\linewidth}{\centering Placeholder for MetaVect backend output}}}
+\end{center}
+\end{document}
