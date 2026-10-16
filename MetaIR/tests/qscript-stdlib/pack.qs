@@ -1,0 +1,11 @@
+use pack, testing;
+let p = pack32(-5, 7);
+equal(hi32(p), -5); equal(lo32(p), 7); equal(lo32(pack32(1, -1)), -1);
+equal(byte(0x1234, 1), 0x12); equal(with_byte(0x1234, 0, 0xff), 0x12ff);
+equal(sign_extend(0xff, 8), -1); equal(sign_extend(0x7f, 8), 127); equal(zero_extend(-1, 8), 255);
+equal(i16(0x8000), -32768); equal(u16(-1), 65535); equal(i8(200), -56); equal(u8(-1), 255);
+equal(u32(-1), 4294967295); equal(i32(4294967295), -1);
+let q = pack16(1, 2, 3, 4);
+equal(field16(q, 3) * 1000 + field16(q, 2) * 100 + field16(q, 1) * 10 + field16(q, 0), 1234);
+equal(pack_bytes(1, 2, 3, 4, 5, 6, 7, 8), 0x0102030405060708);
+print 1;

@@ -1,0 +1,10 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: GLRpp
+Description: Header-only C++20 interface to libglr
+Version: @PROJECT_VERSION@
+Requires: libglr
+Cflags: -I${includedir} -I${includedir}/GLRpp
+Libs:

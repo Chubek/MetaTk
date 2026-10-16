@@ -1,0 +1,8 @@
+// Prints the sum 1 + 2 + ... + n. QScript is integer-only.
+fn triangle(n) {
+    let total = 0;
+    for (let i = 1; i <= n; i++) total += i;
+    return total;
+}
+
+print triangle(10);

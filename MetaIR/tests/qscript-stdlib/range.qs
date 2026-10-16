@@ -1,0 +1,11 @@
+use range, testing;
+equal(contains(5, 1, 10), 1); equal(contains(11, 1, 10), 0);
+equal(length(3, 7), 5); equal(length(7, 3), 0);
+equal(overlaps(1, 5, 5, 9), 1); equal(overlaps(1, 4, 5, 9), 0);
+equal(overlap(1, 5, 4, 9), 2);
+equal(wrap(13, 0, 9), 3); equal(wrap(-1, 0, 9), 9);
+equal(map(5, 0, 10, 0, 100), 50); equal(lerp(0, 100, 1, 4), 25);
+equal(sum(1, 100), 5050); equal(sum(-3, 3), 0); equal(sum(5, 4), 0);
+equal(count_multiples(1, 100, 7), 14); equal(count_multiples(-10, 10, 5), 5);
+equal(steps(0, 10, 3), 4);
+print 1;

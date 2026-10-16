@@ -1,0 +1,11 @@
+use seq, testing;
+equal(triangular(10), 55); equal(pentagonal(4), 22); equal(hexagonal(3), 15);
+equal(is_square(144), 1); equal(is_square(145), 0); equal(is_triangular(55), 1);
+equal(is_fibonacci(144), 1); equal(is_fibonacci(145), 0);
+equal(tribonacci(5), 4); equal(pell(5), 29);
+equal(collatz_steps(27), 111);
+equal(sigma(28), 56); equal(is_perfect(28), 1); equal(is_perfect(27), 0); equal(is_abundant(12), 1);
+equal(arithmetic(2, 3, 4), 14); equal(arithmetic_sum(1, 1, 100), 5050);
+equal(geometric(3, 2, 4), 48); equal(geometric_sum(1, 2, 10), 1023);
+equal(is_happy(19), 1); equal(is_happy(4), 0);
+print 1;

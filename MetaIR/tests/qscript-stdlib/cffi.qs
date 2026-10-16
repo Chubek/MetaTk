@@ -1,0 +1,11 @@
+use cffi;
+let b=alloc(16);
+assert(size(b)==16);
+write(b,0,8,0x0123456789abcdef);
+assert(byte(b,0)==239);
+assert(read(b,0,8)==0x0123456789abcdef);
+copy(b,1,b,0,8);
+assert(read(b,1,8)==0x0123456789abcdef);
+assert(arg(0,0,I64)==7 && arg(I64,1,U8)==39);
+release(b);
+print 1;

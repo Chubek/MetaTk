@@ -1,0 +1,199 @@
+-- avr.dsymspec — AVR 8-bit (classic/enhanced/XMEGA/tinyAVR), AVR-GCC ABI.
+-- Data: isa_reference AVR quick spec (r0-r31 + X=r27:r26/Y=r29:r28/Z=r31:r30,
+-- 16-bit mostly + 32-bit LDS/STS/JMP/CALL), TableGen AVR target, wasm_oracle
+---adjacent 8-bit literature, toolchain_orace (R_AVR_* ELF relocations).
+-- Strata: base | enhanced | movw/mul | lpm | elpm/spm | xmega | tiny | priv.
+local symas = require("backend").new("avr")
+
+symas.target{
+    arch = "avr", subarch = "avr5",
+    addr_size = 16, op_size = 8, addr_def = 16, align = 2,
+    byte_order = "little", obj_format = "ELF32", abi = "AVR-GCC",
+    calling_conv = "avr-gcc",
+    features = { "base", "enhanced", "movw", "lpm" },
+}
+
+symas.feature{ name = "base", desc = "classic AVR base" }
+symas.feature{ name = "classic", desc = "classic AVR core" }
+symas.feature{ name = "enhanced", desc = "enhanced AVR core" }
+symas.feature{ name = "tiny", desc = "tinyAVR (reduced)" }
+symas.feature{ name = "xmega", desc = "XMEGA" }
+symas.feature{ name = "movw", desc = "MOVW/MULS/MULSU word ops" }
+symas.feature{ name = "lpm", desc = "LPM load program memory" }
+symas.feature{ name = "elpm", desc = "ELPM extended LPM" }
+symas.feature{ name = "spm", desc = "SPM store program memory" }
+symas.feature{ name = "break", desc = "BREAK/WDR/SLEEP" }
+symas.feature{ name = "priv", desc = "privileged (SPM/EIND/RAMP)" }
+
+for i = 0, 31 do
+    symas.register{ name = "r" .. i, class = "gpr", width = 8, enc = i, flags = { "readable", "writable" } }
+end
+symas.register{ name = "X", class = "gpr", width = 16, enc = 26, parent = "r26", sub_lo = 0, sub_hi = 8, flags = { "readable", "writable" } }
+symas.register{ name = "Y", class = "gpr", width = 16, enc = 28, parent = "r28", sub_lo = 0, sub_hi = 8, flags = { "readable", "writable" } }
+symas.register{ name = "Z", class = "gpr", width = 16, enc = 30, parent = "r30", sub_lo = 0, sub_hi = 8, flags = { "readable", "writable" } }
+symas.register{ name = "SP", class = "special", width = 16, enc = 0, flags = { "readable", "writable" } }
+symas.register{ name = "PC", class = "special", width = 32, enc = 0 }
+symas.register{ name = "SREG", class = "status", width = 8, enc = 0 }
+for _, c in ipairs({ "RAMPX", "RAMPY", "RAMPZ", "EIND", "SPL", "SPH" }) do
+    symas.register{ name = c, class = "ctrl", width = 8, enc = 0, flags = { "readable", "writable", "modedep" } }
+end
+
+-- Representative 16-bit opcode words (32-bit forms use two words).
+symas.encoder{ name = "nop",  source = "emit16le(0x0000);", max_bytes = 2 }
+symas.encoder{ name = "mov",  source = "emit16le(0x2C00 + rd*16 + rs);", max_bytes = 2 }
+symas.encoder{ name = "movw", source = "emit16le(0x0100 + rd*16 + rs);", max_bytes = 2 }
+symas.encoder{ name = "ldi",  source = "emit16le(0xE000 + rd*16 + (imm % 16) + ((imm / 16) % 16)*256);", max_bytes = 2 }
+symas.encoder{ name = "add",  source = "emit16le(0x0C00 + rd*16 + rs);", max_bytes = 2 }
+symas.encoder{ name = "adc",  source = "emit16le(0x1C00 + rd*16 + rs);", max_bytes = 2 }
+symas.encoder{ name = "sub",  source = "emit16le(0x1800 + rd*16 + rs);", max_bytes = 2 }
+symas.encoder{ name = "sbc",  source = "emit16le(0x0800 + rd*16 + rs);", max_bytes = 2 }
+symas.encoder{ name = "and",  source = "emit16le(0x2000 + rd*16 + rs);", max_bytes = 2 }
+symas.encoder{ name = "or",   source = "emit16le(0x2800 + rd*16 + rs);", max_bytes = 2 }
+symas.encoder{ name = "eor",  source = "emit16le(0x2400 + rd*16 + rs);", max_bytes = 2 }
+symas.encoder{ name = "com",  source = "emit16le(0x9400 + rd*16);", max_bytes = 2 }
+symas.encoder{ name = "neg",  source = "emit16le(0x9401 + rd*16);", max_bytes = 2 }
+symas.encoder{ name = "inc",  source = "emit16le(0x9403 + rd*16);", max_bytes = 2 }
+symas.encoder{ name = "dec",  source = "emit16le(0x940A + rd*16);", max_bytes = 2 }
+symas.encoder{ name = "swap", source = "emit16le(0x9402 + rd*16);", max_bytes = 2 }
+symas.encoder{ name = "lsl",  source = "emit16le(0x0C00 + rd*16 + rd);", max_bytes = 2 }
+symas.encoder{ name = "lsr",  source = "emit16le(0x9406 + rd*16);", max_bytes = 2 }
+symas.encoder{ name = "rol",  source = "emit16le(0x1C00 + rd*16 + rd);", max_bytes = 2 }
+symas.encoder{ name = "asr",  source = "emit16le(0x9405 + rd*16);", max_bytes = 2 }
+symas.encoder{ name = "mul",  source = "emit16le(0x9C00 + rd*16 + rs);", max_bytes = 2 }
+symas.encoder{ name = "muls", source = "emit16le(0x0200 + rd*16 + rs);", max_bytes = 2 }
+symas.encoder{ name = "fmul", source = "emit16le(0x0300 + rd*16 + rs);", max_bytes = 2 }
+symas.encoder{ name = "cpi",  source = "emit16le(0x3000 + rd*16 + (imm % 256));", max_bytes = 2 }
+symas.encoder{ name = "cpc",  source = "emit16le(0x0400 + rd*16 + rs);", max_bytes = 2 }
+symas.encoder{ name = "cp",   source = "emit16le(0x1400 + rd*16 + rs);", max_bytes = 2 }
+symas.encoder{ name = "lds",  source = "emit16le(0x9000 + rd*16); emit16le(imm);", max_bytes = 4 }
+symas.encoder{ name = "sts",  source = "emit16le(0x9200 + rd*16); emit16le(imm);", max_bytes = 4 }
+symas.encoder{ name = "ld",   source = "emit16le(0x8000 + rd*16);", max_bytes = 2 }
+symas.encoder{ name = "st",   source = "emit16le(0x8200 + rd*16);", max_bytes = 2 }
+symas.encoder{ name = "push", source = "emit16le(0x920F + rd*16);", max_bytes = 2 }
+symas.encoder{ name = "pop",  source = "emit16le(0x900F + rd*16);", max_bytes = 2 }
+symas.encoder{ name = "lpm",  source = "emit16le(0x95C8);", max_bytes = 2 }
+symas.encoder{ name = "elpm", source = "emit16le(0x95D8);", max_bytes = 2 }
+symas.encoder{ name = "spm",  source = "emit16le(0x95E8);", max_bytes = 2 }
+symas.encoder{ name = "rjmp", source = "emit16le(0xC000); emit_relocation(sym, R_AVR_13_PCREL);", max_bytes = 2, max_relocs = 1 }
+symas.encoder{ name = "rcall", source = "emit16le(0xD000); emit_relocation(sym, R_AVR_13_PCREL);", max_bytes = 2, max_relocs = 1 }
+symas.encoder{ name = "jmp",  source = "emit16le(0x940C); emit16le(0); emit_relocation(sym, R_AVR_CALL);", max_bytes = 4, max_relocs = 1 }
+symas.encoder{ name = "call", source = "emit16le(0x940E); emit16le(0); emit_relocation(sym, R_AVR_CALL);", max_bytes = 4, max_relocs = 1 }
+symas.encoder{ name = "ret",  source = "emit16le(0x9508);", max_bytes = 2 }
+symas.encoder{ name = "reti", source = "emit16le(0x9518);", max_bytes = 2 }
+symas.encoder{ name = "brbs", source = "emit16le(0xF000 + rs*128 + ((imm + 64) % 64));", max_bytes = 2 }
+symas.encoder{ name = "sbi",  source = "emit16le(0x9A00 + rs*256 + (imm % 8));", max_bytes = 2 }
+symas.encoder{ name = "cbi",  source = "emit16le(0x9800 + rs*256 + (imm % 8));", max_bytes = 2 }
+symas.encoder{ name = "bst",  source = "emit16le(0xFA00 + rs*16 + (imm % 8));", max_bytes = 2 }
+symas.encoder{ name = "bld",  source = "emit16le(0xF800 + rd*16 + (imm % 8));", max_bytes = 2 }
+symas.encoder{ name = "sei",  source = "emit16le(0x9478);", max_bytes = 2 }
+symas.encoder{ name = "cli",  source = "emit16le(0x94F8);", max_bytes = 2 }
+symas.encoder{ name = "sleep", source = "emit16le(0x9588);", max_bytes = 2 }
+symas.encoder{ name = "break", source = "emit16le(0x9598);", max_bytes = 2 }
+symas.encoder{ name = "wdr",  source = "emit16le(0x95A8);", max_bytes = 2 }
+
+local function r8() return { kind = "reg", class = "gpr", width = 8 } end
+local function w8() return { kind = "reg", class = "gpr", width = 8, access = "write" } end
+local function rw8() return { kind = "reg", class = "gpr", width = 8, access = "readwrite" } end
+
+for _, m in ipairs({ "nop", "mov", "movw", "ldi", "add", "adc", "sub",
+    "sbc", "and", "or", "eor", "com", "neg", "inc", "dec", "swap", "lsl",
+    "lsr", "rol", "asr", "mul", "muls", "fmul", "cpi", "cpc", "cp", "lds",
+    "sts", "ld", "st", "push", "pop", "lpm", "elpm", "spm", "rjmp",
+    "rcall", "jmp", "call", "ret", "reti", "brbs", "sbi", "cbi", "bst",
+    "bld", "sei", "cli", "sleep", "break", "wdr" }) do
+    symas.mnemonic{ name = m }
+end
+symas.form{ mnemonic = "nop", encoder = "nop" }
+symas.form{ mnemonic = "mov", encoder = "mov", operands = { w8(), r8() } }
+symas.form{ mnemonic = "movw", encoder = "movw", required = { "movw" }, operands = { w8(), r8() } }
+symas.form{ mnemonic = "ldi", encoder = "ldi", operands = { w8(),
+    { kind = "imm", width = 8, signed = false, imm_min = 0, imm_max = 255 } } }
+symas.form{ mnemonic = "add", encoder = "add", operands = { rw8(), r8() } }
+symas.form{ mnemonic = "adc", encoder = "adc", operands = { rw8(), r8() } }
+symas.form{ mnemonic = "sub", encoder = "sub", operands = { rw8(), r8() } }
+symas.form{ mnemonic = "sbc", encoder = "sbc", operands = { rw8(), r8() } }
+symas.form{ mnemonic = "and", encoder = "and", operands = { rw8(), r8() } }
+symas.form{ mnemonic = "or",  encoder = "or",  operands = { rw8(), r8() } }
+symas.form{ mnemonic = "eor", encoder = "eor", operands = { rw8(), r8() } }
+symas.form{ mnemonic = "com", encoder = "com", operands = { rw8() } }
+symas.form{ mnemonic = "neg", encoder = "neg", operands = { rw8() } }
+symas.form{ mnemonic = "inc", encoder = "inc", operands = { rw8() } }
+symas.form{ mnemonic = "dec", encoder = "dec", operands = { rw8() } }
+symas.form{ mnemonic = "swap", encoder = "swap", operands = { rw8() } }
+symas.form{ mnemonic = "lsl", encoder = "lsl", operands = { rw8() } }
+symas.form{ mnemonic = "lsr", encoder = "lsr", operands = { rw8() } }
+symas.form{ mnemonic = "rol", encoder = "rol", operands = { rw8() } }
+symas.form{ mnemonic = "asr", encoder = "asr", operands = { rw8() } }
+symas.form{ mnemonic = "mul", encoder = "mul", required = { "enhanced" }, operands = { w8(), r8() } }
+symas.form{ mnemonic = "muls", encoder = "muls", required = { "movw" }, operands = { w8(), r8() } }
+symas.form{ mnemonic = "fmul", encoder = "fmul", required = { "movw" }, operands = { w8(), r8() } }
+symas.form{ mnemonic = "cpi", encoder = "cpi", operands = { r8(),
+    { kind = "imm", width = 8, signed = false, imm_min = 0, imm_max = 255 } } }
+symas.form{ mnemonic = "cpc", encoder = "cpc", operands = { r8(), r8() } }
+symas.form{ mnemonic = "cp", encoder = "cp", operands = { r8(), r8() } }
+symas.form{ mnemonic = "lds", encoder = "lds", flags = { "reads_mem" }, operands = { w8(),
+    { kind = "mem", width = 16, signed = false, imm_min = 0, imm_max = 65535 } } }
+symas.form{ mnemonic = "sts", encoder = "sts", flags = { "writes_mem" }, operands = {
+    { kind = "mem", width = 16, signed = false, imm_min = 0, imm_max = 65535 }, r8() } }
+symas.form{ mnemonic = "ld", encoder = "ld", flags = { "reads_mem" }, operands = { w8(), { kind = "mem", width = 8 } } }
+symas.form{ mnemonic = "st", encoder = "st", flags = { "writes_mem" }, operands = { r8(), { kind = "mem", width = 8 } } }
+symas.form{ mnemonic = "push", encoder = "push", operands = { r8() } }
+symas.form{ mnemonic = "pop",  encoder = "pop",  operands = { w8() } }
+symas.form{ mnemonic = "lpm", encoder = "lpm", required = { "lpm" }, flags = { "reads_mem" }, operands = { w8() } }
+symas.form{ mnemonic = "elpm", encoder = "elpm", required = { "elpm" }, flags = { "reads_mem" }, operands = { w8() } }
+symas.form{ mnemonic = "spm", encoder = "spm", required = { "spm" }, flags = { "privileged", "writes_mem" } }
+symas.form{ mnemonic = "rjmp", encoder = "rjmp", flags = { "branch", "reloc" }, operands = { { kind = "sym", width = 16 } } }
+symas.form{ mnemonic = "rcall", encoder = "rcall", flags = { "branch", "reloc" }, operands = { { kind = "sym", width = 16 } } }
+symas.form{ mnemonic = "jmp", encoder = "jmp", flags = { "branch", "terminator", "reloc" }, operands = { { kind = "sym", width = 32 } } }
+symas.form{ mnemonic = "call", encoder = "call", flags = { "branch", "reloc" }, operands = { { kind = "sym", width = 32 } } }
+symas.form{ mnemonic = "ret", encoder = "ret", flags = { "return", "terminator" } }
+symas.form{ mnemonic = "reti", encoder = "reti", flags = { "return", "terminator" } }
+symas.form{ mnemonic = "brbs", encoder = "brbs", flags = { "cond_branch" },
+    operands = { { kind = "cond", width = 8 }, { kind = "sym", width = 16 } } }
+symas.form{ mnemonic = "sbi", encoder = "sbi", operands = { { kind = "mem", width = 8 },
+    { kind = "imm", width = 8, signed = false, imm_min = 0, imm_max = 7 } } }
+symas.form{ mnemonic = "cbi", encoder = "cbi", operands = { { kind = "mem", width = 8 },
+    { kind = "imm", width = 8, signed = false, imm_min = 0, imm_max = 7 } } }
+symas.form{ mnemonic = "bst", encoder = "bst", operands = { r8(),
+    { kind = "imm", width = 8, signed = false, imm_min = 0, imm_max = 7 } } }
+symas.form{ mnemonic = "bld", encoder = "bld", operands = { w8(),
+    { kind = "imm", width = 8, signed = false, imm_min = 0, imm_max = 7 } } }
+symas.form{ mnemonic = "sei", encoder = "sei" }
+symas.form{ mnemonic = "cli", encoder = "cli" }
+symas.form{ mnemonic = "sleep", encoder = "sleep" }
+symas.form{ mnemonic = "break", encoder = "break", required = { "break" } }
+symas.form{ mnemonic = "wdr", encoder = "wdr", required = { "break" } }
+
+symas.syntax{ name = "default", comment = ";", separator = ", " }
+
+symas.section{ name = ".text", flags = { "exec", "alloc", "code" }, align = 2, content = "code" }
+symas.section{ name = ".rodata", flags = { "alloc", "readonly", "data" }, align = 2, content = "data" }
+symas.section{ name = ".data", flags = { "write", "alloc", "data" }, align = 2, content = "data" }
+symas.section{ name = ".bss", flags = { "write", "alloc", "zerofill", "data" }, align = 2, content = "data" }
+symas.section{ name = ".eeprom", flags = { "write", "alloc", "data" }, align = 2, content = "data" }
+symas.section{ name = ".fuse", flags = { "alloc", "readonly", "meta" }, align = 1, content = "meta" }
+
+symas.linkage{ name = "func_global", binding = "global", visibility = "default", symtype = "func" }
+symas.linkage{ name = "isr_vector", binding = "global", visibility = "default", symtype = "func" }
+symas.linkage{ name = "object_global", binding = "global", visibility = "default", symtype = "object" }
+symas.linkage{ name = "local_sym", binding = "local", visibility = "default", symtype = "none" }
+
+symas.reloc{ name = "R_AVR_NONE", width = 16, expr = "S + A" }
+symas.reloc{ name = "R_AVR_16", width = 16, expr = "S + A" }
+symas.reloc{ name = "R_AVR_32", width = 32, expr = "S + A" }
+symas.reloc{ name = "R_AVR_7_PCREL", width = 16, signed = true, pcrel = true, expr = "S + A - P" }
+symas.reloc{ name = "R_AVR_13_PCREL", width = 16, signed = true, pcrel = true, expr = "S + A - P" }
+symas.reloc{ name = "R_AVR_16_PM", width = 16, expr = "S + A" }
+symas.reloc{ name = "R_AVR_LO8_LDI", width = 16, expr = "S + A" }
+symas.reloc{ name = "R_AVR_HI8_LDI", width = 16, expr = "S + A" }
+symas.reloc{ name = "R_AVR_HH8_LDI", width = 16, expr = "S + A" }
+symas.reloc{ name = "R_AVR_CALL", width = 32, pcrel = true, expr = "S + A - P" }
+symas.reloc{ name = "R_AVR_LDI", width = 16, expr = "S + A" }
+symas.reloc{ name = "R_AVR_PORT6", width = 16, expr = "S + A" }
+symas.reloc{ name = "R_AVR_PORT5", width = 16, expr = "S + A" }
+
+symas.debug{ msg = "avr 8-bit base+mul+lpm/flash+interrupts stratification", kind = "target", ref = "" }
+symas.debug{ msg = "flash forms require lpm/elpm/spm", kind = "form", ref = "lpm" }
+symas.debug{ msg = "interrupt forms", kind = "form", ref = "reti" }
+
+print(symas.emit())

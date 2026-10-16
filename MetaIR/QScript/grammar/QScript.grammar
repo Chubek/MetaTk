@@ -1,0 +1,154 @@
+# The QScript grammar, in the Raku-style grammar language of
+# qscript/include/QScript-Grammar.h. It is compiled into the QScript library
+# and is the only parser QScript uses: there is no separate lexer.
+#
+#   token  matches exactly what it says (no implicit whitespace)
+#   rule   whitespace after an atom in the source means <.ws> (sigspace)
+#   proto  variants are tried longest-literal-first (`<=` before `<`)
+#
+# The match tree is turned into the QScript AST by qscript/src/AST.cpp, which
+# also applies operator precedence to the flat <binary> operand lists.
+
+grammar QScript {
+    rule TOP        { <.ws> <item>* }
+    rule item       { <use> | <fn> | <const> | <statement> }
+
+    # ---- declarations ---------------------------------------------------
+    rule use        { <.kw-use> <libname>+ % ',' ';' }
+    token libname   { <ident>+ % '::' }
+    rule fn         { [ <.kw-fn> | <.kw-sub> ] <name=ident> '(' <params>? ')' <block> }
+    rule params     { <ident>+ % ',' }
+    rule const      { <.kw-const> <name=ident> '=' <expr> ';' }
+    rule block      { '{' <statement>* '}' }
+
+    # ---- statements -----------------------------------------------------
+    proto rule statement {*}
+    rule statement:sym<block>    { <block> }
+    rule statement:sym<let>      { <let> ';' }
+    rule statement:sym<if>       { <.kw-if> <cond> <then=statement> <elsif>* [ <.kw-else> <else=statement> ]? }
+    rule statement:sym<unless>   { <.kw-unless> <cond> <then=statement> [ <.kw-else> <else=statement> ]? }
+    rule statement:sym<while>    { <.kw-while> <cond> <statement> }
+    rule statement:sym<until>    { <.kw-until> <cond> <statement> }
+    rule statement:sym<do>       { <.kw-do> <block> [ <while=.kw-while> | <until=.kw-until> ] <cond> ';' }
+    rule statement:sym<for>      { <.kw-for> '(' <init=forinit>? ';' <test=expr>? ';' <step=simple>? ')' <statement> }
+    rule statement:sym<loop>     { <.kw-loop> <block> }
+    rule statement:sym<break>    { [ <.kw-break> | <.kw-last> ] <modifier>? ';' }
+    rule statement:sym<continue> { [ <.kw-continue> | <.kw-next> ] <modifier>? ';' }
+    rule statement:sym<return>   { <.kw-return> <expr>? <modifier>? ';' }
+    rule statement:sym<exit>     { <.kw-exit> <expr>? <modifier>? ';' }
+    rule statement:sym<print>    { [ <.kw-print> | <.kw-say> ] <expr>+ % ',' <modifier>? ';' }
+    rule statement:sym<assert>   { <.kw-assert> <expr> <modifier>? ';' }
+    rule statement:sym<simple>   { <simple> <modifier>? ';' }
+    rule statement:sym<empty>    { ';' }
+
+    rule let        { [ <.kw-let> | <.kw-my> ] <name=ident> '=' <expr> }
+    rule cond       { '(' <expr> ')' }
+    rule elsif      { <.kw-elsif> <cond> <statement> }
+    rule forinit    { <let> | <simple> }
+    rule simple     { <assign> | <incdec> | <expr> }
+    rule assign     { <name=ident> <assignop> <expr> }
+    rule incdec     { <name=ident> <incop> }
+    rule modifier   { [ <if=.kw-if> | <unless=.kw-unless> ] <expr> }
+
+    proto token assignop {*}
+    token assignop:sym<=>    { '=' <!before '='> }
+    token assignop:sym<+=>   { <sym> }
+    token assignop:sym<-=>   { <sym> }
+    token assignop:sym<*=>   { <sym> }
+    token assignop:sym</=>   { <sym> }
+    token assignop:sym<%=>   { <sym> }
+    token assignop:sym<&=>   { <sym> }
+    token assignop:sym<|=>   { <sym> }
+    token assignop:sym<^=>   { <sym> }
+    token assignop:sym<**=>  { <sym> }
+    token assignop:sym«<<=»  { <sym> }
+    token assignop:sym«>>=»  { <sym> }
+    token incop     { '++' | '--' }
+
+    # ---- expressions ----------------------------------------------------
+    # Operands and infix operators are matched flat; precedence and
+    # associativity are applied afterwards (operator-precedence parsing, as
+    # Raku does for its own EXPR).
+    rule expr       { <ternary> }
+    rule ternary    { <binary> [ '?' <then=expr> ':' <else=ternary> ]? }
+    rule binary     { <operand>+ % <infix> }
+    rule operand    { [ <prefix> ]* <term> }
+
+    proto token prefix {*}
+    token prefix:sym<->    { <sym> <!before '-'> }
+    token prefix:sym<+>    { <sym> <!before '+'> }
+    token prefix:sym<!>    { <sym> }
+    token prefix:sym<~>    { <sym> }
+    token prefix:sym<not>  { <sym> >> }
+
+    proto token infix {*}
+    token infix:sym<||>   { <sym> }
+    token infix:sym<or>   { <sym> >> }
+    token infix:sym<&&>   { <sym> }
+    token infix:sym<and>  { <sym> >> }
+    token infix:sym<|>    { <sym> <!before '='> }
+    token infix:sym<^>    { <sym> <!before '='> }
+    token infix:sym<&>    { <sym> <!before '='> }
+    token infix:sym<==>   { <sym> }
+    token infix:sym<!=>   { <sym> }
+    token infix:sym«<=»   { <sym> }
+    token infix:sym«>=»   { <sym> }
+    token infix:sym«<»    { <sym> }
+    token infix:sym«>»    { <sym> }
+    token infix:sym«<<»   { <sym> <!before '='> }
+    token infix:sym«>>»   { <sym> <!before '='> }
+    token infix:sym<+>    { <sym> <!before '='> }
+    token infix:sym<->    { <sym> <!before '='> }
+    token infix:sym<*>    { <sym> <!before '='> }
+    token infix:sym</>    { <sym> <!before '='> }
+    token infix:sym<%>    { <sym> <!before '='> }
+    token infix:sym<**>   { <sym> <!before '='> }
+
+    rule term       { <call> | <number> | <char> | <true=.kw-true> | <false=.kw-false> | <var> | <group> }
+    rule group      { '(' <expr> ')' }
+    rule call       { <qname> '(' <args>? ')' }
+    rule args       { <expr>+ % ',' }
+    token qname     { <ident>+ % '::' }
+    token var       { <ident>+ % '::' }
+    token number    { [ '0' <[xX]> <[0..9a..fA..F_]>+ | '0' <[bB]> <[01_]>+ | '0' <[oO]> <[0..7_]>+ | \d <[0..9_]>* ] >> }
+    token char      { "'" [ '\\' [ 'x' <xdigit> <xdigit> | <[nrt0\\'"]> ] | <-['\\\n]> ] "'" }
+
+    # ---- lexical --------------------------------------------------------
+    token ident     { <!keyword> <[A..Za..z_]> \w* }
+    token ws        { [ \s+ | '//' \N* | '#' \N* | '/*' .*? '*/' ]* }
+
+    token keyword   { <.kw-use> | <.kw-fn> | <.kw-sub> | <.kw-const> | <.kw-let> | <.kw-my>
+                    | <.kw-if> | <.kw-elsif> | <.kw-else> | <.kw-unless> | <.kw-while> | <.kw-until>
+                    | <.kw-do> | <.kw-for> | <.kw-loop> | <.kw-break> | <.kw-last> | <.kw-continue>
+                    | <.kw-next> | <.kw-return> | <.kw-exit> | <.kw-print> | <.kw-say> | <.kw-assert>
+                    | <.kw-and> | <.kw-or> | <.kw-not> | <.kw-true> | <.kw-false> }
+    token kw-use      { 'use' >> }
+    token kw-fn       { 'fn' >> }
+    token kw-sub      { 'sub' >> }
+    token kw-const    { 'const' >> }
+    token kw-let      { 'let' >> }
+    token kw-my       { 'my' >> }
+    token kw-if       { 'if' >> }
+    token kw-elsif    { 'elsif' >> }
+    token kw-else     { 'else' >> }
+    token kw-unless   { 'unless' >> }
+    token kw-while    { 'while' >> }
+    token kw-until    { 'until' >> }
+    token kw-do       { 'do' >> }
+    token kw-for      { 'for' >> }
+    token kw-loop     { 'loop' >> }
+    token kw-break    { 'break' >> }
+    token kw-last     { 'last' >> }
+    token kw-continue { 'continue' >> }
+    token kw-next     { 'next' >> }
+    token kw-return   { 'return' >> }
+    token kw-exit     { 'exit' >> }
+    token kw-print    { 'print' >> }
+    token kw-say      { 'say' >> }
+    token kw-assert   { 'assert' >> }
+    token kw-and      { 'and' >> }
+    token kw-or       { 'or' >> }
+    token kw-not      { 'not' >> }
+    token kw-true     { 'true' >> }
+    token kw-false    { 'false' >> }
+}

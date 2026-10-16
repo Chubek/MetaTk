@@ -1,0 +1,12 @@
+use time, testing;
+let t = unix(2000, 1, 1, 12, 30, 0);
+equal(t, 946729800);
+equal(clock(time_of_day(t)), 123000);
+equal(weekday(t), 6);
+equal(unix_date(t), 20000101);
+equal(hms(1, 2, 3), 3723);
+equal(hours(3723) * 10000 + minutes(3723) * 100 + seconds(3723), 10203);
+equal(unix_days(-1), -1); equal(time_of_day(-1), 86399);
+equal(hour12(0), 12); equal(hour12(13), 1); equal(is_pm(12), 1);
+equal(from_ms(to_ms(5)), 5);
+print 1;

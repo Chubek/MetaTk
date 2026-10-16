@@ -1,0 +1,11 @@
+use hash, testing;
+equal(fnv1a(0x0102), 2408030219406736172);
+equal(mix64(42), -9148929187392628276);
+let h = 0;
+h = jenkins_byte(h, 'a');
+equal(jenkins_final(h), 3392050242);
+not_equal(hash2(1, 2), hash2(2, 1));
+equal(hash_int(5), mix64(5));
+between(bucket(-1, 16), 0, 15);
+equal(djb2_byte(DJB2_INIT, 'a'), 177670);
+print 1;

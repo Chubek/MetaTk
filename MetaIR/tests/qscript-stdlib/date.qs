@@ -1,0 +1,13 @@
+use date, testing;
+equal(is_leap(2000), 1); equal(is_leap(1900), 0); equal(is_leap(2024), 1);
+equal(days_in_month(2023, 2), 28); equal(days_in_month(2024, 2), 29); equal(days_in_month(2024, 4), 30);
+equal(is_valid(2023, 2, 29), 0);
+equal(days_from_civil(1970, 1, 1), 0); equal(days_from_civil(2024, 2, 29), 19782);
+equal(days_from_civil(1969, 12, 31), -1);
+equal(civil(19782), 20240229); equal(civil(19783), 20240301); equal(civil(0), 19700101);
+equal(day_of_week(2024, 2, 29), 4);
+equal(day_of_year(2024, 12, 31), 366);
+equal(add_days(20231231, 1), 20240101); equal(diff_days(20240101, 20250101), 366);
+equal(easter(2024), 20240331); equal(easter(2025), 20250420);
+equal(year(20240229) + month(20240229) + day(20240229), 2024 + 2 + 29);
+print 1;

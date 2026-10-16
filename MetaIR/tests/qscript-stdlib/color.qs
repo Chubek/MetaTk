@@ -1,0 +1,12 @@
+use color, testing;
+let orange = rgb(255, 165, 0);
+equal(orange, 0xffa500);
+equal(red(orange), 255); equal(green(orange), 165); equal(blue(orange), 0);
+equal(rgb(300, -5, 7), 0xff0007);
+equal(luminance(WHITE), 255); equal(luminance(BLACK), 0);
+equal(mix(orange, WHITE, 128), rgb(255, 210, 128));
+equal(invert(WHITE), BLACK); equal(gray(rgb(10, 10, 10)), rgb(10, 10, 10));
+equal(lighten(rgb(250, 0, 10), 10), rgb(255, 10, 20)); equal(darken(rgb(5, 5, 5), 10), BLACK);
+equal(rgba(1, 2, 3, 4), 0x01020304); equal(alpha(0x01020304), 4);
+equal(distance2(BLACK, rgb(1, 2, 2)), 9);
+print 1;

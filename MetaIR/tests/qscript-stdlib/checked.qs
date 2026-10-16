@@ -1,0 +1,11 @@
+use checked, testing;
+equal(add_ok(INT_MAX, 1), 0); equal(add_ok(INT_MAX, -1), 1); equal(add_ok(INT_MIN, -1), 0);
+equal(sub_ok(INT_MIN, 1), 0); equal(sub_ok(0, INT_MIN), 0); equal(sub_ok(-1, INT_MIN), 1);
+equal(mul_ok(3037000500, 3037000500), 0); equal(mul_ok(-1, INT_MIN), 0); equal(mul_ok(123456, 789), 1);
+equal(div_ok(INT_MIN, -1), 0); equal(div_ok(1, 0), 0); equal(neg_ok(INT_MIN), 0);
+equal(add_sat(INT_MAX, 5), INT_MAX); equal(add_sat(INT_MIN, -5), INT_MIN);
+equal(sub_sat(INT_MIN, 1), INT_MIN); equal(sub_sat(1, INT_MIN), INT_MAX);
+equal(mul_sat(INT_MAX, 2), INT_MAX); equal(mul_sat(INT_MAX, -2), INT_MIN);
+equal(neg_sat(INT_MIN), INT_MAX); equal(abs_sat(INT_MIN), INT_MAX);
+equal(add_checked(2, 3), 5); equal(mul_checked(-4, 5), -20); equal(div_checked(9, 2), 4);
+print 1;

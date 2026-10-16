@@ -1,0 +1,13 @@
+use geom, testing;
+equal(manhattan(0, 0, 3, 4), 7); equal(chebyshev(0, 0, 3, -4), 4);
+equal(dist2(0, 0, 3, 4), 25); equal(dist(0, 0, 3, 4), 5);
+equal(dot(1, 2, 3, 4), 11); equal(cross(1, 0, 0, 1), 1);
+equal(orient(0, 0, 1, 0, 0, 1), 1); equal(orient(0, 0, 1, 0, 0, -1), -1); equal(orient(0, 0, 1, 1, 2, 2), 0);
+equal(area2(0, 0, 4, 0, 0, 3), 12);
+equal(in_rect(1, 1, 0, 0, 2, 2), 1); equal(in_rect(3, 1, 0, 0, 2, 2), 0);
+equal(in_circle(3, 4, 0, 0, 5), 1); equal(in_circle(4, 4, 0, 0, 5), 0);
+equal(lattice_points(0, 0, 6, 4), 3);
+equal(segments_intersect(0, 0, 4, 4, 0, 4, 4, 0), 1);
+equal(segments_intersect(0, 0, 1, 1, 2, 2, 3, 3), 0);
+equal(segments_intersect(0, 0, 2, 2, 2, 2, 3, 0), 1);
+print 1;

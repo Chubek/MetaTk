@@ -1,0 +1,3 @@
+# This source distribution vendors third_party dependencies directly.
+# There are no gitlink entries to initialize; do not replace source directories
+# with submodules without recording their upstream URLs and pinned revisions.
