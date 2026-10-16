@@ -1,0 +1,12 @@
+use ascii, testing;
+equal(is_digit('7'), 1); equal(is_digit('a'), 0);
+equal(is_alpha('Q') + is_alnum('5') + is_upper('Q') + is_lower('q'), 4);
+equal(is_space('\t'), 1); equal(is_space('x'), 0);
+equal(is_punct('!'), 1); equal(is_punct('a'), 0); equal(is_cntrl(127), 1); equal(is_print('~'), 1);
+equal(is_xdigit('F'), 1); equal(is_vowel('E'), 1);
+equal(to_upper('q'), 'Q'); equal(to_lower('Q'), 'q'); equal(to_upper('1'), '1');
+equal(digit_value('9'), 9); equal(digit_value('x'), -1);
+equal(hex_value('F'), 15); equal(hex_value('g'), -1); equal(base36_value('z'), 35);
+equal(to_digit(11), 'b'); equal(to_digit(3), '3');
+equal(rot13('a'), 'n'); equal(rot13(rot13('M')), 'M'); equal(caesar('z', 1), 'a'); equal(caesar('A', -1), 'Z');
+print 1;

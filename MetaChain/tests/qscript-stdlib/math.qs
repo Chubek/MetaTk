@@ -1,0 +1,18 @@
+use math, testing;
+equal(abs(-7), 7); equal(abs(INT_MIN), INT_MIN);
+equal(sign(-3) + sign(0) + sign(9), 0);
+equal(min3(4, -2, 9), -2); equal(max3(4, -2, 9), 9);
+equal(clamp(15, 0, 10), 10); equal(clamp(-1, 0, 10), 0); equal(clamp(5, 0, 10), 5);
+equal(gcd(84, 36), 12); equal(gcd(-84, 36), 12); equal(gcd(0, 5), 5);
+equal(lcm(4, 6), 12); equal(lcm(0, 6), 0);
+equal(pow(3, 4), 81); equal(pow(2, 62), 4611686018427387904);
+equal(isqrt(0), 0); equal(isqrt(3), 1); equal(isqrt(1000), 31);
+equal(isqrt(INT_MAX), 3037000499);
+equal(icbrt(27), 3); equal(icbrt(-28), -3); equal(icbrt(INT_MAX), 2097151);
+equal(ilog2(1), 0); equal(ilog2(1024), 10); equal(ilog10(999), 2);
+equal(div_floor(-7, 2), -4); equal(div_ceil(-7, 2), -3); equal(div_ceil(7, 2), 4);
+equal(mod_floor(-7, 3), 2); equal(mod_floor(7, -3), -2);
+equal(average(INT_MAX, INT_MAX - 2), INT_MAX - 1); equal(average(-3, 0), -2);
+equal(is_even(-4) + is_odd(-3), 2);
+equal(dist(3, -4), 7);
+print 1;

@@ -1,0 +1,14 @@
+use bits, testing;
+equal(popcount(0xff), 8); equal(popcount(-1), 64); equal(parity(7), 1);
+equal(clz(1), 63); equal(clz(-1), 0); equal(clz(0), 64);
+equal(ctz(8), 3); equal(ctz(0), 64); equal(bit_length(255), 8);
+equal(rotl(1, 65), 2); equal(rotr(1, 1), -9223372036854775808); equal(rotl(5, 0), 5);
+equal(sar(-16, 2), -4); equal(sar(16, 2), 4);
+equal(mask(4), 15); equal(mask(64), -1);
+equal(bit(5, 2), 1); equal(set_bit(0, 3), 8); equal(clear_bit(15, 0), 14); equal(toggle_bit(1, 1), 3);
+equal(extract(0xabcd, 4, 8), 0xbc); equal(insert(0xabcd, 0x12, 4, 8), 0xa12d);
+equal(lowbit(12), 4); equal(is_pow2(64), 1); equal(is_pow2(0), 0); equal(next_pow2(33), 64);
+equal(bswap16(0x1234), 0x3412); equal(bswap32(0x12345678), 0x78563412);
+equal(bswap64(0x0102030405060708), 0x0807060504030201);
+equal(reverse(1), -9223372036854775808);
+print 1;

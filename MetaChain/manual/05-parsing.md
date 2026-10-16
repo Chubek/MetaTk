@@ -156,3 +156,15 @@ not string-unquoted a second time.
 For the `parse` text command, append a line containing only `%%`, then the
 source input. The payload begins on the following line; it is not included in
 the grammar definition.
+
+## Scannerless, Raku-style grammars
+
+ParseTk's grammar files are token-based: lexemes are regular expressions and
+whitespace is skipped between symbols. For character-level grammars written
+in Raku ("Perl 6") syntax, with `token`/`rule`/`proto`, `%` separators,
+character classes and lookahead, use the grammar layer in
+`qscript/include/QScript-Grammar.h`, which compiles onto ParseTk with
+whitespace skipping disabled. See [QScript manual, chapter 5](qscript/05-grammars.md).
+`ParseResult::expected`, `expected_span` and `expected_all` report the deepest
+terminal failures, including those inside repetitions that later succeeded.
+

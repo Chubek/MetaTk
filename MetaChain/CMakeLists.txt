@@ -47,11 +47,22 @@ if(METACHAIN_BUILD_BACKEND)
     metachain_executable(MetaChainBackend)
 endif()
 if(METACHAIN_BUILD_QSCRIPT)
+    # The QScript grammar and standard library are embedded at build time.
+    file(GLOB QSCRIPT_STDLIB CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/qscript/stdlib/*.qs")
+    set(QSCRIPT_GRAMMAR "${CMAKE_CURRENT_SOURCE_DIR}/qscript/grammar/QScript.grammar")
+    set(QSCRIPT_EMBEDDED "${CMAKE_CURRENT_BINARY_DIR}/qscript_embedded.cpp")
+    string(REPLACE ";" "|" QSCRIPT_STDLIB_ARG "${QSCRIPT_STDLIB}")
+    add_custom_command(OUTPUT "${QSCRIPT_EMBEDDED}"
+        COMMAND "${CMAKE_COMMAND}" "-DGRAMMAR=${QSCRIPT_GRAMMAR}" "-DSTDLIB=${QSCRIPT_STDLIB_ARG}"
+                "-DOUTPUT=${QSCRIPT_EMBEDDED}" -P "${CMAKE_CURRENT_SOURCE_DIR}/qscript/cmake/Embed.cmake"
+        DEPENDS "${QSCRIPT_GRAMMAR}" ${QSCRIPT_STDLIB} "${CMAKE_CURRENT_SOURCE_DIR}/qscript/cmake/Embed.cmake"
+        COMMENT "Embedding QScript grammar and standard library" VERBATIM)
     add_library(QScript STATIC qscript/QScript.c qscript/QScript.cpp
         qscript/src/AST.cpp qscript/src/Visitor.cpp qscript/src/SemaCheck.cpp
         qscript/src/IR.cpp qscript/src/AST2IR.cpp qscript/src/Compiler.cpp
         qscript/src/Optimizer.cpp qscript/src/ISel.cpp qscript/src/ISched.cpp
-        qscript/src/Emitter.cpp qscript/src/Linker.cpp qscript/src/Assembler.cpp)
+        qscript/src/Emitter.cpp qscript/src/Linker.cpp qscript/src/Assembler.cpp
+        qscript/src/Grammar.cpp "${QSCRIPT_EMBEDDED}")
     add_library(MetaChain::QScript ALIAS QScript)
     target_link_libraries(QScript PUBLIC MetaChain::MetaChain)
     target_compile_features(QScript PUBLIC c_std_99)

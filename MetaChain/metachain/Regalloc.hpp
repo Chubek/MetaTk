@@ -4,6 +4,8 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <sstream>
+#include <string>
 #include <vector>
 
 namespace metachain::regalloc {
@@ -25,8 +27,7 @@ inline bool valid(const InterferenceGraph& g,const Result& r,unsigned colors) {
     for (auto [n,c]:g.precolored) if (r.registers[n]!=c) return false;
     return true;
 }
-inline Result color(const InterferenceGraph& g,unsigned colors) {
-    Result r; r.diagnostics=verify(g,colors); if (!r) return r;
+inline Result color(const InterferenceGraph& g,unsigned colors) {    Result r; r.diagnostics=verify(g,colors); if (!r) return r;
     const auto size=g.neighbors.size(); r.registers.resize(size);
     std::vector<bool> removed(size); for (auto [n,c]:g.precolored) { removed[n]=true; r.registers[n]=c; }
     std::vector<backend::Id> stack;
@@ -48,6 +49,38 @@ inline Result color(const InterferenceGraph& g,unsigned colors) {
         if (!r.registers[n]) r.spills[n]=r.spills.size();
     }
     return r;
+}
+struct AllocStats {
+    std::size_t values=0, colored=0, spilled=0, moves=0;
+    double density=0.0;
+};
+inline AllocStats alloc_stats(const InterferenceGraph& g,const Result& r) {
+    AllocStats s; s.values=g.neighbors.size(); s.moves=g.moves.size();
+    s.spilled=r.spills.size();
+    s.colored=s.values>s.spilled?s.values-s.spilled:0;
+    std::size_t edges=0;
+    for (const auto& n:g.neighbors) edges+=n.size();
+    edges/=2;
+    s.density=s.values>1?double(2*edges)/double(s.values*(s.values-1)):0.0;
+    return s;
+}
+inline std::string dump_allocation(const InterferenceGraph& g,const Result& r,unsigned colors) {
+    std::ostringstream out;
+    auto s=alloc_stats(g,r);
+    out << "allocation colors=" << colors << " values=" << s.values << " colored=" << s.colored << " spilled=" << s.spilled << "\n";
+    for (backend::Id n=0;n<r.registers.size();++n) {
+        out << "  v" << n << " -> ";
+        if (r.registers[n]) out << "r" << *r.registers[n];
+        else {
+            auto it=r.spills.find(n);
+            out << (it==r.spills.end()?"<unassigned>":"spill#" + std::to_string(it->second));
+        }
+        auto pre=g.precolored.find(n);
+        if (pre!=g.precolored.end()) out << " (fixed r" << pre->second << ")";
+        out << "\n";
+    }
+    for (const auto& d:r.diagnostics) out << "  diagnostic: " << d.message << " @v" << d.node << "\n";
+    return out.str();
 }
 Result graph_coloring(const InterferenceGraph&,unsigned colors);
 Result briggs(const InterferenceGraph&,unsigned colors);

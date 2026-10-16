@@ -1,5 +1,6 @@
 #pragma once
 #include "metachain/Backend.hpp"
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -33,5 +34,27 @@ struct Triple {
 };
 std::vector<Triple> triples(const Code&);
 Code from_triples(const std::vector<Triple>&);
+inline std::string dump_operand(const Operand& o) {
+    std::ostringstream out;
+    switch (o.kind) {
+    case Operand::Kind::Register: out << "r" << o.value; break;
+    case Operand::Kind::Immediate: out << "#" << o.value; break;
+    case Operand::Kind::Label: out << "L" << o.value; break;
+    default: out << "_"; break;
+    }
+    if (o.type==Type::I64) out << ":i64";
+    else if (o.type==Type::Label) out << ":label";
+    return out.str();
+}
+inline std::string dump_code(const Code& c) {
+    std::ostringstream out;
+    for (std::size_t pc=0;pc<c.instructions.size();++pc) {
+        const auto& q=c.instructions[pc];
+        out << pc << ": " << metail::name(q.op) << " " << dump_operand(q.result)
+            << ", " << dump_operand(q.first) << ", " << dump_operand(q.second) << "\n";
+    }
+    for (const auto& d:c.diagnostics) out << "diagnostic: " << d.message << " @" << d.node << "\n";
+    return out.str();
+}
 std::string pseudo_assembly(const Code&);
 } // namespace metachain::linear

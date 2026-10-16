@@ -47,7 +47,16 @@ options.jit.method_threshold = 1;
 auto result = metachain::Toolchain(options).jit("const r0, 42\nhalt r0\n");
 ```
 
-Compiled extensions now provide backend selection/scheduling/allocation and IR
-algorithms (`MetaChain::Backend`), plus the QScript C/C++ library and CLI
-(`MetaChain::QScript`, `qscript`, `qscript-repl`). See the
-[backend and QScript guide](manual/backend.md) for APIs, examples and limits.
+Compiled extensions provide backend selection/scheduling/allocation and IR
+algorithms (`MetaChain::Backend`), plus QScript (`MetaChain::QScript`,
+`qscript`, `qscript-repl`): an integer scripting language with functions,
+constants and 25 embedded libraries, whose parser is a Raku-style scannerless
+grammar running on ParseTk. QScript compiles to MetaIL and runs on the
+interpreter, the JIT, or as a native executable. See
+[the QScript manual](manual/qscript/README.md) and the
+[backend guide](manual/backend.md).
+
+```sh
+build/qscript run qscript/examples/primes.qs
+build/qscript --repl
+```

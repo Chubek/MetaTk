@@ -114,5 +114,31 @@ int main() {
         g.moves={{0,3},{3,6},{6,9},{2,8}};
         CHECK(regalloc::valid(g,regalloc::graph_coloring(g,3),3)); CHECK(regalloc::valid(g,regalloc::briggs(g,3),3));
     }
+    // Backend diagnostics and analysis helpers.
+    {
+        auto st=backend::stats(tree); CHECK(st.nodes==3&&st.edges==2&&st.outputs==1);
+        CHECK(backend::dump(tree).find("mul")!=std::string::npos);
+        CHECK(backend::to_dot(tree).find("digraph")!=std::string::npos);
+        CHECK(backend::live_from_outputs(tree).size()==3);
+        CHECK(!backend::find_cycle(tree));
+        CHECK(backend::find_cycle(cycle));
+        CHECK(isel::pattern_size(rules[2].pattern)==3&&isel::pattern_operands(rules[1].pattern)==2&&isel::pattern_depth(rules[2].pattern)==2);
+        CHECK(isel::dump_rule(rules[0]).find("constant")!=std::string::npos);
+        auto sel=isel::dag_cover(tree,rules); CHECK(isel::verify_cover(tree,sel));
+        CHECK(isel::dump_result(tree,rules,sel).find("cost=")!=std::string::npos);
+        CHECK(!isel::index_rules(rules).empty());
+        auto sched=isched::list_based(tasks,machine);
+        CHECK(isched::critical_path(tasks)<=sched.makespan);
+        auto sst=isched::schedule_stats(tasks,sched); CHECK(sst.tasks==3&&sst.makespan==sched.makespan);
+        CHECK(isched::dump_schedule(tasks,sched).find("makespan=")!=std::string::npos);
+        auto alloc=regalloc::briggs(interference,3);
+        auto ast=regalloc::alloc_stats(interference,alloc); CHECK(ast.values==4);
+        CHECK(regalloc::dump_allocation(interference,alloc,3).find("allocation")!=std::string::npos);
+        CHECK(graph::dump_cfg(cfg).find("B0")!=std::string::npos);
+        CHECK(graph::dump_analysis(data).find("graph")!=std::string::npos);
+        auto code=linear::quadruples(p.program);
+        CHECK(linear::dump_code(code).find("const")!=std::string::npos);
+        CHECK(linear::dump_operand(code.instructions[0].result)[0]=='r');
+    }
     std::cout << "backend tests passed\n";
 }

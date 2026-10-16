@@ -4,6 +4,7 @@
 #include <iterator>
 #include <optional>
 #include <set>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -42,6 +43,25 @@ struct SSA {
     explicit operator bool() const { return diagnostics.empty(); }
 };
 SSA gssa(const metail::Program&);
+inline std::string dump_cfg(const CFG& c) {
+    std::ostringstream out;
+    out << "cfg blocks=" << c.blocks.size() << "\n";
+    for (Id b=0;b<c.blocks.size();++b) {
+        out << "  B" << b << " [" << c.blocks[b].begin << "," << c.blocks[b].end << ") succ{";
+        for (std::size_t k=0;k<c.blocks[b].successors.size();++k) out << (k?",":"") << "B" << c.blocks[b].successors[k];
+        out << "} pred{";
+        for (std::size_t k=0;k<c.blocks[b].predecessors.size();++k) out << (k?",":"") << "B" << c.blocks[b].predecessors[k];
+        out << "}\n";
+    }
+    for (const auto& d:c.diagnostics) out << "  diagnostic: " << d.message << " @%" << d.node << "\n";
+    return out.str();
+}
+inline std::string dump_analysis(const Analysis& a) {
+    std::ostringstream out;
+    out << backend::dump(a.graph);
+    for (const auto& d:a.diagnostics) out << "diagnostic: " << d.message << " @%" << d.node << "\n";
+    return out.str();
+}
 // VSDG/sea-of-nodes preserve explicit control and effect dependencies.
 Analysis vsdg(const metail::Program&);
 Analysis sea_of_nodes(const metail::Program&);

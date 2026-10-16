@@ -1,0 +1,12 @@
+use fixed, testing;
+let r = from_ratio(3, 2);
+equal(r, 98304); equal(to_int(r), 1);
+equal(to_milli(mul(r, r)), 2250);
+equal(to_milli(div(from_int(1), from_int(3))), 333);
+equal(to_milli(sqrt(from_int(2))), 1414);
+equal(floor(from_ratio(-3, 2)), from_int(-2)); equal(ceil(from_ratio(-3, 2)), from_int(-1));
+equal(round(from_ratio(5, 2)), from_int(3)); equal(frac(from_ratio(7, 4)), from_ratio(3, 4));
+equal(to_milli(recip(from_int(8))), 125);
+equal(lerp(from_int(10), from_int(20), HALF), from_int(15));
+equal(from_milli(500), HALF);
+print 1;

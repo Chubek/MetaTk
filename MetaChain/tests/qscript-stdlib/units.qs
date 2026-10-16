@@ -1,0 +1,10 @@
+use units, testing;
+equal(c_to_f(37000), 98600); equal(f_to_c(32000), 0); equal(c_to_k(0), 273150); equal(k_to_c(273150), 0);
+equal(inches_to_mm(10), 254); equal(feet_to_mm(10), 3048); equal(mm_to_inches(254), 10);
+equal(miles_to_m(26), 41842); equal(m_to_miles(1609344), 1000); equal(km_to_m(3), 3000);
+equal(pounds_to_g(1), 453); equal(g_to_pounds(453593), 1000);
+equal(ounces_to_g(10), 283);
+equal(deg_to_mrad(180), 3141); equal(mrad_to_deg(3141593), 180000);
+equal(kib(64), 65536); equal(mib(1), MIB); equal(gib(2), 2147483648);
+equal(to_kib(1025), 2); equal(to_mib(1), 1);
+print 1;

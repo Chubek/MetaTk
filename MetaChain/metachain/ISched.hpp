@@ -4,6 +4,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -101,8 +102,7 @@ inline bool valid(const std::vector<Task>& tasks,const Result& r,Options o={}) {
     }
     return makespan==r.makespan;
 }
-inline std::vector<Task> dependencies(const std::vector<metail::Instruction>& code) {
-    std::vector<Task> tasks(code.size()); std::vector<backend::Access> accesses;
+inline std::vector<Task> dependencies(const std::vector<metail::Instruction>& code) {    std::vector<Task> tasks(code.size()); std::vector<backend::Access> accesses;
     for (const auto& i:code) accesses.push_back(backend::access(i));
     for (Id n=0;n<code.size();++n) {
         auto& t=tasks[n]; const auto& b=accesses[n]; t.speculatable=!b.barrier&&!b.may_trap;
@@ -113,6 +113,64 @@ inline std::vector<Task> dependencies(const std::vector<metail::Instruction>& co
         }
     }
     return tasks;
+}
+struct ScheduleStats {
+    std::size_t tasks=0, makespan=0;
+    std::map<std::size_t,unsigned> per_cycle;
+    std::map<std::string,std::size_t> per_resource;
+};
+inline ScheduleStats schedule_stats(const std::vector<Task>& tasks,const Result& r) {
+    ScheduleStats s; s.tasks=tasks.size(); s.makespan=r.makespan;
+    for (auto n:r.order) {
+        if (n>=tasks.size()||n>=r.cycle.size()) break;
+        ++s.per_cycle[r.cycle[n]];
+        ++s.per_resource[tasks[n].resource];
+    }
+    return s;
+}
+inline std::string dump_schedule(const std::vector<Task>& tasks,const Result& r) {
+    std::ostringstream out;
+    out << "schedule makespan=" << r.makespan << (r.optimal?" optimal":"") << " tasks=" << tasks.size() << "\n";
+    for (auto n:r.order) {
+        if (n>=tasks.size()||n>=r.cycle.size()) break;
+        out << "  cycle " << r.cycle[n] << ": t" << n << " lat=" << tasks[n].latency;
+        if (!tasks[n].resource.empty()) out << " res=" << tasks[n].resource;
+        if (!tasks[n].dependencies.empty()) {
+            out << " after[";
+            for (std::size_t k=0;k<tasks[n].dependencies.size();++k)
+                out << (k?",":"") << "t" << tasks[n].dependencies[k].predecessor << "+" << tasks[n].dependencies[k].delay;
+            out << "]";
+        }
+        out << "\n";
+    }
+    for (const auto& d:r.diagnostics) out << "  diagnostic: " << d.message << " @t" << d.node << "\n";
+    return out.str();
+}
+// Length of the longest delay-weighted dependency chain (issue-cycle lower bound).
+inline std::size_t critical_path(const std::vector<Task>& tasks) {
+    backend::Graph g; g.nodes.resize(tasks.size());
+    for (Id n=0;n<tasks.size();++n) { g.nodes[n].opcode="task"; for (auto d:tasks[n].dependencies) g.nodes[n].inputs.push_back(d.predecessor); }
+    auto topo=backend::topological_order(g);
+    if (!topo) return 0;
+    const auto infinite=std::numeric_limits<std::size_t>::max();
+    std::vector<std::size_t> longest(tasks.size());
+    for (auto n:*topo) {
+        // Completion bound: cycle[n] >= cycle[p]+delay, so completion[n] >=
+        // completion[p]-latency[p]+delay+latency[n]. Delays already include
+        // the producer latency for value edges; do not count it twice.
+        std::size_t best=tasks[n].latency;
+        for (auto d:tasks[n].dependencies) {
+            const auto pred_start=longest[d.predecessor]>=tasks[d.predecessor].latency
+                ? longest[d.predecessor]-tasks[d.predecessor].latency : std::size_t{0};
+            const auto via=pred_start>=infinite-d.delay-tasks[n].latency
+                ? infinite : pred_start+std::size_t(d.delay)+tasks[n].latency;
+            best=std::max(best,via);
+        }
+        longest[n]=best;
+    }
+    std::size_t overall=0;
+    for (auto v:longest) overall=std::max(overall,v);
+    return overall;
 }
 Result list_based(const std::vector<Task>&,Options={});
 Result cycle_driven(const std::vector<Task>&,Options={});

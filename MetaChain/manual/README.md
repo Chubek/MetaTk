@@ -23,6 +23,10 @@ architecture feature exists. Unsupported inputs must produce diagnostics.
 14. [Testing, portability, and maintenance](14-testing.md)
 15. [Reference tables and migration notes](15-reference.md)
 
+Companion guides: [backend algorithms](backend.md) and
+**[the QScript manual](qscript/README.md)** (language, Raku-style grammar
+engine, standard library, C/C++ API).
+
 ## Choose an entry point
 
 | Goal | Entry point |

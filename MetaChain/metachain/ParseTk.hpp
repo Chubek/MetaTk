@@ -46,6 +46,11 @@ public:
         const auto snapshot = listeners_;
         for (const auto& cb : snapshot) cb(e);
     }
+    // Deliver a batch with one listener snapshot.
+    void emit_all(const std::vector<Event>& events) const {
+        const auto snapshot = listeners_;
+        for (const auto& e : events) for (const auto& cb : snapshot) cb(e);
+    }
 };
 struct PatternSpec {
     enum class Kind { Regex, Exact };
@@ -137,6 +142,15 @@ struct ParseResult {
     std::size_t consumed = 0;
     std::string error;
     SourceSpan error_span{};
+    // Deepest terminal failure seen anywhere, including inside repetitions
+    // and optionals that later succeeded by matching less. Usually the most
+    // helpful "expected ..." report when `error` is a trailing-input error.
+    std::string expected;
+    SourceSpan expected_span{};
+    std::vector<std::string> expected_all;  // every distinct failure at expected_span
+    static ParseResult failure(std::string message, SourceSpan where = {}, std::size_t consumed = 0) {
+        ParseResult r; r.consumed = consumed; r.error = std::move(message); r.error_span = where; return r;
+    }
     explicit operator bool() const { return ok; }
 };
 struct Options {
@@ -156,6 +170,105 @@ struct Expression {
     enum Kind { Empty, Literal, Reference, Sequence, Choice, Star, Plus, Optional, And, Not } kind = Empty;
     std::string text;
     std::vector<Expression> children;
+    const Symbol* symbol = nullptr;  // resolved Reference target (per parse)
+};
+// Byte-set matcher for regex lexemes that are plain character classes, the
+// common case for scannerless grammars: [set], [^set], (?![neg])[set], each
+// optionally wrapped as (?:...)+ . Anything else uses std::regex.
+struct ByteClass {
+    bool table[256] = {};
+    bool repeat = false;
+    static bool escape(std::string_view s, std::size_t& i, bool (&t)[256], int& single) {
+        // At the character after '\'.
+        if (i >= s.size()) return false;
+        const char c = s[i++];
+        auto set_range = [&](unsigned lo, unsigned hi) { for (unsigned k = lo; k <= hi; ++k) t[k] = true; };
+        single = -1;
+        switch (c) {
+        case 's': for (unsigned char k : {' ', '\t', '\n', '\v', '\f', '\r'}) t[k] = true; return true;
+        case 'S': for (unsigned k = 0; k < 256; ++k) if (k != ' ' && (k < 9 || k > 13)) t[k] = true; return true;
+        case 'd': set_range('0', '9'); return true;
+        case 'D': for (unsigned k = 0; k < 256; ++k) if (k < '0' || k > '9') t[k] = true; return true;
+        case 'w': set_range('a', 'z'); set_range('A', 'Z'); set_range('0', '9'); t[unsigned('_')] = true; return true;
+        case 'W': for (unsigned k = 0; k < 256; ++k) if (!ident(static_cast<char>(k))) t[k] = true; return true;
+        case 't': single = '\t'; return true;
+        case 'n': single = '\n'; return true;
+        case 'r': single = '\r'; return true;
+        case 'f': single = '\f'; return true;
+        case 'v': single = '\v'; return true;
+        case 'x': {
+            if (i + 2 > s.size()) return false;
+            int v = 0;
+            for (int k = 0; k < 2; ++k) {
+                const char h = s[i++];
+                v = v * 16 + (h >= '0' && h <= '9' ? h - '0' : h >= 'a' && h <= 'f' ? h - 'a' + 10 : h >= 'A' && h <= 'F' ? h - 'A' + 10 : -1000);
+            }
+            if (v < 0) return false;
+            single = v; return true;
+        }
+        default:
+            if (ident(c)) return false;
+            single = static_cast<unsigned char>(c); return true;
+        }
+    }
+    // Parse "[...]" at s[i]; fills t. Returns false on unsupported syntax.
+    static bool bracket(std::string_view s, std::size_t& i, bool (&t)[256]) {
+        if (i >= s.size() || s[i] != '[') return false;
+        ++i;
+        bool negate = false;
+        if (i < s.size() && s[i] == '^') { negate = true; ++i; }
+        bool local[256] = {};
+        bool first = true;
+        while (true) {
+            if (i >= s.size()) return false;
+            if (s[i] == ']' && !first) { ++i; break; }
+            first = false;
+            int lo = -1;
+            if (s[i] == '\\') { ++i; if (!escape(s, i, local, lo)) return false; }
+            else if (s[i] == '[') return false;
+            else lo = static_cast<unsigned char>(s[i++]);
+            if (lo < 0) continue;
+            if (i + 1 < s.size() && s[i] == '-' && s[i + 1] != ']') {
+                ++i;
+                int hi = -1;
+                if (s[i] == '\\') { ++i; bool scratch[256] = {}; if (!escape(s, i, scratch, hi) || hi < 0) return false; }
+                else hi = static_cast<unsigned char>(s[i++]);
+                if (hi < lo) return false;
+                for (int k = lo; k <= hi; ++k) local[k] = true;
+            } else local[lo] = true;
+        }
+        for (unsigned k = 0; k < 256; ++k) t[k] = negate ? !local[k] : local[k];
+        return true;
+    }
+    static std::optional<ByteClass> compile(std::string_view s) {
+        ByteClass c;
+        std::size_t i = 0;
+        auto body = [&](std::string_view b, bool (&t)[256]) {
+            std::size_t j = 0;
+            bool neg[256] = {}; bool has_neg = false;
+            if (b.substr(0, 3) == "(?!") {
+                j = 3;
+                if (!bracket(b, j, neg) || j >= b.size() || b[j] != ')') return false;
+                ++j; has_neg = true;
+            }
+            if (!bracket(b, j, t) || j != b.size()) return false;
+            if (has_neg) for (unsigned k = 0; k < 256; ++k) t[k] = t[k] && !neg[k];
+            return true;
+        };
+        if (s.substr(0, 3) == "(?:" && s.size() > 5 && s.substr(s.size() - 2) == ")+") {
+            c.repeat = true;
+            if (!body(s.substr(3, s.size() - 5), c.table)) return std::nullopt;
+            return c;
+        }
+        (void)i;
+        if (!body(s, c.table)) return std::nullopt;
+        return c;
+    }
+    std::size_t match(std::string_view input, std::size_t at) const {
+        std::size_t n = 0;
+        while (at + n < input.size() && table[static_cast<unsigned char>(input[at + n])]) { ++n; if (!repeat) break; }
+        return n;
+    }
 };
 class GrammarReader {
     std::string_view s_;
@@ -229,17 +342,28 @@ public:
     }
 };
 }
+struct ByteClassHolder { detail::ByteClass cls; };
 class Parser {
     Registry registry_;
     Options options_;
     EventStream events_;
     std::unordered_map<std::string, detail::Expression> expressions_;
     std::unordered_map<std::string, std::regex> regexes_;
+    std::unordered_map<std::string, ByteClassHolder> classes_;
+    // Lazily formatted failure: prefix + *subject + suffix.
+    struct Failure { const char* prefix = nullptr; const std::string* subject = nullptr; const char* suffix = ""; bool operator==(const Failure&) const = default; };
+    static std::string text(const Failure& f) { return f.prefix ? std::string(f.prefix) + (f.subject ? *f.subject : std::string()) + f.suffix : std::string(); }
+    Failure error_f_{}, deepest_f_{};
+    std::vector<Failure> deepest_list_;
+    std::size_t lookahead_ = 0;
+    std::unordered_map<const Symbol*, const detail::Expression*> bodies_;
+    std::unordered_map<const Symbol*, const ByteClassHolder*> fast_;
+    std::unordered_map<const Symbol*, const std::regex*> slow_;
     std::string grammar_error_, error_, fatal_;
     std::string_view input_;
-    std::size_t cursor_ = 0, farthest_ = 0, operations_ = 0;
+    std::size_t cursor_ = 0, farthest_ = 0, operations_ = 0, deepest_ = 0;
     std::vector<Event> pending_;
-    std::vector<std::pair<std::string, std::size_t>> active_;
+    std::vector<std::pair<const Symbol*, std::size_t>> active_;
     std::vector<std::size_t> lines_;
     bool parsing_ = false;
 
@@ -252,7 +376,10 @@ class Parser {
                     throw std::invalid_argument("grammar size limit exceeded");
                 size += s.body.size() + s.pattern.source.size();
                 if (s.kind == Symbol::Kind::Production) expressions_.emplace(s.name, detail::GrammarReader(s.body).read());
-                else if (s.pattern.kind == PatternSpec::Kind::Regex) regexes_.emplace(s.name, std::regex(s.pattern.source));
+                else if (s.pattern.kind == PatternSpec::Kind::Regex) {
+                    regexes_.emplace(s.name, std::regex(s.pattern.source));
+                    if (auto fast = detail::ByteClass::compile(s.pattern.source)) classes_.emplace(s.name, ByteClassHolder{*fast});
+                }
             }
             std::function<void(const detail::Expression&)> check = [&](const auto& e) {
                 if (e.kind == detail::Expression::Reference && !registry_.find(e.text))
@@ -262,14 +389,38 @@ class Parser {
             for (const auto& [name, e] : expressions_) { (void)name; check(e); }
         } catch (const std::exception& e) { grammar_error_ = e.what(); }
     }
+    // Bind references and lexeme matchers to this object's tables (cheap;
+    // done per parse so copies of a Parser stay self-consistent).
+    void resolve() {
+        bodies_.clear(); fast_.clear(); slow_.clear();
+        for (const auto& s : registry_.symbols()) {
+            if (s.kind == Symbol::Kind::Production) {
+                if (auto it = expressions_.find(s.name); it != expressions_.end()) bodies_[&s] = &it->second;
+            } else if (s.pattern.kind == PatternSpec::Kind::Regex) {
+                if (auto it = classes_.find(s.name); it != classes_.end()) fast_[&s] = &it->second;
+                if (auto it = regexes_.find(s.name); it != regexes_.end()) slow_[&s] = &it->second;
+            }
+        }
+        std::function<void(detail::Expression&)> bind = [&](detail::Expression& e) {
+            if (e.kind == detail::Expression::Reference) e.symbol = registry_.find(e.text);
+            for (auto& c : e.children) bind(c);
+        };
+        for (auto& [name, e] : expressions_) { (void)name; bind(e); }
+    }
     SourceSpan span(std::size_t p, std::size_t n = 0) const {
         auto it = std::upper_bound(lines_.begin(), lines_.end(), p);
         const auto line = static_cast<std::size_t>(it - lines_.begin());
         return {p, n, line, p - lines_[line - 1] + 1};
     }
     void ws() { if (options_.skip_whitespace) while (cursor_ < input_.size() && detail::space(input_[cursor_])) ++cursor_; }
-    bool fail(std::string message) {
-        if (error_.empty() || cursor_ >= farthest_) { farthest_ = cursor_; error_ = std::move(message); }
+    bool fail(const char* prefix, const std::string* subject = nullptr, const char* suffix = "") {
+        const Failure f{prefix, subject, suffix};
+        if (!lookahead_) {
+            if (!deepest_f_.prefix || cursor_ > deepest_) { deepest_ = cursor_; deepest_f_ = f; deepest_list_.clear(); }
+            if (cursor_ == deepest_ && deepest_list_.size() < 256 && std::find(deepest_list_.begin(), deepest_list_.end(), f) == deepest_list_.end())
+                deepest_list_.push_back(f);
+        }
+        if (!error_f_.prefix || cursor_ >= farthest_) { farthest_ = cursor_; error_f_ = f; }
         return false;
     }
     bool event(EventKind kind, std::string name, std::size_t p, std::size_t n, std::size_t depth) {
@@ -280,29 +431,34 @@ class Parser {
     bool symbol(const Symbol& s, std::size_t depth) {
         ws(); const auto start = cursor_;
         if (s.kind == Symbol::Kind::Production) {
-            const auto key = std::make_pair(s.name, cursor_);
+            const auto key = std::make_pair(&s, cursor_);
             if (std::find(active_.begin(), active_.end(), key) != active_.end()) {
                 fatal_ = "left recursion detected at " + s.name; return false;
             }
             if (!event(EventKind::RuleBegin, s.name, start, 0, depth)) return false;
             active_.push_back(key);
-            const bool ok = eval(expressions_.at(s.name), depth + 1);
+            auto body = bodies_.find(&s);
+            const bool ok = eval(body != bodies_.end() ? *body->second : expressions_.at(s.name), depth + 1);
             active_.pop_back();
             return ok && event(EventKind::RuleEnd, s.name, start, cursor_ - start, depth);
         }
         std::size_t n = 0;
         if (s.pattern.kind == PatternSpec::Kind::Exact) {
-            if (input_.substr(cursor_, s.pattern.source.size()) != s.pattern.source) return fail("expected " + s.name);
+            if (input_.substr(cursor_, s.pattern.source.size()) != s.pattern.source) return fail("expected ", &s.name);
             n = s.pattern.source.size();
+        } else if (auto fast = fast_.find(&s); fast != fast_.end()) {
+            n = fast->second->cls.match(input_, cursor_);
+            if (!n) return fail("expected ", &s.name);
         } else {
             std::match_results<std::string_view::const_iterator> m;
+            auto slow = slow_.find(&s);
             if (!std::regex_search(input_.begin() + static_cast<std::ptrdiff_t>(cursor_), input_.end(), m,
-                    regexes_.at(s.name), std::regex_constants::match_continuous)) return fail("expected " + s.name);
+                    slow != slow_.end() ? *slow->second : regexes_.at(s.name), std::regex_constants::match_continuous)) return fail("expected ", &s.name);
             n = static_cast<std::size_t>(m.length());
         }
         if (n == 0) { fatal_ = "empty terminal match: " + s.name; return false; }
         if (s.kind == Symbol::Kind::Keyword && detail::ident(input_[cursor_ + n - 1]) && cursor_ + n < input_.size() && detail::ident(input_[cursor_ + n]))
-            return fail("keyword boundary mismatch: " + s.name);
+            return fail("keyword boundary mismatch: ", &s.name);
         cursor_ += n;
         return event(EventKind::Token, s.name, start, n, depth);
     }
@@ -317,10 +473,10 @@ class Parser {
         case E::Empty: return true;
         case E::Literal: {
             ws(); const auto p = cursor_;
-            if (input_.substr(p, e.text.size()) != e.text) return fail("expected literal '" + e.text + "'");
+            if (input_.substr(p, e.text.size()) != e.text) return fail("expected literal '", &e.text, "'");
             cursor_ += e.text.size(); return event(EventKind::Token, e.text, p, e.text.size(), depth);
         }
-        case E::Reference: return symbol(*registry_.find(e.text), depth);
+        case E::Reference: return symbol(e.symbol ? *e.symbol : *registry_.find(e.text), depth);
         case E::Sequence:
             for (const auto& c : e.children) if (!eval(c, depth + 1)) return false;
             return true;
@@ -332,9 +488,11 @@ class Parser {
             }
             return false;
         case E::And: case E::Not: {
-            const auto old_error = error_; const auto old_far = farthest_;
+            const auto old_error = error_f_; const auto old_far = farthest_;
+            ++lookahead_;
             const bool ok = eval(e.children[0], depth + 1);
-            cursor_ = save; pending_.resize(event_count); error_ = old_error; farthest_ = old_far;
+            --lookahead_;
+            cursor_ = save; pending_.resize(event_count); error_f_ = old_error; farthest_ = old_far;
             if (!fatal_.empty()) return false;
             return (e.kind == E::And ? ok : !ok) || fail("lookahead failed");
         }
@@ -342,12 +500,12 @@ class Parser {
             std::size_t count = 0;
             while (true) {
                 const auto p = cursor_, n = pending_.size(), old_far = farthest_;
-                const auto old_error = error_;
+                const auto old_error = error_f_;
                 if (!eval(e.children[0], depth + 1)) {
                     cursor_ = p; pending_.resize(n);
                     if (!fatal_.empty()) return false;
                     if (e.kind == E::Plus && count == 0) return false;
-                    error_ = old_error; farthest_ = old_far; return true;
+                    error_f_ = old_error; farthest_ = old_far; return true;
                 }
                 ++count;
                 if (e.kind == E::Optional) return true;
@@ -366,12 +524,13 @@ public:
     void subscribe(EventStream::Callback cb) { events_.subscribe(std::move(cb)); }
     const std::string& grammar_error() const noexcept { return grammar_error_; }
     ParseResult parse(std::string_view input, std::string_view start_rule, bool require_eof = true) {
-        if (parsing_) return {false, 0, "Parser::parse is not reentrant", {}};
+        if (parsing_) return ParseResult::failure("Parser::parse is not reentrant");
         parsing_ = true;
         struct Reset { bool& flag; ~Reset() { flag = false; } } reset{parsing_};
-        input_ = input.empty() ? std::string_view("") : input; cursor_ = farthest_ = operations_ = 0;
-        error_.clear(); fatal_.clear(); pending_.clear(); active_.clear(); lines_ = {0};
-        if (input.size() > options_.max_input_bytes) return {false, 0, "input size limit exceeded", {}};
+        input_ = input.empty() ? std::string_view("") : input; cursor_ = farthest_ = operations_ = deepest_ = lookahead_ = 0;
+        error_.clear(); error_f_ = {}; deepest_f_ = {}; deepest_list_.clear();
+        resolve(); fatal_.clear(); pending_.clear(); active_.clear(); lines_ = {0};
+        if (input.size() > options_.max_input_bytes) return ParseResult::failure("input size limit exceeded");
         for (std::size_t i = 0; i < input.size(); ++i) if (input[i] == '\n') lines_.push_back(i + 1);
         bool ok = false;
         const auto* start = registry_.find(start_rule);
@@ -379,14 +538,23 @@ public:
         else if (!start || start->kind != Symbol::Kind::Production) fatal_ = "unknown start production: " + std::string(start_rule);
         else ok = symbol(*start, 0);
         if (ok && require_eof) { ws(); if (cursor_ != input.size()) ok = fail("unexpected trailing input"); }
+        error_ = text(error_f_);
         if (!fatal_.empty()) { ok = false; error_ = fatal_; farthest_ = cursor_; }
         if (!ok) {
             pending_.clear();
             events_.emit({EventKind::ParseError, {}, error_, span(farthest_), 0, false});
-            return {false, cursor_, error_, span(farthest_)};
+            auto failed = ParseResult::failure(error_, span(farthest_), cursor_);
+            for (const auto& f : deepest_list_) {
+                auto t = text(f);
+                if (std::find(failed.expected_all.begin(), failed.expected_all.end(), t) == failed.expected_all.end()) failed.expected_all.push_back(std::move(t));
+            }
+            failed.expected = deepest_f_.prefix ? text(deepest_f_) : error_;
+            failed.expected_span = deepest_f_.prefix ? span(deepest_) : span(farthest_);
+            return failed;
         }
-        for (const auto& e : pending_) events_.emit(e);
-        return {true, cursor_, {}, span(cursor_)};
+        events_.emit_all(pending_);
+        ParseResult done; done.ok = true; done.consumed = cursor_; done.error_span = span(cursor_);
+        return done;
     }
 };
 } // namespace parsetk

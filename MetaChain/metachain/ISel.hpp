@@ -1,6 +1,8 @@
 #pragma once
 #include "Backend.hpp"
 #include <limits>
+#include <map>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -19,6 +21,73 @@ struct Result {
     explicit operator bool() const { return diagnostics.empty(); }
 };
 struct Options { std::size_t max_search=100000, max_tiles=100000; };
+// --- Rule/pattern analysis (used by all covering strategies) ---
+inline std::size_t pattern_size(const Pattern& p) {
+    std::size_t n=1;
+    for (const auto& c:p.inputs) n+=pattern_size(c);
+    return n;
+}
+inline std::size_t pattern_depth(const Pattern& p) {
+    std::size_t d=0;
+    for (const auto& c:p.inputs) d=std::max(d,pattern_depth(c));
+    return 1+d;
+}
+inline std::size_t pattern_operands(const Pattern& p) {
+    if (p.opcode=="*") return 1;
+    std::size_t n=0;
+    for (const auto& c:p.inputs) n+=pattern_operands(c);
+    return n;
+}
+inline std::string dump_pattern(const Pattern& p) {
+    if (p.opcode=="*") return "*";
+    std::string s=p.opcode;
+    if (!p.inputs.empty()) {
+        s+="(";
+        for (std::size_t k=0;k<p.inputs.size();++k) s+=(k?",":"")+dump_pattern(p.inputs[k]);
+        s+=")";
+    }
+    return s;
+}
+inline std::string dump_rule(const Rule& r) {
+    std::ostringstream out;
+    out << (r.name.empty()?"<anon>":r.name) << " := " << dump_pattern(r.pattern) << "  [cost " << r.cost << "]";
+    return out.str();
+}
+inline std::string dump_tile(const Graph& g,const std::vector<Rule>& rules,const Tile& t) {
+    std::ostringstream out;
+    out << (t.rule<rules.size()?rules[t.rule].name:"<bad-rule>") << " @%" << t.root << " covers{";
+    for (std::size_t k=0;k<t.covered.size();++k) out << (k?",":"") << "%" << t.covered[k];
+    out << "} operands{";
+    for (std::size_t k=0;k<t.operands.size();++k) out << (k?",":"") << "%" << t.operands[k];
+    out << "}";
+    (void)g;
+    return out.str();
+}
+inline std::string dump_result(const Graph& g,const std::vector<Rule>& rules,const Result& r) {
+    std::ostringstream out;
+    out << "cover cost=" << r.cost << (r.optimal?" optimal":" heuristic") << " tiles=" << r.tiles.size() << "\n";
+    for (const auto& t:r.tiles) out << "  " << dump_tile(g,rules,t) << "\n";
+    for (const auto& d:r.diagnostics) out << "  diagnostic: " << d.message << " @%" << d.node << "\n";
+    return out.str();
+}
+// Index rules by top opcode for faster candidate generation and reporting.
+inline std::map<std::string,std::vector<Id>> index_rules(const std::vector<Rule>& rules) {
+    std::map<std::string,std::vector<Id>> index;
+    for (Id r=0;r<rules.size();++r) index[rules[r].pattern.opcode].push_back(r);
+    return index;
+}
+// Exact-cover checker shared by tests and the SAT encoder.
+inline bool verify_cover(const Graph& g,const Result& r) {
+    if (!r) return false;
+    if (!backend::topological_order(g)) return false;
+    std::vector<bool> covered(g.nodes.size());
+    for (const auto& t:r.tiles) for (auto n:t.covered) {
+        if (n>=g.nodes.size()||covered[n]) return false;
+        covered[n]=true;
+    }
+    for (auto c:covered) if (!c) return false;
+    return true;
+}
 inline bool match(const Graph& g,Id node,const Pattern& p,Tile& tile,std::size_t depth=0) {
     if (depth>256) return false;
     if (p.opcode=="*") { tile.operands.push_back(node); return true; }

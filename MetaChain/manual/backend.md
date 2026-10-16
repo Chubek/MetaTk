@@ -111,58 +111,49 @@ including loop edges and opaque call/return effects.
 
 ## QScript (`qscript/QScript.h`)
 
-QScript is a small signed 64-bit integer language, **not** JavaScript or a
-general C implementation:
+QScript is a signed 64-bit integer scripting language with functions,
+recursion, compile-time constants and libraries, parsed by a Raku-style
+scannerless grammar on ParseTk and compiled to MetaIL. It has its own manual:
+**[manual/qscript](qscript/README.md)**.
 
-```text
-let n = 5;
-let factorial = 1;
-while (n > 1) {
-    factorial = factorial * n;
-    n = n - 1;
-}
-print factorial;
-return factorial;
+```qscript
+use math;
+fn fact(n) { return n < 2 ? 1 : n * fact(n - 1); }
+for (my i = 1; i <= 5; i++) say fact(i) if i % 2;
+return gcd(fact(5), 84);
 ```
 
-Supported: lexical block scope and shadowing, initialized `let` declarations,
-assignment, `if`/`else`, `while`, `print`, `return`, `//` comments, parentheses,
-decimal/hex/binary/octal literals, unary `- ! ~`, and binary
-`+ - * / % & | ^ << >> == != < <= > >=`. Statements require semicolons except
-blocks/control statements. There are no strings, functions, arrays, floating
-point, logical `&&`/`||`, or persistent REPL variables. No explicit return
-means return zero. Arithmetic/trap behavior follows MetaIL (including logical
-right shifts and wrapping addition/subtraction/multiplication).
-
-There are at most 16 simultaneously scoped variables and 16 expression
-temporaries. Parsing is bounded to 256 levels and 100000 AST nodes by default;
-the frontend also respects MetaChain source, instruction and execution limits.
-Parser errors have source positions. Semantic errors currently report messages
-without AST source spans. Failed compilation returns no executable program.
-
-The C++ API exposes parsing, bounded AST visiting, semantic checking, lowering,
-optimization, scheduling, textual emission, x86-64 selection, assembly and
-linking. AST values reuse DSLtk's `ASTNode`. The C API exposes opaque contexts
-and programs, compile/run/emit/eval, an output callback and a step limit. No C++
-exception crosses its boundary. Free programs with `qs_program_destroy` and
-contexts with `qs_destroy`. Context error/output buffers remain valid until
-the next compile/run/emit/eval; setters do not invalidate them. Contexts are
-not safe for concurrent or reentrant use. C callers must link the C++ runtime.
+| Topic | Chapter |
+|-------|---------|
+| Syntax, operators, statements, traps | [The language](qscript/02-language.md) |
+| `fn`, `const`, scoping, host calls | [Functions and constants](qscript/03-functions.md) |
+| `use`, library search, modules | [Libraries and modules](qscript/04-libraries.md) |
+| The grammar engine (`QScript-Grammar.h`) | [Grammars](qscript/05-grammars.md) |
+| Every C/C++ entry point, including `QScript-Backend.h` and `QScript-Module.h` | [API](qscript/06-api.md) |
+| The 25 embedded libraries | [Standard library](qscript/07-stdlib.md) |
+| `qscript` and `qscript-repl` | [Command line](qscript/08-cli.md) |
+| Pipeline, calling convention, limits | [Internals](qscript/09-internals.md) |
 
 ```sh
-build/qscript run factorial.qs
-build/qscript check factorial.qs
-build/qscript ir factorial.qs
-build/qscript encode factorial.qs -o factorial.mcilb
-build/qscript build factorial.qs -o factorial
-chmod +x factorial
-build/qscript --repl          # or build/qscript-repl
+build/qscript run program.qs
+build/qscript build program.qs -o program
+build/qscript --repl
 ```
 
-`native`, `object`, and `build` reuse MetaChain's Linux x86-64 lowering,
-assembler and static ELF linker, with their existing platform restrictions.
-The REPL evaluates one complete, independent program per line. `:help` and
-`:quit` are available. Binary CLI formats require an explicit output path.
+## Analysis helpers
+
+Every layer ships dumping and statistics for tooling (all header-inline):
+
+- `backend::dump/to_dot/stats/live_from_outputs/find_cycle`
+- `isel::pattern_size/depth/operands`, `dump_rule/pattern/tile/result`,
+  `index_rules`, `verify_cover`
+- `isched::schedule_stats/dump_schedule/critical_path`
+- `regalloc::alloc_stats/dump_allocation`
+- `graph::dump_cfg/dump_analysis`, `linear::dump_operand/dump_code`
+
+QScript's `native`, `object`, and `build` reuse MetaChain's Linux x86-64
+lowering, assembler and static ELF linker, with their existing platform
+restrictions.
 
 ## Vendored support files
 
