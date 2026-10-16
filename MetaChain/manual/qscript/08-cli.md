@@ -14,6 +14,7 @@ qscript --help
 | `check FILE...` | parse and check; prints `ok` |
 | `ir FILE...` | print the MetaIL program |
 | `native FILE...` | print x86-64 assembly |
+| `c FILE... [-o OUT]` | emit portable C99; compile with `-DQSCRIPT_STANDALONE` for a CLI |
 | `encode FILE... -o OUT` | write MCIL bytecode |
 | `object FILE... -o OUT` | write an ELF64 relocatable object |
 | `build FILE... -o OUT` | write a static x86-64 Linux executable |
@@ -39,6 +40,7 @@ Options go before the command.
 | `-L DIR`, `-LDIR` | add a library directory for `use` (repeatable) |
 | `--no-stdlib` | do not resolve `use` against the embedded standard library |
 | `--jit` | execute with MetaJIT |
+| `--cffi` | enable the libffi-based `cffi` runtime library |
 | `--stats` | after `run`, print steps, outputs and program size to standard error |
 | `--sched list\|cycle\|static` | instruction scheduler |
 | `-O0` | disable the MetaIL optimizer |

@@ -27,6 +27,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -155,6 +156,8 @@ struct VMOptions {
     std::size_t max_trace_length = 256;
     std::size_t max_stack_values = 1'000'000;
     std::size_t max_traces = 1024;
+    // Host calls receive a snapshot of r0..r31. The binding defines arity.
+    std::function<std::int64_t(std::int64_t, std::span<const std::int64_t>)> host_call;
 };
 
 struct Trace {

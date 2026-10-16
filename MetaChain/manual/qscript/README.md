@@ -38,9 +38,10 @@ result 12
 4. [Libraries and modules](04-libraries.md): `use`, writing libraries, search paths, multi-file modules
 5. [Grammars](05-grammars.md): the Raku-style scannerless grammar engine on ParseTk
 6. [The C and C++ API](06-api.md): every function in `QScript.h` and `qscript/include/`
-7. [Standard library reference](07-stdlib.md): all 25 libraries, function by function
+7. [Standard library reference](07-stdlib.md): embedded libraries, function by function
 8. [Command line and REPL](08-cli.md)
 9. [Internals](09-internals.md): pipeline, AST, calling convention, limits and diagnostics
+10. [C interoperability and portable C](10-ffi.md): callbacks, libffi, shared libraries, serialization, C99 backend
 
 ## At a glance
 
@@ -50,13 +51,14 @@ result 12
 | Syntax | C-like, with Perl touches: `my`, `say`, `unless`, `until`, `elsif`, `last`/`next`, `loop`, statement modifiers (`next if i % 2;`), `**`, `#` comments |
 | Program structure | top-level statements, `fn` functions (recursive), compile-time `const`, `use` libraries |
 | Checks | names, arity, scopes, `break` placement, constant cycles, all before running |
-| Runs on | MetaVM interpreter, MetaJIT, or native x86-64 ELF (`qscript build`) |
+| Runs on | MetaVM interpreter, MetaJIT, native x86-64 ELF (`qscript build`), portable C99 (`qscript c`) |
 | Safety | every run is bounded: step limit, stack limit; traps on division by zero, bad shifts, failed `assert` |
-| Embedding | C ABI (`qs_compile`, `qs_run`, `qs_call`, ...) and a C++ API |
-| Library | 25 embedded libraries: math, bits, primes, number theory, dates, hashing, checksums, fixed point, ... |
+| Embedding | C ABI, registered host functions, typed libffi calls, shared-library loading and a C++ API |
+| Library | 28 embedded libraries: math, bits, primes, dates, hashing, fixed point, cffi, endian, integer, ... |
 
-What QScript is not: it has no strings, arrays, floating point or heap. Values
+QScript has no built-in strings, arrays or floating-point arithmetic. Values
 are integers; characters are integer codes (`'a'` is 97); several small values
 can be packed into one integer (see the `pack`, `date` and `color` libraries).
-These limits come from MetaIL, the register IL QScript targets; they keep every
-program verifiable and easy to compile to native code.
+The optional `cffi` runtime adds context-owned byte buffers and native calls;
+floating values and pointers cross the integer VM as bit patterns. See
+[chapter 10](10-ffi.md) for its API and lifetime rules.

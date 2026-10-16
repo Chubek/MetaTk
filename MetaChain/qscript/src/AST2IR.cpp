@@ -294,7 +294,7 @@ public:
         for (const auto& q : a_.used_functions) {
             const auto& f = a_.functions.at(q);
             reset(f.unit, true);
-            locate(*f.decl);
+            if (f.decl) locate(*f.decl); else where_ = {};
             entries[q] = here();
             enter();
             emit({Op::Pop, reg(detail::scratch_register), 0, 0, 0});
@@ -302,11 +302,14 @@ public:
             for (const auto& name : f.params) params.push_back(allocate(name));
             for (auto it = params.rbegin(); it != params.rend(); ++it) emit({Op::Pop, reg(*it), 0, 0, 0});
             emit({Op::Push, reg(detail::scratch_register), 0, 0, 0});
-            stmt(*f.body);
+            if (f.host_id) {
+                emit({Op::Host, reg(detail::return_register), 0, 0, *f.host_id});
+                emit({Op::Ret, 0, 0, 0, 0});
+            } else stmt(*f.body);
             leave();
             emit({Op::Const, reg(detail::return_register), 0, 0, 0});
             emit({Op::Ret, 0, 0, 0, 0});
-            const auto l = detail::location(*f.decl);
+            const auto l = f.decl ? detail::location(*f.decl) : detail::Location{};
             unit_.functions.push_back({q, entries[q], f.params.size(), l.file, l.line});
         }
         for (const auto& fix : calls_) {

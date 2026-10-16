@@ -69,6 +69,10 @@ inline Access access(const metail::Instruction& i) {
     a.may_trap=i.op==Op::Div || i.op==Op::Mod || i.op==Op::Shl || i.op==Op::Shr;
     a.barrier=metail::branch(i.op) || i.op==Op::Ret || i.op==Op::Push || i.op==Op::Pop || i.op==Op::Print || i.op==Op::Halt;
     if (i.op==Op::Call || i.op==Op::Ret) for (unsigned r=0;r<32;++r) { a.uses.insert(r); a.defs.insert(r); }
+    if (i.op==Op::Host) {
+        a.barrier=true; a.may_trap=true; a.defs.insert(i.a);
+        for (unsigned r=0;r<32;++r) a.uses.insert(r);
+    }
     return a;
 }
 inline bool intersects(const std::set<unsigned>& a,const std::set<unsigned>& b) {

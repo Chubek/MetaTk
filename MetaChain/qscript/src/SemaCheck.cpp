@@ -67,9 +67,9 @@ class Analyzer {
             const std::string path = dir.empty() ? relative : dir + (dir.back() == '/' ? "" : "/") + relative;
             std::ifstream in(path, std::ios::binary);
             if (!in) continue;
-            std::ostringstream text; text << in.rdbuf();
-            if (text.str().size() > o_.toolchain.il.max_source_bytes) continue;
-            return std::make_pair(text.str(), path);
+            auto text=read_bounded(in,o_.toolchain.il.max_source_bytes);
+            if (!text) throw std::runtime_error("library read failed or source size limit exceeded: " + path);
+            return std::make_pair(std::move(*text), path);
         }
         if (o_.stdlib) if (auto text = stdlib_source(name)) return std::make_pair(*text, "stdlib/" + relative);
         return std::nullopt;
@@ -109,6 +109,9 @@ class Analyzer {
                 const auto& short_name = c.child(0).value();
                 if (!metachain::text::identifier(short_name) || short_name.find('.') != std::string::npos || short_name.find('$') != std::string::npos) { error("invalid function name: " + short_name, &c); continue; }
                 Function f; f.name = prefix + short_name; f.unit = unit; f.decl = &c; f.body = &c.child(2);
+                if (auto existing=a_.functions.find(f.name); existing!=a_.functions.end() && existing->second.host_id) {
+                    error("function conflicts with host binding: " + f.name, &c); continue;
+                }
                 std::set<std::string> seen;
                 for (const auto& p : c.child(1).children()) {
                     if (!p.is_leaf() || p.tag() != "name") { error("invalid parameter AST", &c); continue; }
@@ -328,10 +331,20 @@ public:
     void run(const AST& ast) {
         if (ast.root.tag() != "program" || ast.root.is_leaf()) { error("expected program AST", nullptr); return; }
         a_.units[""] = UnitInfo{};
+        std::set<std::int64_t> ids;
+        for (const auto& [name, host] : o_.hosts) {
+            if (!valid_library_name(name) || host.arity > max_variables || host.id < 0 || !host.invoke || !ids.insert(host.id).second) {
+                error("invalid host binding: " + name, nullptr); continue;
+            }
+            Function f; f.name = name; f.host_id = host.id;
+            for (std::size_t n=0; n<host.arity; ++n) f.params.push_back("arg" + std::to_string(n));
+            a_.functions[name] = std::move(f);
+            a_.units[""].functions[name] = name;
+        }
         items("", ast.root);
         // `**` lowers to a call of the hidden core library.
         for (const auto* s : a_.statements) scan_power(*s);
-        for (const auto& [q, f] : a_.functions) scan_power(*f.body);
+        for (const auto& [q, f] : a_.functions) if (f.body) scan_power(*f.body);
         if (a_.uses_power) load(core_unit, nullptr);
         for (auto& [u, info] : a_.units) if (!u.empty() && u != core_unit && a_.uses_power) info.imports.push_back(core_unit);
         if (a_.uses_power) a_.units[""].imports.push_back(core_unit);
@@ -343,6 +356,7 @@ public:
             for (const auto* s : a_.statements) stmt(b, *s, 1);
         }
         for (auto& [q, f] : a_.functions) {
+            if (f.host_id) continue;
             Body b; b.unit = f.unit; b.calls = &graph[q];
             b.where = location(*f.decl);
             b.scopes.emplace_back(f.params.begin(), f.params.end());
@@ -352,7 +366,7 @@ public:
         // Reachability: the program, plus every function the program defines
         // (callable from the host), plus everything they call.
         std::vector<std::string> work{""};
-        for (const auto& [q, f] : a_.functions) if (f.unit.empty()) work.push_back(q);
+        for (const auto& [q, f] : a_.functions) if (f.unit.empty() && !f.host_id) work.push_back(q);
         std::set<std::string> seen;
         while (!work.empty()) {
             auto q = work.back(); work.pop_back();
@@ -365,6 +379,7 @@ public:
 } // namespace
 
 std::string Analysis::function(const std::string& unit, const std::string& name, std::string& why) const {
+    if (auto f = functions.find(name); f != functions.end() && f->second.host_id) return name;
     auto u = units.find(unit);
     if (u == units.end()) { why = "internal: unknown unit"; return {}; }
     const auto split = name.rfind("::");

@@ -5,6 +5,7 @@
 #include "qscript/include/QScript-Library.h"
 #include "qscript/include/QScript-Module.h"
 #include "qscript/include/QScript-Runtime.h"
+#include "qscript/include/QScript-CFFI.h"
 #include <errno.h>
 #include <inttypes.h>
 #include <stdio.h>
@@ -51,6 +52,7 @@ static void usage(void) {
          "  run FILE...              compile and run; prints output and `result N`\n"
          "  check FILE...            parse and check only\n"
          "  ir|native FILE...        print MetaIL / x86-64 assembly\n"
+         "  c FILE... [-o OUT]       emit portable C99 (QScript runtime included)\n"
          "  encode|object|build FILE... -o OUT   write bytecode / ELF object / executable\n"
          "  call FILE... -- FUNC [ARG...]        call one function and print its result\n"
          "  report FILE...           backend report (blocks, critical paths, makespan)\n"
@@ -66,6 +68,7 @@ static void usage(void) {
          "  -L DIR        add a library directory for `use` (repeatable)\n"
          "  --no-stdlib   do not resolve `use` against the embedded standard library\n"
          "  --jit         run with MetaJIT instead of the interpreter\n"
+         "  --cffi        enable the cffi library (requires libffi)\n"
          "  --stats       after run, print steps to standard error\n"
          "  --sched NAME  scheduler: list (default), cycle or static\n"
          "  -O0           disable MetaIL optimization\n"
@@ -134,6 +137,10 @@ int qs_driver_main(int argc,char **argv) {
         else if (!strncmp(o,"-L",2)&&o[2]) { qs_add_library_path(context,o+2); ++first; }
         else if (!strcmp(o,"--no-stdlib")) { qs_set_stdlib(context,0); ++first; }
         else if (!strcmp(o,"--jit")) { qs_set_engine(context,QS_ENGINE_JIT); ++first; }
+        else if (!strcmp(o,"--cffi")) {
+            if (qs_cffi_enable(context)!=QS_OK) { fprintf(stderr,"%s\n",qs_error(context)); qs_destroy(context); return 2; }
+            ++first;
+        }
         else if (!strcmp(o,"--stats")) { stats=1; ++first; }
         else if (!strcmp(o,"-O0")) { qs_set_optimize(context,0); ++first; }
         else if (!strcmp(o,"--sched")&&first+1<argc) {
@@ -141,7 +148,7 @@ int qs_driver_main(int argc,char **argv) {
             first+=2;
         } else if (!strcmp(o,"--steps")&&first+1<argc) {
             char *end; unsigned long long n; errno=0; n=strtoull(argv[first+1],&end,10);
-            if (errno||*end||!n) { fprintf(stderr,"qscript: invalid step limit: %s\n",argv[first+1]); qs_destroy(context); return 2; }
+            if (errno||end==argv[first+1]||argv[first+1][0]=='-'||*end||!n||n>SIZE_MAX) { fprintf(stderr,"qscript: invalid step limit: %s\n",argv[first+1]); qs_destroy(context); return 2; }
             qs_set_step_limit(context,(size_t)n); first+=2;
         } else { fprintf(stderr,"qscript: unknown option: %s\n",o); qs_destroy(context); return 2; }
     }
@@ -173,6 +180,7 @@ int qs_driver_main(int argc,char **argv) {
     else if (!strcmp(command,"ir")) format=QS_IL;
     else if (!strcmp(command,"encode")) format=QS_BYTECODE;
     else if (!strcmp(command,"native")) format=QS_NATIVE;
+    else if (!strcmp(command,"c")) format=QS_C_SOURCE;
     else if (!strcmp(command,"object")) format=QS_OBJECT;
     else if (!strcmp(command,"build")) format=QS_EXECUTABLE;
     else { fprintf(stderr,"qscript: unknown command: %s\n",command); qs_destroy(context); return 2; }
@@ -183,7 +191,7 @@ int qs_driver_main(int argc,char **argv) {
         inputs=call_at-first-1;
     } else if (argc-first>=4&&strcmp(argv[argc-2],"-o")==0) { outfile=argv[argc-1]; inputs-=2; }
     if (inputs<1) { fputs("qscript: no input files\n",stderr); qs_destroy(context); return 2; }
-    if ((!run&&!check&&!report&&!call&&format!=QS_IL&&format!=QS_NATIVE&&!outfile)||((run||check||report||call)&&outfile)) {
+    if ((!run&&!check&&!report&&!call&&format!=QS_IL&&format!=QS_NATIVE&&format!=QS_C_SOURCE&&!outfile)||((run||check||report||call)&&outfile)) {
         fputs("qscript: binary output requires -o; run/check/report/call do not accept -o\n",stderr); qs_destroy(context); return 2;
     }
     for (k=0;k<inputs;++k) if (!strcmp(argv[first+1+k],"-")&&inputs>1) {
@@ -214,7 +222,7 @@ int qs_driver_main(int argc,char **argv) {
         int64_t args[64],result; size_t count=0;
         for (k=call_at+2;k<argc;++k) {
             char *end; long long v; errno=0; v=strtoll(argv[k],&end,0);
-            if (errno||*end||count==64) { fprintf(stderr,"qscript: invalid argument: %s\n",argv[k]); status=2; break; }
+            if (errno||end==argv[k]||*end||count==64) { fprintf(stderr,"qscript: invalid argument: %s\n",argv[k]); status=2; break; }
             args[count++]=(int64_t)v;
         }
         if (!status) {

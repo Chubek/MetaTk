@@ -13,11 +13,11 @@
 namespace metail {
 enum class Op : std::uint8_t {
     Nop, Const, Mov, Add, Sub, Mul, Div, Mod, And, Or, Xor, Shl, Shr,
-    Eq, Lt, Jmp, Jz, Jnz, Push, Pop, Call, Ret, Print, Halt
+    Eq, Lt, Jmp, Jz, Jnz, Push, Pop, Call, Ret, Print, Halt, Host
 };
-inline constexpr std::array<std::string_view, 24> op_names{
+inline constexpr std::array<std::string_view, 25> op_names{
     "nop", "const", "mov", "add", "sub", "mul", "div", "mod", "and", "or", "xor", "shl", "shr",
-    "eq", "lt", "jmp", "jz", "jnz", "push", "pop", "call", "ret", "print", "halt"};
+    "eq", "lt", "jmp", "jz", "jnz", "push", "pop", "call", "ret", "print", "halt", "host"};
 inline std::string_view name(Op op) {
     const auto n = static_cast<std::size_t>(op);
     return n < op_names.size() ? op_names[n] : std::string_view{"invalid"};
@@ -52,7 +52,7 @@ inline bool branch(Op op) { return op == Op::Jmp || op == Op::Jz || op == Op::Jn
 inline unsigned registers(Op op) {
     if (binary(op)) return 3;
     if (op == Op::Mov) return 2;
-    if (op == Op::Const || op == Op::Jz || op == Op::Jnz || op == Op::Push || op == Op::Pop || op == Op::Print || op == Op::Halt) return 1;
+    if (op == Op::Const || op == Op::Host || op == Op::Jz || op == Op::Jnz || op == Op::Push || op == Op::Pop || op == Op::Print || op == Op::Halt) return 1;
     return 0;
 }
 inline std::vector<Diagnostic> verify(const Program& p, Limits limits = {}) {
@@ -71,6 +71,8 @@ inline std::vector<Diagnostic> verify(const Program& p, Limits limits = {}) {
         if ((n == 0 && i.a) || (n < 2 && i.b) || (n < 3 && i.c)) fail("nonzero unused register field", pc);
         if (branch(i.op)) {
             if (i.immediate < 0 || static_cast<std::uint64_t>(i.immediate) >= p.size()) fail("branch target outside program", pc);
+        } else if (i.op == Op::Host) {
+            if (i.immediate < 0) fail("negative host binding ID", pc);
         } else if (i.op != Op::Const && i.immediate != 0) fail("nonzero unused immediate field", pc);
     }
     return errors;
@@ -110,7 +112,7 @@ inline Result parse(std::string_view source, std::string file = {}, Limits limit
             else {
                 Instruction i; i.op = *op;
                 const unsigned nr = registers(*op);
-                const unsigned count = nr + ((*op == Op::Const || branch(*op)) ? 1 : 0);
+                const unsigned count = nr + ((*op == Op::Const || *op == Op::Host || branch(*op)) ? 1 : 0);
                 // mov/binary use only registers; branches carry one target.
                 if (args.size() != count) fail("wrong operand count for " + std::string(name(*op)));
                 else {
@@ -121,7 +123,7 @@ inline Result parse(std::string_view source, std::string file = {}, Limits limit
                         if (!reg) { fail("expected register r0..r31"); valid = false; }
                         else *fields[n] = *reg;
                     }
-                    if (*op == Op::Const) {
+                    if (*op == Op::Const || *op == Op::Host) {
                         auto v = metachain::text::signed_integer(args.back());
                         if (!v) { fail("expected signed 64-bit constant"); valid = false; } else i.immediate = *v;
                     } else if (branch(*op)) {
@@ -156,7 +158,7 @@ inline std::string emit(const Program& p) {
         out << name(i.op); unsigned nr = registers(i.op);
         const unsigned fields[] = {i.a, i.b, i.c};
         for (unsigned n = 0; n < nr; ++n) out << (n ? ", r" : " r") << fields[n];
-        if (i.op == Op::Const || branch(i.op)) out << (nr ? ", " : " ") << i.immediate;
+        if (i.op == Op::Const || i.op == Op::Host || branch(i.op)) out << (nr ? ", " : " ") << i.immediate;
         out << '\n';
     }
     return out.str();
@@ -219,6 +221,13 @@ struct ISA {
         case Op::Nop: break;
         case Op::Const: set(i.a, i.immediate); break;
         case Op::Mov: set(i.a, get(i.b)); break;
+        case Op::Host: {
+            if (!vm.options().host_call) { vm.trap("unbound host call"); return false; }
+            std::array<std::int64_t, 32> args{};
+            for (unsigned n = 0; n < args.size(); ++n) args[n] = get(n);
+            set(i.a, vm.options().host_call(i.immediate, args));
+            break;
+        }
         case Op::Jmp: vm.set_pc(static_cast<std::size_t>(i.immediate)); break;
         case Op::Jz: case Op::Jnz:
             if ((get(i.a) == 0) == (i.op == Op::Jz)) vm.set_pc(static_cast<std::size_t>(i.immediate));
@@ -296,11 +305,27 @@ inline Result optimize(Program p) {
         if (i.op == Op::Const) v = i.immediate;
         else if (i.op == Op::Mov) v = constants[i.b];
         else if (binary(i.op) && constants[i.b] && constants[i.c]) v = evaluate(i.op, *constants[i.b], *constants[i.c]);
-        if (i.op == Op::Const || i.op == Op::Mov || binary(i.op) || i.op == Op::Pop) {
+        // Integer identities are safe even when the other operand is unknown.
+        // Never erase a potentially trapping division, remainder or shift.
+        if (!v && binary(i.op)) {
+            const auto x = constants[i.b], y = constants[i.c];
+            if ((i.op == Op::Sub || i.op == Op::Xor || i.op == Op::Lt) && i.b == i.c) v = 0;
+            else if (i.op == Op::Eq && i.b == i.c) v = 1;
+            else if ((i.op == Op::Mul || i.op == Op::And) && (x == 0 || y == 0)) v = 0;
+            else if (((i.op == Op::Add || i.op == Op::Sub || i.op == Op::Or || i.op == Op::Xor) && y == 0) ||
+                     (i.op == Op::Mul && y == 1) || (i.op == Op::And && y == -1)) i = {Op::Mov, i.a, i.b, 0, 0};
+            else if (((i.op == Op::Add || i.op == Op::Or || i.op == Op::Xor) && x == 0) ||
+                     (i.op == Op::Mul && x == 1) || (i.op == Op::And && x == -1)) i = {Op::Mov, i.a, i.c, 0, 0};
+        }
+        if ((i.op == Op::Jz || i.op == Op::Jnz) && constants[i.a]) {
+            const bool taken = (*constants[i.a] == 0) == (i.op == Op::Jz);
+            i = taken ? Instruction{Op::Jmp, 0, 0, 0, i.immediate} : Instruction{};
+        }
+        if (i.op == Op::Const || i.op == Op::Mov || binary(i.op) || i.op == Op::Pop || i.op == Op::Host) {
             constants[i.a] = v;
             if (v) i = {Op::Const, i.a, 0, 0, *v};
         }
-        if (branch(i.op) || i.op == Op::Ret) constants.fill(std::nullopt);
+        if (branch(i.op) || i.op == Op::Ret || i.op == Op::Host) constants.fill(std::nullopt);
     }
     return r;
 }

@@ -13,6 +13,10 @@ compiled only under `__cplusplus`.
 | `qscript/include/QScript-Diagnostics.h` | structured diagnostics, checking, AST and match-tree dumps |
 | `qscript/include/QScript-Backend.h` | scheduler and optimizer configuration, backend report |
 | `qscript/include/QScript-Grammar.h` | the Raku-style grammar engine and match trees |
+| `qscript/include/QScript-FFI.h` | registered C callbacks |
+| `qscript/include/QScript-Serialization.h` | portable integer-vector encoding/decoding |
+| `qscript/include/QScript-SharedLibrary.h` | shared-library loading and symbol lookup |
+| `qscript/include/QScript-CFFI.h` | typed C calls, bindings and script-buffer exchange |
 
 Link against `MetaChain::QScript` (`libQScript.a`).
 
@@ -31,8 +35,8 @@ Link against `MetaChain::QScript` (`libQScript.a`).
 * A context is not thread-safe; use one context per thread. Programs and
   grammars are immutable after creation and may be shared between contexts
   for reading.
-* No function writes to the filesystem. Only `qs_module_add_file` and `use`
-  with a library path read from it.
+* Module/library loading reads source files. Shared-library APIs load native
+  code, which may itself perform I/O. See [FFI](10-ffi.md) for ownership rules.
 * C++ functions return `qscript::Result<T>` (= `metachain::Outcome<T>`): a value
   or a list of `metachain::Diagnostic {stage, message, file, line, column, offset}`.
   They never throw for invalid input.
@@ -64,7 +68,7 @@ qs_status   qs_emit(qs_context *, const qs_program *, int format,
 * `qs_emit` formats: `QS_IL` (MetaIL text), `QS_BYTECODE` (MCIL binary,
   decodable with `metail::decode`), `QS_NATIVE` (x86-64 assembly text),
   `QS_OBJECT` (ELF64 relocatable), `QS_EXECUTABLE` (static ELF64 executable
-  for x86-64 Linux). The buffer belongs to the context.
+  for x86-64 Linux), `QS_C_SOURCE` (portable C99). The buffer belongs to the context.
 
 C++ (namespace `qscript`):
 
@@ -78,6 +82,8 @@ struct Options {
     std::vector<std::string> library_paths;
     bool stdlib = true;
     std::size_t max_libraries = 256;
+    std::map<std::string, HostFunction, std::less<>> hosts;
+    bool jit = false;
 };
 struct FunctionInfo { std::string name; std::size_t entry, arity; std::string file; std::size_t line; };
 struct Unit { metail::Program program; std::vector<FunctionInfo> functions; std::vector<std::string> libraries; };
@@ -101,6 +107,7 @@ Result<metail::Program> optimize(metail::Program, Options = {});
 Result<metail::Program> schedule(metail::Program, Options = {});
 Result<metail::Program> verify_ir(metail::Program, Options = {});
 Result<std::string> emit(const metail::Program&, Options = {});
+Result<std::string> emit_c(const metail::Program&, Options = {});        // portable C99
 Result<std::string> select(const metail::Program&, Options = {});        // x86-64 assembly
 Result<std::vector<std::uint8_t>> assemble(std::string_view, bool object = true, Options = {});
 Result<std::vector<std::uint8_t>> link(const std::vector<std::vector<std::uint8_t>>&, Options = {});

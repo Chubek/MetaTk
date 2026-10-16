@@ -24,6 +24,7 @@ struct Function {
     std::vector<std::string> params;
     const dsl::ASTNode* decl = nullptr;
     const dsl::ASTNode* body = nullptr;
+    std::optional<std::int64_t> host_id;
 };
 struct Constant {
     std::string name, unit;

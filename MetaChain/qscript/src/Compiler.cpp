@@ -1,5 +1,6 @@
 #include "qscript/QScript.h"
 #include "qscript/src/Internal.h"
+#include "qscript/src/FFIInternal.h"
 
 namespace qscript {
 Result<Unit> finish(Unit unit, Options o) {
@@ -51,7 +52,18 @@ void translate(const metail::Program& p, Result<metail::Execution>& out) {
 }
 } // namespace
 Result<metail::Execution> run(const metail::Program& p, Options o) {
-    auto executed = metachain::Toolchain(o.toolchain).run(p);
+    const bool jit=o.jit;
+    try { o=detail::runtime_options(std::move(o)); }
+    catch (const std::invalid_argument& e) {
+        return {std::nullopt,{{metachain::Stage::Verify,e.what(),{},0,0,0}}};
+    }
+    auto tc=metachain::Toolchain(std::move(o.toolchain));
+    Result<metail::Execution> executed;
+    if (jit) {
+        auto native=tc.jit(p);
+        executed.diagnostics=std::move(native.diagnostics);
+        if (native.value) executed.value=static_cast<metail::Execution>(std::move(*native.value));
+    } else executed=tc.run(p);
     translate(p, executed);
     return executed;
 }
@@ -63,6 +75,18 @@ Result<metail::Execution> call(const Unit& unit, std::string_view function, cons
     if (args.size() != f->arity) {
         out.diagnostics.push_back({metachain::Stage::Execute, "function " + f->name + " expects " + std::to_string(f->arity) + " arguments", {}, 0, 0, 0});
         return out;
+    }
+    if (f->arity>16 || f->entry>=unit.program.size()) {
+        out.diagnostics.push_back({metachain::Stage::Verify,"invalid function metadata",{},0,0,0}); return out;
+    }
+    // Verify before relocating: malformed public Unit values may otherwise
+    // overflow branch immediates or enter the generated argument stub.
+    for (const auto& e:metail::verify(unit.program,o.toolchain.il))
+        out.diagnostics.push_back({metachain::Stage::Verify,e.message,e.source.file,e.source.line,e.source.column,e.instruction});
+    if (!out.diagnostics.empty()) return out;
+    const auto extra=2*args.size()+3;
+    if (unit.program.size()>o.toolchain.il.max_instructions || extra>o.toolchain.il.max_instructions-unit.program.size()) {
+        out.diagnostics.push_back({metachain::Stage::Verify,"instruction limit exceeded by call stub",{},0,0,0}); return out;
     }
     // Relocate by one instruction and enter through a stub:
     //   jmp stub; <program>; stub: const/push args; call f; halt r30

@@ -15,6 +15,7 @@ return math::isqrt(1000);
 |---------|----------|
 | `ascii` | character classes and case conversion on ASCII codes (`is_digit`, `to_upper`, `hex_value`, `rot13`, ...) |
 | `bits` | `popcount`, `clz`, `ctz`, rotations, arithmetic shift `sar`, bit fields, byte swaps, bit reversal |
+| `cffi` | native calls, shared libraries, checked byte buffers and copying; requires `--cffi` or `qs_cffi_enable` |
 | `checked` | overflow tests (`add_ok`, `mul_ok`, ...), saturating (`add_sat`, ...) and trapping (`add_checked`, ...) arithmetic |
 | `checksum` | CRC-32, CRC-8, Adler-32, Fletcher-16 (byte at a time), Luhn, mod-97 |
 | `codec` | zigzag, Gray code, BCD, LEB128 size, Morton (Z-order) codes |
@@ -22,9 +23,11 @@ return math::isqrt(1000);
 | `combin` | factorial, binomial, permutations, Catalan, Fibonacci, Lucas, derangements, Stirling |
 | `date` | Gregorian calendar: leap years, days since 1970, weekday, day of year, Easter |
 | `digits` | decimal digit count, sum, reverse, palindromes, digital root, Armstrong/Harshad |
+| `endian` | `swap16/32/64`, `byte_at`, `with_byte`, `signed8/16/32` |
 | `fixed` | Q16.16 fixed point: `from_ratio`, `mul`, `div`, `sqrt`, `floor`/`ceil`/`round` |
 | `geom` | integer 2-D geometry: distances, dot/cross, orientation, segment intersection |
 | `hash` | FNV-1a, djb2, Jenkins one-at-a-time, Murmur3 finalizer, hash combining |
+| `integer` | saturating arithmetic, overflow-free `midpoint`, power-of-two tests and checked `align_up` |
 | `logic` | `xor`, `nand`, `implies`, `majority`, `select`, three-way `cmp` |
 | `math` | `abs`, `min`/`max`/`clamp`, `gcd`/`lcm`, `isqrt`/`icbrt`, `ilog2`, floor/ceil division |
 | `ntheory` | overflow-safe `mod_mul`/`mod_pow`, `mod_inv`, CRT, Jacobi, deterministic Miller-Rabin |

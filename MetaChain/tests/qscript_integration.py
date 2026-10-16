@@ -4,7 +4,8 @@ import subprocess
 import sys
 import tempfile
 
-cli, repl = sys.argv[1:]
+cli, repl = sys.argv[1:3]
+cffi = sys.argv[3].upper() in ("ON", "1", "TRUE", "YES")
 with tempfile.TemporaryDirectory() as directory:
     root = pathlib.Path(directory)
     source = root / "factorial.qs"
@@ -40,7 +41,9 @@ with tempfile.TemporaryDirectory() as directory:
     here = pathlib.Path(__file__).resolve().parent.parent
     examples = here / "qscript" / "examples"
     for example in sorted(examples.glob("*.qs")):
-        example_run = invoke("run", example)
+        if example.stem == "cffi" and not cffi:
+            continue
+        example_run = invoke(*(["--cffi"] if example.stem == "cffi" else []), "run", example)
         assert example_run.returncode == 0, (example, example_run.stderr)
     prelude_user = root / "prelude_user.qs"
     prelude_user.write_text("use prelude; let n=5; let f=TRUE; while(n>1) { f=f*n; n=n-1; } print f; return f;")
@@ -54,7 +57,9 @@ with tempfile.TemporaryDirectory() as directory:
     for lib in libs:
         test = tests / (lib + ".qs")
         assert test.is_file(), ("missing stdlib test", lib)
-        result = invoke("run", test)
+        if lib == "cffi" and not cffi:
+            continue
+        result = invoke(*(["--cffi"] if lib == "cffi" else []), "run", test)
         assert result.returncode == 0 and result.stdout == b"1\nresult 0\n", (lib, result.stdout, result.stderr)
         assert invoke("lib", lib).stdout, lib
     # Libraries from a directory with -L; functions callable from the CLI.
@@ -82,6 +87,8 @@ with tempfile.TemporaryDirectory() as directory:
     for flags in (["--jit"], ["--sched", "cycle"], ["--sched", "static"], ["-O0"]):
         assert invoke(*flags, "run", source).stdout == run.stdout, flags
     assert invoke("--steps", "10", "run", source).returncode != 0
+    for invalid in ("-1", "", "18446744073709551616"):
+        assert invoke("--steps", invalid, "run", source).returncode != 0
     stats = invoke("--stats", "run", source)
     assert b"steps" in stats.stderr
     # Diagnostics carry file:line:column.
@@ -99,6 +106,20 @@ with tempfile.TemporaryDirectory() as directory:
         native = subprocess.run([root / "fib"], capture_output=True, timeout=10)
         assert native.returncode == 4 and native.stdout == b"610\n", native
     assert invoke("encode", source).returncode != 0
+    if cffi:
+        def buffer(name, text):
+            data = text.encode()
+            return f"let {name}=alloc({len(data)+1});" + "".join(
+                f"put_byte({name},{i},{byte});" for i, byte in enumerate(data))
+        native_call = root / "ffi.qs"
+        native_call.write_text("use cffi;" + buffer("path", sys.argv[4]) +
+                              buffer("name", "fixture_add") +
+                              "let lib=open(path); let f=function(lib,name,I64,arg(I64,1,I64),2);"
+                              "release(lib); let answer=call2(f,20,22);"
+                              "release(path); release(name); release(f); return answer;")
+        for flags in ([], ["--jit"]):
+            result = invoke("--cffi", *flags, "run", native_call)
+            assert result.returncode == 0 and result.stdout == b"result 42\n", result
     assert invoke("unknown", source).returncode != 0
     assert invoke("run", root / "missing").returncode != 0
     for driver in ([repl], [cli, "--repl"]):

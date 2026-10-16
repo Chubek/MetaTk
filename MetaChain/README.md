@@ -50,9 +50,11 @@ auto result = metachain::Toolchain(options).jit("const r0, 42\nhalt r0\n");
 Compiled extensions provide backend selection/scheduling/allocation and IR
 algorithms (`MetaChain::Backend`), plus QScript (`MetaChain::QScript`,
 `qscript`, `qscript-repl`): an integer scripting language with functions,
-constants and 25 embedded libraries, whose parser is a Raku-style scannerless
+constants and 28 embedded libraries, whose parser is a Raku-style scannerless
 grammar running on ParseTk. QScript compiles to MetaIL and runs on the
-interpreter, the JIT, or as a native executable. See
+interpreter, the JIT, as a native executable, or through a portable C99 backend.
+C embedding includes registered callbacks, typed libffi calls, shared-library
+loading, and binary data exchange. See
 [the QScript manual](manual/qscript/README.md) and the
 [backend guide](manual/backend.md).
 
@@ -60,3 +62,7 @@ interpreter, the JIT, or as a native executable. See
 build/qscript run qscript/examples/primes.qs
 build/qscript --repl
 ```
+
+Typed FFI requires libffi development files (or configure
+`-DQSCRIPT_ENABLE_CFFI=OFF`). Use `-DQSCRIPT_BUILD_SHARED=ON` for a shared
+embedding library. See [FFI and C backend examples](manual/qscript/10-ffi.md).

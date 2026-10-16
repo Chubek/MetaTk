@@ -7,6 +7,7 @@
 #include "qscript/include/QScript-Runtime.h"
 #include "qscript/src/Context.h"
 #include "qscript/src/Internal.h"
+#include "qscript/src/FFIInternal.h"
 #include <cstring>
 #include <fstream>
 #include <new>
@@ -58,12 +59,8 @@ void qs_program_destroy(qs_program* p) { delete p; }
 static qs_status execute(qs_context* c, const qs_program* p, qs_run_info* info) {
     if (info) *info = qs_run_info{0, 0, 0, QS_RUN_TRAPPED};
     if (!p) { c->error = "null program"; return QS_INVALID_ARGUMENT; }
-    metachain::Outcome<metail::Execution> executed;
-    if (c->engine == QS_ENGINE_JIT) {
-        auto jitted = metachain::Toolchain(c->options.toolchain).jit(p->unit.program);
-        executed.diagnostics = std::move(jitted.diagnostics);
-        if (jitted.value) executed.value = static_cast<metail::Execution>(std::move(*jitted.value));
-    } else executed = qscript::run(p->unit.program, c->options);
+    auto options=c->options; options.jit=c->engine==QS_ENGINE_JIT;
+    auto executed=qscript::run(p->unit.program,std::move(options));
     if (executed.value) {
         if (c->output) for (auto value : executed->output) c->output(value, c->user);
         if (info) {
@@ -91,11 +88,17 @@ qs_status qs_emit(qs_context* c, const qs_program* p, int format, const unsigned
     return protect(c, [&] {
         if (!p || !data || !length) { c->error = "null emit argument"; return QS_INVALID_ARGUMENT; }
         const auto& ir = p->unit.program;
-        if (format == QS_IL || format == QS_NATIVE) {
-            auto text = format == QS_IL ? qscript::emit(ir, c->options) : qscript::select(ir, c->options);
+        if (format == QS_IL || format == QS_NATIVE || format == QS_C_SOURCE) {
+            auto text = format == QS_C_SOURCE ? qscript::emit_c(ir,c->options) :
+                        format == QS_IL ? qscript::emit(ir, c->options) : qscript::select(ir, c->options);
             if (!text) { report(c, text.diagnostics); return QS_ERROR; }
             c->buffer.assign(text->begin(), text->end());
-        } else if (format == QS_BYTECODE) c->buffer = metail::encode(ir);
+        } else if (format == QS_BYTECODE) {
+            for (const auto& i:ir.code) if (i.op==metail::Op::Host) {
+                c->error="QScript host bindings are process-local; cannot serialize as bytecode"; return QS_ERROR;
+            }
+            c->buffer = metail::encode(ir);
+        }
         else if (format == QS_OBJECT || format == QS_EXECUTABLE) {
             auto source = qscript::select(ir, c->options);
             if (!source) { report(c, source.diagnostics); return QS_ERROR; }
@@ -192,8 +195,8 @@ qs_status qs_module_add_source(qs_module* m, const char* text, size_t length, co
     if (!m) return QS_INVALID_ARGUMENT;
     if (!text && length) return QS_INVALID_ARGUMENT;
     try {
+        if (length > 64u * 1024u * 1024u) return QS_ERROR;
         qscript::module::Source s{std::string(text ? text : "", length), file ? file : ""};
-        if (s.text.size() > 64u * 1024u * 1024u) return QS_ERROR;
         m->module.sources.push_back(std::move(s));
     } catch (...) { return QS_ERROR; }
     return QS_OK;
@@ -203,10 +206,9 @@ qs_status qs_module_add_file(qs_module* m, const char* path) {
     try {
         std::ifstream in(path, std::ios::binary);
         if (!in) return QS_ERROR;
-        std::ostringstream text; text << in.rdbuf();
-        if (!in.good() && !in.eof()) return QS_ERROR;
-        auto s = text.str();
-        return qs_module_add_source(m, s.data(), s.size(), path);
+        auto s=qscript::detail::read_bounded(in,64u*1024u*1024u);
+        if (!s) return QS_ERROR;
+        return qs_module_add_source(m, s->data(), s->size(), path);
     } catch (...) { return QS_ERROR; }
 }
 qs_status qs_module_add_library(qs_module* m, const char* name, const char* text, size_t length) {
@@ -312,8 +314,11 @@ qs_status qs_call(qs_context* c, const qs_program* p, const char* function, cons
     if (result) *result = 0;
     return protect(c, [&] {
         if (!p || !function || !result || (!args && count)) { c->error = "null call argument"; return QS_INVALID_ARGUMENT; }
-        std::vector<std::int64_t> values(args, args + count);
-        auto executed = qscript::call(p->unit, function, values, c->options);
+        if (count>16) { c->error="too many call arguments"; return QS_INVALID_ARGUMENT; }
+        std::vector<std::int64_t> values;
+        if (count) values.assign(args, args + count);
+        auto options=c->options; options.jit=c->engine==QS_ENGINE_JIT;
+        auto executed = qscript::call(p->unit, function, values, std::move(options));
         if (executed.value && c->output) for (auto v : executed->output) c->output(v, c->user);
         if (!executed) { report(c, executed.diagnostics); return QS_ERROR; }
         *result = executed->value;

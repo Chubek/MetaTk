@@ -4,6 +4,9 @@
 #include "qscript/QScript.h"
 #include <string>
 #include <vector>
+#include <memory>
+
+namespace qscript::detail { struct CFFIState; }
 
 struct qs_context {
     qscript::Options options;
@@ -13,6 +16,7 @@ struct qs_context {
     qs_output_fn output = nullptr;
     void* user = nullptr;
     int engine = 0;  // qs_engine
+    std::shared_ptr<qscript::detail::CFFIState> cffi;
     // Library resolver callback (QScript-Library.h).
     const char* (*resolver)(const char*, size_t*, void*) = nullptr;
     void* resolver_user = nullptr;

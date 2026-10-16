@@ -5,8 +5,21 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <istream>
 
 namespace qscript::detail {
+inline std::optional<std::string> read_bounded(std::istream& input,std::size_t limit) {
+    std::string text;
+    char buffer[4096];
+    while (input) {
+        input.read(buffer,sizeof buffer);
+        const auto count=static_cast<std::size_t>(input.gcount());
+        if (count>limit-text.size()) return std::nullopt;
+        text.append(buffer,count);
+    }
+    if (!input.eof() || input.bad()) return std::nullopt;
+    return text;
+}
 // Statements, declarations and calls may carry a trailing location leaf
 // tagged "@" whose value is "line:column:file". It is optional, so ASTs
 // built by hand need not include it.

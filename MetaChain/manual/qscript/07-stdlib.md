@@ -1,6 +1,6 @@
 # 7. Standard library reference
 
-The standard library is 25 QScript libraries embedded in `libQScript`. Import
+The standard library is 28 QScript libraries embedded in `libQScript`. Import
 with `use NAME;` and call functions unqualified or as `NAME::f`. Sources are
 in `qscript/stdlib/` (`qscript lib NAME` prints one); each has a test program
 in `tests/qscript-stdlib/`.
@@ -15,9 +15,36 @@ precondition `assert` it, so violating it traps with "assertion failed".
 [hash](#hash) · [logic](#logic) · [math](#math) · [ntheory](#ntheory) ·
 [pack](#pack) · [prelude](#prelude) · [prime](#prime) · [random](#random) ·
 [range](#range) · [round](#round) · [seq](#seq) · [testing](#testing) ·
-[time](#time) · [units](#units)
+[time](#time) · [units](#units) · [cffi](#cffi) · [endian](#endian) · [integer](#integer)
 
 ---
+
+## cffi
+
+Typed native calls, shared-library loading and context-owned byte buffers.
+Enable using `--cffi` or `qs_cffi_enable` before importing. See the complete
+[API and examples](10-ffi.md#the-cffi-script-library).
+
+## endian
+
+| Function | Result |
+|---|---|
+| `swap16(x)`, `swap32(x)`, `swap64(x)` | Reverse the bytes of the low 16/32/64 bits |
+| `byte_at(x,index)` | Byte 0..7, least significant first |
+| `with_byte(x,index,value)` | Replace byte 0..7 with value 0..255 |
+| `signed8(x)`, `signed16(x)`, `signed32(x)` | Sign-extend the low 8/16/32 bits |
+
+## integer
+
+Constants `MIN` and `MAX` are the signed 64-bit endpoints.
+
+| Function | Result |
+|---|---|
+| `saturating_add(a,b)`, `saturating_sub(a,b)` | Signed arithmetic clamped at MIN/MAX |
+| `saturating_abs(x)` | Absolute value, with MIN mapped to MAX |
+| `midpoint(a,b)` | Overflow-free midpoint, rounding toward `a` |
+| `is_power_of_two(x)` | True for positive powers of two |
+| `align_up(value,alignment)` | Round a nonnegative value upward; asserts positive power-of-two alignment and no overflow |
 
 ## ascii
 

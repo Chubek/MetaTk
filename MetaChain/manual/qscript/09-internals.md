@@ -19,6 +19,8 @@ source ──► grammar (ParseTk, scannerless) ──► match tree ──► A
 | Optimize / schedule | `Optimizer.cpp`, `ISched.cpp` | `qscript::finish`, `optimize`, `schedule` |
 | Execution, host calls | `Compiler.cpp` | `qscript::run`, `qscript::call` |
 | Native | `ISel.cpp`, `Assembler.cpp`, `Linker.cpp` | `select`, `assemble`, `link`, `build` |
+| Portable C99 | `CEmitter.cpp`, `metachain/CSource.hpp` | `emit_c`, `lower_c99` |
+| C interoperability | `FFI.cpp`, `CFFI.cpp` | registered calls, serialization, loader, libffi |
 | C ABI | `QScript.cpp`, `src/Grammar.cpp`, `QScript.c` | `qs_*` |
 | Embedding | `qscript/cmake/Embed.cmake` | generates `qscript_embedded.cpp` |
 
@@ -105,11 +107,17 @@ f:  pop  r31                    ; return address
     const r30, 0  ; ret         ; falling off the end
 ```
 
-All of this uses existing MetaIL instructions (`push`, `pop`, `call`, `ret`),
-so the verifier, optimizer, scheduler, interpreter, JIT and x86-64 lowering
-needed no changes. Host calls (`qscript::call`) relocate the program by one
+Script calls use MetaIL's `push`, `pop`, `call`, `ret`.
+Calls from the host (`qscript::call`) relocate the program by one
 instruction and enter through a stub that pushes the arguments, calls the
 function and halts with `r30`.
+
+Registered host functions get the same prologue and execute `host r30, ID`
+followed by `ret`. MetaIL dispatches through `VMOptions::host_call`, passing
+a snapshot of all 32 registers; QScript's binding passes only the declared
+arguments. Host instructions are effect/trap barriers for scheduling and
+invalidate optimizer constant knowledge. The interpreter and JIT both implement
+them; syscall-only ELF lowering rejects them.
 
 `assert E` compiles to `jnz E, ok; const r31, 0; div r31, r31, r31; ok:`.
 The division traps; `qscript::run` recognizes that exact instruction pair and
@@ -120,12 +128,14 @@ are built from `eq`/`lt` (MetaIL has no others).
 
 ## 9.5 Optimization and scheduling
 
-The MetaIL optimizer does constant propagation inside basic blocks and
+The MetaIL optimizer does constant propagation, integer identity simplification,
+and known-condition branch folding inside basic blocks and
 rewrites instructions in place; the scheduler reorders instructions inside
 basic blocks of at most 256 instructions (larger blocks keep their order).
-Neither changes instruction count or block boundaries, so function entry
+Neither changes instruction count, so function entry
 points recorded during lowering stay valid. Calls and returns end blocks and
-are barriers, as are `push`, `pop`, `print` and `halt`.
+are barriers, as are `push`, `pop`, `print`, `host` and `halt`. Potentially
+trapping arithmetic is retained unless it can be evaluated successfully.
 
 ## 9.6 Source locations
 
@@ -178,6 +188,9 @@ Two additive changes were made to `metachain/ParseTk.hpp` for QScript:
 | `tests/qscript_c.c` | the whole C ABI, compiled as C |
 | `tests/qscript_integration.py` | CLI commands, examples, every stdlib test program, `-L`, native executables, REPL |
 | `tests/qscript-stdlib/*.qs` | one self-checking program per standard library |
+| `tests/qscript_ffi_c.c`, `qscript_ffi_fixture.c` | real C ABI, native signatures, ownership, binary exchange |
+| `tests/test_qscript_ffi.cpp` | eager JIT callbacks and optimizer differential tests |
+| `tests/qscript_c_backend.py` | compile generated C and compare its results/traps with the VM |
 
 ```sh
 ctest --test-dir build -R qscript --output-on-failure

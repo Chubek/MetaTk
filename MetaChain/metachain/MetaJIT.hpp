@@ -82,6 +82,11 @@ inline void complex_instruction(Frame* f) noexcept {
     const auto& i = rt.program.code[f->pc];
     try {
         switch (i.op) {
+        case Op::Host:
+            if (!rt.options.host_call) { trap(*f, "unbound host call"); return; }
+            f->registers[i.a] = rt.options.host_call(i.immediate, f->registers);
+            ++f->pc;
+            break;
         case Op::Push: case Op::Call:
             if (rt.stack.size() >= rt.options.max_stack_values) { trap(*f, "stack limit exceeded"); return; }
             rt.stack.push_back(i.op == Op::Push ? f->registers[i.a] : static_cast<std::int64_t>(f->pc+1));

@@ -65,6 +65,7 @@ the end is allowed, but explicit branches must identify an instruction.
 | `ret` | pop instruction index and branch to it |
 | `print a` | append an integer to captured output |
 | `halt a` | stop, returning a register's integer value |
+| `host d, id` | invoke a registered host binding, storing its integer result in `d` |
 
 Shift counts outside `[0,63]` trap. Both division and remainder trap for a zero
 divisor and for `INT64_MIN / -1`; this avoids host-dependent overflow. `shr`
@@ -75,12 +76,20 @@ temporary pushes before `ret`. There is no protected call stack or automatic
 register save convention. A popped return address in `[0, program.size()]` is
 valid; returning exactly to the end halts by fallthrough.
 
+`host` requires a nonnegative numeric binding ID. `VMOptions::host_call`
+receives `(id, span<const int64_t>)` containing a snapshot of all 32 registers.
+The binding defines its own argument convention. Missing bindings and callback
+exceptions trap; only the destination register is modified. Host calls are
+effect barriers and work in the interpreter, JIT and portable C99 backend.
+Static syscall-only ELF lowering rejects them.
+
 ## C++ instruction representation
 
 `Instruction` has `Op op`, three `uint8_t` register fields `a`, `b`, `c`, and an
 `int64_t immediate`. For binary arithmetic, `a` is destination and `b/c` are
 sources. For `mov`, `a/b` are destination/source. For `const`, `a` is destination
-and `immediate` is the constant. Conditional branches use `a` and `immediate`.
+and `immediate` is the constant. `host` uses `a` for the destination and
+`immediate` for the binding ID. Conditional branches use `a` and `immediate`.
 Unconditional branches and calls use only `immediate`.
 
 Unused register and immediate fields must be zero. This makes binary encodings
@@ -130,7 +139,9 @@ Serialization is field-by-field and does not copy a native C++ struct.
 
 Each record contains opcode byte, `a`, `b`, `c`, then the 64-bit two's-complement
 immediate. Opcode values are the table order, starting at `nop = 0` and ending
-at `halt = 23`. There is no padding, checksum, source map, filename, or debug
+at `host = 24` (`halt = 23` is unchanged). Older decoders reject the added
+opcode. Host bindings themselves are not serialized. There is no padding,
+checksum, source map, filename, or debug
 section. The exact file length must match the count: trailing bytes are errors.
 
 `encode(program)` verifies first and returns an empty byte vector on invalid
@@ -141,8 +152,9 @@ layout of `Instruction` as a substitute for this format.
 ## Conservative optimization
 
 `optimize(program)` propagates constants within basic blocks and replaces
-foldable moves/arithmetic with constants. It clears knowledge at branch
-targets and control-flow boundaries. Potentially trapping arithmetic is not
+foldable moves/arithmetic with constants. It also simplifies integer identities
+and known conditional branches in place. It clears knowledge at branch
+targets, control-flow boundaries and host calls. Potentially trapping arithmetic is not
 folded into an invented value.
 
 The optimizer never deletes or inserts instructions. Numeric branch targets,

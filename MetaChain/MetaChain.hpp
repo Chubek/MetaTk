@@ -11,6 +11,7 @@
 #include "metachain/LDtk.hpp"
 #include "metachain/ASMtk.hpp"
 #include "metachain/Native.hpp"
+#include "metachain/CSource.hpp"
 #include "metachain/Text.hpp"
 #include "metachain/ISel.hpp"
 #include "metachain/ISched.hpp"

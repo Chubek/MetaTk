@@ -10,7 +10,7 @@ typedef struct qs_context qs_context;
 typedef struct qs_program qs_program;
 typedef void (*qs_output_fn)(int64_t value,void *user);
 typedef enum qs_status { QS_OK=0, QS_ERROR=1, QS_INVALID_ARGUMENT=2 } qs_status;
-typedef enum qs_format { QS_IL, QS_BYTECODE, QS_NATIVE, QS_OBJECT, QS_EXECUTABLE } qs_format;
+typedef enum qs_format { QS_IL, QS_BYTECODE, QS_NATIVE, QS_OBJECT, QS_EXECUTABLE, QS_C_SOURCE } qs_format;
 const char *qs_version(void);
 qs_context *qs_create(void);
 void qs_destroy(qs_context *);
@@ -47,6 +47,11 @@ struct BackendOptions {
 };
 // Resolves `use NAME;` to library source text, or nullopt if unknown.
 using LibraryResolver=std::function<std::optional<std::string>(std::string_view name)>;
+struct HostFunction {
+    std::int64_t id=0;
+    std::size_t arity=0;
+    std::function<std::int64_t(std::span<const std::int64_t>)> invoke;
+};
 struct Options {
     metachain::Options toolchain{};
     std::size_t max_depth=256,max_nodes=100000;
@@ -60,6 +65,8 @@ struct Options {
     std::vector<std::string> library_paths{};
     bool stdlib=true;
     std::size_t max_libraries=256;
+    std::map<std::string,HostFunction,std::less<>> hosts;
+    bool jit=false;
 };
 // A function callable from the host (qs_call) and its entry point.
 struct FunctionInfo {
@@ -89,6 +96,7 @@ Result<metail::Program> schedule(metail::Program,Options={});
 Result<std::string> select(const metail::Program&,Options={});
 Result<metail::Program> verify_ir(metail::Program,Options={});
 Result<std::string> emit(const metail::Program&,Options={});
+Result<std::string> emit_c(const metail::Program&,Options={});
 Result<std::vector<std::uint8_t>> assemble(std::string_view,bool object=true,Options={});
 Result<std::vector<std::uint8_t>> link(const std::vector<std::vector<std::uint8_t>>&,Options={});
 Result<std::vector<std::uint8_t>> build(const metail::Program&,Options={});

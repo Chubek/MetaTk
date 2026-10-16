@@ -14,6 +14,10 @@ inline NativeSource lower_linux_x86_64(const metail::Program& p, metavm::VMOptio
     using metail::Op;
     NativeSource r; r.diagnostics = metail::verify(p);
     if (!r.diagnostics.empty()) return r;
+    for (std::size_t pc=0; pc<p.size(); ++pc) if (p.code[pc].op==Op::Host) {
+        r.diagnostics.push_back({"host calls require an embedding runtime (use JIT or C source)",pc,{}});
+        return r;
+    }
     std::ostringstream out;
     auto slot = [](unsigned reg) { return "[rbp-" + std::to_string((reg+1)*8) + "]"; };
     auto label = [](std::int64_t pc) { return ".mc_pc_" + std::to_string(pc); };

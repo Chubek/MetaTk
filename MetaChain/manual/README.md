@@ -42,12 +42,15 @@ engine, standard library, C/C++ API).
 | Emit x86-64 bytes | `asmtk::Assembler::assemble` |
 | Emit an ELF object | `asmtk::Assembler::assemble_object` |
 | Link ELF objects | `ld_tk::Linker::link` |
-| Compile all MetaIL operations to native code | `Toolchain::executable` |
+| Compile standalone MetaIL to native code | `Toolchain::executable` |
+| Emit portable C99 with embedding callbacks | `metachain::lower_c99` |
 | Embed text commands | `metachain::evaluate` |
 
 ## Capability and platform boundaries
 
-The IL and interpreter implement all 24 documented operations. Native lowering
+The IL and interpreter implement 25 operations, including registered `host`
+calls. The JIT and portable C99 backend also support host calls. Static ELF
+lowering rejects them because they require an embedding runtime. Native lowering
 implements the same integer operations, control flow, stack, output, and halt
 semantics using the Linux x86-64 syscall ABI. Native process exit codes expose
 only the low eight bits of the IL halt value, unlike the interpreter's full
