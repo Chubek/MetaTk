@@ -8,8 +8,10 @@
 * Python 3 for optional black-box integration tests.
 
 The core has no separately compiled runtime. It needs neither Boost.JSON nor
-Lua. Enabling Symspec metadata support adds Symspec's own dependencies; it is
-not needed for the built-in assembler or native backend.
+Lua. The default assembler consumes checked-in C++ data generated from
+`Arch/stdspec`; it does not open architecture files at runtime. Enabling
+Symspec bank loading adds Boost.JSON. Lua is needed only to regenerate the bank
+or evaluate original DSL documents, not to load generated JSON.
 
 ## Include-path configurations
 
@@ -57,6 +59,8 @@ Build options:
 | `METACHAIN_BUILD_TESTS` | `ON` | unit, example, and integration tests |
 | `METACHAIN_BUILD_CLI` | `ON` | textual command driver |
 | `METACHAIN_SANITIZERS` | `OFF` | ASan and UBSan on GCC/Clang executable targets |
+| `METACHAIN_ENABLE_SYMSPEC` | `OFF` | load executable architecture banks; requires Boost.JSON |
+| `QSCRIPT_BUILD_NATIVE_RUNTIME` | `ON` on Linux x86-64 | minimal static native grammar/match archive; building such executables needs a C++ driver and static C++/C libraries |
 
 For an embedding project:
 
@@ -112,16 +116,28 @@ Writing the ELF image does not automatically grant execute permission. Native
 files are intended for a Linux x86-64 host; generating bytes and executing those
 bytes are separate operations.
 
-## Optional Symspec metadata
+## Optional Symspec architecture loading
+
+```sh
+cmake -S . -B build-symspec -DMETACHAIN_ENABLE_SYMSPEC=ON
+cmake --build build-symspec -j8 -- -k
+ctest --test-dir build-symspec -j4 --output-on-failure
+```
+
+CMake finds the Boost.JSON package and propagates its library and the feature
+macro through `MetaChain::MetaChain`. For non-CMake consumers:
 
 ```cpp
 #define METACHAIN_ENABLE_SYMSPEC
 #include "MetaChain.hpp"
 ```
 
-Make `ArchTk/Symspec.hpp` and Boost.JSON available and link Boost.JSON when
+Make `Arch/Symspec.hpp` and Boost.JSON available and link Boost.JSON when
 using Symspec functionality. `Architecture` then exposes `get`, `forms`,
 `register_info`, and `record`, and `Assembler::load_architecture` becomes
 available. Returned views borrow from the retained immutable specification.
-Loading a non-x86-64 architecture does not install a corresponding encoder:
-instruction assembly reports the unsupported target.
+Loaded register and executable encoding records drive assembly, rather than
+serving only as metadata. `Arch/stdspec/asmtk/amd64.json` is a ready-to-load
+bank. Loading an unsupported target or a document without the executable
+`asmtk` extension fails without replacing the current architecture. See
+[chapter 6](06-assembler.md) for validation, regeneration and lifetime rules.

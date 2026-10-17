@@ -2,11 +2,16 @@
 
 ## Scope and output modes
 
-ASMtk contains a real x86-64 encoder. It accepts Intel-style destination-first
+ASMtk contains a real, Arch-backed x86-64 encoder. It accepts Intel-style destination-first
 syntax, resolves forward labels, emits data/string/alignment directives, and
 produces raw bytes or ELF64 relocatable objects. The instruction subset below
 is the supported contract; unknown mnemonics and unsupported operand forms are
-errors, even if optional Symspec metadata describes such a form.
+errors, even if broader Symspec metadata describes such a form. Registers,
+mnemonics, opcode bytes, condition aliases, operand widths, ModRM groups and
+implicit shift registers come from the executable bank in
+`Arch/stdspec/asmtk/amd64.lua`, shared with `Arch/stdspec/amd64.dsymspec`.
+The encoder implements bounded REX/ModRM/SIB and fixup mechanisms, not a second
+hand-maintained opcode table.
 
 ```cpp
 asmtk::Assembler assembler;
@@ -153,6 +158,57 @@ and should not be used for validation of untrusted or unfamiliar assembly.
 counts toward the output limit, so a raw text image that exactly fills that
 limit cannot necessarily be wrapped in an object at the same limit.
 
-With `METACHAIN_ENABLE_SYMSPEC`, `Architecture` retains an immutable specification
-and exposes borrowed query results. The built-in target remains x86-64;
-metadata discovery is not a substitute for an instruction encoder.
+### Default architecture and regeneration
+
+The default `Architecture` uses the checked-in `Arch/stdspec/asmtk/AMD64.hpp`.
+It is generated from the executable bank, so ordinary C++ consumers need
+neither Lua, Boost.JSON, nor architecture files at runtime. Regenerate both
+the header and loadable `amd64.json` after changing the bank:
+
+```sh
+lua Arch/stdspec/tools/generate_asmtk.lua
+lua Arch/stdspec/tools/generate_asmtk.lua --check
+```
+
+Generation needs Lua 5.3 or newer; normal builds do not. CTest registers the
+freshness check when Lua is installed. `Architecture::registers()` and
+`encodings()` expose read-only spans for the active executable subset.
+
+### Loading a Symspec bank
+
+Configure with `-DMETACHAIN_ENABLE_SYMSPEC=ON` to enable specification loading.
+The CMake interface propagates the macro and links Boost.JSON consistently to
+all consumers. Without CMake, define the macro in every translation unit and
+link Boost.JSON explicitly.
+
+```cpp
+asmtk::Assembler assembler;
+auto status = assembler.load_architecture("Arch/stdspec/asmtk/amd64.json");
+if (!status) { /* status.error().message explains the rejected bank */ }
+auto result = assembler.assemble("mov r9, r10\n");
+```
+
+Loading installs the bank's register records and executable encoding records;
+these records actually drive assembly. The full `amd64.dsymspec` also emits
+this executable extension when evaluated with its existing DSL runtime. The
+compact JSON bank contains only the target, supported registers and executable
+extension, not the full compiler backend metadata.
+
+The accepted document is Symspec schema 1 with one 64-bit little-endian target
+(`amd64`, `x86_64` or `x86-64`), `registers`, and an `asmtk` schema 1 extension.
+See the architecture bank's README for the record schema. Missing extensions,
+unknown encoding mechanisms, malformed fields, duplicate overlapping forms,
+and unsupported targets fail loading. A failure leaves the active architecture
+unchanged. There is no fallback to the default tables for a loaded bank.
+
+`Architecture(Spec)` retains the immutable specification and validates its
+executable subset. Check `valid()` and `error()` when constructing one directly.
+An invalid architecture rejects even empty or directive-only input and returns
+no byte artifact. Query results from `get`, `forms`, `register_info`, `record`,
+`registers` and `encodings` borrow the retained architecture; keep it alive.
+
+The broader bank may describe high-byte, 16-bit, APX or vector registers that
+this encoder cannot use; they are excluded from its executable register view.
+Arbitrary TableGen encodings and the DomSymAsCC encoder language are not
+executed by ASMtk. Other architectures still require real backend mechanisms
+and target-specific tests rather than metadata-only acceptance.

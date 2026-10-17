@@ -214,11 +214,11 @@ public:
         else out.value=std::move(r.rules);
         return out;
     }
-    Outcome<std::string> native_source(const metail::Program& p) const {
+    Outcome<std::string> native_source(const metail::Program& p, const NativeRuntime& runtime = {}) const {
         Outcome<std::string> out;
         il_errors(out,metail::verify(p,options_.il),Stage::Verify);
         if (!out.diagnostics.empty()) return out;
-        auto r=lower_linux_x86_64(p,options_.vm,options_.assembler.max_source_bytes);
+        auto r=lower_linux_x86_64(p,options_.vm,options_.assembler.max_source_bytes,runtime);
         il_errors(out,r.diagnostics,Stage::Lower); if (out.diagnostics.empty()) out.value=std::move(r.assembly); return out;
     }
     Outcome<std::vector<std::uint8_t>> executable(const metail::Program& p) const {

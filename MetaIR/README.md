@@ -32,7 +32,8 @@ chmod +x factorial
 
 The last three commands target Linux x86-64. Parsing, rewriting, IL, and the
 interpreter are portable. ELF generation requires a little-endian host. The
-assembler implements a documented x86-64 subset, not arbitrary Symspec encodings;
+assembler takes its registers/opcodes from `Arch/stdspec` and implements a
+documented x86-64 subset, not arbitrary Symspec encodings;
 the linker is static, non-PIE, and does not replace a system dynamic linker.
 
 See the [complete manual](manual/README.md), particularly the supported-feature
@@ -49,12 +50,16 @@ auto result = metachain::Toolchain(options).jit("const r0, 42\nhalt r0\n");
 
 Compiled extensions provide backend selection/scheduling/allocation and IR
 algorithms (`MetaChain::Backend`), plus QScript (`MetaChain::QScript`,
-`qscript`, `qscript-repl`): an integer scripting language with functions,
+`qscript`, `qscript-repl`): a typed scripting language with functions,
 constants and 28 embedded libraries, whose parser is a Raku-style scannerless
 grammar running on ParseTk. QScript compiles to MetaIL and runs on the
-interpreter, the JIT, as a native executable, or through a portable C99 backend.
+interpreter, the JIT, as a native executable, or through a C99 backend. Grammar
+and match programs also run natively: ASMtk emits their instructions and a C++
+driver statically links the parser, producing self-contained Linux x86-64 ELF
+executables. Simpler native programs retain the small libc-free runtime.
 C embedding includes registered callbacks, typed libffi calls, shared-library
-loading, and binary data exchange. See
+loading, binary data exchange, and owning typed host calls for every QScript
+value. See
 [the QScript manual](manual/qscript/README.md) and the
 [backend guide](manual/backend.md).
 

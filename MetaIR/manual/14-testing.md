@@ -40,6 +40,9 @@ The C++ suite covers:
 * deterministic randomized optimized/unoptimized execution parity;
 * x86 byte encodings, strict strings/comments, forward references, integer
   widths, NUL/output limits, ELF emission, multi-object resolution, and W^X;
+* the Arch-backed encoding matrix (`metachain.assembler`), including REX
+  register fields, byte moves, all branch conditions/aliases, special memory
+  bases, invalid operands and relocation kinds;
 * malformed, truncated, and deterministic byte-mutated ELF inputs;
 * facade pipelines, native C++ scripts, text parsing/rewriting, lossless
   DSLtk AST/term conversions, depth guards on C++-owned value graphs, and
@@ -105,6 +108,21 @@ External tools are optional tests, not production dependencies. Native
 execution tests are skipped on incompatible hosts; the portable unit suite
 still runs.
 
+`metachain.assembler.reference` generates 7,595 supported register, immediate
+and memory instructions from the Arch bank and compares the complete byte
+stream against GNU `as` and `objcopy`. It is registered on x86-64 hosts when
+Python and those tools are available. Large displacements/immediates avoid
+system-assembler relaxation; the C++ golden tests cover conditional branches,
+symbolic fixups and accumulator immediates with intentionally different layouts.
+`metachain.arch.generated` checks both generated architecture outputs for
+staleness when Lua is available.
+
+Run the suite again with `METACHAIN_ENABLE_SYMSPEC=ON` to exercise loaded banks.
+The assembler matrix then runs against both the default data and the loadable
+JSON bank. Additional tests replace register names, implicit shift registers
+and opcode bytes, verify retained-view lifetimes across copies, and reject
+malformed/unsupported banks. Failed file loads must preserve the previous bank.
+
 ## Header-only discipline
 
 New non-template definitions in headers must be `inline`, class members, or
@@ -119,7 +137,11 @@ verifier, codec, interpreter, optimizer policy, native lowering, and tests.
 
 ## Adding an assembler form
 
-Document operand widths and exact grammar first. Implement encoding with
+Document operand widths and exact grammar first. Extend the bank in
+`Arch/stdspec/asmtk/amd64.lua`, regenerate its outputs, and extend
+`Arch/Encoding.hpp`/`Arch/AssemblerSpec.hpp` only if a new encoding mechanism
+is genuinely needed. Never add a parallel mnemonic/register/opcode table in
+ASMtk. Implement encoding with
 explicit range checks and a source diagnostic on unsupported operands. Include
 REX, ModRM, SIB, immediate width, displacement sign, and relocation bias tests.
 Compare representative encodings with a trusted assembler, including extended

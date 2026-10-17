@@ -192,3 +192,188 @@ be connected to the corresponding host functions by the embedding application.
 QScript's process-local host bindings cannot be saved as MCIL bytecode or linked
 into static syscall-only ELF executables. These requests produce diagnostics.
 Pure script programs retain those existing output formats.
+
+### Strings and lists in generated C
+
+A program that uses strings or lists is generated with a run-time (about 700
+lines of C99, included in the output). It has no dependency beyond the C
+standard library, and each run frees its heap when it finishes. The results,
+printed lines and run-time messages match the VM. The `metachain.qscript.c_language`
+test compiles every language program with `-Wall -Wextra -pedantic` and
+compares it with the VM.
+
+Printing a value that is not an integer needs a text function, which the
+embedding application installs before the run:
+
+```c
+typedef int (*qs_generated_text_fn)(const char *text, size_t length, void *user);
+void qs_generated_set_text(qs_generated_text_fn text, void *user);  /* before qs_generated_run */
+```
+
+The function receives one line at a time, without the newline, and returns
+zero on success. A non-zero return stops the run with status 4. A program
+that prints a string without a text function stops with status 1. When a
+program prints any non-integer, its integers go through the text function as
+well, so the output keeps its order; a program that prints only integers
+sends them to the output callback, as before.
+
+The standalone program installs a text function that writes to standard output.
+The standalone program exits with 120 plus the run's status: 121 for a trap and
+123 for a limit. A run-time error prints its message on standard error, for example
+`qscript: pop from an empty list`. Traps raised by the instructions themselves
+(division by zero, `assert`, a return with no target) report only the status,
+because the VM's messages for them are not part of the generated program.
+
+The heap limits (`max_heap_objects`, `max_heap_bytes`) are compiled into the
+program from the options in effect at `qs_emit` or `qscript c`. The command
+line uses the defaults: one million objects and 256 MiB.
+
+### Grammars and matches in generated C
+
+Programs using grammars or matches emit ordinary C99 control flow plus calls
+through `qscript/include/QScript-Generated.h`. They **must link QScript's C++
+runtime**; they are not single-file, C-standard-library-only executables. A
+comment at the start of the runtime prelude says `QScript linked runtime:`.
+Integer/string/list-only programs retain their standalone C99 runtime.
+
+Compile the emitted source as C and link using the existing CMake target:
+
+```cmake
+add_executable(generated program.c)
+target_compile_definitions(generated PRIVATE QSCRIPT_STANDALONE)
+target_link_libraries(generated PRIVATE MetaChain::QScript)
+```
+
+CMake supplies the include roots, appropriate linker and configured dependencies
+(backend algorithms, libffi when enabled, and optional Boost.JSON). Without
+CMake, compile `program.c` with a C99 compiler, then link its object with a C++
+driver and QScript's configured dependencies. Do not compile the C99 source as
+C++ merely to satisfy its runtime dependency.
+
+The bridge creates a fresh `Session` and copies the unit's string/type/grammar
+tables for every `qs_generated_run`. It dispatches built-ins directly; it does
+not execute MetaIL in a VM, recompile QScript source, or substitute precomputed
+parse results. Arithmetic, calls, branches, instruction step limits and stack
+limits remain generated C. All grammar/match built-ins use the same engine and
+heap accounting as the interpreter, including dynamic `compile_grammar`, grammar
+extension, failed matches and child-tree lifetimes. The same text-output ABI,
+callback failure status and standalone error reporting apply. Runtime and
+context are freed on success, traps and budget failures.
+
+The bridge's public C ABI also permits direct embedding:
+
+```c
+qs_runtime *qs_runtime_create(qs_context *, const qs_runtime_config *);
+void qs_runtime_destroy(qs_runtime *);
+qs_status qs_runtime_dispatch(qs_context *, qs_runtime *, int64_t builtin_id,
+                              const int64_t *registers, size_t count, int64_t *result);
+```
+
+`qs_runtime_config` supplies length-delimited string and grammar-source tables,
+canonical type spellings, and heap limits. The runtime copies the tables and
+snapshots output callbacks/limits; its owning context must stay alive. Dispatch
+uses that same context and exactly 32 registers. Handles are local to one
+runtime, unknown IDs/invalid handles fail, and no C++ exception crosses the C
+boundary. Generated wrappers are stateful and not reentrant, like the existing
+standalone C runtime; use independently generated instances for concurrent runs.
+
+### Grammars and matches in native executables
+
+`qscript native`, `object` and `build` support all five QScript types. A program
+using grammar/match operations or descriptors emits an x86-64 C-ABI entry plus
+constant tables. ASMtk, using `Arch/stdspec`, encodes every program instruction.
+`build` then statically links the existing parser engine and its C++/C support
+libraries. The executable contains no MetaVM, QScript compiler, source-program
+interpreter or dependency on a QScript shared library. Dynamic grammar sources
+are compiled by the grammar engine because that is the operation the script
+requested; the QScript program's own control flow is already native code.
+
+```sh
+cmake -S . -B build -DQSCRIPT_BUILD_NATIVE_RUNTIME=ON
+cmake --build build -j8 -- -k
+build/qscript build tests/qscript-language/grammar_eval.qs -o calculator
+chmod +x calculator
+./calculator
+```
+
+**Build-time requirements:** Linux x86-64, a compatible C++ linker driver and
+static C++/C development libraries. `QSCRIPT_BUILD_NATIVE_RUNTIME` defaults ON
+on Linux x86-64 and builds `libQScriptNativeRuntime.a`. The archive includes
+only the launcher, `Session`, owning-value support and the existing grammar
+engine; it does not depend on libffi, Boost.JSON or the main QScript library.
+It is built without sanitizers so it can be linked statically. The same runtime
+sources are instrumented and tested through the ordinary QScript library.
+
+**Deployment:** the result is an ELF64 `ET_EXEC` with no `PT_INTERP` or dynamic
+table, no writable/executable load segment, and a non-executable stack. The
+link wrapper verifies these properties and the configured output bound before
+returning bytes. After building, neither the compiler, archive, source file nor
+QScript installation is needed to run it. This is a self-contained static C++
+executable, not the tiny libc-free syscall-only image used for simpler programs.
+
+Integer/string/list-only native programs retain the existing assembly runtime
+and ASMtk/LDtk pipeline, without any external linker dependency. Process-local
+host/FFI bindings remain unsupported in either native mode: they require a
+separately defined embedding ABI and are diagnosed, not guessed or called with
+invalid runtime handles.
+
+#### Object and assembly interoperability
+
+Grammar/match objects export `qs_native_entry` and `qs_native_unit_data` and
+reference `qs_native_dispatch`. `qscript::link` recognizes those validated ELF
+symbols and chooses the static parser link path. For manual linking:
+
+```sh
+build/qscript object program.qs -o program.o
+c++ -static -no-pie -Wl,--gc-sections -Wl,-z,noexecstack \
+    program.o build/libQScriptNativeRuntime.a -o program
+```
+
+Assembly output has the comment `QScript static parser runtime ABI:`. Assemble
+it with ASMtk, not GNU `as`'s different directive syntax. The native archive is
+also available as `MetaChain::QScriptNativeRuntime` for CMake consumers. Its
+`main` launches the emitted entry, owns/frees a fresh session, and returns the
+script result modulo 256. `QScript-Native.h` defines ABI version 1 and its
+88-byte unit record; incompatible versions are rejected at startup.
+Its ABI version must change when that layout or built-in ID numbering changes;
+use an archive built for the producer's ABI and target C++ toolchain.
+
+#### Configuring and supervising the linker
+
+CMake records the C++ driver and native archive as defaults. Override moved or
+cross-toolchain paths explicitly:
+
+```sh
+build/qscript --native-linker /path/to/c++ \
+    --native-runtime /path/to/libQScriptNativeRuntime.a build program.qs -o program
+```
+
+C++ uses `Options::native_link` (`NativeLinkOptions`): `driver`,
+`runtime_archive`, `temporary_directory`, extra `arguments`, `timeout_seconds`
+(default 60, maximum 3600), and `max_diagnostic_bytes` (default 1 MiB, maximum
+16 MiB). Empty paths use defaults/the system temporary directory. The public
+C interface provides `qs_set_native_link`, `qs_get_native_link`,
+`qs_native_default_driver` and `qs_native_default_runtime` (chapter 6).
+
+Arguments are passed directly using `posix_spawnp`, never interpolated into a
+shell command. Each link uses a private scratch directory, bounds retained
+diagnostics, enforces a timeout and kills the linker process group on timeout,
+including compiler/linker descendants. Owned input/output files are removed
+on success and failure. Errors return link-stage diagnostics with no partial
+artifact. Disabling the bundled archive still permits assembly/object emission
+and explicitly configured external archives; it does not trigger a VM fallback.
+
+The linker driver, its extra arguments and the parser archive are trusted build
+tools/code, not sandboxed inputs. Static linking is external tool execution;
+applications that cannot permit it should emit objects for a trusted build
+service. The wrapper honors input count/size and output limits, page-aligned
+image bases and defined symbols; its entry must remain CRT `_start`.
+
+Small integer/string/list run-time. `ISel.cpp` gives the native backend a `NativeRuntime`: the
+prologue `call qs_rt_init` maps the state block and the descriptor table, each
+built-in is a `host` instruction that calls `qs_rt_builtin` with the frame base in
+`rdi` and the built-in number in `rsi`, and the routines, string literals,
+descriptors and built-in table come from `NativeRuntime.cpp`. The limits are the
+same constants as the VM's. Runtime failures print `qscript: MESSAGE` on standard
+error and exit with status 126; heap and object limits exit with 125 and step
+limits with 124, as in chapter 11.

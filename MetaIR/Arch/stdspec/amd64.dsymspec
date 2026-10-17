@@ -8,6 +8,14 @@
 -- Operand names: dst, src, imm, sym.
 -- Strata: base | bmi/popcnt | sse/avx/fma | aes/sha | rdrnd | x87 | priv.
 local symas = require("backend").new("amd64")
+local asmtk = require("asmtk.amd64")
+local encode_json = require("asmtk.serialize")
+local emit = symas.emit
+symas.emit = function()
+    local document = emit()
+    assert(string.sub(document, -1) == "}", "expected a Symspec document")
+    return string.sub(document, 1, #document - 1) .. ',"asmtk":' .. encode_json(asmtk.document.asmtk) .. "}"
+end
 
 symas.target{
     arch = "amd64", subarch = "x86-64",
@@ -59,10 +67,7 @@ symas.feature{ name = "clzero", desc = "CLZERO" }
 symas.feature{ name = "priv", desc = "privileged system instructions" }
 
 -- 64-bit GPRs (TableGen GR64 incl. R16-R31 APX extension regs).
-local gpr64 = { "rax", "rcx", "rdx", "rbx", "rsp", "rbp", "rsi", "rdi" }
-local gpr32 = { "eax", "ecx", "edx", "ebx", "esp", "ebp", "esi", "edi" }
-local gpr16 = { "ax", "cx", "dx", "bx", "sp", "bp", "si", "di" }
-local gpr8  = { "al", "cl", "dl", "bl", "spl", "bpl", "sil", "dil" }
+local gpr64, gpr32, gpr16, gpr8 = asmtk.gpr64, asmtk.gpr32, asmtk.gpr16, asmtk.gpr8
 for i = 0, 7 do
     local r = gpr64[i + 1]
     symas.register{ name = r, class = "gpr", width = 64, enc = i, flags = { "readable", "writable" } }
@@ -124,45 +129,45 @@ for i = 0, 7 do
 end
 
 -- Legacy/REX.W encodings. emit_modrm(dst,src) -> mod=11 reg=dst rm=src.
-symas.encoder{ name = "nop",   source = "emit8(0x90);", max_bytes = 1 }
-symas.encoder{ name = "ret",   source = "emit8(0xC3);", max_bytes = 1 }
-symas.encoder{ name = "mov",   source = "emit8(0x48); emit8(0x89); emit_modrm(src, dst);", max_bytes = 3 }
-symas.encoder{ name = "movimm", source = "emit8(0x48); emit8(0xB8 + dst); emit_imm(8, imm);", max_bytes = 10 }
+symas.encoder{ name = "nop",   source = asmtk.source("nop", "Fixed"), max_bytes = 1 }
+symas.encoder{ name = "ret",   source = asmtk.source("ret", "Fixed"), max_bytes = 1 }
+symas.encoder{ name = "mov",   source = asmtk.source("mov", "RegisterRegister", 64), max_bytes = 3 }
+symas.encoder{ name = "movimm", source = asmtk.source("mov", "MoveImmediate", 64), max_bytes = 10 }
 symas.encoder{ name = "movzx", source = "emit8(0x48); emit8(0x0F); emit8(0xB7); emit_modrm(src, dst);", max_bytes = 4 }
 symas.encoder{ name = "movsx", source = "emit8(0x48); emit8(0x0F); emit8(0xBF); emit_modrm(src, dst);", max_bytes = 4 }
 symas.encoder{ name = "xchg",  source = "emit8(0x48); emit8(0x87); emit_modrm(src, dst);", max_bytes = 3 }
 symas.encoder{ name = "lea",   source = "emit8(0x48); emit8(0x8D); emit_modrm(src, dst);", max_bytes = 3 }
-symas.encoder{ name = "add",   source = "emit8(0x48); emit8(0x01); emit_modrm(src, dst);", max_bytes = 3 }
-symas.encoder{ name = "sub",   source = "emit8(0x48); emit8(0x29); emit_modrm(src, dst);", max_bytes = 3 }
-symas.encoder{ name = "and",   source = "emit8(0x48); emit8(0x21); emit_modrm(src, dst);", max_bytes = 3 }
-symas.encoder{ name = "or",    source = "emit8(0x48); emit8(0x09); emit_modrm(src, dst);", max_bytes = 3 }
-symas.encoder{ name = "xor",   source = "emit8(0x48); emit8(0x31); emit_modrm(src, dst);", max_bytes = 3 }
+symas.encoder{ name = "add",   source = asmtk.source("add", "RegisterRegister", 64), max_bytes = 3 }
+symas.encoder{ name = "sub",   source = asmtk.source("sub", "RegisterRegister", 64), max_bytes = 3 }
+symas.encoder{ name = "and",   source = asmtk.source("and", "RegisterRegister", 64), max_bytes = 3 }
+symas.encoder{ name = "or",    source = asmtk.source("or", "RegisterRegister", 64), max_bytes = 3 }
+symas.encoder{ name = "xor",   source = asmtk.source("xor", "RegisterRegister", 64), max_bytes = 3 }
 symas.encoder{ name = "adc",   source = "emit8(0x48); emit8(0x11); emit_modrm(src, dst);", max_bytes = 3 }
 symas.encoder{ name = "sbb",   source = "emit8(0x48); emit8(0x19); emit_modrm(src, dst);", max_bytes = 3 }
-symas.encoder{ name = "cmp",   source = "emit8(0x48); emit8(0x39); emit_modrm(src, dst);", max_bytes = 3 }
-symas.encoder{ name = "test",  source = "emit8(0x48); emit8(0x85); emit_modrm(src, dst);", max_bytes = 3 }
-symas.encoder{ name = "inc",   source = "emit8(0x48); emit8(0xFF); emit_modrm(0, dst);", max_bytes = 3 }
-symas.encoder{ name = "dec",   source = "emit8(0x48); emit8(0xFF); emit_modrm(1, dst);", max_bytes = 3 }
-symas.encoder{ name = "neg",   source = "emit8(0x48); emit8(0xF7); emit_modrm(3, dst);", max_bytes = 3 }
-symas.encoder{ name = "not",   source = "emit8(0x48); emit8(0xF7); emit_modrm(2, dst);", max_bytes = 3 }
-symas.encoder{ name = "imul",  source = "emit8(0x48); emit8(0x0F); emit8(0xAF); emit_modrm(src, dst);", max_bytes = 4 }
-symas.encoder{ name = "div",   source = "emit8(0x48); emit8(0xF7); emit_modrm(6, src);", max_bytes = 3 }
-symas.encoder{ name = "idiv",  source = "emit8(0x48); emit8(0xF7); emit_modrm(7, src);", max_bytes = 3 }
-symas.encoder{ name = "shl",   source = "emit8(0x48); emit8(0xD3); emit_modrm(4, dst);", max_bytes = 3 }
-symas.encoder{ name = "shr",   source = "emit8(0x48); emit8(0xD3); emit_modrm(5, dst);", max_bytes = 3 }
-symas.encoder{ name = "sar",   source = "emit8(0x48); emit8(0xD3); emit_modrm(7, dst);", max_bytes = 3 }
+symas.encoder{ name = "cmp",   source = asmtk.source("cmp", "RegisterRegister", 64), max_bytes = 3 }
+symas.encoder{ name = "test",  source = asmtk.source("test", "RegisterRegister", 64), max_bytes = 3 }
+symas.encoder{ name = "inc",   source = asmtk.source("inc", "Unary", 64), max_bytes = 3 }
+symas.encoder{ name = "dec",   source = asmtk.source("dec", "Unary", 64), max_bytes = 3 }
+symas.encoder{ name = "neg",   source = asmtk.source("neg", "Unary", 64), max_bytes = 3 }
+symas.encoder{ name = "not",   source = asmtk.source("not", "Unary", 64), max_bytes = 3 }
+symas.encoder{ name = "imul",  source = asmtk.source("imul", "RegisterRegister", 64), max_bytes = 4 }
+symas.encoder{ name = "div",   source = asmtk.source("div", "Unary", 64), max_bytes = 3 }
+symas.encoder{ name = "idiv",  source = asmtk.source("idiv", "Unary", 64), max_bytes = 3 }
+symas.encoder{ name = "shl",   source = asmtk.source("shl", "ShiftCL", 64), max_bytes = 3 }
+symas.encoder{ name = "shr",   source = asmtk.source("shr", "ShiftCL", 64), max_bytes = 3 }
+symas.encoder{ name = "sar",   source = asmtk.source("sar", "ShiftCL", 64), max_bytes = 3 }
 symas.encoder{ name = "andn",  source = "emit8(0xC4); emit8(0xE2); emit8(0xF0); emit_modrm(src, dst); emit8(0xC0 + src2);", max_bytes = 5 }
 symas.encoder{ name = "popcnt", source = "emit8(0xF3); emit8(0x48); emit8(0x0F); emit8(0xB8); emit_modrm(src, dst);", max_bytes = 5 }
 symas.encoder{ name = "tzcnt", source = "emit8(0xF3); emit8(0x48); emit8(0x0F); emit8(0xBC); emit_modrm(src, dst);", max_bytes = 5 }
-symas.encoder{ name = "push",  source = "emit8(0x50 + dst);", max_bytes = 1 }
-symas.encoder{ name = "pop",   source = "emit8(0x58 + dst);", max_bytes = 1 }
+symas.encoder{ name = "push",  source = asmtk.source("push", "OpcodeRegister", 64), max_bytes = 2 }
+symas.encoder{ name = "pop",   source = asmtk.source("pop", "OpcodeRegister", 64), max_bytes = 2 }
 symas.encoder{ name = "pushf", source = "emit8(0x9C);", max_bytes = 1 }
 symas.encoder{ name = "popf",  source = "emit8(0x9D);", max_bytes = 1 }
-symas.encoder{ name = "call",  source = "emit8(0xE8); emit_imm(4, 0); emit_relocation(sym, R_X86_64_PLT32);", max_bytes = 5, max_relocs = 1 }
-symas.encoder{ name = "jmp",   source = "emit8(0xE9); emit_imm(4, 0); emit_relocation(sym, R_X86_64_PLT32);", max_bytes = 5, max_relocs = 1 }
+symas.encoder{ name = "call",  source = asmtk.source("call", "Relative"), max_bytes = 5, max_relocs = 1 }
+symas.encoder{ name = "jmp",   source = asmtk.source("jmp", "Relative"), max_bytes = 5, max_relocs = 1 }
 symas.encoder{ name = "jcc",   source = "emit8(0x0F); emit8(0x80 + cond); emit_imm(4, 0); emit_relocation(sym, R_X86_64_PC32);", max_bytes = 6, max_relocs = 1 }
-symas.encoder{ name = "leave", source = "emit8(0xC9);", max_bytes = 1 }
-symas.encoder{ name = "syscall", source = "emit8(0x0F); emit8(0x05);", max_bytes = 2 }
+symas.encoder{ name = "leave", source = asmtk.source("leave", "Fixed"), max_bytes = 1 }
+symas.encoder{ name = "syscall", source = asmtk.source("syscall", "Fixed"), max_bytes = 2 }
 symas.encoder{ name = "int",   source = "emit8(0xCD); emit8(imm);", max_bytes = 2 }
 symas.encoder{ name = "cpuid", source = "emit8(0x0F); emit8(0xA2);", max_bytes = 2 }
 symas.encoder{ name = "movaps", source = "emit8(0x0F); emit8(0x28); emit_modrm(src, dst);", max_bytes = 3 }

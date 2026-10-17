@@ -12,10 +12,11 @@ and remainder checks, logical shifts, comparisons, conditional branches,
 shared value/return stack behavior, decimal printing, and halt. There is no
 fallback that silently ignores an unsupported IL operation.
 
-The target is Linux x86-64 using direct syscalls. It is not the Windows x64
-ABI, macOS syscall ABI, a C-callable function compiler, or a relocatable
-position-independent code generator. The output is a standalone `_start`
-program and uses no C runtime or dynamic loader.
+The default target is Linux x86-64 using direct syscalls. It is not the Windows
+x64 ABI, macOS syscall ABI, or a position-independent code generator. Default
+output is a standalone `_start` program with no C runtime or dynamic loader.
+The optional `NativeRuntime` entry/exit adapters described below let QScript
+link the same lowering to its static C++ grammar runtime instead.
 
 ## Frame and register conventions
 
@@ -91,6 +92,15 @@ model. Native helper instructions do not consume extra IL steps.
 | operand stack failure or invalid return | 125 |
 | division/remainder/shift failure | 126 |
 | output syscall failure | 127 |
+| heap object or byte limit (built-ins) | 125 |
+| run-time built-in error (`qscript: MESSAGE` on stderr) | 126 |
+
+The built-in run-time (`qscript native` on a unit with strings or lists) reports
+its errors on standard error with the same text as the VM. Heap limits trap with
+status 125 and the VM's message (`heap object limit exceeded` or `heap size limit
+exceeded`), so the native and VM limits give the same allocation threshold in the
+tested programs. Instruction-level traps
+(assert, division, a return with no target) report only the status.
 
 These codes are not disjoint from normal program return values. If a protocol
 must distinguish all successful integer results from all errors, use the
@@ -109,3 +119,27 @@ operating-system resource failure, or a raw assembled program can still be
 dangerous. Use process isolation, resource limits, and provenance checks when
 running code outside your trust boundary. Producing an ELF artifact never
 authorizes MetaChain itself to execute it.
+
+## C-ABI entry/exit adapters
+
+`NativeRuntime` retains its `prologue`, `builtin` and `text` hooks and adds
+optional `entry` and `exit` assembly. Empty fields preserve the original
+syscall-only output byte-for-byte. An entry adapter replaces the `_start`
+declaration/preamble, before the normal 256-byte register frame is initialized.
+An exit adapter receives the halt value or native failure status in `rdi` at
+`.mc_exit`. Every halt, fallthrough and instruction-level trap uses that exit
+adapter when present. It must restore its caller's stack/registers and return
+or terminate; the core does not guess its ABI.
+
+QScript's grammar/match backend saves the SysV callee-saved registers before
+creating the frame, retains its runtime state in `r13`, and restores those
+registers before returning to the static C++ launcher. Each built-in adapter
+copies all 32 frame slots into a contiguous register snapshot, aligns the C
+call stack to 16 bytes, calls `qs_native_dispatch`, and stores its result back
+in the IL frame. Exceptions are caught inside the C++ dispatcher, never
+unwound through assembly frames. The QScript step/stack counters remain in
+native code, including their normal 124/125/126/127 error exits.
+
+This produces real ASMtk-encoded instructions, not a VM entry point or an
+embedded bytecode program. See [the QScript backend chapter](qscript/10-ffi.md)
+for static parser archive/linker requirements and deployment checks.

@@ -1,4 +1,5 @@
 #include "qscript/include/QScript-CFFI.h"
+#include "qscript/include/QScript-Runtime.h"
 #include "qscript/include/QScript-Diagnostics.h"
 #include <stdio.h>
 #include <stdlib.h>

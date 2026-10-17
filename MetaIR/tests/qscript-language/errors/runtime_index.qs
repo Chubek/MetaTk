@@ -1,0 +1,1 @@
+let xs = [1]; print xs[3];

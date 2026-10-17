@@ -1,0 +1,30 @@
+// String operations: concatenation, indexing, slicing, searching, case and trimming.
+let s = "Hello, World";
+print s.len();
+print s.at(0);
+print s.sub(7, 5);
+print s.find("o");
+print s.find("o", 5);
+print s.find("zz");
+print s.starts_with("Hell");
+print s.ends_with("ld");
+print s.contains("lo, W");
+print s.upper();
+print s.lower();
+print "  padded\t ".trim();
+print "a-b-c".replace("-", "+");
+print "ab".repeat(3);
+print "a,b,,c".split(",").len();
+print "x" ~ "y" ~ "z";
+print "42".to_int() + 1;
+print 65.chr();
+print 7.str() ~ "!";
+print "abc" == "abc";
+print "abc" != "abd";
+print "apple" < "banana";
+print "b" >= "a";
+print "" == "";
+let greeting = "";
+for (my c in ["one", "two"]) { greeting = greeting ~ c.upper(); }
+print greeting;
+return s.len();

@@ -16,6 +16,11 @@ return lcm(4, 6);
 * Parameters are local variables initialized by the caller; assigning to one
   does not affect the caller.
 * `return EXPR;` returns a value; reaching the end of the body returns 0.
+* A function whose result is `str`, `list`, `grammar` or `match` must return on
+  every path. A path that can reach the end of the body is a compile error:
+  `function NAME ended without returning a value on some path`. A loop with a
+  constant-true condition (`loop`, `while (1)`) and no `break` that leaves it
+  counts as never reaching the end, and so does `exit` and a call to `die`.
 * Functions may be called before they are defined and may be recursive or
   mutually recursive. Recursion depth is limited by the VM stack (one million
   values by default); runaway recursion traps with "stack limit exceeded".

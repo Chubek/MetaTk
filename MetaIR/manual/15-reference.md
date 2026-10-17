@@ -77,9 +77,12 @@ field `allow_undefined`, `max_input_size`, `max_total_input_size`, `max_objects`
 ## Observable compatibility changes from the initial headers
 
 * `MetaIL.hpp` and `MetaChain.hpp` are now implemented, not empty placeholders.
-* The assembler defaults to its built-in x86-64 encoder. Optional Symspec
+* The assembler defaults to an Arch-backed x86-64 encoder, using generated
+  checked-in register/opcode data from `Arch/stdspec`. Optional Symspec
   methods require `METACHAIN_ENABLE_SYMSPEC`; ordinary users no longer acquire
-  a Boost.JSON dependency merely by including the assembler.
+  a Boost.JSON dependency merely by including the assembler. A loaded bank's
+  executable records drive encoding; unsupported targets and missing/malformed
+  executable extensions are rejected without replacing the active bank.
 * Unsupported instructions/directives still fail, but supported machine forms
   now encode real instructions and can emit interoperable ELF objects.
 * Integer data operands are range-checked instead of silently truncating.

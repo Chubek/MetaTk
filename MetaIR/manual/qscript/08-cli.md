@@ -14,7 +14,7 @@ qscript --help
 | `check FILE...` | parse and check; prints `ok` |
 | `ir FILE...` | print the MetaIL program |
 | `native FILE...` | print x86-64 assembly |
-| `c FILE... [-o OUT]` | emit portable C99; compile with `-DQSCRIPT_STANDALONE` for a CLI |
+| `c FILE... [-o OUT]` | emit C99; compile with `-DQSCRIPT_STANDALONE` for a CLI; grammar/match programs must link QScript (chapter 10) |
 | `encode FILE... -o OUT` | write MCIL bytecode |
 | `object FILE... -o OUT` | write an ELF64 relocatable object |
 | `build FILE... -o OUT` | write a static x86-64 Linux executable |
@@ -45,6 +45,14 @@ Options go before the command.
 | `--sched list\|cycle\|static` | instruction scheduler |
 | `-O0` | disable the MetaIL optimizer |
 | `--steps N` | execution step limit (default 10,000,000) |
+| `--native-linker PATH` | C++ driver used to statically link native grammar/match programs |
+| `--native-runtime PATH` | native parser archive override (default from CMake) |
+
+`build` supports grammar/match programs with `QSCRIPT_BUILD_NATIVE_RUNTIME=ON`
+(the Linux x86-64 default) and static C++/C libraries. The resulting ELF needs
+neither QScript nor a compiler when run. Integer/string/list-only native output
+does not invoke an external linker. `native`/`object` can emit the grammar ABI
+even when the bundled runtime is disabled, for linking on another build host.
 
 ## Exit status
 

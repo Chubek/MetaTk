@@ -8,6 +8,8 @@ compiled only under `__cplusplus`.
 |--------|----------|
 | `qscript/QScript.h` | contexts, compile, run, emit; the C++ pipeline (`qscript::compile`, `lower`, `run`, `call`, ...) |
 | `qscript/include/QScript-Runtime.h` | engines, limits, run statistics, host calls, program introspection |
+| `qscript/include/QScript-Generated.h` | linked built-in runtime for generated C99 grammar/match programs |
+| `qscript/include/QScript-Native.h` | versioned C ABI for ASMtk code and the self-contained static native parser runtime |
 | `qscript/include/QScript-Library.h` | the embedded standard library and `use` resolution |
 | `qscript/include/QScript-Module.h` | multi-source modules, module-local libraries |
 | `qscript/include/QScript-Diagnostics.h` | structured diagnostics, checking, AST and match-tree dumps |
@@ -60,8 +62,20 @@ qs_status   qs_emit(qs_context *, const qs_program *, int format,
 ```
 
 * `qs_output_fn` is `void (*)(int64_t value, void *user)` and receives every
-  value printed by `print`/`say`, in order, after the run (also when the run
+  integer printed by `print`/`say`, in order, after the run (also when the run
   traps after printing).
+* `qs_set_text_output` installs the destination for values that are not
+  integers. Its callback receives one printed line at a time, without the
+  newline, while the program runs. A program that prints a string, list,
+  grammar or match without a text output traps with a message saying so.
+  When a program prints any non-integer, its integers are also rendered as
+  text and go through this callback, so the order of all lines is kept
+  (chapter 11.3).
+
+```c
+typedef void (*qs_text_fn)(const char *text, size_t length, void *user);
+void qs_set_text_output(qs_context *, qs_text_fn, void *user);
+```
 * `qs_compile` parses, checks, lowers, optimizes and schedules. Source is
   bytes with an explicit length; embedded NUL bytes are a syntax error.
 * `qs_eval` = `qs_compile` + `qs_run` + `qs_program_destroy`.
@@ -107,7 +121,7 @@ Result<metail::Program> optimize(metail::Program, Options = {});
 Result<metail::Program> schedule(metail::Program, Options = {});
 Result<metail::Program> verify_ir(metail::Program, Options = {});
 Result<std::string> emit(const metail::Program&, Options = {});
-Result<std::string> emit_c(const metail::Program&, Options = {});        // portable C99
+Result<std::string> emit_c(const Unit&, Options = {});                  // C99; grammar/match programs link QScript
 Result<std::string> select(const metail::Program&, Options = {});        // x86-64 assembly
 Result<std::vector<std::uint8_t>> assemble(std::string_view, bool object = true, Options = {});
 Result<std::vector<std::uint8_t>> link(const std::vector<std::vector<std::uint8_t>>&, Options = {});
@@ -167,7 +181,11 @@ The JIT engine falls back to the interpreter on platforms without native code
 support; results are identical.
 
 `qs_call` runs one function with the given arguments and returns its value.
-The program's top-level statements are not executed. Callable functions are
+The program's top-level statements are not executed. Arguments and the result
+are integers: a function with a `str`, `list`, `grammar` or `match` parameter
+or result is refused with `takes str arguments; qs_call passes integers only`
+(or `returns str; qs_call returns integers only`). This legacy ABI remains
+unchanged; use `qs_call_value` below for non-integer values. Callable functions are
 listed by `qs_program_function_*`: every function the program defines, plus
 library functions it uses, named `lib::f`.
 
@@ -175,6 +193,98 @@ library functions it uses, named `lib::f`.
 for (size_t i = 0; i < qs_program_function_count(p); ++i)
     printf("%s/%zu\n", qs_program_function_name(p, i), qs_program_function_arity(p, i));
 ```
+
+### Typed function calls and owning values
+
+`qs_call_value` supports `int`, byte strings, every `list<T>`, `grammar` and
+`match`. It enters the same function stub and interpreter/JIT as `qs_call` and
+does not execute top-level statements. Argument count and canonical types are
+checked before entering the function; there are no implicit conversions or raw
+heap handles in this interface.
+
+```c
+typedef struct qs_value qs_value;
+qs_status qs_call_value(qs_context *, const qs_program *, const char *function,
+                       const qs_value *const *args, size_t count, qs_value **result);
+qs_value *qs_value_int(qs_context *, int64_t);
+qs_value *qs_value_string(qs_context *, const char *, size_t length);
+qs_value *qs_value_list(qs_context *, const char *element_type,
+                        const qs_value *const *items, size_t count);
+qs_value *qs_value_grammar(qs_context *, const char *source, size_t length);
+qs_value *qs_value_match(qs_context *, const qs_match *);
+qs_value *qs_value_clone(qs_context *, const qs_value *);
+void qs_value_destroy(qs_value *);
+
+int qs_value_get_kind(const qs_value *); /* QS_VALUE_INT/STR/LIST/GRAMMAR/MATCH; -1 for NULL */
+const char *qs_value_type(const qs_value *);
+qs_status qs_value_get_int(const qs_value *, int64_t *);
+qs_status qs_value_get_string(const qs_value *, const char **, size_t *);
+size_t qs_value_list_size(const qs_value *);
+qs_value *qs_value_list_at(qs_context *, const qs_value *, size_t index);
+const qs_grammar *qs_value_get_grammar(const qs_value *);
+const qs_match *qs_value_get_match(const qs_value *);
+const char *qs_value_match_error(const qs_value *);
+const char *qs_program_function_parameter_type(const qs_program *, size_t function, size_t parameter);
+const char *qs_program_function_result_type(const qs_program *, size_t function);
+```
+
+For a compiled `fn suffix(s: str): str { return s ~ "!"; }`:
+
+```c
+qs_value *input = qs_value_string(c, "hello", 5), *output = NULL;
+const qs_value *args[] = {input};
+if (input && qs_call_value(c, p, "suffix", args, 1, &output) == QS_OK) {
+    const char *bytes; size_t length;
+    if (qs_value_get_string(output, &bytes, &length) == QS_OK)
+        fwrite(bytes, 1, length, stdout);
+}
+qs_value_destroy(input);
+qs_value_destroy(output);
+```
+
+Ownership and errors:
+
+* Every returned `qs_value *`, including `clone` and `list_at`, is independently
+  owned and must be destroyed. Values survive their creating context, program
+  and call. Cloning shares immutable storage, not a runtime heap.
+* Getter pointers borrow the value, not the context's scratch buffer. Do not
+  destroy a grammar/match returned by a getter; keep its value alive. Strings
+  have explicit byte lengths and may contain NUL bytes.
+* Lists are immutable host snapshots. The element type is mandatory even for
+  an empty list, and all items must match it exactly. A call copies the values
+  into a fresh, heap-limited session; mutation does not modify the host inputs.
+  Repeated references to the same value preserve their aliases within that
+  call, including nested lists. Returned lists capture the final contents.
+* Grammar values retain compiled grammars, complete inheritance/extension
+  source, internal names and derivation depth. Match values retain their root,
+  even when returning a child. A failed match is still a `QS_VALUE_MATCH`;
+  `get_match` returns NULL and `match_error` returns its diagnostic. It may be
+  passed back to a QScript function like any other match.
+* A failed call leaves `*result` NULL. Wrong kinds in scalar getters return
+  `QS_INVALID_ARGUMENT` and clear their output. Invalid indices return NULL.
+  Invalid type spellings, heterogeneous lists and excessive type/match nesting
+  are rejected rather than recursively overflowing the host stack.
+* Type-introspection strings borrow the program. Out-of-range function or
+  parameter indices return NULL. Existing `qs_call` and CLI `call` remain
+  integer-only for ABI and command-line compatibility.
+
+C++ uses `qscript::Value` and `qscript::call_value`:
+
+```cpp
+std::vector<qscript::Value> args{qscript::Value(std::string("hello"))};
+auto called = qscript::call_value(unit, "suffix", args, options);
+if (called) std::cout << *called->value.as_string();
+```
+
+Construct integers/strings directly; `Value::list(element_type, items)`,
+`Value::compile_grammar(source, options)` and `Value::from_match(match, options)`
+return `Result<Value>`. Inspect `kind`, `type`, `as_integer` (optional),
+`as_string`, `as_list`, `as_grammar`, `as_match` and `match_error` without
+throwing on the wrong kind. `CallResult` contains the owning `value` and the
+`metail::Execution` statistics/output. On a runtime trap, execution statistics
+may still be present, but the value is not meaningful: check the outcome first.
+`execution.value` is zero for non-integer returns; only the owning `value`
+contains their result, never a handle into a destroyed heap.
 
 ## 6.4 Libraries: `QScript-Library.h`
 
@@ -268,7 +378,27 @@ qs_status   qs_set_scheduler_name(qs_context *, const char *name);     /* "list"
 const char *qs_scheduler_name(int scheduler);
 qs_status   qs_backend_describe(const qs_context *, char *text, size_t capacity, size_t *length);
 qs_status   qs_backend_report(qs_context *, const qs_program *, const char **text, size_t *length);
+
+typedef struct qs_native_link_options {
+    const char *driver, *runtime_archive, *temporary_directory;
+    size_t timeout_seconds, max_diagnostic_bytes;
+} qs_native_link_options;
+qs_status qs_set_native_link(qs_context *, const qs_native_link_options *);
+qs_status qs_get_native_link(const qs_context *, qs_native_link_options *);
+const char *qs_native_default_driver(void);
+const char *qs_native_default_runtime(void);
 ```
+
+Native grammar/match executables statically link `QScriptNativeRuntime` using
+the configured C++ driver. Setter NULL string fields/zero numeric fields keep
+the current value; empty strings restore build-time defaults. Getter strings
+borrow the context. Invalid configurations fail transactionally. Defaults are
+available through the two context-free getters, or NULL when the bundled
+runtime was disabled. The timeout defaults to 60 seconds (maximum 3600) and
+retained diagnostics to 1 MiB (maximum 16 MiB). C++ uses
+`Options::native_link`/`NativeLinkOptions`, which also accepts an argv vector
+of extra linker arguments. No shell command is evaluated. See chapter 10 for
+trusted-tool, static-library, scratch-directory and deployment requirements.
 
 Scheduling reorders instructions only inside basic blocks (calls, returns,
 pushes, pops and prints are barriers), so every configuration gives the same

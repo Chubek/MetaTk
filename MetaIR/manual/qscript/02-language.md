@@ -27,9 +27,13 @@ and `_`. They are case-sensitive. A qualified name joins identifiers with
 **Keywords** cannot be used as identifiers:
 
 ```
-use fn sub const let my if elsif else unless while until do for loop
+use fn sub const let my if elsif else unless while until do for in loop
 break last continue next return exit print say assert and or not true false
+grammar is
 ```
+
+The type names `int`, `str`, `list` and `match` are not keywords, so `list`
+and `match` remain usable as identifiers.
 
 **Integer literals** are decimal, hexadecimal (`0x`), binary (`0b`) or octal
 (`0o`), with optional `_` separators. A leading zero does not mean octal.
@@ -56,7 +60,8 @@ assert 'A' == 65 && '\n' == 10 && '\x41' == 'A';
 
 ## 2.2 Values and arithmetic
 
-There is one type: the signed 64-bit integer.
+The numeric type is the signed 64-bit integer. QScript also has `str`,
+`list<T>`, `grammar` and `match` (chapter 11); this section covers integers.
 
 * `+ - *` wrap around on overflow (two's complement): `9223372036854775807 + 1`
   is `-9223372036854775808`. Use the `checked` library to detect overflow.
@@ -101,6 +106,11 @@ return x;
 Compound assignment operators: `+= -= *= /= %= &= |= ^= <<= >>= **=`.
 `x++` and `x--` are statements, not expressions.
 
+Elements of a list are assigned the same way: `xs[i] = v`, `xs[i] += v`,
+`xs[i]++`, and nested forms such as `grid[0][1] = 20`. The base and index are
+each evaluated once, even in a compound form. Chapter 11 describes lists,
+strings and their methods.
+
 ## 2.4 Operators
 
 From lowest to highest precedence:
@@ -143,6 +153,11 @@ assert 2 + 2 == 4;     # trap with "assertion failed" if false
 gcd(10, 4);            # a call as a statement; the value is discarded
 ```
 
+`print` and `say` accept any type. Integers go to the program's output. A
+string, list, grammar or match needs a text output in the host (`qscript run`
+always has one); chapter 11.3 gives the rules, including how integers and
+text keep their order when a program prints both.
+
 ### Conditionals
 
 ```qscript
@@ -174,6 +189,17 @@ starts its next iteration. In a `for` loop, `continue` runs the step first; in
 a compile-time error.
 
 A `let` in the `for` initializer is scoped to the loop.
+
+`for (my x in EXPR) body` runs the body once per element of a list. `EXPR` is
+evaluated once, and `x` takes each element in turn. `break`, `continue` and
+`return` work as in the other loops. Iterating over anything but a list is a
+compile error (`foreach needs a list, not int`).
+
+```qscript
+let total = 0;
+for (my v in [1, 2, 3, 4, 5]) { if (v % 2 == 0) { continue; } total += v; }
+say total;                             # 9
+```
 
 ### Statement modifiers
 

@@ -1,0 +1,6 @@
+// A bracketed list of integers separated by commas.
+lexeme @INT = "[0-9]+"
+rule #List = '[' #Items? ']'
+rule #Items = @INT (',' @INT)*
+%%
+[1, 22, 333]

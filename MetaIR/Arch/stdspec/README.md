@@ -345,3 +345,58 @@ edits/copies specs, emits JSON/Lua/NDJSON, integrates with `dsl::Serializer`
 via `symspec::Codec`, and discovers architectures lazily through
 `symspec::Repository`. See `../tests/symspec_test.cc` for roundtrips,
 bank validation and app-integration coverage.
+
+## Executable ASMtk bank
+
+`asmtk/amd64.lua` is the single source for ASMtk's supported register names,
+widths and encodings. `amd64.dsymspec` shares its base-register names and
+representative encoder programs, and appends its `asmtk` extension to the full
+document. Unlike broad compiler metadata, this extension describes mechanisms
+that ASMtk actually implements. The existing broader representative DSL forms
+are not automatically executable in ASMtk.
+
+Run from the repository root (Lua 5.3+):
+
+```sh
+lua Arch/stdspec/tools/generate_asmtk.lua
+lua Arch/stdspec/tools/generate_asmtk.lua --check
+```
+
+This writes deterministic `asmtk/AMD64.hpp` and `asmtk/amd64.json`. The header
+is consumed by the default, dependency-free assembler. The JSON is a compact
+Symspec schema 1 assembler document with target/register records and the same
+executable extension; no external DSL runtime or TableGen bank is needed to
+load it. Do not edit either generated output. Normal builds require neither
+Lua nor regeneration.
+
+### `asmtk.schema = 1`
+
+`asmtk.encodings` is an array. Each record contains:
+
+| Field | Meaning |
+|---|---|
+| `mnemonic` | lowercase spelling, including separate alias records |
+| `form` | one of the mechanisms in `Arch/Encoding.hpp` |
+| `widths` | supported register widths, chosen from 8, 32, 64; empty for fixed/relative forms |
+| `opcode` | one to three literal bytes, before register-code addition |
+| `group` | ModRM group selector, 0 through 7 (default 0) |
+| `reg_operand` | which source operand occupies ModRM.reg for register/register forms, 0 or 1 (default 1) |
+| `rex_w` | whether a 64-bit operand sets REX.W (default true) |
+| `relocation` | ELF PC-relative type 2 or 4 for relative branches, otherwise 0 |
+| `implicit_register` | 8-bit count-register name for `ShiftCL`, empty otherwise |
+
+Mechanisms cover fixed bytes; rel32 branches; indirect branches; register-in-
+opcode push/pop; unary ModRM groups; register/register, load and store forms;
+full-width move immediates; implicit-register or immediate shifts; and signed
+imm32 arithmetic. Instruction selection checks operand kind and width before
+emission. Register-in-opcode bases must have their low three bits clear.
+Duplicate overlapping forms, unsupported widths, invalid groups/opcode bytes,
+and unresolved implicit register names fail validation. Broader register
+records outside the bounded low-byte/32-bit/64-bit REX subset are excluded.
+
+`Arch/AssemblerSpec.hpp` validates and exposes borrowed executable tables from
+an immutable `Spec`. `asmtk::Assembler::load_architecture` installs them only
+after complete validation. Changing a loaded name, opcode or group therefore
+changes assembly; there is no hidden fallback table. Only 64-bit little-endian
+x86 targets are accepted. Arbitrary encoder programs, other target encodings,
+and compiler selection/scheduling policies still need dedicated implementations.

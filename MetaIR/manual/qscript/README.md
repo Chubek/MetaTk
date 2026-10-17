@@ -42,23 +42,30 @@ result 12
 8. [Command line and REPL](08-cli.md)
 9. [Internals](09-internals.md): pipeline, AST, calling convention, limits and diagnostics
 10. [C interoperability and portable C](10-ffi.md): callbacks, libffi, shared libraries, serialization, C99 backend
+11. [Strings, lists, grammars and matches](11-types.md): the four heap types, every built-in method, printing, limits
 
 ## At a glance
 
 | | |
 |---|---|
-| Values | one type: signed 64-bit integers, two's-complement wrap-around |
+| Values | signed 64-bit integers (two's-complement wrap-around), strings, `list<T>`, first-class grammars and their match trees |
 | Syntax | C-like, with Perl touches: `my`, `say`, `unless`, `until`, `elsif`, `last`/`next`, `loop`, statement modifiers (`next if i % 2;`), `**`, `#` comments |
 | Program structure | top-level statements, `fn` functions (recursive), compile-time `const`, `use` libraries |
 | Checks | names, arity, scopes, `break` placement, constant cycles, all before running |
 | Runs on | MetaVM interpreter, MetaJIT, native x86-64 ELF (`qscript build`), portable C99 (`qscript c`) |
 | Safety | every run is bounded: step limit, stack limit; traps on division by zero, bad shifts, failed `assert` |
-| Embedding | C ABI, registered host functions, typed libffi calls, shared-library loading and a C++ API |
+| Embedding | C ABI, owning typed host calls, registered host functions, typed libffi calls, shared-library loading and a C++ API |
 | Library | 28 embedded libraries: math, bits, primes, dates, hashing, fixed point, cffi, endian, integer, ... |
 
-QScript has no built-in strings, arrays or floating-point arithmetic. Values
-are integers; characters are integer codes (`'a'` is 97); several small values
-can be packed into one integer (see the `pack`, `date` and `color` libraries).
+Strings are byte strings and `list<T>` values are homogeneous, mutable lists.
+All five types run on the VM/JIT, generated C and native Linux x86-64 ELF.
+Grammar/match C output links QScript's runtime; native output statically links
+the parser and C++/C libraries at build time and is self-contained when deployed.
+Integer/string/list native output keeps its small libc-free assembly runtime.
+The owning `qs_value`/`qscript::Value` host interfaces support all five types
+without exposing temporary heap handles (chapter 6).
+QScript has no floating-point arithmetic; several small integer values can be
+packed into one integer (see the `pack`, `date` and `color` libraries).
 The optional `cffi` runtime adds context-owned byte buffers and native calls;
 floating values and pointers cross the integer VM as bit patterns. See
 [chapter 10](10-ffi.md) for its API and lifetime rules.
