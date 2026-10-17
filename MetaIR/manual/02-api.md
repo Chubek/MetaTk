@@ -47,6 +47,12 @@ numbering; MCIL has its own wire-format version.
 
 ## Results and diagnostics
 
+`metachain/Outcome.hpp` supplies `Stage`, `Diagnostic` and `Outcome<T>` without
+including the collective assembler/JIT facade. `MetaChain.hpp` includes that
+header, preserving the same namespace and definitions. This lightweight
+boundary is used by the [C/QScript MLVM bridge](mlvm-bridge.md)'s optional
+`MLVM-MetaIR.hpp` adapter for importing/exporting `metail::Program` via MCIL.
+
 `Outcome<T>` contains `optional<T> value` and `vector<Diagnostic> diagnostics`.
 Its boolean conversion succeeds only when a value exists and diagnostics are
 empty. `*result` and `result->member` require a value. They use checked optional

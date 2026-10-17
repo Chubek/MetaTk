@@ -1,0 +1,430 @@
+# bpf.dsymspec.yaml
+# Migrated from the Lua DSL (bpf.dsymspec). Encoder bodies are imperative
+# pseudo-code; the grammar is documented in README.md.
+#
+# bpf.dsymspec — eBPF ISA (64-bit, little-endian), helper/BTF/Maps model.
+# Data: isa_reference eBPF quick spec (r0-r10 roles, 64-bit fixed encoding
+# with 16-byte LD_IMM64), bfd_oracle (elf64-bpfle/elf64-bpfbe targets),
+# osdev_oracle (kernel verifier: 512B stack, bounded loops, tail calls).
+# Strata: base | alu32 | byteswap | ldimm64 | atomics | bounded-loops |
+#   bpf-to-bpf | tail-calls | btf | priv(helpers/maps).
+
+schema: 1
+targets:
+  - {arch: bpf, subarch: bpfel, addr_size: 64, op_size: 64, addr_def: 64, align: 8, byte_order: little, obj_format: ELF64, abi: eBPF, calling_conv: bpf-helper, features: [base, alu32, ldimm64]}
+features:
+  - {name: base, desc: "eBPF base 64-bit ALU + jumps"}
+  - {name: alu32, desc: "32-bit ALU sub-register ops"}
+  - {name: ldimm64, desc: "16-byte load-immediate-64"}
+  - {name: byteswap, desc: "BE/LE 16/32/64 conversions"}
+  - {name: maps, desc: "BPF maps (fd/lookup/update)"}
+  - {name: helpers, desc: "helper calls (r1-r5 args, r0 ret)"}
+  - {name: tail-calls, desc: "tail calls"}
+  - {name: bpf-to-bpf, desc: "BPF-to-BPF calls"}
+  - {name: btf, desc: "BPF Type Format"}
+  - {name: atomics, desc: "atomic add/or/and/xor/fetch"}
+  - {name: bounded-loops, desc: "bounded loops (verifier v2)"}
+  - {name: priv, desc: "privileged (map update, kfuncs)"}
+registers:
+  # r0-r10 64-bit + w0-w10 32-bit views (TableGen BPF + isa_reference roles).
+  - {name: r0, class: gpr, width: 64, enc: 0, flags: [readable, writable]}
+  - {name: r1, class: gpr, width: 64, enc: 1, flags: [readable, writable]}
+  - {name: r2, class: gpr, width: 64, enc: 2, flags: [readable, writable]}
+  - {name: r3, class: gpr, width: 64, enc: 3, flags: [readable, writable]}
+  - {name: r4, class: gpr, width: 64, enc: 4, flags: [readable, writable]}
+  - {name: r5, class: gpr, width: 64, enc: 5, flags: [readable, writable]}
+  - {name: r6, class: gpr, width: 64, enc: 6, flags: [readable, writable]}
+  - {name: r7, class: gpr, width: 64, enc: 7, flags: [readable, writable]}
+  - {name: r8, class: gpr, width: 64, enc: 8, flags: [readable, writable]}
+  - {name: r9, class: gpr, width: 64, enc: 9, flags: [readable, writable]}
+  - {name: r10, class: gpr, width: 64, enc: 10, flags: [readable, writable]}
+  - {name: w0, class: gpr, width: 32, enc: 0, parent: r0, sub_lo: 0, sub_hi: 32, flags: [readable, writable]}
+  - {name: w1, class: gpr, width: 32, enc: 1, parent: r1, sub_lo: 0, sub_hi: 32, flags: [readable, writable]}
+  - {name: w2, class: gpr, width: 32, enc: 2, parent: r2, sub_lo: 0, sub_hi: 32, flags: [readable, writable]}
+  - {name: w3, class: gpr, width: 32, enc: 3, parent: r3, sub_lo: 0, sub_hi: 32, flags: [readable, writable]}
+  - {name: w4, class: gpr, width: 32, enc: 4, parent: r4, sub_lo: 0, sub_hi: 32, flags: [readable, writable]}
+  - {name: w5, class: gpr, width: 32, enc: 5, parent: r5, sub_lo: 0, sub_hi: 32, flags: [readable, writable]}
+  - {name: w6, class: gpr, width: 32, enc: 6, parent: r6, sub_lo: 0, sub_hi: 32, flags: [readable, writable]}
+  - {name: w7, class: gpr, width: 32, enc: 7, parent: r7, sub_lo: 0, sub_hi: 32, flags: [readable, writable]}
+  - {name: w8, class: gpr, width: 32, enc: 8, parent: r8, sub_lo: 0, sub_hi: 32, flags: [readable, writable]}
+  - {name: w9, class: gpr, width: 32, enc: 9, parent: r9, sub_lo: 0, sub_hi: 32, flags: [readable, writable]}
+  - {name: w10, class: gpr, width: 32, enc: 10, parent: r10, sub_lo: 0, sub_hi: 32, flags: [readable, writable]}
+  - {name: fp, class: gpr, width: 64, enc: 10, flags: [readable]}
+  - {name: stack, class: special, width: 64, enc: 10}
+  - {name: pc, class: special, width: 64, enc: 0}
+mnemonics:
+  - {name: add}
+  - {name: sub}
+  - {name: mul}
+  - {name: div}
+  - {name: or}
+  - {name: and}
+  - {name: lsh}
+  - {name: rsh}
+  - {name: neg}
+  - {name: mod}
+  - {name: xor}
+  - {name: mov}
+  - {name: arsh}
+  - {name: add32}
+  - {name: mov32}
+  - {name: addimm}
+  - {name: movimm}
+  - {name: be16}
+  - {name: le64}
+  - {name: ldimm64}
+  - {name: ldxw}
+  - {name: stxw}
+  - {name: stw}
+  - {name: stxadd}
+  - {name: ja}
+  - {name: jeq}
+  - {name: jne}
+  - {name: jlt}
+  - {name: jset}
+  - {name: call}
+  - {name: callx}
+  - {name: exit}
+encoders:
+  # 64-bit fixed encodings (opcode|dst|src|off|imm); wide LD_IMM64 = 16B.
+  - name: add
+    max_bytes: 8
+    body: |
+      EMIT64LE 0x0F + dst*4096 + src*256 + off*65536
+  - name: sub
+    max_bytes: 8
+    body: |
+      EMIT64LE 0x1F + dst*4096 + src*256 + off*65536
+  - name: mul
+    max_bytes: 8
+    body: |
+      EMIT64LE 0x2F + dst*4096 + src*256 + off*65536
+  - name: div
+    max_bytes: 8
+    body: |
+      EMIT64LE 0x3F + dst*4096 + src*256 + off*65536
+  - name: or
+    max_bytes: 8
+    body: |
+      EMIT64LE 0x4F + dst*4096 + src*256 + off*65536
+  - name: and
+    max_bytes: 8
+    body: |
+      EMIT64LE 0x5F + dst*4096 + src*256 + off*65536
+  - name: lsh
+    max_bytes: 8
+    body: |
+      EMIT64LE 0x6F + dst*4096 + src*256 + off*65536
+  - name: rsh
+    max_bytes: 8
+    body: |
+      EMIT64LE 0x7F + dst*4096 + src*256 + off*65536
+  - name: neg
+    max_bytes: 8
+    body: |
+      EMIT64LE 0x8F + dst*4096
+  - name: mod
+    max_bytes: 8
+    body: |
+      EMIT64LE 0x9F + dst*4096 + src*256
+  - name: xor
+    max_bytes: 8
+    body: |
+      EMIT64LE 0xAF + dst*4096 + src*256
+  - name: mov
+    max_bytes: 8
+    body: |
+      EMIT64LE 0xBF + dst*4096 + src*256
+  - name: arsh
+    max_bytes: 8
+    body: |
+      EMIT64LE 0xCF + dst*4096 + src*256
+  - name: add32
+    max_bytes: 8
+    body: |
+      EMIT64LE 0x0C + dst*4096 + src*256
+  - name: mov32
+    max_bytes: 8
+    body: |
+      EMIT64LE 0xBC + dst*4096 + src*256
+  - name: addimm
+    max_bytes: 8
+    body: |
+      EMIT64LE 0x07 + dst*4096 + imm*4294967296
+  - name: movimm
+    max_bytes: 8
+    body: |
+      EMIT64LE 0xB7 + dst*4096 + imm*4294967296
+  - name: be16
+    max_bytes: 8
+    body: |
+      EMIT64LE 0xDC + dst*4096 + 16*4294967296
+  - name: le64
+    max_bytes: 8
+    body: |
+      EMIT64LE 0xD4 + dst*4096 + 64*4294967296
+  - name: ldimm64
+    max_bytes: 16
+    body: |
+      EMIT64LE 0x18 + dst*4096
+      EMIT64LE imm
+  - name: ldxw
+    max_bytes: 8
+    body: |
+      EMIT64LE 0x61 + dst*4096 + src*256 + off*65536
+  - name: stxw
+    max_bytes: 8
+    body: |
+      EMIT64LE 0x63 + dst*4096 + src*256 + off*65536
+  - name: stw
+    max_bytes: 8
+    body: |
+      EMIT64LE 0x62 + dst*4096 + off*65536 + imm*4294967296
+  - name: stxadd
+    max_bytes: 8
+    body: |
+      EMIT64LE 0xC3 + dst*4096 + src*256 + off*65536 + 64*16777216
+  - name: ja
+    max_bytes: 8
+    max_relocs: 1
+    body: |
+      EMIT64LE 0x05 + off*65536
+      EMIT_RELOCATION sym, R_BPF_JMP
+  - name: jeq
+    max_bytes: 8
+    max_relocs: 1
+    body: |
+      EMIT64LE 0x15 + dst*4096 + src*256 + off*65536
+      EMIT_RELOCATION sym, R_BPF_JMP
+  - name: jne
+    max_bytes: 8
+    max_relocs: 1
+    body: |
+      EMIT64LE 0x55 + dst*4096 + src*256 + off*65536
+      EMIT_RELOCATION sym, R_BPF_JMP
+  - name: jlt
+    max_bytes: 8
+    body: |
+      EMIT64LE 0xA5 + dst*4096 + src*256 + off*65536
+  - name: jset
+    max_bytes: 8
+    body: |
+      EMIT64LE 0x45 + dst*4096 + src*256 + off*65536
+  - name: call
+    max_bytes: 8
+    body: |
+      EMIT64LE 0x85 + imm*4294967296
+  - name: callx
+    max_bytes: 8
+    body: |
+      EMIT64LE 0x8D + imm*4294967296
+  - name: exit
+    max_bytes: 8
+    body: |
+      EMIT64LE 0x95
+forms:
+  - mnemonic: add
+    encoder: add
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: sub
+    encoder: sub
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: mul
+    encoder: mul
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: div
+    encoder: div
+    flags: [may_trap]
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: or
+    encoder: or
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: and
+    encoder: and
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: lsh
+    encoder: lsh
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: rsh
+    encoder: rsh
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: neg
+    encoder: neg
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+  - mnemonic: mod
+    encoder: mod
+    flags: [may_trap]
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: xor
+    encoder: xor
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: mov
+    encoder: mov
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: arsh
+    encoder: arsh
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: add32
+    encoder: add32
+    required: [alu32]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: mov32
+    encoder: mov32
+    required: [alu32]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: addimm
+    encoder: addimm
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: imm, width: 32, imm_min: -2147483648, imm_max: 2147483647, signed: true}
+  - mnemonic: movimm
+    encoder: movimm
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: imm, width: 32, imm_min: -2147483648, imm_max: 2147483647, signed: true}
+  - mnemonic: be16
+    encoder: be16
+    required: [byteswap]
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+  - mnemonic: le64
+    encoder: le64
+    required: [byteswap]
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+  - mnemonic: ldimm64
+    encoder: ldimm64
+    flags: [reloc]
+    required: [ldimm64]
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: imm, width: 64, imm_min: -9223372036854775807, imm_max: 9223372036854775807, signed: true}
+  - mnemonic: ldxw
+    encoder: ldxw
+    flags: [reads_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: mem, width: 32}
+  - mnemonic: stxw
+    encoder: stxw
+    flags: [writes_mem]
+    operands:
+      - {kind: mem, width: 32}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: stw
+    encoder: stw
+    flags: [writes_mem]
+    operands:
+      - {kind: mem, width: 32}
+      - {kind: imm, width: 32, imm_min: -2147483648, imm_max: 2147483647, signed: true}
+  - mnemonic: stxadd
+    encoder: stxadd
+    flags: [reads_mem, writes_mem]
+    required: [atomics]
+    operands:
+      - {kind: mem, width: 64}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: ja
+    encoder: ja
+    flags: [branch, reloc]
+    operands:
+      - {kind: sym, width: 64}
+  - mnemonic: jeq
+    encoder: jeq
+    flags: [cond_branch, reloc]
+    operands:
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: sym, width: 64}
+  - mnemonic: jne
+    encoder: jne
+    flags: [cond_branch, reloc]
+    operands:
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: sym, width: 64}
+  - mnemonic: jlt
+    encoder: jlt
+    flags: [cond_branch]
+    required: [bounded-loops]
+    operands:
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: sym, width: 64}
+  - mnemonic: jset
+    encoder: jset
+    flags: [cond_branch]
+    operands:
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: sym, width: 64}
+  - mnemonic: call
+    encoder: call
+    flags: [branch]
+    required: [helpers]
+    operands:
+      - {kind: imm, width: 32, imm_min: -2147483648, imm_max: 2147483647, signed: true}
+  - mnemonic: callx
+    encoder: callx
+    flags: [branch, reloc]
+    required: [bpf-to-bpf]
+    operands:
+      - {kind: sym, width: 64}
+  - mnemonic: exit
+    encoder: exit
+    flags: [return, terminator]
+syntaxes:
+  - {name: default, comment: ";", separator: ", "}
+sections:
+  - {name: ".text", flags: [exec, alloc, code], align: 8, content: code}
+  - {name: ".rodata", flags: [alloc, readonly, data], align: 8, content: data}
+  - {name: ".maps", flags: [write, alloc, data], align: 8, content: data}
+  - {name: ".btf", flags: [alloc, readonly, meta], align: 4, content: meta}
+  - {name: ".BTF.ext", flags: [alloc, readonly, meta], align: 4, content: meta}
+  - {name: ".license", flags: [alloc, readonly, meta], align: 1, content: meta}
+linkages:
+  - {name: prog_global, binding: global, visibility: default, symtype: func}
+  - {name: map_def, binding: global, visibility: default, symtype: object}
+  - {name: local_sym, binding: local, visibility: default, symtype: none}
+relocs:
+  - {name: R_BPF_NONE, width: 64, expr: "S + A"}
+  - {name: R_BPF_64_64, width: 64, expr: "S + A"}
+  - {name: R_BPF_64_32, width: 32, expr: "S + A"}
+  - {name: R_BPF_MAP_FD, width: 64, expr: "S + A"}
+  - {name: R_BPF_JMP, width: 64, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_BPF_DATA, width: 64, expr: "section(S) + A"}
+debug:
+  - {kind: target, ref: "", msg: "ebpf r0-r10 roles + verifier strata (loops/tail/atomics)"}
+  - {kind: form, ref: stxadd, msg: "atomic forms require atomics"}
+  - {kind: form, ref: call, msg: "helper calls clobber r1-r5, return r0"}
+backend:
+  file: backend/bpf.json

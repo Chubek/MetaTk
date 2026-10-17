@@ -3,6 +3,7 @@
 // The collective MetaChain C++20 interface. The core is inline; optional
 // backend algorithm entry points are supplied by MetaChain::Backend.
 #include "metachain/Common.hpp"
+#include "metachain/Outcome.hpp"
 #include "metachain/ParseTk.hpp"
 #include "metachain/Rewrite.hpp"
 #include "metachain/MetaVM.hpp"
@@ -31,21 +32,6 @@ namespace jit = ::metajit;
 namespace assembly = ::asmtk;
 namespace linking = ::ld_tk;
 inline constexpr std::string_view version = "1.0.0";
-enum class Stage { Parse, Verify, Optimize, Execute, Assemble, Link, Lower, Rewrite, IO };
-struct Diagnostic {
-    Stage stage = Stage::Parse;
-    std::string message, file;
-    std::size_t line = 0, column = 0, offset = 0;
-};
-template<class T> struct Outcome {
-    std::optional<T> value;
-    std::vector<Diagnostic> diagnostics;
-    explicit operator bool() const noexcept { return value.has_value() && diagnostics.empty(); }
-    T& operator*() { return value.value(); }
-    const T& operator*() const { return value.value(); }
-    T* operator->() { return &value.value(); }
-    const T* operator->() const { return &value.value(); }
-};
 // Lossless DSLtk AST <-> first-order term bridge. Tags and leaf values are
 // separate atoms; a leaf is never confused with a zero-child inner node.
 // Recursion is depth bounded; an oversized C++ value graph throws rather than

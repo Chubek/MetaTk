@@ -1,0 +1,11 @@
+# Sum 1 through 5; branch targets are zero-based instruction indices.
+module 1 {
+    const r0 5;
+    const r1 0;
+    const r2 1;
+    add r1 r1 r0;
+    sub r0 r0 r2;
+    jz r0 7;
+    jmp 3;
+    ret r1;
+}

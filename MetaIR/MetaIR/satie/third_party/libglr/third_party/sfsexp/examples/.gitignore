@@ -1,8 +1,0 @@
-binmode
-callbacks
-continuations
-packunpack
-paultest
-rcfile
-sexpvis
-simple_interp

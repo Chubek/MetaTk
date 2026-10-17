@@ -1,0 +1,4 @@
+# This generated source is shipped so using MLVM needs no Python YAML tooling.
+!/generated/
+!/generated/arch/
+!/generated/arch/riscv64.qs

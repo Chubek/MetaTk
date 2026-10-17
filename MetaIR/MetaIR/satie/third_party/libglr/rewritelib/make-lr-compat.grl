@@ -1,8 +1,0 @@
-(rewrite
-  (name "make-lr-compatible")
-  (rules
-    (remove-epsilon-productions)
-    (remove-unit-productions)
-    (remove-left-recursion)
-    (left-factor)
-    (eliminate-useless-symbols)))

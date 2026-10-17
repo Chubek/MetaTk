@@ -95,9 +95,10 @@ endif()
 # QScript: the language library and its command-line drivers.
 # ---------------------------------------------------------------------------
 if(METACHAIN_BUILD_QSCRIPT)
+    include(qscript/cmake/Sources.cmake)
     if(QSCRIPT_BUILD_NATIVE_RUNTIME)
         add_library(QScriptNativeRuntime STATIC qscript/native/Entry.cpp qscript/native/Runtime.cpp
-            qscript/src/Runtime.cpp qscript/src/Value.cpp)
+            ${QSCRIPT_SESSION_SOURCES})
         add_library(MetaChain::QScriptNativeRuntime ALIAS QScriptNativeRuntime)
         target_link_libraries(QScriptNativeRuntime PRIVATE MetaChain::MetaChain)
         target_compile_features(QScriptNativeRuntime PUBLIC cxx_std_20 c_std_99)
@@ -123,7 +124,6 @@ if(METACHAIN_BUILD_QSCRIPT)
         DEPENDS "${QSCRIPT_GRAMMAR}" ${QSCRIPT_STDLIB} "${CMAKE_CURRENT_SOURCE_DIR}/qscript/cmake/Embed.cmake"
         COMMENT "Embedding QScript grammar and standard library" VERBATIM)
 
-    file(GLOB QSCRIPT_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/qscript/src/*.cpp")
     set(QSCRIPT_LIBRARY_TYPE STATIC)
     if(QSCRIPT_BUILD_SHARED)
         set(QSCRIPT_LIBRARY_TYPE SHARED)
@@ -168,6 +168,7 @@ if(METACHAIN_BUILD_QSCRIPT)
     target_compile_definitions(qscript-repl PRIVATE QSCRIPT_REPL_STANDALONE)
     target_link_libraries(qscript-repl PRIVATE QScript)
     metachain_executable(qscript-repl)
+    add_subdirectory(MLVM)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -223,6 +224,10 @@ if(METACHAIN_BUILD_TESTS)
         target_link_libraries(qscript_value_tests PRIVATE MetaChain::QScript)
         metachain_executable(qscript_value_tests)
         add_test(NAME metachain.qscript.values COMMAND qscript_value_tests)
+        add_executable(mlvm_bridge_tests tests/mlvm_bridge_c.c tests/mlvm_bridge_metair.cpp)
+        target_link_libraries(mlvm_bridge_tests PRIVATE MLVM::Bridge)
+        metachain_executable(mlvm_bridge_tests)
+        add_test(NAME metachain.mlvm.bridge COMMAND mlvm_bridge_tests)
         if(TARGET QScriptNativeRuntime)
             add_library(qscript_native_entry_fixture STATIC tests/qscript_native_entry_fixture.cpp)
             add_executable(qscript_native_tests tests/test_qscript_native.cpp)
@@ -272,6 +277,21 @@ if(METACHAIN_BUILD_TESTS)
         endif()
     endif()
     if(Python3_Interpreter_FOUND AND METACHAIN_BUILD_QSCRIPT)
+        add_test(NAME metachain.qscript.strata COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/qscript_strata.py")
+        add_test(NAME metachain.mlvm COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/mlvm.py" "$<TARGET_FILE:qscript>" "${CMAKE_C_COMPILER}")
+        add_test(NAME metachain.mlvm.dataflow COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/mlvm_dataflow.py" "$<TARGET_FILE:qscript>")
+        add_test(NAME metachain.mlvm.runtime COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/mlvm_runtime.py" "$<TARGET_FILE:qscript>" "${CMAKE_C_COMPILER}"
+            "${QSCRIPT_GENERATED_TEST_RUNTIME}" "${QSCRIPT_BUILD_NATIVE_RUNTIME}" "${METACHAIN_SANITIZERS}")
+        execute_process(COMMAND "${Python3_EXECUTABLE}" -c "import yaml, jsonschema"
+            RESULT_VARIABLE MLVM_SPEC_PYTHON_READY OUTPUT_QUIET ERROR_QUIET)
+        if(MLVM_SPEC_PYTHON_READY EQUAL 0)
+            add_test(NAME metachain.mlvm.arch.generated COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/tests/mlvm_arch.py")
+        endif()
         add_test(NAME metachain.qscript.integration COMMAND "${Python3_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/qscript_integration.py" "$<TARGET_FILE:qscript>" "$<TARGET_FILE:qscript-repl>" "${QSCRIPT_ENABLE_CFFI}" "$<TARGET_FILE:qscript_ffi_fixture>")
         add_test(NAME metachain.qscript.c_backend COMMAND "${Python3_EXECUTABLE}"

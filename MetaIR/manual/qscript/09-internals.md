@@ -24,6 +24,27 @@ source ──► grammar (ParseTk, scannerless) ──► match tree ──► A
 | C ABI | `QScript.cpp`, `src/Grammar.cpp`, `QScript.c` | `qs_*` |
 | Embedding | `qscript/cmake/Embed.cmake` | generates `qscript_embedded.cpp` |
 
+### Build source strata
+
+`qscript/cmake/Sources.cmake` explicitly owns every `qscript/src/*.cpp` in one
+of seven strata: parser, analysis, lowering/optimization, shared session,
+runtime adapters, emission, and API orchestration. CMake audits the directory
+against those lists and rejects missing or duplicate ownership. The glob is
+only an audit, not a source selector: adding a file cannot silently add it to
+deployment archives. These are source-ownership boundaries, not separate
+public ABIs or an assertion that C++ include dependencies are fully isolated.
+
+The minimal native parser archive uses the shared session stratum
+(`Runtime.cpp`, `Value.cpp`) plus its explicit native entry/dispatch adapters.
+Compiler, lowering, libffi and emission sources are not selected into that
+archive. Add new shared runtime code to the appropriate stratum deliberately
+and keep the static-deployment tests passing.
+
+[MLVM](../mlvm.md) exercises QScript as a layered implementation language:
+its parser, IR verifier, executor, optimizer and target lowerings are explicit
+libraries using typed lists, grammars and non-transitive imports. No new
+language builtin or host-only algorithm is required by its integer core.
+
 ## 9.2 The AST
 
 `qscript::AST` wraps a `dsl::ASTNode`. Statement, declaration and call

@@ -71,3 +71,13 @@ build/qscript --repl
 Typed FFI requires libffi development files (or configure
 `-DQSCRIPT_ENABLE_CFFI=OFF`). Use `-DQSCRIPT_BUILD_SHARED=ON` for a shared
 embedding library. See [FFI and C backend examples](manual/qscript/10-ffi.md).
+
+The first [MLVM integer core](manual/mlvm.md) is implemented in QScript:
+verified register IR, execution, CFG/dominance/liveness analyses, local/global
+constant propagation, interference allocation, serialization, QScript/AMD64
+lowering and bounded Arch-generated RV64 leaf code. Other MLVM
+subsystems remain planned. Run a sample with
+`python3 MLVM/tooling/mlvm.py run MLVM/tests/sum.mlvm`.
+
+The [MetaIR/MLVM bridge](manual/mlvm-bridge.md) (`MLVM::Bridge`) embeds MLVM's
+QScript behind a C99 API and exchanges verified integer programs through MCIL.

@@ -22,6 +22,11 @@ compiled only under `__cplusplus`.
 
 Link against `MetaChain::QScript` (`libQScript.a`).
 
+For MetaIR/MLVM integration, [the MLVM bridge](../mlvm-bridge.md) builds a
+separate C99 API on these owning typed calls. `MLVM::Bridge` embeds the QScript
+MLVM implementation, imports/exports MCIL and keeps modules independent of a
+call's runtime heap. It does not change the `qs_*` ABI or expose raw handles.
+
 ## 6.1 Conventions
 
 * Every function that can fail returns `qs_status`: `QS_OK` (0), `QS_ERROR`

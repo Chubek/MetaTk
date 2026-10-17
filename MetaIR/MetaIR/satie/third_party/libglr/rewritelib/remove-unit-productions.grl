@@ -1,5 +1,0 @@
-(rewrite
-  (name "remove-unit-productions")
-  (rules
-    (remove-unit-productions)
-    (eliminate-useless-symbols)))

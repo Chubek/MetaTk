@@ -25,7 +25,9 @@ architecture feature exists. Unsupported inputs must produce diagnostics.
 
 Companion guides: [backend algorithms](backend.md) and
 **[the QScript manual](qscript/README.md)** (language, Raku-style grammar
-engine, standard library, C/C++ API).
+engine, standard library, C/C++ API), and [MLVM](mlvm.md) (QScript integer IR
+core, verifier, optimizer and architecture backends), with its
+[MetaIR/QScript/C bridge](mlvm-bridge.md).
 
 ## Choose an entry point
 
