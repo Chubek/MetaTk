@@ -1,6 +1,0 @@
-module 1 {
-    const r0 20;
-    const r1 22;
-    add r2 r0 r1;
-    ret r2;
-}

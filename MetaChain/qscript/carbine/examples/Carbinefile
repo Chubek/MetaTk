@@ -1,6 +1,0 @@
-# Example: one QScript program built with `carbine build`.
-project examples;
-
-target program hello {
-    sources hello.c15;
-}
