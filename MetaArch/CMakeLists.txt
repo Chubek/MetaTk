@@ -171,7 +171,10 @@ if(ARCHDB_BUILD_TESTS)
   target_link_libraries(test_archdb PRIVATE metaarch)
   add_test(NAME archdb_roundtrip
            COMMAND test_archdb ${CMAKE_CURRENT_SOURCE_DIR}/ArchDB
-                    ${CMAKE_CURRENT_SOURCE_DIR}/ArchDBCatalogue.yaml)
+                     ${CMAKE_CURRENT_SOURCE_DIR}/ArchDBCatalogue.yaml)
+  add_executable(test_encode_form tests/test_encode_form.c)
+  target_link_libraries(test_encode_form PRIVATE metaarch)
+  add_test(NAME archdb_encode_form COMMAND test_encode_form)
   if(ARCHDB_BUILD_DSL)
     add_executable(test_metaarch_dsl tests/test_dsl.cpp)
     target_link_libraries(test_metaarch_dsl PRIVATE metaarch_dsl)

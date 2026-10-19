@@ -316,6 +316,27 @@ static void encodings(const char *dir) {
         expect_bytes(s, "riscv64", "addi", n, v, 3, "13 05 15 00"); /* addi a0,a0,1 */
         int64_t v2[] = {10, 10, -1};
         expect_bytes(s, "riscv64", "addi", n, v2, 3, "13 05 f5 ff"); /* addi a0,a0,-1 */
+        int32_t form = -1;
+        int32_t mnemonic = dsym_spec_find_mnemonic(s, "addi");
+        CHECK(dsym_spec_forms_for_mnemonic(s, mnemonic, &form, 1) > 0 && form >= 0,
+              "find RISC-V addi form");
+        if (form >= 0) {
+            DsymEncoded out;
+            CHECK(dsym_encode_form(s, (size_t)form, 0, v2, 3, &out) && out.size == 4 &&
+                  !memcmp(out.bytes, "\x13\x05\xf5\xff", 4), "checked RISC-V addi anchor");
+            int64_t bad[] = {10, 10, -2049};
+            CHECK(!dsym_encode_form(s, (size_t)form, 0, bad, 3, &out) &&
+                  strstr(out.error, "operand 3 (imm)"), "checked immediate cannot wrap below range");
+            bad[2] = 2048;
+            CHECK(!dsym_encode_form(s, (size_t)form, 0, bad, 3, &out),
+                  "checked immediate cannot wrap above range");
+            CHECK(dsym_encode(s, dsym_spec_find_encoder(s, "addi"), 0, bad, 3, &out),
+                  "low-level modulo behavior unchanged");
+            bad[0] = 32;
+            bad[2] = 0;
+            CHECK(!dsym_encode_form(s, (size_t)form, 0, bad, 3, &out) &&
+                  strstr(out.error, "operand 1 (reg)"), "checked RISC-V register encoding");
+        }
         expect_bytes(s, "riscv64", "ret", NULL, NULL, 0, "67 80 00 00");
         dsym_spec_free(s);
     }

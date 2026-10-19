@@ -1734,6 +1734,24 @@ static bool biased_opt_out(const char *text) {
     return !*comment;
 }
 
+static bool operand_visible(const DsymOperand *o) {
+    return !o->hidden && o->kind != DSYM_OK_IMPLICIT;
+}
+
+static size_t visible_operand_count(const DsymForm *f) {
+    size_t count = 0;
+    for (size_t i = 0; i < f->operand_count; i++)
+        if (operand_visible(&f->operands[i])) count++;
+    return count;
+}
+
+static bool param_is_relocated(const DsymProgram *p, size_t param) {
+    for (size_t i = 0; i < p->stmt_count; i++)
+        if (p->stmts[i].kind == DSYM_ST_RELOC && p->stmts[i].sym_param == param)
+            return true;
+    return false;
+}
+
 bool dsym_spec_resolve(DsymSpec *s, uint32_t flags, DsymDiags *diags) {
     if (!s) return false;
     DsymDiags local;
@@ -1912,6 +1930,33 @@ bool dsym_spec_resolve(DsymSpec *s, uint32_t flags, DsymDiags *diags) {
             if (f->encoder_index < 0) {
                 RPATH(r, "/forms/%zu/encoder", i);
                 rdiag(r, DSYM_ERROR, "unknown encoder '%s'", f->encoder);
+            }
+            if ((flags & DSYM_LOAD_LINT) && f->encoder_index >= 0) {
+                const DsymProgram *p = s->encoders[f->encoder_index].program;
+                size_t visible = visible_operand_count(f);
+                if (p && visible != p->param_count) {
+                    RPATH(r, "/forms/%zu/operands", i);
+                    rdiag(r, DSYM_WARNING,
+                          "DSYM-W002: form %zu (%s): %zu visible operand(s), encoder '%s' has %zu parameter(s)",
+                          i, f->mnemonic, visible, f->encoder, p->param_count);
+                }
+                if (p && visible == p->param_count) {
+                    size_t slot = 0;
+                    for (size_t k = 0; k < f->operand_count; k++) {
+                        const DsymOperand *o = &f->operands[k];
+                        if (!operand_visible(o)) continue;
+                        bool symbolic = o->kind == DSYM_OK_SYM || o->kind == DSYM_OK_REL;
+                        if (symbolic != param_is_relocated(p, slot)) {
+                            RPATH(r, "/forms/%zu/operands/%zu", i, k);
+                            rdiag(r, DSYM_WARNING,
+                                  "DSYM-W003: form %zu operand %zu (%s), parameter '%s': %s",
+                                  i, k + 1, dsym_operand_kind_name(o->kind), p->params[slot],
+                                  symbolic ? "no EMIT_RELOCATION for symbolic operand" :
+                                             "EMIT_RELOCATION requires a sym or rel operand");
+                        }
+                        slot++;
+                    }
+                }
             }
             const char *pf = "/forms/%zu/%s/%zu";
             if (!(f->required_index = resolve_list(r, &f->required, &ix->features, "feature", pf, i, "required")) ||
@@ -2723,8 +2768,10 @@ static bool fits(int64_t v, unsigned bytes) {
 }
 
 bool dsym_encode(const DsymSpec *s, int32_t ei, size_t ti, const int64_t *args,
-                 size_t argc, DsymEncoded *out) {
+                  size_t argc, DsymEncoded *out) {
+    if (!out) return false;
     memset(out, 0, sizeof *out);
+    if (argc && !args) return enc_fail(out, "operand array is NULL");
     if (!s || ei < 0 || (size_t)ei >= s->encoder_count)
         return enc_fail(out, "no such encoder");
     const DsymEncoder *e = &s->encoders[ei];
@@ -2795,9 +2842,92 @@ bool dsym_encode(const DsymSpec *s, int32_t ei, size_t ti, const int64_t *args,
     return true;
 }
 
+static bool operand_value_valid(const DsymSpec *s, const DsymOperand *o,
+                                size_t position, int64_t value, DsymEncoded *out) {
+    const char *kind = dsym_operand_kind_name(o->kind);
+    if (o->has_imm_min && value < o->imm_min)
+        return enc_fail(out, "operand %zu (%s): value %" PRId64 " below minimum %" PRId64,
+                        position, kind, value, o->imm_min);
+    if (o->has_imm_max && value > o->imm_max)
+        return enc_fail(out, "operand %zu (%s): value %" PRId64 " above maximum %" PRId64,
+                        position, kind, value, o->imm_max);
+    if (o->kind == DSYM_OK_REG) {
+        for (size_t i = 0; i < s->register_count; i++) {
+            const DsymRegister *r = &s->registers[i];
+            if (r->enc == value && (!o->has_reg_class || r->reg_class == o->reg_class) &&
+                (!o->has_width || r->width == o->width)) return true;
+        }
+        return enc_fail(out, "operand %zu (reg): encoding %" PRId64
+                        " has no register matching class %s and width %" PRId64,
+                        position, value,
+                        o->has_reg_class ? dsym_reg_class_name(o->reg_class) : "any",
+                        o->has_width ? o->width : 0);
+    }
+    /* Widths >= 64 never require a shift by 64 or a narrowing conversion.
+       The int64_t API cannot represent the unsigned upper half of uint64_t. */
+    bool is_signed = o->has_signed && o->is_signed;
+    bool fits_width = true;
+    if (o->has_width) {
+        if (o->width < 1) fits_width = false;
+        else if (is_signed && o->width < 64) {
+            int64_t bound = INT64_C(1) << (o->width - 1);
+            fits_width = value >= -bound && value < bound;
+        } else if (!is_signed) {
+            fits_width = value >= 0 && (o->width >= 63 ||
+                         (uint64_t)value < (UINT64_C(1) << o->width));
+        }
+    } else if (o->has_signed && !o->is_signed) {
+        fits_width = value >= 0;
+    }
+    if (!fits_width)
+        return enc_fail(out, "operand %zu (%s): value %" PRId64 " outside %s width %" PRId64,
+                        position, kind, value, is_signed ? "signed" : "unsigned", o->width);
+    return true;
+}
+
+bool dsym_encode_form(const DsymSpec *s, size_t fi, size_t ti, const int64_t *args,
+                      size_t n, DsymEncoded *out) {
+    if (!out) return false;
+    memset(out, 0, sizeof *out);
+    if (!s || fi >= s->form_count) return enc_fail(out, "no such form");
+    if (ti >= s->target_count) return enc_fail(out, "no such target");
+    const DsymForm *f = &s->forms[fi];
+    if (f->encoder_index < 0 || (size_t)f->encoder_index >= s->encoder_count)
+        return enc_fail(out, "form %zu: no resolved encoder", fi);
+    const DsymProgram *p = s->encoders[f->encoder_index].program;
+    if (!p) return enc_fail(out, "form %zu: encoder is not compiled", fi);
+    size_t visible = visible_operand_count(f);
+    if (visible != p->param_count)
+        return enc_fail(out, "form %zu: %zu visible operands cannot map to %zu encoder parameters",
+                        fi, visible, p->param_count);
+    if (n > visible)
+        return enc_fail(out, "form %zu: expected %zu visible operand(s), got %zu", fi, visible, n);
+    if (n && !args) return enc_fail(out, "operand array is NULL");
+    size_t slot = 0;
+    for (size_t i = 0; i < f->operand_count; i++) {
+        const DsymOperand *o = &f->operands[i];
+        if (!operand_visible(o)) continue;
+        if (slot >= n)
+            return enc_fail(out, "operand %zu (%s): missing argument", i + 1,
+                            dsym_operand_kind_name(o->kind));
+        bool symbolic = o->kind == DSYM_OK_SYM || o->kind == DSYM_OK_REL;
+        if (symbolic != param_is_relocated(p, slot))
+            return enc_fail(out, "operand %zu (%s): relocation parameter mismatch for '%s'",
+                            i + 1, dsym_operand_kind_name(o->kind), p->params[slot]);
+        if (!operand_value_valid(s, o, i + 1, args[slot], out)) return false;
+        slot++;
+    }
+    return dsym_encode(s, f->encoder_index, ti, args, n, out);
+}
+
 bool dsym_encode_named(const DsymSpec *s, const char *encoder, size_t ti,
                        const char *const *names, const int64_t *values, size_t n,
-                       bool allow_unbound, DsymEncoded *out) {
+                        bool allow_unbound, DsymEncoded *out) {
+    if (!out) return false;
+    if (n && (!names || !values)) {
+        memset(out, 0, sizeof *out);
+        return enc_fail(out, "operand names or values array is NULL");
+    }
     int32_t ei = dsym_spec_find_encoder(s, encoder);
     if (ei < 0) {
         memset(out, 0, sizeof *out);

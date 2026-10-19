@@ -570,10 +570,29 @@ typedef struct DsymEncoded {
     char error[160]; /* set when dsym_encode returns false */
 } DsymEncoded;
 
-/* args[i] binds program->params[i]. target_index selects byte order for
-   EMIT_IMM (0 if unsure). */
+/* Low-level encoder entry point: args[i] binds program->params[i]. Checks
+   REQUIRE and emitted fields, NOT form operand ranges or register metadata.
+   target_index selects byte order for EMIT_IMM (0 if unsure).
+   Input arrays are borrowed for the call. Returns false with out->error on
+   failure (false without a diagnostic if out is NULL). Discard output on
+   failure. Does not mutate the spec; concurrent calls need separate outputs. */
 bool dsym_encode(const DsymSpec *s, int32_t encoder_index, size_t target_index,
-                 const int64_t *args, size_t arg_count, DsymEncoded *out);
+                  const int64_t *args, size_t arg_count, DsymEncoded *out);
+/* Checked form entry point. args contains exactly one int64_t per visible
+   operand in declaration order, skipping hidden:true and kind:implicit.
+   These map positionally to program->params (first-use order). Count and
+   sym/rel relocation mismatches fail rather than inferring a mapping.
+   Registers are hardware enc values, not register-table indices; at least
+   one declared register must match the operand's class/width and enc value.
+   Other scalar operands obey imm_min/max and width/signed (unsigned when
+   signed is absent). With no width only explicit bounds/signed apply.
+   Both indices must exist; form_index is zero-based. Errors name the original
+   1-based operand position and kind where applicable. No allocation, ownership
+   transfer or spec mutation; input arrays are borrowed. As with dsym_encode,
+   discard output on failure; out->error explains it unless out is NULL.
+   This API does not interpret free-form constraint strings or feature gates. */
+bool dsym_encode_form(const DsymSpec *s, size_t form_index, size_t target_index,
+                      const int64_t *args, size_t n, DsymEncoded *out);
 /* Convenience: bind by name; unbound parameters default to 0 and are
    reported as an error unless `allow_unbound`. */
 bool dsym_encode_named(const DsymSpec *s, const char *encoder,

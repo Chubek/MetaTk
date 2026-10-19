@@ -1,4 +1,38 @@
-# MetaArch — verified Phase A checkpoint
+# MetaArch — Phase B implementation checkpoint
+
+## Current API additions / compatibility notes
+
+- Added `dsym_encode_form(const DsymSpec *, size_t form_index, size_t target_index,
+  const int64_t *args, size_t n, DsymEncoded *out)`. Visible operands map to
+  encoder parameters positionally in first-use order, skipping hidden/implicit
+  operands. Checks scalar ranges, signed widths and register class/width/enc.
+  Both indices must exist. Count and relocation-kind mismatches are rejected.
+- Existing low-level encode APIs remain available and do not enforce form
+  constraints. NULL outputs/argument arrays now return failure instead of
+  dereferencing NULL. No existing public structure changed in this increment.
+- New stable resolver lint codes: DSYM-W002 (visible count) and DSYM-W003
+  (relocation-parameter kind); strict + lint promotes them to errors.
+
+Phase B is **in progress**, not finished. No Phase C–G implementation is claimed.
+The original Phase A verification and 51-site data audit remain below.
+
+### First Phase B increment verification
+
+Four warning-free `-Wall -Wextra -Wpedantic -Werror` builds pass 4/4 CTest cases:
+GCC Release 13.73 s, Clang Release 13.36 s, GCC ASan+UBSan 66.34 s and Clang
+ASan+UBSan 60.21 s (single observations with concurrent activity). The focused
+`archdb_encode_form` test covers signed/unsigned widths 1/8/63/64/128, explicit
+bounds, aliases/class/width, both target byte orders, hidden/implicit operands,
+mapping/lint policy, NULL arrays and invalid indices. The existing full test
+also checks the real RISC-V addi form and rejects immediates that would otherwise
+wrap. No sanitizer findings; no data files changed this round.
+
+New lint reveals 135 count mismatches and 7 relocation-kind mismatches across
+existing specs. They are not silently repaired: complex memory decomposition,
+unused declared operands and missing relocation statements require individual
+reviews. Existing low-level encoding remains available for these forms.
+
+## Historical Phase A checkpoint
 
 ## API additions or changes
 

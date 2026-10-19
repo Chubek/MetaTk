@@ -83,6 +83,51 @@ Intentional bias must be documented with an exact trailing `# biased` comment
 on that statement. This suppresses only this check, not other diagnostics.
 See [the encoder audit](docs/encoder-audit.md) for outstanding ISA data issues.
 
+### Checked form encoding and operand mapping
+
+`dsym_encode` / `dsym_encode_named` are low-level APIs: they execute `REQUIRE`
+and check emitted field sizes, but **do not enforce form operand constraints**.
+Use `dsym_encode_form(spec, form_index, target_index, args, n, &out)` when a
+form is known. Both indices are zero-based and must exist. On failure it returns
+false and sets `out.error`; discard the output. Encoding reads but never mutates
+the resolved spec, so callers may encode concurrently with separate output objects.
+
+The mapping is positional: visit form operands in declaration order, skip
+`hidden: true` and `kind: implicit`, and bind the remaining operands to encoder
+parameters in **first-use order** (`program->params`). `args` must contain exactly
+one integer per visible operand. Operand error positions are 1-based positions
+in the original list, including skipped entries. No schema keys were added.
+The `implicit_ops` form flag alone does not hide an otherwise visible operand.
+
+- Register integers are hardware `enc` values, not indices into `registers`.
+  At least one register with that encoding must match the operand's declared
+  class and width. Aliases sharing an encoding are allowed; an integer cannot
+  distinguish their names. Width here is register data width, not encoding width.
+- Other scalar integers obey `imm_min`, `imm_max`, and `width`/`signed` together.
+  With a width, absent `signed` means unsigned; `signed: true` means the usual
+  two's-complement interval. Without a width, explicit bounds still apply and
+  `signed: false` rejects negative values. Widths of 64 or more are handled
+  without shifting by 64. The `int64_t` API cannot express unsigned values above
+  `INT64_MAX`. Symbol/relocation arguments are numeric values under the same
+  declared scalar constraints, not string symbol names.
+- `sym`/`rel` operands must map to parameters used by `EMIT_RELOCATION`, and
+  other operand kinds must not map to those parameters.
+- A complex memory operand is not silently expanded into multiple parameters:
+  a count mismatch is rejected. Use the low-level API for such existing forms
+  until their mapping is explicitly representable. This API does not parse
+  free-form operand `constraint` strings or evaluate target feature gates.
+
+Resolver lint reports mapping issues without changing the spec data:
+
+| Code | Condition | Severity |
+|---|---|---|
+| `DSYM-W001` | Suspicious biased modulo | Warning under lint; error under strict, even without lint |
+| `DSYM-W002` | Visible operand count differs from encoder parameter count | Lint warning; strict + lint error |
+| `DSYM-W003` | Symbol/relocation kind and relocation parameter disagree | Lint warning; strict + lint error |
+
+Mapping checks need compiled encoders and are skipped with `DSYM_LOAD_NO_COMPILE`.
+The checked API enforces the mapping regardless of whether lint was enabled.
+
 ```c
 DsymSpec *s = dsym_spec_load_file("ArchDB/riscv64.dsymspec.yaml", 0, 0, &diags);
 const char *n[] = {"rd", "rs1", "imm"};
