@@ -1,0 +1,41 @@
+file(MAKE_DIRECTORY "${WORK}")
+execute_process(COMMAND "${TOOL}" assemble "${SOURCE}/examples/toy.march"
+  "${SOURCE}/examples/toy.asm" RESULT_VARIABLE rc OUTPUT_VARIABLE hex ERROR_VARIABLE err)
+if(NOT rc EQUAL 0 OR NOT hex STREQUAL "11 ff 10 2a\n")
+  message(FATAL_ERROR "hex assembly failed: ${rc}: ${hex} ${err}")
+endif()
+execute_process(COMMAND "${TOOL}" assemble "${SOURCE}/examples/toy.march"
+  "${SOURCE}/examples/toy.asm" -o "${WORK}/toy.bin" RESULT_VARIABLE rc ERROR_VARIABLE err)
+file(READ "${WORK}/toy.bin" binary HEX)
+if(NOT rc EQUAL 0 OR NOT binary STREQUAL "11ff102a")
+  message(FATAL_ERROR "binary assembly failed: ${err}")
+endif()
+execute_process(COMMAND "${TOOL}" convert "${SOURCE}/examples/toy.march" -f json
+  -o "${WORK}/toy.json" RESULT_VARIABLE rc ERROR_VARIABLE err)
+if(NOT rc EQUAL 0)
+  message(FATAL_ERROR "DSL conversion failed: ${err}")
+endif()
+file(WRITE "${WORK}/named.asm" "mov dst=r1, imm=-1\n")
+execute_process(COMMAND "${TOOL}" assemble "${WORK}/toy.json" "${WORK}/named.asm"
+  RESULT_VARIABLE rc OUTPUT_VARIABLE hex ERROR_VARIABLE err)
+if(NOT rc EQUAL 0 OR NOT hex STREQUAL "11 ff\n")
+  message(FATAL_ERROR "converted spec assembly failed: ${err}")
+endif()
+file(WRITE "${WORK}/rv.asm" "addi a0, a0, 1\n")
+execute_process(COMMAND "${TOOL}" assemble "${SOURCE}/ArchDB/riscv64.dsymspec.yaml"
+  "${WORK}/rv.asm" --bind addi=rd,rs1,imm RESULT_VARIABLE rc OUTPUT_VARIABLE hex ERROR_VARIABLE err)
+if(NOT rc EQUAL 0 OR NOT hex STREQUAL "13 05 15 00\n")
+  message(FATAL_ERROR "RISC-V positional assembly failed: ${err}")
+endif()
+file(WRITE "${WORK}/bad.asm" "mov r0, 999\n")
+execute_process(COMMAND "${TOOL}" assemble "${SOURCE}/examples/toy.march"
+  "${WORK}/bad.asm" -o "${WORK}/toy.bin" RESULT_VARIABLE rc ERROR_VARIABLE err)
+file(READ "${WORK}/toy.bin" binary HEX)
+if(NOT rc EQUAL 1 OR NOT binary STREQUAL "11ff102a" OR NOT err MATCHES "bad.asm:1:")
+  message(FATAL_ERROR "failed assembly must report a location and leave output unchanged: ${err}")
+endif()
+execute_process(COMMAND "${TOOL}" assemble "${SOURCE}/examples/toy.march"
+  "${SOURCE}/examples/toy.asm" --target invalid RESULT_VARIABLE rc ERROR_QUIET)
+if(NOT rc EQUAL 2)
+  message(FATAL_ERROR "invalid target must be a usage error")
+endif()

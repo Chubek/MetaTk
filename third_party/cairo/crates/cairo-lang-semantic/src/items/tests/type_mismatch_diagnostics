@@ -1,0 +1,243 @@
+//! > Type mismatch diagnostics of a tuple expression.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo() {
+    let _: felt252 = (3, 3);
+}
+
+//! > expected_diagnostics
+error[E2041]: Unexpected argument type. Expected: "felt252", found: "({numeric}, {numeric})".
+ --> lib.cairo:2:22
+    let _: felt252 = (3, 3);
+                     ^^^^^^
+
+//! > ==========================================================================
+
+//! > Type mismatch diagnostics of a snapshot expression.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo() {
+    let _: felt252 = @3_felt252;
+    let _: @u32 = @3_felt252;
+}
+
+//! > expected_diagnostics
+error[E2041]: Unexpected argument type. Expected: "felt252", found: "@felt252".
+ --> lib.cairo:2:22
+    let _: felt252 = @3_felt252;
+                     ^^^^^^^^^^
+
+error[E2041]: Unexpected argument type. Expected: "@u32", found: "@felt252".
+ --> lib.cairo:3:19
+    let _: @u32 = @3_felt252;
+                  ^^^^^^^^^^
+
+//! > ==========================================================================
+
+//! > Type mismatch diagnostics of a desnap expression.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo() {
+    let _: felt252 = *3_u32;
+}
+
+//! > expected_diagnostics
+error[E2135]: Type `u32` cannot be dereferenced
+ --> lib.cairo:2:22
+    let _: felt252 = *3_u32;
+                     ^
+
+//! > ==========================================================================
+
+//! > Type mismatch diagnostics of a fixed size array expression of style [expr; num].
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo() {
+    let _: [felt252; 2] = [3_u16; 2];
+}
+
+//! > expected_diagnostics
+error[E2041]: Unexpected argument type. Expected: "[felt252; 2]", found: "[u16; 2]".
+ --> lib.cairo:2:27
+    let _: [felt252; 2] = [3_u16; 2];
+                          ^^^^^^^^^^
+
+//! > ==========================================================================
+
+//! > Type mismatch diagnostics of a fixed size array expression of style [expr, expr].
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo() {
+    let _: [felt252; 2] = [3_u16, 3_u32];
+}
+
+//! > expected_diagnostics
+error[E2041]: Unexpected argument type. Expected: "u16", found: "u32".
+ --> lib.cairo:2:35
+    let _: [felt252; 2] = [3_u16, 3_u32];
+                                  ^^^^^
+
+//! > ==========================================================================
+
+//! > Type mismatch diagnostics of a constructor expression with a single argument.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+struct MyGenericType<T> {
+    x: T,
+}
+fn foo() {
+    let _: MyGenericType<felt252> = MyGenericType { x: 3_u32 };
+}
+
+//! > expected_diagnostics
+error[E2041]: Unexpected argument type. Expected: "MyGenericType::<felt252>", found: "MyGenericType::<u32>".
+ --> lib.cairo:5:37
+    let _: MyGenericType<felt252> = MyGenericType { x: 3_u32 };
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+//! > ==========================================================================
+
+//! > Type mismatch diagnostics of a constructor expression with a tail argument.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+struct MyGenericType<T> {
+    x: T,
+}
+fn foo(other: MyGenericType<u32>) {
+    let _: MyGenericType<felt252> = MyGenericType { x: 3_felt252, ..other };
+}
+
+//! > expected_diagnostics
+error[E2041]: Unexpected argument type. Expected: "MyGenericType::<felt252>", found: "MyGenericType::<u32>".
+ --> lib.cairo:5:69
+    let _: MyGenericType<felt252> = MyGenericType { x: 3_felt252, ..other };
+                                                                    ^^^^^
+
+//! > ==========================================================================
+
+//! > Type mismatch diagnostics of an enum variant creation expression.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo() {
+    let _: Option<felt252> = Some(3_u16);
+}
+
+//! > expected_diagnostics
+error[E2041]: Unexpected argument type. Expected: "Option::<felt252>", found: "Option::<u16>".
+ --> lib.cairo:2:30
+    let _: Option<felt252> = Some(3_u16);
+                             ^^^^^^^^^^^
+
+//! > ==========================================================================
+
+//! > Type mismatch diagnostics of delayed snapshot type comparison.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+trait Issue<T> {
+    type Index;
+    fn issue(self: T, index: Self::Index) -> felt252;
+}
+
+impl ImplIssue of Issue<felt252> {
+    type Index = felt252;
+    fn issue(self: felt252, index: felt252) -> felt252 {
+        self + index
+    }
+}
+fn foo() {
+    1_felt252.issue(@2_felt252);
+}
+
+//! > expected_diagnostics
+error[E2308]: `ImplIssue::Index` type mismatch: `@felt252` and `felt252`.
+ --> lib.cairo:13:15
+    1_felt252.issue(@2_felt252);
+              ^^^^^
+
+//! > ==========================================================================
+
+//! > Type mismatch diagnostics of reference expressions.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo() {
+    let _: Box<u32> = &3_u32;
+    let _: Box<@felt252> = &3_u32;
+}
+
+//! > expected_diagnostics
+error[E2041]: Unexpected argument type. Expected: "Box::<u32>", found: "Box::<@u32>".
+ --> lib.cairo:2:23
+    let _: Box<u32> = &3_u32;
+                      ^^^^^^
+
+error[E2041]: Unexpected argument type. Expected: "Box::<@felt252>", found: "Box::<@u32>".
+ --> lib.cairo:3:28
+    let _: Box<@felt252> = &3_u32;
+                           ^^^^^^
+
+//! > ==========================================================================
+
+//! > Cannot assign to mutable variable after referencing it.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo(mut param: u32) {
+    let mut x = 3_u32;
+    let _r = &x;
+    x = 5;
+
+    let mut y = 2_felt252;
+    let _s = &y;
+    y = 10;
+}
+
+//! > expected_diagnostics
+error[E2169]: Cannot assign to a variable with a taken pointer
+ --> lib.cairo:4:5
+    x = 5;
+    ^^^^^
+note: variable pointer taken here:
+  --> lib.cairo:3:14
+    let _r = &x;
+             ^^
+
+error[E2169]: Cannot assign to a variable with a taken pointer
+ --> lib.cairo:8:5
+    y = 10;
+    ^^^^^^
+note: variable pointer taken here:
+  --> lib.cairo:7:14
+    let _s = &y;
+             ^^

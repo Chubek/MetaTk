@@ -1,0 +1,21 @@
+use crate::function_generator_test_utils::test_function_generator;
+
+cairo_lang_test_utils::test_file_test!(
+    function_generator,
+    "src/function_generator_test_data",
+    {
+        boxing: "boxing",
+        inline: "inline",
+        struct_: "struct",
+        match_: "match",
+        simple: "simple",
+        snapshot: "snapshot",
+        stack_tracking: "stack_tracking",
+        literals: "literals",
+        generics: "generics",
+        externally_provided_const: "externally_provided_const",
+
+    },
+    test_function_generator,
+    ["future_sierra"]
+);

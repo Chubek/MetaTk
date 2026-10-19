@@ -1,0 +1,127 @@
+= Match expressions
+
+A match xref:expressions.adoc[expression] is used for pattern matching, it allows you to match a
+value against a set of patterns and execute code based on the matching pattern.
+
+== Syntax
+
+A match expression starts with the xref:keywords.adoc[keyword] `match`
+followed by an expression and a list of arms.
+Each arm begins with a xref:patterns.adoc[pattern] which is followed by the `=>` operator, an
+expression, and a comma.
+A xref:block-expression.adoc[block expression] is typically used if the logic in the arm is more
+than a single expression.
+The pattern in a given arm may introduce xref:variables.adoc[variables] that can be used in
+the expression of the said arm.
+If the pattern contains variables that are unused in the expression, then the wildcard `_` can be
+used in their place.
+
+== Semantics
+
+A match expression is evaluated by evaluating the expression and then matching the value against
+the patterns in the arms in order. The first arm whose pattern matches the value of the expression
+is executed and the result of the expression in the arm is returned as the result of the match.
+[NOTE]
+====
+All the arms that don't break the control flow must evaluate to the same type.
+An arm breaks the control flow if it
+xref:return-expressions.adoc[returns] or xref:panic.adoc[panics].
+====
+
+== Supported match targets
+
+Match expressions can match on several kinds of values:
+
+=== Match on an enum
+
+[source, cairo]
+----
+match enum_var {
+    variant_0(a, b, c) => { /* code */ }
+    variant_1(_) => { /* code */ }
+    ...
+    variant_k(a, c) => { /* code */ }
+}
+----
+
+Where `enum_var` is an instance of some xref:enums.adoc[enum] and `variant_0`, `variant_1`, ...,
+`variant_k` are all the variants of the said enum, ordered in the way that they were declared.
+
+=== Match on numeric and boolean types
+
+Match expressions also work on numeric types (`felt252`, `u8`, `u16`, `u32`, `u64`, `u128`,
+`i8`, `i16`, `i32`, `i64`, `i128`) and `bool`.
+
+[source, cairo]
+----
+fn describe(x: u32) -> ByteArray {
+    match x {
+        0 => "zero",
+        1 => "one",
+        _ => "other",
+    }
+}
+
+// Match on bool
+match flag {
+    true => { /* code */ }
+    false => { /* code */ }
+}
+----
+
+Numeric match patterns use xref:literal-expressions.adoc[literal] values
+and the wildcard `_` (which matches any value). The wildcard arm must be last (arms after it are unreachable).
+
+=== Match with struct and tuple destructuring
+
+Match arms can destructure structs and tuples:
+
+[source, cairo]
+----
+match point {
+    Point { x: 0, y } => { /* on y-axis */ }
+    Point { x, y: 0 } => { /* on x-axis */ }
+    Point { x, y } => { /* general case */ }
+}
+
+match pair {
+    (0, y) => { /* code */ }
+    (x, 0) => { /* code */ }
+    (x, y) => { /* code */ }
+}
+----
+
+=== OR patterns
+
+Multiple patterns can share the same arm using `|`:
+
+[source, cairo]
+----
+match value {
+    MyEnum::A(x) | MyEnum::B(x) => { x },
+    MyEnum::C(_) => { 0 },
+}
+----
+
+Variables bound across alternatives must be consistent (same name and type in each branch).
+
+=== Nested (recursive) matching
+
+Patterns can be nested to match complex data structures in a single arm:
+
+[source, cairo]
+----
+match result {
+    Result::Ok(MyEnum::A(x)) => { x },
+    Result::Ok(MyEnum::B(_)) => { 0 },
+    Result::Err(e) => { e },
+}
+----
+
+This works with any combination of enums, structs, and tuples.
+
+== See also
+
+- xref:enums.adoc[Enums] — Enum type definitions
+- xref:patterns.adoc[Patterns] — Pattern syntax reference
+- xref:expressions.adoc[Expressions] — Expression syntax

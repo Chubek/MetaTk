@@ -1,0 +1,186 @@
+//! > Incompatible types in if blocks.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo() {
+    let x = 7_felt252;
+    if x {
+        true
+    } else {
+        0
+    }
+}
+
+//! > expected_diagnostics
+error[E2055]: Condition has type "felt252", expected bool.
+ --> lib.cairo:3:8
+    if x {
+       ^
+
+error[E2056]: If blocks have incompatible types: "bool" and "{numeric}"
+ --> lib.cairo:3:5-7:5
+      if x {
+ _____^
+| ...
+|     }
+|_____^
+
+error[E2042]: Unexpected return type. Expected: "()", found: "bool".
+ --> lib.cairo:4:9
+        true
+        ^^^^
+
+//! > ==========================================================================
+
+//! > Single sided if.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo() -> bool {
+    let x = 7_u64;
+    if x {
+        return true;
+    } else {}
+    false
+}
+
+//! > expected_diagnostics
+error[E2055]: Condition has type "u64", expected bool.
+ --> lib.cairo:3:8
+    if x {
+       ^
+
+//! > ==========================================================================
+
+//! > if_let.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+enum MyEnum {
+    A: felt252,
+}
+fn foo() -> bool {
+    let x = Some(7_u64);
+    if let MyEnum::A(y) = x {
+        return y == 9;
+    } else {
+        return false;
+    }
+}
+
+//! > expected_diagnostics
+error[E2109]: Wrong enum in pattern. Expected: "Option". Got: "MyEnum".
+ --> lib.cairo:6:12
+    if let MyEnum::A(y) = x {
+           ^^^^^^^^^^^^
+
+error[E0006]: Identifier not found.
+ --> lib.cairo:7:16
+        return y == 9;
+               ^
+
+//! > ==========================================================================
+
+//! > if_let logical operators.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo() -> bool {
+    let x = Some(7_u64);
+    if let Some(y) = x || true {
+        return y == 9;
+    } else {
+        return false;
+    }
+}
+
+//! > expected_diagnostics
+error[E1030]: Operator '||' is not allowed in let chains. Consider wrapping the expression in parentheses.
+ --> lib.cairo:3:24
+    if let Some(y) = x || true {
+                       ^
+
+//! > ==========================================================================
+
+//! > if_let some no args.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo() -> bool {
+    let x = Some(7_u64);
+    if let Some = x {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+//! > expected_diagnostics
+warning[E2192]: Pattern missing subpattern for the payload of variant. Consider using `Some(_)`
+ --> lib.cairo:3:12
+    if let Some = x {
+           ^^^^
+
+//! > ==========================================================================
+
+//! > if_let enum unit no args.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: false)
+
+//! > cairo_code
+enum A {
+    B: (),
+}
+fn foo() -> bool {
+    let a = A::B(());
+    if let A::B = a {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+//! > expected_diagnostics
+
+//! > ==========================================================================
+
+//! > if_let with multiple conditions.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo(a: Option<Option<Option<felt252>>>) {
+    if let Some(b) = a && let Some(_c) = b {}
+    // The opposite order doesn't work.
+    if let Some(_c) = b && let Some(b) = a {}
+    // Test with the same variable name. The later conditions can use the previous pattern
+    // variables.
+    if let Some(a) = a && let Some(a) = a && let Some(a) = a {
+        a
+    } else {
+        1
+    };
+}
+
+//! > expected_diagnostics
+error[E0006]: Identifier not found.
+ --> lib.cairo:4:23
+    if let Some(_c) = b && let Some(b) = a {}
+                      ^
+
+warning[E0001]: Unused variable. Consider ignoring by prefixing with `_`.
+ --> lib.cairo:4:37
+    if let Some(_c) = b && let Some(b) = a {}
+                                    ^

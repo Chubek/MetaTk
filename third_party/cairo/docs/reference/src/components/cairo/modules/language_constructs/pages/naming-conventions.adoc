@@ -1,0 +1,46 @@
+= Naming conventions
+
+This chapter covers standard naming conventions.
+
+== Casing
+
+In general, use `PascalCase` for names of types or traits and use `snake_case` otherwise.
+More precisely:
+
+[cols="1,2",options="header"]
+|===
+| Item            | Convention
+| Modules         | `snake_case`
+| Types           | `PascalCase`
+| Traits          | `PascalCase`
+| Enum variants   | `PascalCase`
+| Struct fields   | `snake_case`
+| Functions       | `snake_case`
+| Methods         | `snake_case`
+| Variables       | `snake_case`
+| Constants       | `UPPER_CASE`
+| Type parameters | `PascalCase` generally, a single letter like `T` usually
+|===
+
+In `PascalCase`, acronyms count as one word: use `L1Handler` rather than `L1_Handler`.
+In `snake_case`, acronyms are lower-cased: `rpc_call`, `json_data`.
+
+In `snake_case` or `UPPER_CASE`, a _word_ should never consist of a single character unless it is
+a digit or the last _word_.
+Thus, we have `contract_class` rather than `c_class`, `compiled_program` rather than `c_program`, and `entry_point_selector` instead of `e_selector`.
+Also, examples like `CHAIN_ID_MAINNET` and `RPC_429_ERROR` illustrate correct handling of digits and acronyms.
+
+Language implementations can emit warnings when names do not follow these rules.
+
+== Underscore prefix (e.g. `_foo`)
+
+The name of an unused variable must start with an _ (a common example is simply "_").
+
+[source,cairo]
+----
+let _unused = compute_something();
+----
+
+Language implementations can emit warnings when a variable **not** starting with an underscore is
+only written-to but is never read. The same applies when a variable starting with an underscore is
+read.

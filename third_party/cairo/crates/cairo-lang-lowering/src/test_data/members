@@ -1,0 +1,82 @@
+//! > Test member borrowing.
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: false)
+
+//! > cairo_code
+struct A {
+    b: B,
+    f: felt252,
+    f2: felt252,
+}
+struct B {
+    f: felt252,
+    c: C,
+}
+struct C {
+    f: felt252,
+}
+#[allow(extern_outside_corelib)]
+extern fn mutate(ref f: felt252) nopanic;
+#[target_function]
+fn foo(ref a: A) {
+    a.f = 5;
+    mutate(ref a.b.c.f);
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > lowering_flat
+Parameters: v0: test::A
+blk0 (root):
+Statements:
+  (v1: test::B, v2: core::felt252, v3: core::felt252) <- struct_destructure(v0)
+  (v4: core::felt252, v5: test::C) <- struct_destructure(v1)
+  (v6: core::felt252) <- struct_destructure(v5)
+  (v7: core::felt252) <- test::mutate(v6)
+  (v8: core::felt252) <- 5
+  (v9: test::C) <- struct_construct(v7)
+  (v10: test::B) <- struct_construct(v4, v9)
+  (v11: test::A) <- struct_construct(v10, v8, v3)
+End:
+  Return(v11)
+
+//! > ==========================================================================
+
+//! > Dup member.
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: false)
+
+//! > cairo_code
+#[derive(Drop)]
+struct MyStruct {
+    value: felt252,
+    arr: Array<felt252>,
+}
+
+#[inline(never)]
+fn sub_three(value: felt252) -> felt252 {
+    value - 3
+}
+#[target_function]
+fn foo(ref my_struct: MyStruct) {
+    let result = sub_three(my_struct.value);
+    my_struct.value = result;
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > lowering_flat
+Parameters: v0: test::MyStruct
+blk0 (root):
+Statements:
+  (v1: core::felt252, v2: core::array::Array::<core::felt252>) <- struct_destructure(v0)
+  (v3: core::felt252) <- test::sub_three(v1)
+  (v4: test::MyStruct) <- struct_construct(v3, v2)
+End:
+  Return(v4)

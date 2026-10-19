@@ -1,0 +1,38 @@
+[package]
+name = "cairo-lang-casm"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license-file.workspace = true
+description = "Cairo assembly encoding."
+
+[dependencies]
+cairo-lang-utils = { path = "../cairo-lang-utils", version = "=2.20.0", default-features = false }
+indoc.workspace = true
+num-bigint = { workspace = true }
+num-traits = { workspace = true }
+
+# Optional
+parity-scale-codec = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+
+[dev-dependencies]
+cairo-lang-test-utils = { path = "../cairo-lang-test-utils", features = ["testing"] }
+itertools = { workspace = true, default-features = true }
+pretty_assertions.workspace = true
+test-case.workspace = true
+tracing.workspace = true
+
+[features]
+default = ["std"]
+parity-scale-codec = ["cairo-lang-utils/parity-scale-codec", "dep:parity-scale-codec"]
+schemars = ["cairo-lang-utils/schemars", "dep:schemars", "std"]
+serde = ["cairo-lang-utils/serde", "dep:serde"]
+std = [
+  "cairo-lang-utils/std",
+  "num-bigint/std",
+  "num-traits/std",
+  "parity-scale-codec?/std",
+  "serde?/std",
+]

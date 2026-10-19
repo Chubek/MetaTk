@@ -1,0 +1,60 @@
+//! > Test basic return.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: false)
+
+//! > cairo_code
+fn foo() -> felt252 {
+    return 1 + 2;
+}
+
+//! > expected_diagnostics
+
+//! > ==========================================================================
+
+//! > Test unreachable tail statement.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: false)
+
+//! > cairo_code
+fn foo() -> felt252 {
+    return 1 + 2;
+    35
+}
+
+//! > expected_diagnostics
+
+//! > ==========================================================================
+
+//! > Test unreachable internal return.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: false)
+
+//! > cairo_code
+fn foo(x: felt252) -> felt252 {
+    match x {
+        0 => { return 5; },
+        1 => { return 6; },
+        2 => { return 9; },
+    }
+}
+
+//! > expected_diagnostics
+
+//! > ==========================================================================
+
+//! > Test type mismatch in return.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo() -> felt252 {}
+
+//! > expected_diagnostics
+error[E2042]: Unexpected return type. Expected: "felt252", found: "()".
+ --> lib.cairo:1:21
+fn foo() -> felt252 {}
+                    ^^

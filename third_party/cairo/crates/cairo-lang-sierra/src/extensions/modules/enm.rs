@@ -1,0 +1,467 @@
+//! Sierra example:
+//! ```ignore
+//! type felt252_ty = felt252;
+//! type unit_ty = Tuple;
+//! type Option = Enum<felt252_ty, unit_ty>;
+//! libfunc init_option_some = enum_init<Option, 0>;
+//! libfunc init_option_none = enum_init<Option, 1>;
+//! libfunc match_option = enum_match<Option>;
+//! ...
+//! felt252_const<0>() -> (felt0);
+//! tuple_const() -> (unit);
+//! init_option_some(felt0) -> (some_id);
+//! init_option_none(unit) -> (none_id);
+//! match_option(some_id) {1000(some), 2000(none)};
+//! match_option(none_id) {1000(some), 2000(none)};
+//! ```
+
+use cairo_lang_utils::try_extract_matches;
+use num_traits::Signed;
+
+use super::snapshot::snapshot_ty;
+use super::structure::StructType;
+use super::utils::{peel_snapshot, reinterpret_cast_signature};
+use crate::define_libfunc_hierarchy;
+use crate::extensions::bounded_int::bounded_int_ty;
+use crate::extensions::boxing::box_ty;
+use crate::extensions::lib_func::{
+    BranchSignature, DeferredOutputKind, LibfuncSignature, OutputVarInfo, ParamSignature,
+    SierraApChange, SignatureOnlyGenericLibfunc, SignatureSpecializationContext,
+    SpecializationContext,
+};
+use crate::extensions::type_specialization_context::TypeSpecializationContext;
+use crate::extensions::types::TypeInfo;
+use crate::extensions::utils::ty_with_optional_snapshot;
+use crate::extensions::{
+    ConcreteType, NamedLibfunc, NamedType, OutputVarReferenceInfo, SignatureBasedConcreteLibfunc,
+    SpecializationError, args_as_single_type,
+};
+use crate::ids::{ConcreteTypeId, GenericTypeId};
+use crate::program::{ConcreteTypeLongId, GenericArg};
+
+/// Type representing an enum.
+#[derive(Default)]
+pub struct EnumType {}
+impl NamedType for EnumType {
+    type Concrete = EnumConcreteType;
+    const ID: GenericTypeId = GenericTypeId::new_inline("Enum");
+
+    fn specialize(
+        &self,
+        context: &dyn TypeSpecializationContext,
+        args: &[GenericArg],
+    ) -> Result<Self::Concrete, SpecializationError> {
+        Self::Concrete::new(context, args)
+    }
+}
+
+pub struct EnumConcreteType {
+    pub info: TypeInfo,
+    pub variants: Vec<ConcreteTypeId>,
+}
+impl EnumConcreteType {
+    fn new(
+        context: &dyn TypeSpecializationContext,
+        args: &[GenericArg],
+    ) -> Result<Self, SpecializationError> {
+        let mut args_iter = args.iter();
+        args_iter
+            .next()
+            .and_then(|arg| try_extract_matches!(arg, GenericArg::UserType))
+            .ok_or(SpecializationError::UnsupportedGenericArg)?;
+        let mut duplicatable = true;
+        let mut droppable = true;
+        let mut variants: Vec<ConcreteTypeId> = Vec::with_capacity(args_iter.len());
+        for arg in args_iter {
+            let ty = try_extract_matches!(arg, GenericArg::Type)
+                .ok_or(SpecializationError::UnsupportedGenericArg)?
+                .clone();
+            let info = context.get_type_info(&ty)?;
+            if !info.storable {
+                return Err(SpecializationError::UnsupportedGenericArg);
+            }
+            if !info.duplicatable {
+                duplicatable = false;
+            }
+            if !info.droppable {
+                droppable = false;
+            }
+            variants.push(ty);
+        }
+        Ok(EnumConcreteType {
+            info: TypeInfo {
+                long_id: ConcreteTypeLongId {
+                    generic_id: "Enum".into(),
+                    generic_args: args.to_vec(),
+                },
+                duplicatable,
+                droppable,
+                storable: true,
+                zero_sized: false,
+            },
+            variants,
+        })
+    }
+
+    /// Returns the EnumConcreteType of the given type, or a specialization error if not possible.
+    fn try_from_concrete_type(
+        context: &dyn SignatureSpecializationContext,
+        ty: &ConcreteTypeId,
+    ) -> Result<Self, SpecializationError> {
+        let long_id = &context.get_type_info(ty)?.long_id;
+        if long_id.generic_id != EnumType::ID {
+            return Err(SpecializationError::UnsupportedGenericArg);
+        }
+        Self::new(context, &long_id.generic_args)
+    }
+}
+
+impl ConcreteType for EnumConcreteType {
+    fn info(&self) -> &TypeInfo {
+        &self.info
+    }
+}
+
+define_libfunc_hierarchy! {
+    pub enum EnumLibfunc {
+        Init(EnumInitLibfunc),
+        FromBoundedInt(EnumFromBoundedIntLibfunc),
+        Match(EnumMatchLibfunc),
+        SnapshotMatch(EnumSnapshotMatchLibfunc),
+        BoxedMatch(EnumBoxedMatchLibfunc),
+    }, EnumConcreteLibfunc
+}
+
+pub struct EnumInitConcreteLibfunc {
+    pub signature: LibfuncSignature,
+    /// The number of variants of the enum.
+    pub n_variants: usize,
+    /// The index of the relevant variant from the enum.
+    pub index: usize,
+}
+impl SignatureBasedConcreteLibfunc for EnumInitConcreteLibfunc {
+    fn signature(&self) -> &LibfuncSignature {
+        &self.signature
+    }
+}
+
+/// Libfunc for setting a value to an enum.
+#[derive(Default)]
+pub struct EnumInitLibfunc {}
+impl EnumInitLibfunc {
+    /// Creates the specialization of the enum-init libfunc with the given template arguments.
+    fn specialize_concrete_lib_func(
+        &self,
+        context: &dyn SignatureSpecializationContext,
+        args: &[GenericArg],
+    ) -> Result<EnumInitConcreteLibfunc, SpecializationError> {
+        let (enum_type, index) = match args {
+            [GenericArg::Type(enum_type), GenericArg::Value(index)] => (enum_type, index),
+            [_, _] => return Err(SpecializationError::UnsupportedGenericArg),
+            _ => return Err(SpecializationError::WrongNumberOfGenericArgs),
+        };
+        let variant_types = EnumConcreteType::try_from_concrete_type(context, enum_type)?.variants;
+        let n_variants = variant_types.len();
+        if index.is_negative() || index >= &n_variants.into() {
+            return Err(SpecializationError::IndexOutOfRange {
+                index: index.clone(),
+                range_size: n_variants,
+            });
+        }
+        let index: usize = index.try_into().unwrap();
+        let variant_type = variant_types[index].clone();
+        Ok(EnumInitConcreteLibfunc {
+            signature: LibfuncSignature::new_non_branch_ex(
+                vec![ParamSignature {
+                    ty: variant_type,
+                    allow_deferred: true,
+                    allow_add_const: true,
+                    allow_const: true,
+                }],
+                vec![OutputVarInfo {
+                    ty: enum_type.clone(),
+                    ref_info: OutputVarReferenceInfo::Deferred(DeferredOutputKind::Generic),
+                }],
+                SierraApChange::Known { new_vars_only: true },
+            ),
+            n_variants,
+            index,
+        })
+    }
+}
+impl NamedLibfunc for EnumInitLibfunc {
+    type Concrete = EnumInitConcreteLibfunc;
+    const STR_ID: &'static str = "enum_init";
+
+    fn specialize_signature(
+        &self,
+        context: &dyn SignatureSpecializationContext,
+        args: &[GenericArg],
+    ) -> Result<LibfuncSignature, SpecializationError> {
+        Ok(self.specialize_concrete_lib_func(context, args)?.signature)
+    }
+
+    fn specialize(
+        &self,
+        context: &dyn SpecializationContext,
+        args: &[GenericArg],
+    ) -> Result<Self::Concrete, SpecializationError> {
+        self.specialize_concrete_lib_func(context, args)
+    }
+}
+
+pub struct EnumFromBoundedIntConcreteLibfunc {
+    pub signature: LibfuncSignature,
+    /// The number of variants of the enum.
+    pub n_variants: usize,
+}
+impl SignatureBasedConcreteLibfunc for EnumFromBoundedIntConcreteLibfunc {
+    fn signature(&self) -> &LibfuncSignature {
+        &self.signature
+    }
+}
+
+/// Libfunc for creating an enum from a `BoundedInt` type.
+/// Will only work where there is the same number of empty variants as in the range of the
+/// `BoundedInt` type, and the range starts from 0.
+#[derive(Default)]
+pub struct EnumFromBoundedIntLibfunc {}
+impl EnumFromBoundedIntLibfunc {
+    /// Creates the specialization of the enum-from-bounded-int libfunc with the given template
+    /// arguments.
+    fn specialize_concrete_lib_func(
+        &self,
+        context: &dyn SignatureSpecializationContext,
+        args: &[GenericArg],
+    ) -> Result<EnumFromBoundedIntConcreteLibfunc, SpecializationError> {
+        let enum_type = args_as_single_type(args)?;
+        let variant_types = EnumConcreteType::try_from_concrete_type(context, enum_type)?.variants;
+        let n_variants = variant_types.len();
+        if n_variants == 0 {
+            return Err(SpecializationError::UnsupportedGenericArg);
+        }
+
+        for v in variant_types {
+            let long_id = &context.get_type_info(&v)?.long_id;
+            // Only trivial empty structs are allowed as variant types.
+            if !(long_id.generic_id == StructType::ID && long_id.generic_args.len() == 1) {
+                return Err(SpecializationError::UnsupportedGenericArg);
+            }
+        }
+        let input_ty = bounded_int_ty(context, 0.into(), (n_variants - 1).into())?;
+        if n_variants <= 2 {
+            Ok(EnumFromBoundedIntConcreteLibfunc {
+                signature: reinterpret_cast_signature(input_ty, enum_type.clone()),
+                n_variants,
+            })
+        } else {
+            Ok(EnumFromBoundedIntConcreteLibfunc {
+                signature: LibfuncSignature::new_non_branch_ex(
+                    vec![ParamSignature::new(input_ty)],
+                    vec![OutputVarInfo {
+                        ty: enum_type.clone(),
+                        ref_info: OutputVarReferenceInfo::Deferred(DeferredOutputKind::Generic),
+                    }],
+                    SierraApChange::Known { new_vars_only: false },
+                ),
+                n_variants,
+            })
+        }
+    }
+}
+impl NamedLibfunc for EnumFromBoundedIntLibfunc {
+    type Concrete = EnumFromBoundedIntConcreteLibfunc;
+    const STR_ID: &'static str = "enum_from_bounded_int";
+
+    fn specialize_signature(
+        &self,
+        context: &dyn SignatureSpecializationContext,
+        args: &[GenericArg],
+    ) -> Result<LibfuncSignature, SpecializationError> {
+        Ok(self.specialize_concrete_lib_func(context, args)?.signature)
+    }
+
+    fn specialize(
+        &self,
+        context: &dyn SpecializationContext,
+        args: &[GenericArg],
+    ) -> Result<Self::Concrete, SpecializationError> {
+        self.specialize_concrete_lib_func(context, args)
+    }
+}
+
+/// Libfunc for matching an enum.
+#[derive(Default)]
+pub struct EnumMatchLibfunc {}
+impl SignatureOnlyGenericLibfunc for EnumMatchLibfunc {
+    const STR_ID: &'static str = "enum_match";
+
+    fn specialize_signature(
+        &self,
+        context: &dyn SignatureSpecializationContext,
+        args: &[GenericArg],
+    ) -> Result<LibfuncSignature, SpecializationError> {
+        let enum_type = args_as_single_type(args)?;
+        let variant_types = EnumConcreteType::try_from_concrete_type(context, enum_type)?.variants;
+        let is_empty = variant_types.is_empty();
+        let branch_signatures = variant_types
+            .into_iter()
+            .map(|ty| {
+                Ok(BranchSignature {
+                    vars: vec![OutputVarInfo {
+                        ref_info: if context.get_type_info(&ty)?.zero_sized {
+                            OutputVarReferenceInfo::ZeroSized
+                        } else {
+                            OutputVarReferenceInfo::PartialParam { param_idx: 0 }
+                        },
+                        ty,
+                    }],
+                    ap_change: SierraApChange::Known { new_vars_only: true },
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(LibfuncSignature {
+            param_signatures: vec![enum_type.clone().into()],
+            branch_signatures,
+            fallthrough: (!is_empty).then_some(0),
+        })
+    }
+}
+
+/// Libfunc for matching an enum snapshot.
+#[derive(Default)]
+pub struct EnumSnapshotMatchLibfunc {}
+impl SignatureOnlyGenericLibfunc for EnumSnapshotMatchLibfunc {
+    const STR_ID: &'static str = "enum_snapshot_match";
+
+    fn specialize_signature(
+        &self,
+        context: &dyn SignatureSpecializationContext,
+        args: &[GenericArg],
+    ) -> Result<LibfuncSignature, SpecializationError> {
+        let enum_type = args_as_single_type(args)?;
+        let variant_types = EnumConcreteType::try_from_concrete_type(context, enum_type)?.variants;
+        let is_empty = variant_types.is_empty();
+        let branch_signatures = variant_types
+            .into_iter()
+            .map(|ty| {
+                Ok(BranchSignature {
+                    vars: vec![OutputVarInfo {
+                        ref_info: if context.get_type_info(&ty)?.zero_sized {
+                            OutputVarReferenceInfo::ZeroSized
+                        } else {
+                            // All memory of the deconstruction would have the same lifetime as the
+                            // first param - as it is its deconstruction.
+                            OutputVarReferenceInfo::PartialParam { param_idx: 0 }
+                        },
+                        ty: snapshot_ty(context, ty)?,
+                    }],
+                    ap_change: SierraApChange::Known { new_vars_only: true },
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(LibfuncSignature {
+            param_signatures: vec![snapshot_ty(context, enum_type.clone())?.into()],
+            branch_signatures,
+            fallthrough: (!is_empty).then_some(0),
+        })
+    }
+}
+
+/// Concrete implementation of the boxed enum match libfunc.
+pub struct EnumBoxedMatchConcreteLibfunc {
+    /// The concrete types of the enum variants (no additional snapshots and boxing) that will be
+    /// extracted as boxed values.
+    pub variants: Vec<ConcreteTypeId>,
+    pub signature: LibfuncSignature,
+}
+
+impl SignatureBasedConcreteLibfunc for EnumBoxedMatchConcreteLibfunc {
+    fn signature(&self) -> &LibfuncSignature {
+        &self.signature
+    }
+}
+
+/// Libfunc for matching a boxed enum into boxes of its variants.
+#[derive(Default)]
+pub struct EnumBoxedMatchLibfunc {}
+
+impl EnumBoxedMatchLibfunc {
+    /// Extracts variant types and snapshot status from an enum type.
+    fn analyze_enum_type(
+        context: &dyn SignatureSpecializationContext,
+        ty: &ConcreteTypeId,
+    ) -> Result<(Vec<ConcreteTypeId>, bool), SpecializationError> {
+        let type_info = context.get_type_info(ty)?;
+        let (inner_ty, is_snapshot) = peel_snapshot(ty, type_info)?;
+        let enum_type = EnumConcreteType::try_from_concrete_type(context, inner_ty)?;
+        Ok((enum_type.variants, is_snapshot))
+    }
+
+    /// Builds the libfunc signature for boxed enum match.
+    fn create_signature(
+        context: &dyn SignatureSpecializationContext,
+        ty: ConcreteTypeId,
+        variant_types: impl ExactSizeIterator<Item = ConcreteTypeId>,
+        is_snapshot: bool,
+    ) -> Result<LibfuncSignature, SpecializationError> {
+        let new_vars_only = variant_types.len() <= 1;
+        let fallthrough = if variant_types.len() == 0 { None } else { Some(0) };
+        let branch_signatures = variant_types
+            .map(|variant_ty| {
+                let ref_info = OutputVarReferenceInfo::Deferred(DeferredOutputKind::AddConst);
+                Ok(BranchSignature {
+                    vars: vec![OutputVarInfo {
+                        ty: box_ty(
+                            context,
+                            ty_with_optional_snapshot(context, variant_ty, is_snapshot)?,
+                        )?,
+                        ref_info,
+                    }],
+                    ap_change: SierraApChange::Known { new_vars_only },
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(LibfuncSignature {
+            param_signatures: vec![
+                ParamSignature::new(box_ty(context, ty)?).with_allow_add_const(),
+            ],
+            branch_signatures,
+            fallthrough,
+        })
+    }
+}
+
+impl NamedLibfunc for EnumBoxedMatchLibfunc {
+    type Concrete = EnumBoxedMatchConcreteLibfunc;
+    const STR_ID: &'static str = "enum_boxed_match";
+
+    fn specialize_signature(
+        &self,
+        context: &dyn SignatureSpecializationContext,
+        args: &[GenericArg],
+    ) -> Result<LibfuncSignature, SpecializationError> {
+        let enum_type = args_as_single_type(args)?;
+        let (variant_types, is_snapshot) = Self::analyze_enum_type(context, enum_type)?;
+        Self::create_signature(context, enum_type.clone(), variant_types.into_iter(), is_snapshot)
+    }
+
+    fn specialize(
+        &self,
+        context: &dyn SpecializationContext,
+        args: &[GenericArg],
+    ) -> Result<Self::Concrete, SpecializationError> {
+        let enum_type = args_as_single_type(args)?;
+        let (variants, is_snapshot) = Self::analyze_enum_type(context, enum_type)?;
+        let signature = Self::create_signature(
+            context,
+            enum_type.clone(),
+            variants.iter().cloned(),
+            is_snapshot,
+        )?;
+        Ok(EnumBoxedMatchConcreteLibfunc { variants, signature })
+    }
+}

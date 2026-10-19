@@ -1,0 +1,93 @@
+//! > Test struct snapshot.
+
+//! > test_runner_name
+test_function_diagnostics
+
+//! > cairo_code
+struct A {
+    a: Array<felt252>,
+    b: felt252,
+}
+fn bar(a: @Array::<felt252>, b: @felt252) {}
+fn foo(a: @A) {
+    bar(a.a, a.b);
+}
+
+//! > expected_diagnostics
+
+//! > ==========================================================================
+
+//! > Test coercion failure.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo() {
+    let _x: @felt252 = 5;
+    let _y: felt252 = @6;
+}
+
+//! > expected_diagnostics
+error[E2315]: Mismatched types. The type `@felt252` cannot be created from a numeric literal.
+ --> lib.cairo:2:24
+    let _x: @felt252 = 5;
+                       ^
+
+error[E2041]: Unexpected argument type. Expected: "felt252", found: "@{numeric}".
+It is possible that the type inference failed because the types differ in the number of snapshots.
+Consider adding or removing snapshots.
+ --> lib.cairo:3:23
+    let _y: felt252 = @6;
+                      ^^
+
+//! > ==========================================================================
+
+//! > Test coercion failure - no inference.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo() {
+    let _x: @felt252 = 5_felt252;
+    let _y: felt252 = @6_felt252;
+}
+
+//! > expected_diagnostics
+error[E2041]: Unexpected argument type. Expected: "@felt252", found: "felt252".
+ --> lib.cairo:2:24
+    let _x: @felt252 = 5_felt252;
+                       ^^^^^^^^^
+
+error[E2041]: Unexpected argument type. Expected: "felt252", found: "@felt252".
+ --> lib.cairo:3:23
+    let _y: felt252 = @6_felt252;
+                      ^^^^^^^^^^
+
+//! > ==========================================================================
+
+//! > Test struct snapshot auto member access desnap.
+
+//! > test_runner_name
+test_function_diagnostics
+
+//! > crate_settings
+edition = "2025_12"
+
+//! > cairo_code
+struct A {
+    a: Array<felt252>,
+    b: felt252,
+}
+fn foo(a: @A) {
+    let _: @Array<felt252> = @a.a;
+    let _: @Array<felt252> = @(@a).a;
+    let _: @@Array<felt252> = @@(@a).a;
+    let _: felt252 = a.b;
+    let _: @felt252 = @a.b;
+    let _: @felt252 = @(@a).b;
+    let _: @@felt252 = @@(@a).b;
+}
+
+//! > expected_diagnostics

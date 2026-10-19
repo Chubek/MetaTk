@@ -1,0 +1,35 @@
+//! > Test panicable from panicable.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: false)
+
+//! > cairo_code
+fn bar_panic() {}
+fn bar_nopanic() nopanic {}
+fn foo_panic() {
+    bar_panic();
+    bar_nopanic();
+}
+
+//! > expected_diagnostics
+
+//! > ==========================================================================
+
+//! > Test panicable from non-panicable.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn bar_panic() {}
+fn bar_nopanic() nopanic {}
+fn foo_nopanic() nopanic {
+    bar_panic();
+    bar_nopanic();
+}
+
+//! > expected_diagnostics
+error[E2115]: Function is declared as nopanic but calls a function that may panic.
+ --> lib.cairo:4:5
+    bar_panic();
+    ^^^^^^^^^^^

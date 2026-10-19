@@ -1,0 +1,76 @@
+= Member access expressions
+
+A member access expression accesses a field of a xref:structs.adoc[struct] or an element of a
+xref:tuple-types.adoc[tuple].
+Additionally, if a type implements the `Deref` trait, member access expressions can access members
+of the `Deref::Target` type.
+
+== Syntax
+
+For structs, `member_name` is a field name:
+
+[source,cairo]
+----
+expression.member_name
+----
+
+For tuples, the index is a plain decimal integer literal (no type suffix, no leading zeros,
+no hex prefix):
+
+[source,cairo]
+----
+expression.0
+expression.1
+----
+
+== Semantics
+
+The expression on the left is evaluated first, then the specified member or element is accessed.
+The type of the result is the type of the accessed field or tuple element.
+
+== Examples
+
+[source,cairo]
+----
+struct Point {
+    x: felt252,
+    y: felt252,
+}
+
+struct Line {
+    start: Point,
+    end: Point,
+}
+
+fn example() -> felt252 {
+    let p = Point { x: 10, y: 20 };
+    let sum = p.x + p.y;
+
+    let line = Line {
+        start: Point { x: 0, y: 0 },
+        end: Point { x: 10, y: 10 },
+    };
+    let end_x: felt252 = line.end.x;
+
+    let t: (felt252, u8) = (1, 2_u8);
+    let first: felt252 = t.0;
+    let second: u8 = t.1;
+
+    sum
+}
+----
+
+Assignment to a mutable tuple element is also supported:
+
+[source,cairo]
+----
+fn mutate(mut t: (felt252, u8)) {
+    t.0 = 5;
+}
+----
+
+== Related
+
+- xref:structs.adoc[Structs]
+- xref:tuple-types.adoc[Tuple types]
+- xref:method-calls.adoc[Method calls]

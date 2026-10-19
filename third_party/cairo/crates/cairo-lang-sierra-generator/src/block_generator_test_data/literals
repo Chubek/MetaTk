@@ -1,0 +1,42 @@
+//! > Test literals code.
+
+//! > test_runner_name
+block_generator_test
+
+//! > cairo_code
+#[target_function]
+fn foo() -> (felt252, felt252, felt252, u128, u128) {
+    let a = 5;
+    let b = 6;
+    let c = 0x1a;
+    let d = 12_u128;
+    let e = 0x12_u128;
+    (a, b, c, d, e)
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > sierra_code
+const_as_immediate<Const<felt252, 5>>() -> ([0])
+const_as_immediate<Const<felt252, 6>>() -> ([1])
+const_as_immediate<Const<felt252, 26>>() -> ([2])
+const_as_immediate<Const<u128, 12>>() -> ([3])
+const_as_immediate<Const<u128, 18>>() -> ([4])
+struct_construct<Tuple<felt252, felt252, felt252, u128, u128>>([0], [1], [2], [3], [4]) -> ([5])
+PushValues([5]: Tuple<felt252, felt252, felt252, u128, u128>) -> ([5])
+return([5])
+
+//! > lowering_flat
+Parameters:
+blk0 (root):
+Statements:
+  (v0: core::felt252) <- 5
+  (v1: core::felt252) <- 6
+  (v2: core::felt252) <- 26
+  (v3: core::integer::u128) <- 12
+  (v4: core::integer::u128) <- 18
+  (v5: (core::felt252, core::felt252, core::felt252, core::integer::u128, core::integer::u128)) <- struct_construct(v0, v1, v2, v3, v4)
+End:
+  Return(v5)

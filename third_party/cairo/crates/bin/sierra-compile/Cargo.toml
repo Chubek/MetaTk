@@ -1,0 +1,23 @@
+[package]
+name = "sierra-compile"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license-file.workspace = true
+description = "Compiler executable for the Sierra intermediate representation"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+indoc.workspace = true
+log.workspace = true
+mimalloc = { workspace = true, optional = true }
+tracing.workspace = true
+
+cairo-lang-sierra = { path = "../../cairo-lang-sierra", version = "=2.20.0" }
+cairo-lang-sierra-to-casm = { path = "../../cairo-lang-sierra-to-casm", version = "=2.20.0" }
+cairo-lang-sierra-type-size = { path = "../../cairo-lang-sierra-type-size", version = "=2.20.0" }
+cairo-lang-utils = { path = "../../cairo-lang-utils", version = "=2.20.0", features = ["tracing"] }
+
+[features]
+mimalloc = ["dep:mimalloc"]

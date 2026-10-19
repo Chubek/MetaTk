@@ -1,0 +1,249 @@
+//! > Match extern
+
+//! > test_runner_name
+check_find_local_variables
+
+//! > cairo_code
+use zeroable::IsZeroResult;
+// Revokes ap since this function is recursive.
+fn revoke_ap() -> felt252 {
+    revoke_ap()
+}
+#[target_function]
+fn foo(x: felt252) -> felt252 {
+    match felt252_is_zero(x) {
+        IsZeroResult::Zero => 1,
+        IsZeroResult::NonZero(y) => {
+            revoke_ap();
+            // y is not revoked, since it's the same as x, which is local.
+            y.into()
+        },
+    }
+    let x2 = x + x;
+    match felt252_is_zero(x2) {
+        IsZeroResult::Zero => 1,
+        IsZeroResult::NonZero(y) => {
+            revoke_ap();
+            // x2 is revoked, since y is identical to x2.
+            y.into()
+        },
+    }
+}
+
+//! > lowering_format
+Parameters: v0: core::felt252
+blk0 (root):
+Statements:
+End:
+  Match(match core::felt252_is_zero(v0) {
+    IsZeroResult::Zero => blk1,
+    IsZeroResult::NonZero(v1) => blk2,
+  })
+
+blk1:
+Statements:
+End:
+  Goto(blk3, {})
+
+blk2:
+Statements:
+  (v2: core::felt252) <- test::revoke_ap()
+  (v3: core::felt252) <- core::zeroable::unwrap_non_zero::<core::felt252>(v1)
+End:
+  Goto(blk3, {})
+
+blk3:
+Statements:
+  (v4: core::felt252) <- core::felt252_add(v0, v0)
+End:
+  Match(match core::felt252_is_zero(v4) {
+    IsZeroResult::Zero => blk4,
+    IsZeroResult::NonZero(v5) => blk5,
+  })
+
+blk4:
+Statements:
+  (v6: core::felt252) <- 1
+End:
+  Return(v6)
+
+blk5:
+Statements:
+  (v7: core::felt252) <- test::revoke_ap()
+  (v8: core::felt252) <- core::zeroable::unwrap_non_zero::<core::felt252>(v5)
+End:
+  Return(v8)
+
+//! > local_variables
+v4
+
+//! > ==========================================================================
+
+//! > Match extern - if
+
+//! > test_runner_name
+check_find_local_variables
+
+//! > cairo_code
+// Revokes ap since this function is recursive.
+fn revoke_ap() -> felt252 {
+    revoke_ap()
+}
+#[target_function]
+fn foo(x: felt252) -> felt252 {
+    let x1 = x + x;
+    let x2 = x1 + x1;
+    let x3 = if x2 == 0 {
+        1
+    } else {
+        2
+    };
+    // The "if" revokes "x1".
+    x1 + x3;
+    let x4 = if x1 == 0 {
+        1
+    } else {
+        2
+    };
+    revoke_ap();
+    x4
+}
+
+//! > lowering_format
+Parameters: v0: core::felt252
+blk0 (root):
+Statements:
+  (v1: core::felt252) <- core::felt252_add(v0, v0)
+  (v2: core::felt252) <- core::felt252_add(v1, v1)
+End:
+  Match(match core::felt252_is_zero(v2) {
+    IsZeroResult::Zero => blk1,
+    IsZeroResult::NonZero(v3) => blk2,
+  })
+
+blk1:
+Statements:
+  (v4: core::felt252) <- 1
+End:
+  Goto(blk3, {v4 -> v5})
+
+blk2:
+Statements:
+  (v6: core::felt252) <- 2
+End:
+  Goto(blk3, {v6 -> v5})
+
+blk3:
+Statements:
+  (v7: core::felt252) <- core::felt252_add(v1, v5)
+End:
+  Match(match core::felt252_is_zero(v1) {
+    IsZeroResult::Zero => blk4,
+    IsZeroResult::NonZero(v8) => blk5,
+  })
+
+blk4:
+Statements:
+  (v9: core::felt252) <- 1
+End:
+  Goto(blk6, {v9 -> v10})
+
+blk5:
+Statements:
+  (v11: core::felt252) <- 2
+End:
+  Goto(blk6, {v11 -> v10})
+
+blk6:
+Statements:
+  (v12: core::felt252) <- test::revoke_ap()
+End:
+  Return(v10)
+
+//! > local_variables
+v10
+
+//! > ==========================================================================
+
+//! > Match extern early return
+
+//! > test_runner_name
+check_find_local_variables
+
+//! > cairo_code
+use zeroable::IsZeroResult;
+// Revokes ap since this function is recursive.
+fn revoke_ap() -> felt252 {
+    revoke_ap()
+}
+#[target_function]
+fn foo(x: felt252) -> felt252 {
+    let w1 = x + x;
+
+    match felt252_is_zero(x) {
+        IsZeroResult::Zero => 1,
+        IsZeroResult::NonZero(_y) => {
+            revoke_ap();
+            return 0;
+        },
+    }
+
+    // w1 is not revoked.
+    let w2 = w1 + x;
+
+    match felt252_is_zero(x) {
+        IsZeroResult::Zero => 1,
+        IsZeroResult::NonZero(_y) => {
+            // Same as above, without revoke_ap() and without an early return.
+            2
+        },
+    }
+
+    // w2 is revoked.
+    w2 + x
+}
+
+//! > lowering_format
+Parameters: v0: core::felt252
+blk0 (root):
+Statements:
+  (v1: core::felt252) <- core::felt252_add(v0, v0)
+End:
+  Match(match core::felt252_is_zero(v0) {
+    IsZeroResult::Zero => blk1,
+    IsZeroResult::NonZero(v2) => blk5,
+  })
+
+blk1:
+Statements:
+  (v3: core::felt252) <- core::felt252_add(v1, v0)
+End:
+  Match(match core::felt252_is_zero(v0) {
+    IsZeroResult::Zero => blk2,
+    IsZeroResult::NonZero(v4) => blk3,
+  })
+
+blk2:
+Statements:
+End:
+  Goto(blk4, {})
+
+blk3:
+Statements:
+End:
+  Goto(blk4, {})
+
+blk4:
+Statements:
+  (v5: core::felt252) <- core::felt252_add(v3, v0)
+End:
+  Return(v5)
+
+blk5:
+Statements:
+  (v6: core::felt252) <- test::revoke_ap()
+  (v7: core::felt252) <- 0
+End:
+  Return(v7)
+
+//! > local_variables

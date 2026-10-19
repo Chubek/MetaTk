@@ -1,0 +1,45 @@
+//! > Test variable lifetime for block
+
+//! > test_runner_name
+check_variable_lifetime
+
+//! > cairo_code
+#[target_function]
+fn foo(x: felt252) -> felt252 {
+    let a = x + x;
+    let z = {
+        let b = a + a;
+        let _c = a + 1;
+        {
+            b
+        }
+        20
+    };
+    z
+}
+
+//! > lowering_format
+Parameters: v0: core::felt252
+blk0 (root):
+Statements:
+  (v1: core::felt252) <- core::felt252_add(v0, v0)
+  (v2: core::felt252) <- core::felt252_add(v1, v1)
+  (v3: core::felt252) <- 1
+  (v4: core::felt252) <- core::felt252_add(v1, v3)
+  (v5: core::felt252) <- 20
+End:
+  Return(v5)
+
+//! > last_use
+v5: ((blk0, 5), 0)
+v3: ((blk0, 3), 1)
+v1: ((blk0, 3), 0)
+v0: ((blk0, 0), 1)
+
+//! > drops
+PostStatement((blk0, 3)): v4
+PostStatement((blk0, 1)): v2
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics

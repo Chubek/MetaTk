@@ -1,0 +1,28 @@
+= Statements
+
+Cairo is an expression-oriented language, where most syntax productions producing values or
+causing effects when evaluated are _expressions_.
+Many expressions can nest within each other, and the sequence of evaluation is driven by
+precedence and associativity rules.
+
+There are not a lot of statement kinds, whose role is limited to containing explicitly sequential
+xref:expression-statement.adoc[expression evaluation] and declaring xref:items.adoc[items]
+and xref:let-statement.adoc[variables] in xref:block-expression.adoc[code blocks].
+
+The kinds of statements are:
+
+- xref:expression-statement.adoc[Expression statement].
+- xref:let-statement.adoc[Let statement].
+- xref:assignment-statement.adoc[Assignment statement].
+- xref:item-statement.adoc[Item statement].
+- Continue statement.
+- xref:return-expressions.adoc[Return statement].
+- Break statement.
+
+== Semicolons
+
+Statements are _usually_ separated with a semicolon (`;`).
+Extraneous semicolons are ignored.
+Semicolons _after_ last statement in code block _may_ be omitted and have a separate semantic
+meaning as it makes the statement define returned value of enclosing code block
+(see xref:block-expression.adoc[code blocks] for more details).

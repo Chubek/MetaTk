@@ -1,0 +1,56 @@
+//! > Test variable lifetime with local variables
+
+//! > test_runner_name
+check_variable_lifetime
+
+//! > cairo_code
+#[inline(never)]
+#[target_function]
+fn foo(x: felt252) -> felt252 {
+    if x == 0 {
+        x
+    } else {
+        let a = x + x;
+        // The recursive call will force `a` to be a local variable.
+        foo(0);
+        a
+    }
+}
+
+//! > lowering_format
+Parameters: v0: core::felt252
+blk0 (root):
+Statements:
+End:
+  Match(match core::felt252_is_zero(v0) {
+    IsZeroResult::Zero => blk1,
+    IsZeroResult::NonZero(v1) => blk2,
+  })
+
+blk1:
+Statements:
+End:
+  Return(v0)
+
+blk2:
+Statements:
+  (v2: core::felt252) <- core::felt252_add(v0, v0)
+  (v3: core::felt252) <- 0
+  (v4: core::felt252) <- test::foo(v3)
+End:
+  Return(v2)
+
+//! > last_use
+v2: ((blk2, 3), 0)
+v3: ((blk2, 2), 0)
+v0: ((blk2, 0), 1)
+v0: ((blk1, 0), 0)
+
+//! > drops
+PostStatement((blk2, 2)): v4
+BeginningOfBlock(blk2): v1
+BeginningOfBlock(blk1): UninitializedLocal(v2)
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics

@@ -1,0 +1,111 @@
+//! > simple closure.
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: false)
+
+//! > cairo_code
+#[target_function]
+fn foo(a: felt252) -> felt252 {
+    let c = |a| {
+        a + 3
+    };
+    c(2)
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > lowering_flat
+Parameters: v0: core::felt252
+blk0 (root):
+Statements:
+  (v1: core::felt252) <- 5
+End:
+  Return(v1)
+
+//! > ==========================================================================
+
+//! > using captured copiable variable.
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: false)
+
+//! > cairo_code
+#[target_function]
+fn foo() -> felt252 {
+    let x = 8;
+    let c = |a| {
+        x * (a + 3)
+    };
+    let y = c(2);
+    y + x
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > lowering_flat
+Parameters:
+blk0 (root):
+Statements:
+  (v0: core::felt252) <- 48
+End:
+  Return(v0)
+
+//! > ==========================================================================
+
+//! > Test closure desnapping a snapshot-only captured non-Copy variable (captured by value).
+
+//! > test_runner_name
+test_function_lowering
+
+//! > cairo_code
+#[target_function]
+fn foo(a: Array<felt252>) -> Array<felt252> {
+    let f = || *(@a);
+    f()
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+error[E3003]: Cannot desnap a non copyable type.
+ --> lib.cairo:3:16
+    let f = || *(@a);
+               ^^^^^
+note: Trait has no implementation in context: Copy::<Array::<felt252>>.
+
+//! > lowering_flat
+<Failed lowering function - run with RUST_LOG=warn (or less) to see diagnostics>
+
+//! > ==========================================================================
+
+//! > Test closure that both snapshots and desnaps the same non-Copy captured variable.
+
+//! > test_runner_name
+test_function_lowering
+
+//! > cairo_code
+fn use_snap(a: @Array<felt252>) {}
+#[target_function]
+fn foo(a: Array<felt252>) -> Array<felt252> {
+    let f = || {
+        use_snap(@a);
+        *(@a)
+    };
+    f()
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+error[E3003]: Cannot desnap a non copyable type.
+ --> lib.cairo:6:9
+        *(@a)
+        ^^^^^
+note: Trait has no implementation in context: Copy::<Array::<felt252>>.
+
+//! > lowering_flat
+<Failed lowering function - run with RUST_LOG=warn (or less) to see diagnostics>

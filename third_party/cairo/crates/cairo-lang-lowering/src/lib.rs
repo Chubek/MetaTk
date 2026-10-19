@@ -1,0 +1,34 @@
+//! Cairo lowering.
+//!
+//! This crate is responsible for handling the lowering phase.
+pub mod add_withdraw_gas;
+pub mod analysis;
+pub mod borrow_check;
+pub mod cache;
+pub mod concretize;
+pub mod db;
+pub mod destructs;
+pub mod diagnostic;
+pub mod fmt;
+pub mod graph_algorithms;
+pub mod ids;
+pub mod implicits;
+pub mod inline;
+pub mod lower;
+pub mod objects;
+pub mod optimizations;
+pub mod panic;
+pub mod reorganize_blocks;
+pub mod scc;
+pub mod specialization;
+pub mod utils;
+
+#[cfg(test)]
+mod test;
+
+pub use self::objects::*;
+
+#[cfg(test)]
+pub mod test_runner;
+#[cfg(test)]
+pub mod test_utils;

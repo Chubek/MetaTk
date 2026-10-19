@@ -1,0 +1,423 @@
+//! > pattern type for a param.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: false)
+
+//! > cairo_code
+fn foo(x: (felt252, felt252)) {}
+
+//! > expected_diagnostics
+
+//! > ==========================================================================
+
+//! > Valid destructures of a struct.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: false)
+
+//! > cairo_code
+struct Struct1 {
+    member1: felt252,
+    member2: (),
+}
+struct Struct2 {
+    member1: felt252,
+    member2: (),
+    member3: Struct1,
+}
+fn foo(s2: Struct2) {
+    let Struct2 { member1: _, member2: _, member3: _ } = s2;
+    let Struct2 { member1: _, member2: _, .. } = s2;
+    let Struct2 { member1: _, member2: _, member3: Struct1 { member1: _a, .. } } = s2;
+}
+
+//! > expected_diagnostics
+
+//! > ==========================================================================
+
+//! > Test struct pattern with missing members.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+struct MyStruct {
+    a: usize,
+    b: usize,
+}
+fn foo(s: MyStruct) {
+    let MyStruct { a: _ } = s;
+}
+
+//! > expected_diagnostics
+error[E0003]: Missing member "b".
+ --> lib.cairo:6:9
+    let MyStruct { a: _ } = s;
+        ^^^^^^^^^^^^^^^^^
+
+//! > ==========================================================================
+
+//! > Test struct pattern with non existing members.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+struct MyStruct {}
+fn foo(s: MyStruct) {
+    let MyStruct { a, b } = s;
+}
+
+//! > expected_diagnostics
+error[E2058]: Struct "MyStruct" has no member "a"
+ --> lib.cairo:3:20
+    let MyStruct { a, b } = s;
+                   ^
+
+error[E2058]: Struct "MyStruct" has no member "b"
+ --> lib.cairo:3:23
+    let MyStruct { a, b } = s;
+                      ^
+
+//! > ==========================================================================
+
+//! > Test struct pattern with members redefinition.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+struct MyStruct {
+    a: usize,
+    b: usize,
+}
+fn foo(s: MyStruct) {
+    let MyStruct { a: _, b: _, a: _, b: _ } = s;
+}
+
+//! > expected_diagnostics
+error[E2050]: Redefinition of member "a" on struct "MyStruct".
+ --> lib.cairo:6:32
+    let MyStruct { a: _, b: _, a: _, b: _ } = s;
+                               ^
+
+error[E2050]: Redefinition of member "b" on struct "MyStruct".
+ --> lib.cairo:6:38
+    let MyStruct { a: _, b: _, a: _, b: _ } = s;
+                                     ^
+
+//! > ==========================================================================
+
+//! > Test struct pattern with non existing members, members redefinition and missing members.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+struct MyStruct {
+    a: usize,
+    b: usize,
+}
+fn foo(s: MyStruct) {
+    let MyStruct { a: _, c: _, a: _ } = s;
+}
+
+//! > expected_diagnostics
+error[E2058]: Struct "MyStruct" has no member "c"
+ --> lib.cairo:6:26
+    let MyStruct { a: _, c: _, a: _ } = s;
+                         ^
+
+error[E2050]: Redefinition of member "a" on struct "MyStruct".
+ --> lib.cairo:6:32
+    let MyStruct { a: _, c: _, a: _ } = s;
+                               ^
+
+error[E0003]: Missing member "b".
+ --> lib.cairo:6:9
+    let MyStruct { a: _, c: _, a: _ } = s;
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+//! > ==========================================================================
+
+//! > Test fixed size array pattern incompatible number of elements.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo(s: [felt252; 3]) {
+    let [_a, _b] = s;
+}
+
+//! > expected_diagnostics
+error[E2108]: Wrong number of fixed size array elements in pattern. Expected: 3. Got: 2.
+ --> lib.cairo:2:9
+    let [_a, _b] = s;
+        ^^^^^^^^
+
+//! > ==========================================================================
+
+//! > Test tuple assigned to a fixed size array pattern.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo(s: (felt252, felt252, felt252)) {
+    let [_a, _b, _c] = s;
+}
+
+//! > expected_diagnostics
+error[E2103]: Mismatched types: pattern cannot match against type "(felt252, felt252, felt252)".
+ --> lib.cairo:2:9
+    let [_a, _b, _c] = s;
+        ^^^^^^^^^^^^
+
+//! > ==========================================================================
+
+//! > Test fixed size array assigned to a tuple pattern.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo(s: [felt252; 3]) {
+    let (_a, _b, _c) = s;
+}
+
+//! > expected_diagnostics
+error[E2103]: Mismatched types: pattern cannot match against type "[felt252; 3]".
+ --> lib.cairo:2:9
+    let (_a, _b, _c) = s;
+        ^^^^^^^^^^^^
+
+//! > ==========================================================================
+
+//! > Avoid crash on unknown patterns.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo(s: [felt252; 3]) {
+    let (unresolved,) = if true {} else {
+        (array![(1, 2, 3)],)
+    };
+    for (_x, _y, _z) in unresolved.span() {}
+}
+
+//! > expected_diagnostics
+error[E2056]: If blocks have incompatible types: "()" and "(Array::<({numeric}, {numeric}, {numeric})>,)"
+ --> lib.cairo:2:25-4:5
+      let (unresolved,) = if true {} else {
+ _________________________^
+|         (array![(1, 2, 3)],)
+|     };
+|_____^
+
+error[E2107]: Wrong number of tuple elements in pattern. Expected: 0. Got: 1.
+ --> lib.cairo:2:9
+    let (unresolved,) = if true {} else {
+        ^^^^^^^^^^^^^
+
+//! > ==========================================================================
+
+//! > Test duplicate variables in tuple pattern let.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo() {
+    let (_a, _a) = (1, 2);
+}
+
+//! > expected_diagnostics
+error[E2049]: Redefinition of variable name "_a" in pattern.
+ --> lib.cairo:2:14
+    let (_a, _a) = (1, 2);
+             ^^
+
+//! > ==========================================================================
+
+//! > Test duplicate variables in match patterns.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo() {
+    match (1, 2) {
+        (_a, _a) => (),
+    }
+
+    match ((1, 2), 3) {
+        ((_b, _), _b) => (),
+    };
+}
+
+//! > expected_diagnostics
+error[E2049]: Redefinition of variable name "_a" in pattern.
+ --> lib.cairo:3:14
+        (_a, _a) => (),
+             ^^
+
+error[E2049]: Redefinition of variable name "_b" in pattern.
+ --> lib.cairo:7:19
+        ((_b, _), _b) => (),
+                  ^^
+
+//! > ==========================================================================
+
+//! > Test span into fixed size array pattern.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: false)
+
+//! > cairo_code
+fn foo(s: Span<u32>) -> u32 {
+    let [a, b] = s else {
+        return 0;
+    };
+    *a + *b
+}
+
+//! > expected_diagnostics
+
+//! > ==========================================================================
+
+//! > Test type mismatch in span pattern arm surfaces as confusing ToSpanTrait error.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo() {
+    let a: Array<u8> = array![1, 2, 3];
+    let c: u16 = 0;
+    match a.span() {
+        [x, y, z] => c + *x + *y + *z,
+        _ => 0,
+    };
+}
+
+//! > expected_diagnostics
+error[E2311]: Trait has no implementation in context: ToSpanTrait::<Array::<u8>, u16>.
+ --> lib.cairo:4:13
+    match a.span() {
+            ^^^^
+
+//! > ==========================================================================
+
+//! > Test array pattern on non-Span generic struct.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+struct MyStruct<T> {
+    value: T,
+}
+fn foo(s: MyStruct<u8>) {
+    let [_x, _y] = s;
+}
+
+//! > expected_diagnostics
+error[E2103]: Mismatched types: pattern cannot match against type "MyStruct::<u8>".
+ --> lib.cairo:5:9
+    let [_x, _y] = s;
+        ^^^^^^^^
+
+//! > ==========================================================================
+
+//! > Test array pattern on Array instead of Span.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo() {
+    let a: Array<u8> = array![1, 2, 3];
+    match a {
+        [_x, _y, _z] => {},
+        _ => {},
+    };
+}
+
+//! > expected_diagnostics
+error[E2103]: Mismatched types: pattern cannot match against type "Array::<u8>".
+ --> lib.cairo:4:9
+        [_x, _y, _z] => {},
+        ^^^^^^^^^^^^
+
+//! > ==========================================================================
+
+//! > Test array pattern on fixed size array value.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: false)
+
+//! > cairo_code
+fn foo() {
+    let a: [u8; 3] = [1, 2, 3];
+    match a {
+        [_x, _y, _z] => {},
+        _ => {},
+    };
+}
+
+//! > expected_diagnostics
+
+//! > ==========================================================================
+
+//! > Test invalid patterns on Span value.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+fn foo(s: Span<u32>) -> u32 {
+    match s {
+        [a, b] => *a + *b,
+        5 => 0,
+        (a, b) => *a + *b,
+        Some(a) => *a,
+    }
+}
+
+//! > expected_diagnostics
+error[E2315]: Mismatched types. The type `Span::<u32>` cannot be created from a numeric literal.
+ --> lib.cairo:4:9
+        5 => 0,
+        ^
+
+error[E2103]: Mismatched types: pattern cannot match against type "Span::<u32>".
+ --> lib.cairo:5:9
+        (a, b) => *a + *b,
+        ^^^^^^
+
+error[E2135]: Type `<missing>` cannot be dereferenced
+ --> lib.cairo:5:19
+        (a, b) => *a + *b,
+                  ^
+
+error[E2135]: Type `<missing>` cannot be dereferenced
+ --> lib.cairo:5:24
+        (a, b) => *a + *b,
+                       ^
+
+error[E2103]: Mismatched types: pattern cannot match against type "Span::<u32>".
+ --> lib.cairo:6:9
+        Some(a) => *a,
+        ^^^^^^^
+
+error[E0006]: Identifier not found.
+ --> lib.cairo:6:21
+        Some(a) => *a,
+                    ^
+
+error[E2135]: Type `<missing>` cannot be dereferenced
+ --> lib.cairo:6:20
+        Some(a) => *a,
+                   ^

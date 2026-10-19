@@ -1,0 +1,33 @@
+# ArchDBCatalogue.yaml — index of architecture specifications.
+# Regenerate with: archdb catalogue ArchDB -o ArchDBCatalogue.yaml
+schema: 1
+root: ArchDB
+architectures:
+- {name: aarch64, file: aarch64.dsymspec.yaml, arch: aarch64, subarch: armv8-a, addr_size: 64, byte_order: little, obj_format: ELF64, backend: backend/aarch64.json}
+- {name: amd64, file: amd64.dsymspec.yaml, arch: amd64, subarch: x86-64, addr_size: 64, byte_order: little, obj_format: ELF64, backend: backend/amd64.json}
+- {name: amdgpu, file: amdgpu.dsymspec.yaml, arch: amdgpu, subarch: gfx900, addr_size: 64, byte_order: little, obj_format: ELF64, backend: backend/amdgpu.json}
+- {name: arc, file: arc.dsymspec.yaml, arch: arc, subarch: arcv2, addr_size: 32, byte_order: little, obj_format: ELF32, backend: backend/arc.json}
+- {name: arm32, file: arm32.dsymspec.yaml, arch: arm32, subarch: armv7-a, addr_size: 32, byte_order: little, obj_format: ELF32, backend: backend/arm32.json}
+- {name: avr, file: avr.dsymspec.yaml, arch: avr, subarch: avr5, addr_size: 16, byte_order: little, obj_format: ELF32, backend: backend/avr.json}
+- {name: bpf, file: bpf.dsymspec.yaml, arch: bpf, subarch: bpfel, addr_size: 64, byte_order: little, obj_format: ELF64, backend: backend/bpf.json}
+- {name: directx, file: directx.dsymspec.yaml, arch: directx, subarch: dxil, addr_size: 64, byte_order: little, obj_format: dxil, backend: backend/directx.json}
+- {name: hexagon, file: hexagon.dsymspec.yaml, arch: hexagon, subarch: v68, addr_size: 32, byte_order: little, obj_format: ELF32, backend: backend/hexagon.json}
+- {name: lanai, file: lanai.dsymspec.yaml, arch: lanai, subarch: lanai, addr_size: 32, byte_order: big, obj_format: ELF32, backend: backend/lanai.json}
+- {name: loongarch32, file: loongarch32.dsymspec.yaml, arch: loongarch32, subarch: la32, addr_size: 32, byte_order: little, obj_format: ELF32, backend: backend/loongarch32.json}
+- {name: loongarch64, file: loongarch64.dsymspec.yaml, arch: loongarch64, subarch: la64, addr_size: 64, byte_order: little, obj_format: ELF64, backend: backend/loongarch64.json}
+- {name: m68k, file: m68k.dsymspec.yaml, arch: m68k, subarch: "68020", addr_size: 32, byte_order: big, obj_format: ELF32, backend: backend/m68k.json}
+- {name: mips32, file: mips32.dsymspec.yaml, arch: mips32, subarch: mips32r2, addr_size: 32, byte_order: little, obj_format: ELF32, backend: backend/mips32.json}
+- {name: mips64, file: mips64.dsymspec.yaml, arch: mips64, subarch: mips64r2, addr_size: 64, byte_order: little, obj_format: ELF64, backend: backend/mips64.json}
+- {name: msp430, file: msp430.dsymspec.yaml, arch: msp430, subarch: msp430, addr_size: 16, byte_order: little, obj_format: ELF32, backend: backend/msp430.json}
+- {name: nvptx, file: nvptx.dsymspec.yaml, arch: nvptx, subarch: sm_80, addr_size: 64, byte_order: little, obj_format: ptx, backend: backend/nvptx.json}
+- {name: ppc32, file: ppc32.dsymspec.yaml, arch: ppc32, subarch: powerpc, addr_size: 32, byte_order: big, obj_format: ELF32, backend: backend/ppc32.json}
+- {name: ppc64, file: ppc64.dsymspec.yaml, arch: ppc64, subarch: power9, addr_size: 64, byte_order: little, obj_format: ELF64, backend: backend/ppc64.json}
+- {name: riscv32, file: riscv32.dsymspec.yaml, arch: riscv32, subarch: rv32gcv, addr_size: 32, byte_order: little, obj_format: ELF32, backend: backend/riscv32.json}
+- {name: riscv64, file: riscv64.dsymspec.yaml, arch: riscv64, subarch: rv64gcv, addr_size: 64, byte_order: little, obj_format: ELF64, backend: backend/riscv64.json}
+- {name: s390x, file: s390x.dsymspec.yaml, arch: s390x, subarch: z/arch, addr_size: 64, byte_order: big, obj_format: ELF64, backend: backend/s390x.json}
+- {name: sparc64, file: sparc64.dsymspec.yaml, arch: sparc64, subarch: v9, addr_size: 64, byte_order: big, obj_format: ELF64, backend: backend/sparc64.json}
+- {name: spirv, file: spirv.dsymspec.yaml, arch: spirv, subarch: spirv1.6, addr_size: 32, byte_order: little, obj_format: spirv, backend: backend/spirv.json}
+- {name: tricore, file: tricore.dsymspec.yaml, arch: tricore, subarch: tc1.6, addr_size: 32, byte_order: little, obj_format: ELF32, backend: backend/tricore.json}
+- {name: wasm, file: wasm.dsymspec.yaml, arch: wasm, subarch: wasm32, addr_size: 32, byte_order: little, obj_format: wasm, backend: backend/wasm.json}
+- {name: x86, file: x86.dsymspec.yaml, arch: x86, subarch: i386, addr_size: 32, byte_order: little, obj_format: ELF32, backend: backend/x86.json}
+- {name: xcore, file: xcore.dsymspec.yaml, arch: xcore, subarch: xs1, addr_size: 32, byte_order: little, obj_format: ELF32, backend: backend/xcore.json}

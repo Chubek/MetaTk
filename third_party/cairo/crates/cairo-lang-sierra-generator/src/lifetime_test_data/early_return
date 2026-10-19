@@ -1,0 +1,140 @@
+//! > Test early return
+
+//! > test_runner_name
+check_variable_lifetime
+
+//! > cairo_code
+#[target_function]
+fn foo(x: felt252) -> felt252 {
+    if x == 0 {
+        return 0;
+    }
+    x
+}
+
+//! > lowering_format
+Parameters: v0: core::felt252
+blk0 (root):
+Statements:
+End:
+  Match(match core::felt252_is_zero(v0) {
+    IsZeroResult::Zero => blk1,
+    IsZeroResult::NonZero(v1) => blk2,
+  })
+
+blk1:
+Statements:
+  (v2: core::felt252) <- 0
+End:
+  Return(v2)
+
+blk2:
+Statements:
+End:
+  Return(v0)
+
+//! > last_use
+v0: ((blk2, 0), 0)
+v2: ((blk1, 1), 0)
+
+//! > drops
+BeginningOfBlock(blk2): v1
+BeginningOfBlock(blk1): v0
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > ==========================================================================
+
+//! > Test return inside block
+
+//! > test_runner_name
+check_variable_lifetime
+
+//! > cairo_code
+#[target_function]
+fn foo(x: felt252, y: felt252) -> felt252 {
+    {
+        return y;
+    }
+    x + 1
+}
+
+//! > lowering_format
+Parameters: v0: core::felt252, v1: core::felt252
+blk0 (root):
+Statements:
+End:
+  Return(v1)
+
+//! > last_use
+v1: ((blk0, 0), 0)
+
+//! > drops
+BeginningOfBlock(blk0): v0
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+warning[E3000]: Unreachable code
+ --> lib.cairo:6:5
+    x + 1
+    ^^^^^
+
+//! > ==========================================================================
+
+//! > Test return in all branches
+
+//! > test_runner_name
+check_variable_lifetime
+
+//! > cairo_code
+#[target_function]
+fn foo(x: felt252, y: felt252) -> felt252 {
+    if x == 0 {
+        return 1;
+    } else {
+        return 2;
+    }
+    x + y
+}
+
+//! > lowering_format
+Parameters: v0: core::felt252, v1: core::felt252
+blk0 (root):
+Statements:
+End:
+  Match(match core::felt252_is_zero(v0) {
+    IsZeroResult::Zero => blk1,
+    IsZeroResult::NonZero(v2) => blk2,
+  })
+
+blk1:
+Statements:
+  (v3: core::felt252) <- 1
+End:
+  Return(v3)
+
+blk2:
+Statements:
+  (v4: core::felt252) <- 2
+End:
+  Return(v4)
+
+//! > last_use
+v4: ((blk2, 1), 0)
+v3: ((blk1, 1), 0)
+v0: ((blk0, 0), 0)
+
+//! > drops
+BeginningOfBlock(blk2): v2
+BeginningOfBlock(blk0): v1
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+warning[E3000]: Unreachable code
+ --> lib.cairo:8:5
+    x + y
+    ^^^^^

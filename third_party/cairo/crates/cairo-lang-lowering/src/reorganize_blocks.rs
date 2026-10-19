@@ -1,0 +1,226 @@
+use cairo_lang_utils::unordered_hash_map::UnorderedHashMap;
+use itertools::Itertools;
+
+use crate::analysis::core::StatementLocation;
+use crate::analysis::{DataflowAnalyzer, DataflowBackAnalysis, Direction, Edge};
+use crate::blocks::BlocksBuilder;
+use crate::optimizations::remappings::{self, Context};
+use crate::utils::{Rebuilder, RebuilderEx};
+use crate::{
+    Block, BlockEnd, BlockId, Lowered, Statement, VarRemapping, VariableArena, VariableId,
+};
+
+/// Reorganizes the blocks in lowered function and removes unnecessary remappings.
+///
+/// Removes unreachable blocks.
+/// Blocks that are reachable only through goto are combined with the block that does the goto.
+pub fn reorganize_blocks<'db>(lowered: &mut Lowered<'db>) {
+    if lowered.blocks.is_empty() {
+        return;
+    }
+    let mut ctx = TopSortContext {
+        old_block_rev_order: Vec::with_capacity(lowered.blocks.len()),
+        incoming_gotos: vec![0; lowered.blocks.len()],
+        can_be_merged: vec![true; lowered.blocks.len()],
+        remappings_ctx: Context::new(lowered.variables.len()),
+    };
+
+    remappings::visit_remappings(lowered, |remapping| {
+        for (dst, src) in remapping.iter() {
+            ctx.remappings_ctx.dest_to_srcs[dst.index()].push(src.var_id);
+        }
+    });
+
+    DataflowBackAnalysis::new(lowered, &mut ctx).run();
+
+    // Keep only blocks that can't be merged or have more than 1 incoming
+    // goto.
+    // Note that unreachable blocks were not added to `ctx.old_block_rev_order` during
+    // the analysis above.
+    let mut old_block_rev_order = ctx
+        .old_block_rev_order
+        .into_iter()
+        .filter(|block_id| !ctx.can_be_merged[block_id.0] || ctx.incoming_gotos[block_id.0] > 1)
+        .collect_vec();
+
+    // Add the root block as it was filtered above.
+    old_block_rev_order.push(BlockId::root());
+
+    let n_visited_blocks = old_block_rev_order.len();
+
+    // Rebuild the blocks in the correct order.
+    let mut new_blocks = BlocksBuilder::with_capacity(n_visited_blocks);
+
+    let mut rebuilder = RebuildContext {
+        block_remapping: UnorderedHashMap::from_iter(
+            old_block_rev_order
+                .iter()
+                .enumerate()
+                .map(|(idx, block_id)| (*block_id, BlockId(n_visited_blocks - idx - 1))),
+        ),
+        remappings_ctx: ctx.remappings_ctx,
+    };
+
+    let mut var_reassigner = VarReassigner::new(&lowered.variables);
+    for param in lowered.parameters.iter_mut() {
+        *param = var_reassigner.map_var_id(*param);
+    }
+
+    for block_id in old_block_rev_order.into_iter().rev() {
+        let mut block = &lowered.blocks[block_id];
+        let mut statements = Vec::with_capacity(block.statements.len());
+        loop {
+            statements.extend(
+                block.statements.iter().map(|stmt| {
+                    var_reassigner.rebuild_statement(&rebuilder.rebuild_statement(stmt))
+                }),
+            );
+            if let BlockEnd::Goto(target_block_id, remappings) = &block.end
+                && !rebuilder.block_remapping.contains_key(target_block_id)
+            {
+                assert!(
+                    rebuilder.rebuild_remapping(remappings).is_empty(),
+                    "Remapping should be empty."
+                );
+                block = &lowered.blocks[*target_block_id];
+                continue;
+            }
+            break;
+        }
+
+        let end = var_reassigner.rebuild_end(&rebuilder.rebuild_end(&block.end));
+        new_blocks.alloc(Block { statements, end });
+    }
+
+    lowered.variables = var_reassigner.new_vars;
+    lowered.blocks = new_blocks.build().unwrap();
+}
+
+pub struct TopSortContext {
+    old_block_rev_order: Vec<BlockId>,
+    // The number of incoming gotos, indexed by block_id.
+    incoming_gotos: Vec<usize>,
+
+    // True if the block can be merged with the block that goes to it.
+    can_be_merged: Vec<bool>,
+
+    remappings_ctx: remappings::Context,
+}
+
+impl<'db, 'a> DataflowAnalyzer<'db, 'a> for TopSortContext {
+    type Info = ();
+
+    const DIRECTION: Direction = Direction::Backward;
+
+    fn initial_info(&mut self, _block_id: BlockId, block_end: &'a BlockEnd<'db>) -> Self::Info {
+        // For zero-arm matches (e.g. `never` type), no MatchArm edges are traversed,
+        // so mark match inputs as used here.
+        if let BlockEnd::Match { info } = block_end {
+            for var_usage in info.inputs() {
+                self.remappings_ctx.set_used(var_usage.var_id);
+            }
+        }
+    }
+
+    fn merge(
+        &mut self,
+        _lowered: &Lowered<'db>,
+        _statement_location: StatementLocation,
+        _info1: Self::Info,
+        _info2: Self::Info,
+    ) -> Self::Info {
+    }
+
+    fn visit_block_start(
+        &mut self,
+        _info: &mut Self::Info,
+        block_id: BlockId,
+        _block: &Block<'db>,
+    ) {
+        self.old_block_rev_order.push(block_id);
+    }
+
+    fn transfer_stmt(
+        &mut self,
+        _info: &mut Self::Info,
+        _statement_location: StatementLocation,
+        stmt: &'a Statement<'db>,
+    ) {
+        for var_usage in stmt.inputs() {
+            self.remappings_ctx.set_used(var_usage.var_id);
+        }
+    }
+
+    fn transfer_edge(&mut self, info: &Self::Info, edge: &Edge<'db, 'a>) -> Self::Info {
+        match edge {
+            Edge::Goto { target, remapping: _ } => {
+                // Note that the remappings of a goto are not considered a usage. Later usages
+                // (such as a merge) would catch them if used.
+                self.incoming_gotos[target.0] += 1;
+            }
+            Edge::MatchArm { arm, match_info } => {
+                self.can_be_merged[arm.block_id.0] = false;
+                // Mark match inputs as used.
+                for var_usage in match_info.inputs() {
+                    self.remappings_ctx.set_used(var_usage.var_id);
+                }
+            }
+            Edge::Return { vars, .. } => {
+                for var_usage in vars.iter() {
+                    self.remappings_ctx.set_used(var_usage.var_id);
+                }
+            }
+            Edge::Panic { var } => {
+                self.remappings_ctx.set_used(var.var_id);
+            }
+        }
+        *info
+    }
+}
+
+pub struct RebuildContext {
+    block_remapping: UnorderedHashMap<BlockId, BlockId>,
+    remappings_ctx: remappings::Context,
+}
+impl<'db> Rebuilder<'db> for RebuildContext {
+    fn map_block_id(&mut self, block: BlockId) -> BlockId {
+        self.block_remapping[&block]
+    }
+
+    fn map_var_id(&mut self, var: VariableId) -> VariableId {
+        self.remappings_ctx.map_var_id(var)
+    }
+
+    fn transform_remapping(&mut self, remapping: &mut VarRemapping<'db>) {
+        self.remappings_ctx.transform_remapping(remapping)
+    }
+}
+
+/// Helper class to reassign variable ids according to the rebuild order.
+///
+/// Note that it can't be integrated into the RebuildContext above because rebuild_remapping might
+/// call `map_var_id` on variables that are going to be removed.
+pub struct VarReassigner<'db, 'a> {
+    pub old_vars: &'a VariableArena<'db>,
+    pub new_vars: VariableArena<'db>,
+
+    // Maps old var_id to new_var_id
+    pub vars: Vec<Option<VariableId>>,
+}
+
+impl<'db, 'a> VarReassigner<'db, 'a> {
+    pub fn new(old_vars: &'a VariableArena<'db>) -> Self {
+        Self {
+            old_vars,
+            new_vars: VariableArena::with_capacity(old_vars.len()),
+            vars: vec![None; old_vars.len()],
+        }
+    }
+}
+
+impl<'db> Rebuilder<'db> for VarReassigner<'db, '_> {
+    fn map_var_id(&mut self, var: VariableId) -> VariableId {
+        *self.vars[var.index()]
+            .get_or_insert_with(|| self.new_vars.alloc(self.old_vars[var].clone()))
+    }
+}

@@ -1,0 +1,110 @@
+= Boolean types
+
+The boolean type `bool` represents a logical value that can be either `true` or
+`false`. It is a fundamental type used for conditional logic and control flow.
+
+== Syntax
+
+The type is denoted by `bool`. Boolean values are created using the
+literal keywords `true` and `false`:
+
+[source,cairo]
+----
+let x: bool = true;
+let y: bool = false;
+----
+
+== Characteristics
+
+- **Values**: Only two possible values: `true` and `false`
+- **No implicit conversions**: Only `bool` can be used in boolean contexts
+- **Copy type**: `bool` implements the `Copy` trait
+- **Runtime representation**: Stored as `felt252` at runtime
+
+== Operators
+
+Boolean types support logical and bitwise operators:
+
+=== Logical Operators (Short-circuiting)
+
+[options="header"]
+|===
+| Operator | Description | Example | Short-circuits
+| `&&`     | Logical AND | `x && y` | Yes (if `x` is `false`)
+| `\|\|`   | Logical OR  | `x \|\| y` | Yes (if `x` is `true`)
+| `!`      | Logical NOT | `!x`     | N/A
+|===
+
+See xref:boolean-operators.adoc[Boolean operators] for details.
+
+=== Bitwise Operators (Non-short-circuiting)
+
+[options="header"]
+|===
+| Operator | Description | Example | Short-circuits
+| `&`      | Bitwise AND | `x & y` | No
+| `\|`     | Bitwise OR  | `x \| y` | No
+| `^`      | Bitwise XOR | `x ^ y` | No
+|===
+
+See xref:bitwise-operators.adoc[Bitwise operators] for details.
+
+=== Equality Operators
+
+[options="header"]
+|===
+| Operator | Description | Example
+| `==`     | Equality    | `x == y`
+| `!=`     | Inequality  | `x != y`
+|===
+
+== Examples
+
+[source,cairo]
+----
+fn main() {
+    let x: bool = true;
+    let y = false;
+
+    // Logical operations
+    let z1 = x && y;  // false
+    let z2 = x || y;  // true
+    let z3 = !x;      // false
+
+    // Bitwise operations
+    let z4 = x & y;   // false
+    let z5 = x | y;   // true
+
+    // Comparisons
+    assert(x == true, 'x is true');
+    assert(x != y, 'x and y differ');
+}
+----
+
+== Usage in Control Flow
+
+[source,cairo]
+----
+fn example(x: u32) {
+    // If expression
+    if x > 10 {
+        // ...
+    }
+
+    // If-else with return value
+    let result = if x > 10 { "large" } else { "small" };
+
+    // While loop
+    let mut i = 0;
+    while i < 10 {
+        i += 1;
+    }
+}
+----
+
+== Related
+
+- xref:boolean-operators.adoc[Boolean operators] — Logical and bitwise operations
+- xref:negation-operators.adoc[Negation operators] — The `!` operator
+- xref:equality-operators.adoc[Equality operators] — Operators that return `bool`
+- xref:if-expressions.adoc[If expressions] — Conditional branching

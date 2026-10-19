@@ -1,0 +1,158 @@
+//! > Test struct generics.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: false)
+
+//! > cairo_code
+struct A<T> {
+    a: T,
+}
+fn foo(a: A<felt252>) -> felt252 {
+    a.a
+}
+
+//! > expected_diagnostics
+
+//! > ==========================================================================
+
+//! > Test invalid recursive struct.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+struct A {
+    member: A,
+}
+
+struct B {
+    member: C,
+    member2: A,
+}
+
+struct C {
+    member: B,
+}
+
+//! > expected_diagnostics
+error[E2052]: Recursive type "A" has infinite size.
+ --> lib.cairo:2:5
+    member: A,
+    ^^^^^^^^^
+
+error[E2052]: Recursive type "C" has infinite size.
+ --> lib.cairo:6:5
+    member: C,
+    ^^^^^^^^^
+
+error[E2052]: Recursive type "A" has infinite size.
+ --> lib.cairo:7:5
+    member2: A,
+    ^^^^^^^^^^
+
+error[E2052]: Recursive type "B" has infinite size.
+ --> lib.cairo:11:5
+    member: B,
+    ^^^^^^^^^
+
+//! > ==========================================================================
+
+//! > Test a recursive struct used as a value is reported only where the cycle is closed.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+struct A {
+    member: A,
+}
+fn foo(a: A) -> A {
+    a
+}
+
+//! > expected_diagnostics
+error[E2052]: Recursive type "A" has infinite size.
+ --> lib.cairo:2:5
+    member: A,
+    ^^^^^^^^^
+
+//! > ==========================================================================
+
+//! > Test phantom recursive struct.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: false)
+
+//! > cairo_code
+#[phantom]
+struct A {
+    member: A,
+}
+
+//! > expected_diagnostics
+
+//! > ==========================================================================
+
+//! > Test struct containing phantom.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+#[phantom]
+struct A {}
+
+struct B {
+    member: A,
+}
+
+//! > expected_diagnostics
+error[E2020]: Non-phantom type containing phantom type.
+ --> lib.cairo:5:5
+    member: A,
+    ^^^^^^^^^
+
+//! > ==========================================================================
+
+//! > Test struct containing empty array.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+struct A {
+    member: Array<((), ())>,
+}
+
+//! > expected_diagnostics
+error[E2053]: Cannot have array of type "((), ())" that is zero sized.
+ --> lib.cairo:2:5
+    member: Array<((), ())>,
+    ^^^^^^^^^^^^^^^^^^^^^^^
+
+//! > ==========================================================================
+
+//! > Test no ICE when an item-level macro call names an enum variant whose type is a generic struct with a trait bound.
+
+//! > test_runner_name
+test_function_diagnostics(expect_diagnostics: true)
+
+//! > cairo_code
+struct W<T, +Drop<T>> {
+    x: T,
+}
+enum E {
+    A: W<felt252>,
+}
+E::A!(());
+
+//! > expected_diagnostics
+error[E2028]: Cycle detected while resolving generic param. Try specifying the generic impl parameter explicitly to break the cycle.
+ --> lib.cairo:1:13
+struct W<T, +Drop<T>> {
+            ^^^^^^^^
+
+error[E2156]: Inline macro `E::A` not found.
+ --> lib.cairo:7:1
+E::A!(());
+^^^^^^^^^^

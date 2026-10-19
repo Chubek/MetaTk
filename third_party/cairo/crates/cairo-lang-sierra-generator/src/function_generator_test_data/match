@@ -1,0 +1,40 @@
+//! > Match with dup
+
+//! > test_runner_name
+test_function_generator
+
+//! > cairo_code
+#[inline(never)]
+fn immovable<T>(t: T) -> T {
+    t
+}
+#[target_function]
+fn foo(a: felt252) {
+    let (_x, _y) = immovable(if a == 0 {
+        (a, a)
+    } else {
+        (a, a)
+    });
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > sierra_code
+label_test::foo::0:
+dup<felt252>([0]) -> ([0], [1])
+felt252_is_zero([1]) { fallthrough() label_test::foo::1([2]) }
+branch_align() -> ()
+jump() { label_test::foo::3() }
+label_test::foo::1:
+branch_align() -> ()
+drop<NonZero<felt252>>([2]) -> ()
+label_test::foo::3:
+dup<felt252>([0]) -> ([0], [3])
+struct_construct<Tuple<felt252, felt252>>([3], [0]) -> ([4])
+store_temp<Tuple<felt252, felt252>>([4]) -> ([4])
+function_call<user@test::immovable::<(core::felt252, core::felt252)>>([4]) -> ([5])
+drop<Tuple<felt252, felt252>>([5]) -> ()
+return()
+label_test::foo::2:

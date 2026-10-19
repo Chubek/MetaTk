@@ -1,0 +1,241 @@
+//! > Last use in one branch
+
+//! > test_runner_name
+check_variable_lifetime
+
+//! > cairo_code
+#[target_function]
+fn foo(x: felt252, y: felt252) -> felt252 {
+    if x == 0 {
+        y
+    } else {
+        0
+    }
+}
+
+//! > lowering_format
+Parameters: v0: core::felt252, v1: core::felt252
+blk0 (root):
+Statements:
+End:
+  Match(match core::felt252_is_zero(v0) {
+    IsZeroResult::Zero => blk1,
+    IsZeroResult::NonZero(v2) => blk2,
+  })
+
+blk1:
+Statements:
+End:
+  Return(v1)
+
+blk2:
+Statements:
+  (v3: core::felt252) <- 0
+End:
+  Return(v3)
+
+//! > last_use
+v3: ((blk2, 1), 0)
+v1: ((blk1, 0), 0)
+v0: ((blk0, 0), 0)
+
+//! > drops
+BeginningOfBlock(blk2): v2, v1
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > ==========================================================================
+
+//! > Last use after branch
+
+//! > test_runner_name
+check_variable_lifetime
+
+//! > cairo_code
+#[target_function]
+fn foo(x: felt252, y: felt252) -> felt252 {
+    let _z = if x == 0 {
+        y
+    } else {
+        0
+    };
+    y
+}
+
+//! > lowering_format
+Parameters: v0: core::felt252, v1: core::felt252
+blk0 (root):
+Statements:
+End:
+  Match(match core::felt252_is_zero(v0) {
+    IsZeroResult::Zero => blk1,
+    IsZeroResult::NonZero(v2) => blk2,
+  })
+
+blk1:
+Statements:
+End:
+  Return(v1)
+
+blk2:
+Statements:
+End:
+  Return(v1)
+
+//! > last_use
+v1: ((blk2, 0), 0)
+v1: ((blk1, 0), 0)
+v0: ((blk0, 0), 0)
+
+//! > drops
+BeginningOfBlock(blk2): v2
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > ==========================================================================
+
+//! > Last use in both branches
+
+//! > test_runner_name
+check_variable_lifetime
+
+//! > cairo_code
+#[target_function]
+fn foo(x: felt252, y: felt252) {
+    let _z = if x == 0 {
+        y
+    } else {
+        y + 3
+    };
+}
+
+//! > lowering_format
+Parameters: v0: core::felt252, v1: core::felt252
+blk0 (root):
+Statements:
+End:
+  Match(match core::felt252_is_zero(v0) {
+    IsZeroResult::Zero => blk1,
+    IsZeroResult::NonZero(v2) => blk2,
+  })
+
+blk1:
+Statements:
+End:
+  Return()
+
+blk2:
+Statements:
+  (v3: core::felt252) <- 3
+  (v4: core::felt252) <- core::felt252_add(v1, v3)
+End:
+  Return()
+
+//! > last_use
+v3: ((blk2, 1), 1)
+v1: ((blk2, 1), 0)
+v0: ((blk0, 0), 0)
+
+//! > drops
+PostStatement((blk2, 1)): v4
+BeginningOfBlock(blk2): v2
+BeginningOfBlock(blk1): v1
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > ==========================================================================
+
+//! > Nested ifs
+
+//! > test_runner_name
+check_variable_lifetime
+
+//! > cairo_code
+#[target_function]
+fn foo(x: felt252, y: felt252) {
+    let _z = if x == 0 {
+        y
+    } else {
+        if x == 1 {
+            if x == y {
+                y
+            } else {
+                1234
+            }
+        } else {
+            1000
+        }
+    };
+}
+
+//! > lowering_format
+Parameters: v0: core::felt252, v1: core::felt252
+blk0 (root):
+Statements:
+End:
+  Match(match core::felt252_is_zero(v0) {
+    IsZeroResult::Zero => blk1,
+    IsZeroResult::NonZero(v2) => blk2,
+  })
+
+blk1:
+Statements:
+End:
+  Return()
+
+blk2:
+Statements:
+  (v3: core::felt252) <- 1
+  (v4: core::felt252) <- core::felt252_sub(v0, v3)
+End:
+  Match(match core::felt252_is_zero(v4) {
+    IsZeroResult::Zero => blk3,
+    IsZeroResult::NonZero(v5) => blk6,
+  })
+
+blk3:
+Statements:
+  (v6: core::felt252) <- core::felt252_sub(v0, v1)
+End:
+  Match(match core::felt252_is_zero(v6) {
+    IsZeroResult::Zero => blk4,
+    IsZeroResult::NonZero(v7) => blk5,
+  })
+
+blk4:
+Statements:
+End:
+  Return()
+
+blk5:
+Statements:
+End:
+  Return()
+
+blk6:
+Statements:
+End:
+  Return()
+
+//! > last_use
+v6: ((blk3, 1), 0)
+v1: ((blk3, 0), 1)
+v0: ((blk3, 0), 0)
+v4: ((blk2, 2), 0)
+v3: ((blk2, 1), 1)
+
+//! > drops
+BeginningOfBlock(blk5): v7
+BeginningOfBlock(blk6): v5, v1, v0
+BeginningOfBlock(blk2): v2
+BeginningOfBlock(blk1): v1, v0
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics

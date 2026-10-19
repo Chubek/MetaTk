@@ -1,0 +1,16 @@
+[ap + 0] = 300, ap++;
+ret;
+jmp rel 4 if [fp + -4] != 0;
+[ap + 0] = [fp + -3], ap++;
+ret;
+[ap + 0] = [fp + -3], ap++;
+ret;
+jmp rel [fp + -4];
+jmp rel 8;
+jmp rel 4;
+[ap + 0] = [fp + -3], ap++;
+ret;
+[ap + 0] = [fp + -3], ap++;
+ret;
+[ap + 0] = [fp + -3], ap++;
+ret;

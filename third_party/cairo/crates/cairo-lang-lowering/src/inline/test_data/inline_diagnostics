@@ -1,0 +1,98 @@
+//! > Test inlining diagnostics for a recursive function.
+
+//! > test_runner_name
+test_function_inlining
+
+//! > cairo_code
+#[inline(always)]
+#[target_function]
+fn foo(ref a: felt252, b: felt252) -> felt252 {
+    foo(ref a, b);
+    b
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+error[E3005]: Cannot inline a function that might call itself.
+ --> lib.cairo:1:1-6:1
+  #[inline(always)]
+ _^
+| ...
+| }
+|_^
+
+//! > before
+<Failed lowering function - run with RUST_LOG=warn (or less) to see diagnostics>
+
+//! > after
+<Failed lowering function - run with RUST_LOG=warn (or less) to see diagnostics>
+
+//! > ==========================================================================
+
+//! > Test inlining a function where the last block does not return.
+
+//! > test_runner_name
+test_function_inlining
+
+//! > cairo_code
+#[inline(always)]
+fn bar(n: felt252) -> felt252 {
+    if n == 0 {
+        return 1;
+    } else {
+        return 1;
+    }
+}
+#[target_function]
+fn foo(n: felt252) -> felt252 {
+    bar(n)
+}
+
+//! > semantic_diagnostics
+
+//! > before
+Parameters: v0: core::felt252
+blk0 (root):
+Statements:
+  (v1: core::felt252) <- test::bar(v0)
+End:
+  Return(v1)
+
+//! > after
+Parameters: v0: core::felt252
+blk0 (root):
+Statements:
+End:
+  Goto(blk1, {})
+
+blk1:
+Statements:
+End:
+  Match(match core::felt252_is_zero(v0) {
+    IsZeroResult::Zero => blk2,
+    IsZeroResult::NonZero(v2) => blk3,
+  })
+
+blk2:
+Statements:
+End:
+  Goto(blk4, {})
+
+blk3:
+Statements:
+End:
+  Goto(blk4, {})
+
+blk4:
+Statements:
+  (v3: core::felt252) <- 1
+End:
+  Goto(blk5, {v3 -> v1})
+
+blk5:
+Statements:
+End:
+  Return(v1)
+
+//! > lowering_diagnostics

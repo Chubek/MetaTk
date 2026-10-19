@@ -1,0 +1,328 @@
+//! > Test arm pattern destructure for match-enum variable (with refs and implicits).
+
+//! > test_runner_name
+test_match_optimizer
+
+//! > cairo_code
+enum MyEnum {
+    a: (felt252, (felt252, felt252)),
+    b: (felt252, (felt252, felt252)),
+    c: (felt252, (felt252, felt252)),
+    d: (felt252, felt252),
+    e: (felt252, felt252),
+    f: (felt252,),
+    g: (felt252,),
+    h: felt252,
+}
+#[allow(extern_outside_corelib)]
+extern fn bar(ref r: felt252) -> MyEnum implicits(RangeCheck) nopanic;
+#[target_function]
+fn foo(mut z: felt252) {
+    let y = bar(ref z);
+    match y {
+        MyEnum::a((_x, (_y, _z))) => {},
+        MyEnum::b((_x, _y)) => {},
+        MyEnum::c(_x) => {},
+        MyEnum::d((_x, _y)) => {},
+        MyEnum::e(_x) => {},
+        MyEnum::f((_x,)) => {},
+        MyEnum::g(_x) => {},
+        MyEnum::h(_x) => {},
+    }
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > before
+Parameters: v0: core::felt252
+blk0 (root):
+Statements:
+End:
+  Match(match test::bar(v0) {
+    MyEnum::a(v1, v2, v3) => blk1,
+    MyEnum::b(v4, v5, v6) => blk2,
+    MyEnum::c(v7, v8, v9) => blk3,
+    MyEnum::d(v10, v11, v12) => blk4,
+    MyEnum::e(v13, v14, v15) => blk5,
+    MyEnum::f(v16, v17) => blk6,
+    MyEnum::g(v18, v19) => blk7,
+    MyEnum::h(v20, v21) => blk8,
+  })
+
+blk1:
+Statements:
+  (v22: (core::felt252, (core::felt252, core::felt252))) <- struct_construct(v2, v3)
+  (v23: test::MyEnum) <- MyEnum::a(v22)
+End:
+  Goto(blk9, {v23 -> v24})
+
+blk2:
+Statements:
+  (v25: (core::felt252, (core::felt252, core::felt252))) <- struct_construct(v5, v6)
+  (v26: test::MyEnum) <- MyEnum::b(v25)
+End:
+  Goto(blk9, {v26 -> v24})
+
+blk3:
+Statements:
+  (v27: (core::felt252, (core::felt252, core::felt252))) <- struct_construct(v8, v9)
+  (v28: test::MyEnum) <- MyEnum::c(v27)
+End:
+  Goto(blk9, {v28 -> v24})
+
+blk4:
+Statements:
+  (v29: (core::felt252, core::felt252)) <- struct_construct(v11, v12)
+  (v30: test::MyEnum) <- MyEnum::d(v29)
+End:
+  Goto(blk9, {v30 -> v24})
+
+blk5:
+Statements:
+  (v31: (core::felt252, core::felt252)) <- struct_construct(v14, v15)
+  (v32: test::MyEnum) <- MyEnum::e(v31)
+End:
+  Goto(blk9, {v32 -> v24})
+
+blk6:
+Statements:
+  (v33: (core::felt252,)) <- struct_construct(v17)
+  (v34: test::MyEnum) <- MyEnum::f(v33)
+End:
+  Goto(blk9, {v34 -> v24})
+
+blk7:
+Statements:
+  (v35: (core::felt252,)) <- struct_construct(v19)
+  (v36: test::MyEnum) <- MyEnum::g(v35)
+End:
+  Goto(blk9, {v36 -> v24})
+
+blk8:
+Statements:
+  (v37: test::MyEnum) <- MyEnum::h(v21)
+End:
+  Goto(blk9, {v37 -> v24})
+
+blk9:
+Statements:
+End:
+  Match(match_enum(v24) {
+    MyEnum::a(v38) => blk10,
+    MyEnum::b(v39) => blk11,
+    MyEnum::c(v40) => blk12,
+    MyEnum::d(v41) => blk13,
+    MyEnum::e(v42) => blk14,
+    MyEnum::f(v43) => blk15,
+    MyEnum::g(v44) => blk16,
+    MyEnum::h(v45) => blk17,
+  })
+
+blk10:
+Statements:
+End:
+  Goto(blk18, {})
+
+blk11:
+Statements:
+End:
+  Goto(blk18, {})
+
+blk12:
+Statements:
+End:
+  Goto(blk18, {})
+
+blk13:
+Statements:
+End:
+  Goto(blk18, {})
+
+blk14:
+Statements:
+End:
+  Goto(blk18, {})
+
+blk15:
+Statements:
+End:
+  Goto(blk18, {})
+
+blk16:
+Statements:
+End:
+  Goto(blk18, {})
+
+blk17:
+Statements:
+End:
+  Goto(blk18, {})
+
+blk18:
+Statements:
+End:
+  Return()
+
+//! > after
+Parameters: v0: core::felt252
+blk0 (root):
+Statements:
+End:
+  Match(match test::bar(v0) {
+    MyEnum::a(v1, v2, v3) => blk1,
+    MyEnum::b(v4, v5, v6) => blk2,
+    MyEnum::c(v7, v8, v9) => blk3,
+    MyEnum::d(v10, v11, v12) => blk4,
+    MyEnum::e(v13, v14, v15) => blk5,
+    MyEnum::f(v16, v17) => blk6,
+    MyEnum::g(v18, v19) => blk7,
+    MyEnum::h(v20, v21) => blk8,
+  })
+
+blk1:
+Statements:
+  (v22: (core::felt252, (core::felt252, core::felt252))) <- struct_construct(v2, v3)
+End:
+  Goto(blk10, {v22 -> v38})
+
+blk2:
+Statements:
+  (v25: (core::felt252, (core::felt252, core::felt252))) <- struct_construct(v5, v6)
+End:
+  Goto(blk11, {v25 -> v39})
+
+blk3:
+Statements:
+  (v27: (core::felt252, (core::felt252, core::felt252))) <- struct_construct(v8, v9)
+End:
+  Goto(blk12, {v27 -> v40})
+
+blk4:
+Statements:
+  (v29: (core::felt252, core::felt252)) <- struct_construct(v11, v12)
+End:
+  Goto(blk13, {v29 -> v41})
+
+blk5:
+Statements:
+  (v31: (core::felt252, core::felt252)) <- struct_construct(v14, v15)
+End:
+  Goto(blk14, {v31 -> v42})
+
+blk6:
+Statements:
+  (v33: (core::felt252,)) <- struct_construct(v17)
+End:
+  Goto(blk15, {v33 -> v43})
+
+blk7:
+Statements:
+  (v35: (core::felt252,)) <- struct_construct(v19)
+End:
+  Goto(blk16, {v35 -> v44})
+
+blk8:
+Statements:
+End:
+  Goto(blk17, {v21 -> v45})
+
+blk9:
+Statements:
+End:
+  Match(match_enum(v24) {
+    MyEnum::a(v63) => blk26,
+    MyEnum::b(v62) => blk25,
+    MyEnum::c(v61) => blk24,
+    MyEnum::d(v60) => blk23,
+    MyEnum::e(v59) => blk22,
+    MyEnum::f(v58) => blk21,
+    MyEnum::g(v57) => blk20,
+    MyEnum::h(v56) => blk19,
+  })
+
+blk10:
+Statements:
+End:
+  Goto(blk18, {})
+
+blk11:
+Statements:
+End:
+  Goto(blk18, {})
+
+blk12:
+Statements:
+End:
+  Goto(blk18, {})
+
+blk13:
+Statements:
+End:
+  Goto(blk18, {})
+
+blk14:
+Statements:
+End:
+  Goto(blk18, {})
+
+blk15:
+Statements:
+End:
+  Goto(blk18, {})
+
+blk16:
+Statements:
+End:
+  Goto(blk18, {})
+
+blk17:
+Statements:
+End:
+  Goto(blk18, {})
+
+blk18:
+Statements:
+End:
+  Return()
+
+blk19:
+Statements:
+End:
+  Goto(blk17, {v56 -> v45})
+
+blk20:
+Statements:
+End:
+  Goto(blk16, {v57 -> v44})
+
+blk21:
+Statements:
+End:
+  Goto(blk15, {v58 -> v43})
+
+blk22:
+Statements:
+End:
+  Goto(blk14, {v59 -> v42})
+
+blk23:
+Statements:
+End:
+  Goto(blk13, {v60 -> v41})
+
+blk24:
+Statements:
+End:
+  Goto(blk12, {v61 -> v40})
+
+blk25:
+Statements:
+End:
+  Goto(blk11, {v62 -> v39})
+
+blk26:
+Statements:
+End:
+  Goto(blk10, {v63 -> v38})

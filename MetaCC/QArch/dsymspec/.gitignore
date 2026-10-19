@@ -1,7 +1,0 @@
-build/
-__pycache__/
-*.pyc
-!generated/
-!generated/AMD64.hpp
-!generated/AMD64Backend.hpp
-!generated/amd64-asmtk.json

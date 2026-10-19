@@ -1,0 +1,79 @@
+= Panic
+
+Code in Cairo may _panic_, which means it fails with an unrecoverable error.
+When a program panics, all living variables are destructed using the
+xref:../../language_semantics/pages/linear-types.adoc[linear type system].
+
+== `panic` Function
+
+The basic panic function is defined as:
+
+[source,cairo]
+----
+extern fn panic(data: Array<felt252>) -> never;
+----
+
+The `panic` function takes an array of `felt252` values as the panic reason and
+never returns (marked with the xref:never-type.adoc[never type]).
+
+== `nopanic` Notation
+
+Functions may be marked with the `nopanic` notation to indicate they will never
+panic:
+
+[source,cairo]
+----
+fn safe_operation() -> u32 nopanic {
+    42
+}
+----
+
+Only `nopanic` functions may be called from other `nopanic` functions.
+
+=== Traits and `nopanic`
+
+If a trait function is marked `nopanic`, all implementations must also be
+`nopanic`. For example, the `Destruct` trait's `destruct` function is
+`nopanic` because it is called during panic handling.
+
+If a trait function is not marked `nopanic`, implementations may choose
+whether to be `nopanic`. For example, `Add::add` is `nopanic` for `felt252`
+but not for integer types (which may overflow).
+
+== `panic_with` Attribute
+
+IMPORTANT: `#[panic_with]` is deprecated. Prefer direct error handling expressions.
+
+Functions returning `Option` or `Result` may use the `panic_with` attribute to generate a wrapper
+function that panics on `None` or `Err`. Using it emits a deprecation warning unless suppressed
+with `#[feature("deprecated-panic-with")]`.
+
+[source,cairo]
+----
+#[panic_with('value is None', unwrap_value)]
+fn identity(value: Option<u32>) -> Option<u32> {
+    value
+}
+// Generates: fn unwrap_value(value: Option<u32>) -> u32
+----
+
+== Examples
+
+[source,cairo]
+----
+fn will_panic() {
+    panic(array!['error message']);
+}
+
+fn conditional_panic(x: u32) {
+    if x == 0 {
+        panic(array!['x cannot be zero']);
+    }
+}
+----
+
+== Related
+
+- xref:never-type.adoc[Never type] — The `never` return type
+- xref:../../language_semantics/pages/linear-types.adoc[Linear types] —
+Variable destruction during panic

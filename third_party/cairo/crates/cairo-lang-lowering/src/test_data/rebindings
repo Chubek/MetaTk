@@ -1,0 +1,26 @@
+//! > Test rebindings.
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: false)
+
+//! > cairo_code
+#[allow(extern_outside_corelib)]
+extern fn bar() -> felt252 nopanic;
+#[target_function]
+fn foo(ref a: felt252, b: felt252, c: felt252) -> felt252 {
+    a = b;
+    a = bar();
+    c
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > lowering_flat
+Parameters: v0: core::felt252, v1: core::felt252, v2: core::felt252
+blk0 (root):
+Statements:
+  (v3: core::felt252) <- test::bar()
+End:
+  Return(v3, v2)

@@ -1,0 +1,111 @@
+use core::hash::{BuildHasher, Hash};
+use core::ops::Sub;
+
+use indexmap::IndexSet;
+use itertools::zip_eq;
+
+// hashbrown's default hasher (foldhash) rather than std's SipHash. IndexMap/IndexSet iterate in
+// insertion order, so the iteration order -- and thus compilation determinism -- is independent of
+// the hasher.
+type BHImpl = hashbrown::DefaultHashBuilder;
+
+#[derive(Clone, Debug)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(transparent),
+    serde(bound(
+        serialize = "Key: serde::Serialize",
+        deserialize = "Key: serde::Deserialize<'de> + Hash + Eq, BH: BuildHasher + Default"
+    ))
+)]
+pub struct OrderedHashSet<Key, BH = BHImpl>(IndexSet<Key, BH>);
+
+impl<Key, BH> core::ops::Deref for OrderedHashSet<Key, BH> {
+    type Target = IndexSet<Key, BH>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<Key, BH> core::ops::DerefMut for OrderedHashSet<Key, BH> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[cfg(feature = "salsa")]
+unsafe impl<Key: Eq + Hash + salsa::SalsaValue, BH: BuildHasher> salsa::SalsaValue
+    for OrderedHashSet<Key, BH>
+{
+}
+
+pub type Iter<'a, Key> = indexmap::set::Iter<'a, Key>;
+
+impl<Key, BH: Default> Default for OrderedHashSet<Key, BH> {
+    #[cfg(feature = "std")]
+    fn default() -> Self {
+        Self(Default::default())
+    }
+    #[cfg(not(feature = "std"))]
+    fn default() -> Self {
+        Self(IndexSet::with_hasher(Default::default()))
+    }
+}
+
+impl<Key, BH> IntoIterator for OrderedHashSet<Key, BH> {
+    type Item = Key;
+    type IntoIter = <IndexSet<Key, BH> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl<'a, Key, BH> IntoIterator for &'a OrderedHashSet<Key, BH> {
+    type Item = &'a Key;
+    type IntoIter = <&'a IndexSet<Key, BH> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+impl<Key: Eq, BH> PartialEq for OrderedHashSet<Key, BH> {
+    fn eq(&self, other: &Self) -> bool {
+        if self.len() != other.len() {
+            return false;
+        };
+
+        zip_eq(self.iter(), other.iter()).all(|(a, b)| a == b)
+    }
+}
+
+impl<Key: Eq, BH> Eq for OrderedHashSet<Key, BH> {}
+
+impl<Key: Hash, BH> Hash for OrderedHashSet<Key, BH> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.len().hash(state);
+        for e in self.iter() {
+            e.hash(state);
+        }
+    }
+}
+
+impl<Key: Hash + Eq, BH: BuildHasher + Default> FromIterator<Key> for OrderedHashSet<Key, BH> {
+    fn from_iter<T: IntoIterator<Item = Key>>(iter: T) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
+
+impl<'a, Key, BH> Sub<&'a OrderedHashSet<Key, BH>> for &'a OrderedHashSet<Key, BH>
+where
+    &'a IndexSet<Key, BH>: Sub<Output = IndexSet<Key, BH>>,
+{
+    type Output = OrderedHashSet<Key, BH>;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        OrderedHashSet::<Key, BH>(&self.0 - &rhs.0)
+    }
+}

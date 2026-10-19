@@ -1,0 +1,412 @@
+//! > Test boolean if.
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: false)
+
+//! > cairo_code
+struct A {
+    x: u128,
+}
+impl ADestruct of Destruct<A> {
+    #[inline(never)]
+    #[feature("corelib-internal-use")]
+    fn destruct(self: A) nopanic {
+        let A { x } = self;
+        // Use RangeCheck, a previously unused implicit.
+        match core::integer::u128_overflowing_add(x, 2_u128) {
+            Ok(v) => v,
+            Err(v) => v,
+        };
+    }
+}
+#[target_function]
+fn foo(flag: bool, x: u128) -> Option<A> {
+    let a = A { x };
+    if flag {
+        Some(a)
+    } else {
+        None
+    }
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > lowering_flat
+Parameters: v0: core::RangeCheck, v1: core::bool, v2: core::integer::u128
+blk0 (root):
+Statements:
+End:
+  Match(match_enum(v1) {
+    bool::False(v3) => blk1,
+    bool::True(v4) => blk2,
+  })
+
+blk1:
+Statements:
+  (v5: test::A) <- struct_construct(v2)
+  (v6: core::RangeCheck) <- test::ADestruct::destruct(v0, v5)
+  (v7: ()) <- struct_construct()
+  (v8: core::option::Option::<test::A>) <- Option::None(v7)
+End:
+  Return(v6, v8)
+
+blk2:
+Statements:
+  (v9: test::A) <- struct_construct(v2)
+  (v10: core::option::Option::<test::A>) <- Option::Some(v9)
+End:
+  Return(v0, v10)
+
+//! > ==========================================================================
+
+//! > Test dict destruct through panic.
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: false)
+
+//! > cairo_code
+fn get_total_signed_weight(used_keys: Felt252Dict<felt252>) -> u128 {
+    1_u128
+}
+#[target_function]
+fn foo(d: Felt252Dict<felt252>) {
+    get_total_signed_weight(d);
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > lowering_flat
+Parameters: v0: core::RangeCheck, v1: core::SegmentArena, v2: core::gas::GasBuiltin, v3: core::dict::Felt252Dict::<core::felt252>
+blk0 (root):
+Statements:
+  (v4: core::RangeCheck, v5: core::SegmentArena, v6: core::gas::GasBuiltin, v7: core::dict::SquashedFelt252Dict::<core::felt252>) <- core::dict::Felt252DictImpl::<core::felt252, core::Felt252Felt252DictValue>::squash(v0, v1, v2, v3)
+End:
+  Return(v4, v5, v6)
+
+//! > ==========================================================================
+
+//! > Test panic destruct.
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: false)
+
+//! > cairo_code
+#[inline(never)]
+fn may_panic() {
+    panic_with_felt252('123');
+}
+
+struct A {}
+impl APanicDestruct of PanicDestruct<A> {
+    #[inline(never)]
+    fn panic_destruct(self: A, ref panic: Panic) nopanic {
+        let A { } = self;
+    }
+}
+
+struct B {
+    a: A,
+}
+impl BPanicDestruct of PanicDestruct<B> {
+    #[inline(never)]
+    fn panic_destruct(self: B, ref panic: Panic) nopanic {
+        let B { a: _ } = self;
+    }
+}
+#[target_function]
+fn foo(a: A, b: B) {
+    may_panic();
+    may_panic();
+    panic_with_felt252('123');
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > lowering_flat
+Parameters: v0: test::A, v1: test::B
+blk0 (root):
+Statements:
+  (v2: core::panics::PanicResult::<((),)>) <- test::may_panic()
+End:
+  Match(match_enum(v2) {
+    PanicResult::Ok(v3) => blk1,
+    PanicResult::Err(v4) => blk4,
+  })
+
+blk1:
+Statements:
+  (v5: core::panics::PanicResult::<((),)>) <- test::may_panic()
+End:
+  Match(match_enum(v5) {
+    PanicResult::Ok(v6) => blk2,
+    PanicResult::Err(v7) => blk3,
+  })
+
+blk2:
+Statements:
+  (v8: (core::panics::Panic, core::array::Array::<core::felt252>)) <- core::panic_with_const_felt252::<3224115>()
+  (v9: core::panics::Panic, v10: core::array::Array::<core::felt252>) <- struct_destructure(v8)
+  (v11: core::panics::Panic) <- test::BPanicDestruct::panic_destruct(v1, v9)
+  (v12: core::panics::Panic) <- test::APanicDestruct::panic_destruct(v0, v11)
+  (v13: (core::panics::Panic, core::array::Array::<core::felt252>)) <- struct_construct(v12, v10)
+  (v14: core::panics::PanicResult::<((),)>) <- PanicResult::Err(v13)
+End:
+  Return(v14)
+
+blk3:
+Statements:
+End:
+  Goto(blk5, {v7 -> v15})
+
+blk4:
+Statements:
+End:
+  Goto(blk5, {v4 -> v15})
+
+blk5:
+Statements:
+  (v16: core::panics::Panic, v17: core::array::Array::<core::felt252>) <- struct_destructure(v15)
+  (v18: core::panics::Panic) <- test::BPanicDestruct::panic_destruct(v1, v16)
+  (v19: core::panics::Panic) <- test::APanicDestruct::panic_destruct(v0, v18)
+  (v20: (core::panics::Panic, core::array::Array::<core::felt252>)) <- struct_construct(v19, v17)
+  (v21: core::panics::PanicResult::<((),)>) <- PanicResult::Err(v20)
+End:
+  Return(v21)
+
+//! > ==========================================================================
+
+//! > Test panic destruct with merge.
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: false)
+
+//! > cairo_code
+#[inline(never)]
+fn may_panic() {
+    panic_with_felt252('123');
+}
+
+struct A {}
+impl APanicDestruct of PanicDestruct<A> {
+    #[inline(never)]
+    fn panic_destruct(self: A, ref panic: Panic) nopanic {
+        let A { } = self;
+    }
+}
+#[target_function]
+fn foo(a: bool, d: A) -> A {
+    if a {
+        may_panic();
+    }
+    return d;
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > lowering_flat
+Parameters: v0: core::bool, v1: test::A
+blk0 (root):
+Statements:
+End:
+  Match(match_enum(v0) {
+    bool::False(v2) => blk1,
+    bool::True(v3) => blk2,
+  })
+
+blk1:
+Statements:
+  (v4: (test::A,)) <- struct_construct(v1)
+  (v5: core::panics::PanicResult::<(test::A,)>) <- PanicResult::Ok(v4)
+End:
+  Return(v5)
+
+blk2:
+Statements:
+  (v6: core::panics::PanicResult::<((),)>) <- test::may_panic()
+End:
+  Match(match_enum(v6) {
+    PanicResult::Ok(v7) => blk3,
+    PanicResult::Err(v8) => blk4,
+  })
+
+blk3:
+Statements:
+  (v9: (test::A,)) <- struct_construct(v1)
+  (v10: core::panics::PanicResult::<(test::A,)>) <- PanicResult::Ok(v9)
+End:
+  Return(v10)
+
+blk4:
+Statements:
+  (v11: core::panics::Panic, v12: core::array::Array::<core::felt252>) <- struct_destructure(v8)
+  (v13: core::panics::Panic) <- test::APanicDestruct::panic_destruct(v1, v11)
+  (v14: (core::panics::Panic, core::array::Array::<core::felt252>)) <- struct_construct(v13, v12)
+  (v15: core::panics::PanicResult::<(test::A,)>) <- PanicResult::Err(v14)
+End:
+  Return(v15)
+
+//! > ==========================================================================
+
+//! > Test custom unit destruct (Currently broken).
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: false)
+
+//! > cairo_code
+#[inline]
+fn bar<T, +Destruct<T>>(a: T) {}
+
+pub impl MyDestruct of Destruct<()> {
+    #[inline(always)]
+    fn destruct(self: ()) nopanic {
+        my_fn()
+    }
+}
+
+#[allow(extern_outside_corelib)]
+extern fn my_fn() nopanic;
+#[target_function]
+fn foo(a: Option<()>) {
+    bar::<(), MyDestruct>(a.expect('Should be Some.'))
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > lowering_flat
+Parameters: v0: core::option::Option::<()>
+blk0 (root):
+Statements:
+End:
+  Match(match_enum(v0) {
+    Option::Some(v1) => blk1,
+    Option::None(v2) => blk2,
+  })
+
+blk1:
+Statements:
+  () <- test::my_fn()
+  (v3: ()) <- struct_construct()
+  (v4: ((),)) <- struct_construct(v3)
+  (v5: core::panics::PanicResult::<((),)>) <- PanicResult::Ok(v4)
+End:
+  Return(v5)
+
+blk2:
+Statements:
+  (v6: (core::panics::Panic, core::array::Array::<core::felt252>)) <- core::panic_with_const_felt252::<433078840523992521883553638820701486>()
+  (v7: core::panics::PanicResult::<((),)>) <- PanicResult::Err(v6)
+End:
+  Return(v7)
+
+//! > ==========================================================================
+
+//! > Test inline of self calling destruct.
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: true)
+
+//! > cairo_code
+struct A {}
+impl ADestruct of Destruct<A> {
+    #[inline(always)]
+    fn destruct(self: A) nopanic {}
+}
+#[target_function]
+fn foo() {
+    let _a = A {};
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+error[E3008]: Call cycle of `nopanic` functions is not allowed.
+ --> lib.cairo:3:5-4:35
+      #[inline(always)]
+ _____^
+|     fn destruct(self: A) nopanic {}
+|___________________________________^
+
+error[E3005]: Cannot inline a function that might call itself.
+ --> lib.cairo:3:5-4:35
+      #[inline(always)]
+ _____^
+|     fn destruct(self: A) nopanic {}
+|___________________________________^
+
+//! > lowering_flat
+Parameters:
+
+//! > ==========================================================================
+
+//! > Panic destruct is not duplicated when arms converge on a shared panic.
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: false)
+
+//! > cairo_code
+struct Wrap {
+    d: Felt252Dict<u64>,
+}
+
+impl WrapPanicDestruct of core::traits::PanicDestruct<Wrap> {
+    fn panic_destruct(self: Wrap, ref panic: core::panics::Panic) nopanic {
+        let Wrap { d } = self;
+        d.squash();
+    }
+}
+#[target_function]
+fn foo(flag: bool) {
+    let d: Felt252Dict<u64> = Default::default();
+    let _w = Wrap { d };
+    if flag {
+        let _a = 1_u8;
+    } else {
+        let _b = 2_u8;
+    }
+    core::panic_with_felt252('x');
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > lowering_flat
+Parameters: v0: core::RangeCheck, v1: core::SegmentArena, v2: core::gas::GasBuiltin, v3: core::bool
+blk0 (root):
+Statements:
+  (v4: core::SegmentArena, v5: core::dict::Felt252Dict::<core::integer::u64>) <- core::dict::felt252_dict_new::<core::integer::u64>(v1)
+End:
+  Match(match_enum(v3) {
+    bool::False(v6) => blk1,
+    bool::True(v7) => blk2,
+  })
+
+blk1:
+Statements:
+  (v8: core::gas::GasBuiltin) <- core::gas::redeposit_gas(v2)
+End:
+  Goto(blk3, {v8 -> v9})
+
+blk2:
+Statements:
+  (v10: core::gas::GasBuiltin) <- core::gas::redeposit_gas(v2)
+End:
+  Goto(blk3, {v10 -> v9})
+
+blk3:
+Statements:
+  (v11: (core::panics::Panic, core::array::Array::<core::felt252>)) <- core::panic_with_const_felt252::<120>()
+  (v12: core::RangeCheck, v13: core::SegmentArena, v14: core::gas::GasBuiltin, v15: core::dict::SquashedFelt252Dict::<core::integer::u64>) <- core::dict::Felt252DictImpl::<core::integer::u64, core::integer::U64Felt252DictValue>::squash(v0, v4, v9, v5)
+  (v16: core::panics::PanicResult::<((),)>) <- PanicResult::Err(v11)
+End:
+  Return(v12, v13, v14, v16)

@@ -1,0 +1,256 @@
+//! > Test variable lifetime in simple inlining scenario
+
+//! > test_runner_name
+check_variable_lifetime
+
+//! > cairo_code
+#[inline(always)]
+fn bar(a: felt252) -> felt252 {
+    if a == 0 {
+        return 1;
+    }
+    0
+}
+#[target_function]
+fn foo(a: felt252) -> felt252 {
+    bar(a)
+}
+
+//! > lowering_format
+Parameters: v0: core::felt252
+blk0 (root):
+Statements:
+End:
+  Match(match core::felt252_is_zero(v0) {
+    IsZeroResult::Zero => blk1,
+    IsZeroResult::NonZero(v1) => blk2,
+  })
+
+blk1:
+Statements:
+  (v2: core::felt252) <- 1
+End:
+  Return(v2)
+
+blk2:
+Statements:
+  (v3: core::felt252) <- 0
+End:
+  Return(v3)
+
+//! > last_use
+v3: ((blk2, 1), 0)
+v2: ((blk1, 1), 0)
+v0: ((blk0, 0), 0)
+
+//! > drops
+BeginningOfBlock(blk2): v1
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > ==========================================================================
+
+//! > Test variable lifetime in inlining scenario with callsite
+
+//! > test_runner_name
+check_variable_lifetime
+
+//! > cairo_code
+#[inline(always)]
+fn bar(a: felt252) -> felt252 {
+    if a == 0 {
+        return 1;
+    }
+    0
+}
+#[target_function]
+fn foo(a: felt252) -> felt252 {
+    if a == 2 {
+        bar(a)
+    } else {
+        a
+    }
+}
+
+//! > lowering_format
+Parameters: v0: core::felt252
+blk0 (root):
+Statements:
+  (v1: core::felt252) <- 2
+  (v2: core::felt252) <- core::felt252_sub(v0, v1)
+End:
+  Match(match core::felt252_is_zero(v2) {
+    IsZeroResult::Zero => blk1,
+    IsZeroResult::NonZero(v3) => blk4,
+  })
+
+blk1:
+Statements:
+End:
+  Match(match core::felt252_is_zero(v0) {
+    IsZeroResult::Zero => blk2,
+    IsZeroResult::NonZero(v4) => blk3,
+  })
+
+blk2:
+Statements:
+  (v5: core::felt252) <- 1
+End:
+  Return(v5)
+
+blk3:
+Statements:
+  (v6: core::felt252) <- 0
+End:
+  Return(v6)
+
+blk4:
+Statements:
+End:
+  Return(v0)
+
+//! > last_use
+v0: ((blk4, 0), 0)
+v6: ((blk3, 1), 0)
+v5: ((blk2, 1), 0)
+v0: ((blk1, 0), 0)
+v2: ((blk0, 2), 0)
+v1: ((blk0, 1), 1)
+
+//! > drops
+BeginningOfBlock(blk3): v4
+BeginningOfBlock(blk4): v3
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > ==========================================================================
+
+//! > Test variable lifetime with local variables
+
+//! > test_runner_name
+check_variable_lifetime
+
+//! > cairo_code
+#[inline(always)]
+fn bar(x: felt252) -> felt252 {
+    if x == 0 {
+        x
+    } else {
+        let a = x + x;
+        // The call will force `a` to be a local variable.
+        revoke_tempvars();
+        a
+    }
+}
+
+fn revoke_tempvars() {
+    revoke_tempvars()
+}
+#[target_function]
+fn foo(x: felt252) -> felt252 {
+    bar(x)
+}
+
+//! > lowering_format
+Parameters: v0: core::felt252
+blk0 (root):
+Statements:
+End:
+  Match(match core::felt252_is_zero(v0) {
+    IsZeroResult::Zero => blk1,
+    IsZeroResult::NonZero(v1) => blk2,
+  })
+
+blk1:
+Statements:
+End:
+  Return(v0)
+
+blk2:
+Statements:
+  (v2: core::felt252) <- core::felt252_add(v0, v0)
+  () <- test::revoke_tempvars()
+End:
+  Return(v2)
+
+//! > last_use
+v2: ((blk2, 2), 0)
+v0: ((blk2, 0), 1)
+v0: ((blk1, 0), 0)
+
+//! > drops
+BeginningOfBlock(blk2): v1
+BeginningOfBlock(blk1): UninitializedLocal(v2)
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > ==========================================================================
+
+//! > Test match where is there a goto in one arm and callsite in another.
+
+//! > test_runner_name
+check_variable_lifetime
+
+//! > cairo_code
+#[inline(always)]
+fn bar(data: Array<felt252>) -> Array<felt252> {
+    gas::withdraw_gas().expect('Out of gas');
+
+    let mut arr = Default::default();
+    arr
+}
+#[target_function]
+fn foo(data: Array<felt252>) -> Array<felt252> {
+    bar(data)
+}
+
+//! > lowering_format
+Parameters: v0: core::RangeCheck, v1: core::gas::GasBuiltin, v2: core::array::Array::<core::felt252>
+blk0 (root):
+Statements:
+End:
+  Match(match core::gas::withdraw_gas(v0, v1) {
+    Option::Some(v3, v4) => blk1,
+    Option::None(v5, v6) => blk2,
+  })
+
+blk1:
+Statements:
+  (v7: core::array::Array::<core::felt252>) <- core::array::array_new::<core::felt252>()
+  (v8: (core::array::Array::<core::felt252>,)) <- struct_construct(v7)
+  (v9: core::panics::PanicResult::<(core::array::Array::<core::felt252>,)>) <- PanicResult::Ok(v8)
+End:
+  Return(v3, v4, v9)
+
+blk2:
+Statements:
+  (v10: (core::panics::Panic, core::array::Array::<core::felt252>)) <- core::panic_with_const_felt252::<375233589013918064796019>()
+  (v11: core::panics::PanicResult::<(core::array::Array::<core::felt252>,)>) <- PanicResult::Err(v10)
+End:
+  Return(v5, v6, v11)
+
+//! > last_use
+v11: ((blk2, 2), 2)
+v6: ((blk2, 2), 1)
+v5: ((blk2, 2), 0)
+v10: ((blk2, 1), 0)
+v9: ((blk1, 3), 2)
+v4: ((blk1, 3), 1)
+v3: ((blk1, 3), 0)
+v8: ((blk1, 2), 0)
+v7: ((blk1, 1), 0)
+v1: ((blk0, 0), 1)
+v0: ((blk0, 0), 0)
+
+//! > drops
+BeginningOfBlock(blk0): v2
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics

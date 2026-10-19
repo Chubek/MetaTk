@@ -1,0 +1,380 @@
+//! > Test empty function.
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: false)
+
+//! > cairo_code
+#[target_function]
+fn foo() {}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > lowering_flat
+Parameters:
+blk0 (root):
+Statements:
+End:
+  Return()
+
+//! > ==========================================================================
+
+//! > Test unreachable code by return.
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: true)
+
+//! > cairo_code
+#[target_function]
+fn foo(a: felt252) -> felt252 {
+    return a + a * a;
+    5;
+    6;
+    7
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+warning[E3000]: Unreachable code
+ --> lib.cairo:4:5-6:5
+      5;
+ _____^
+|     6;
+|     7
+|_____^
+
+//! > lowering_flat
+Parameters: v0: core::felt252
+blk0 (root):
+Statements:
+  (v1: core::felt252) <- core::felt252_mul(v0, v0)
+  (v2: core::felt252) <- core::felt252_add(v0, v1)
+End:
+  Return(v2)
+
+//! > ==========================================================================
+
+//! > Test unreachable code by match.
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: warnings_only)
+
+//! > cairo_code
+#[target_function]
+fn foo(a: never) -> felt252 {
+    match a {}
+    1 + 2
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+warning[E3000]: Unreachable code
+ --> lib.cairo:4:5
+    1 + 2
+    ^^^^^
+
+//! > lowering_flat
+Parameters: v0: core::never
+blk0 (root):
+Statements:
+End:
+  Match(match_enum(v0) {
+  })
+
+//! > ==========================================================================
+
+//! > Test unreachable code by loop.
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: warnings_only)
+
+//! > cairo_code
+#[target_function]
+fn foo() -> felt252 {
+    loop {}
+    1
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+warning[E3000]: Unreachable code
+ --> lib.cairo:4:5
+    1
+    ^
+
+//! > lowering_flat
+Parameters: v0: core::RangeCheck, v1: core::gas::GasBuiltin
+blk0 (root):
+Statements:
+  (v2: core::RangeCheck, v3: core::gas::GasBuiltin, v4: core::panics::PanicResult::<(core::felt252,)>) <- test::foo::{loop#0}(v0, v1)
+End:
+  Return(v2, v3, v4)
+
+//! > ==========================================================================
+
+//! > Test single patterns.
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: false)
+
+//! > cairo_code
+#[target_function]
+fn foo(a: felt252) -> felt252 {
+    let (_, _b) = (1, a);
+    5
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > lowering_flat
+Parameters: v0: core::felt252
+blk0 (root):
+Statements:
+  (v1: core::felt252) <- 5
+End:
+  Return(v1)
+
+//! > ==========================================================================
+
+//! > Test compound expressions.
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: false)
+
+//! > cairo_code
+#[target_function]
+fn foo(a: felt252) -> felt252 {
+    let x = {
+        7;
+    };
+    {
+        x;
+    }
+    let _y = if a == 1 {
+        6
+    } else {
+        7
+    };
+    foo(3) + 5 * {
+        3;
+        a + 0
+    }
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > lowering_flat
+Parameters: v0: core::RangeCheck, v1: core::gas::GasBuiltin, v2: core::felt252
+blk0 (root):
+Statements:
+End:
+  Match(match core::gas::withdraw_gas(v0, v1) {
+    Option::Some(v3, v4) => blk1,
+    Option::None(v5, v6) => blk7,
+  })
+
+blk1:
+Statements:
+  (v7: core::felt252) <- 1
+  (v8: core::felt252) <- core::felt252_sub(v2, v7)
+End:
+  Match(match core::felt252_is_zero(v8) {
+    IsZeroResult::Zero => blk2,
+    IsZeroResult::NonZero(v9) => blk3,
+  })
+
+blk2:
+Statements:
+  (v10: core::gas::GasBuiltin) <- core::gas::redeposit_gas(v4)
+End:
+  Goto(blk4, {v10 -> v11})
+
+blk3:
+Statements:
+  (v12: core::gas::GasBuiltin) <- core::gas::redeposit_gas(v4)
+End:
+  Goto(blk4, {v12 -> v11})
+
+blk4:
+Statements:
+  (v13: core::RangeCheck, v14: core::gas::GasBuiltin, v15: core::panics::PanicResult::<(core::felt252,)>) <- test::foo{3, }(v3, v11)
+End:
+  Match(match_enum(v15) {
+    PanicResult::Ok(v16) => blk5,
+    PanicResult::Err(v17) => blk6,
+  })
+
+blk5:
+Statements:
+  (v18: core::gas::GasBuiltin) <- core::gas::redeposit_gas(v14)
+  (v19: core::felt252) <- struct_destructure(v16)
+  (v20: core::felt252) <- 5
+  (v21: core::felt252) <- core::felt252_mul(v20, v2)
+  (v22: core::felt252) <- core::felt252_add(v19, v21)
+  (v23: (core::felt252,)) <- struct_construct(v22)
+  (v24: core::panics::PanicResult::<(core::felt252,)>) <- PanicResult::Ok(v23)
+End:
+  Return(v13, v18, v24)
+
+blk6:
+Statements:
+  (v25: core::panics::PanicResult::<(core::felt252,)>) <- PanicResult::Err(v17)
+End:
+  Return(v13, v14, v25)
+
+blk7:
+Statements:
+  (v26: (core::panics::Panic, core::array::Array::<core::felt252>)) <- core::panic_with_const_felt252::<375233589013918064796019>()
+  (v27: core::panics::PanicResult::<(core::felt252,)>) <- PanicResult::Err(v26)
+End:
+  Return(v5, v6, v27)
+
+//! > ==========================================================================
+
+//! > Test match enum.
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: false)
+
+//! > cairo_code
+enum MyEnum {
+    A: (),
+    B: felt252,
+    C: Box<((), felt252)>,
+}
+#[target_function]
+fn foo(x: MyEnum) -> felt252 {
+    match x {
+        MyEnum::A(_inner) => { return 5; },
+        MyEnum::B(inner) => { inner },
+        MyEnum::C(inner) => {
+            // A workaround to drop inner.
+            let (_a, _b) = inner.unbox();
+            7
+        },
+    }
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > lowering_flat
+Parameters: v0: test::MyEnum
+blk0 (root):
+Statements:
+End:
+  Match(match_enum(v0) {
+    MyEnum::A(v1) => blk1,
+    MyEnum::B(v2) => blk2,
+    MyEnum::C(v3) => blk3,
+  })
+
+blk1:
+Statements:
+  (v4: core::felt252) <- 5
+End:
+  Return(v4)
+
+blk2:
+Statements:
+End:
+  Return(v2)
+
+blk3:
+Statements:
+  (v5: core::felt252) <- 7
+End:
+  Return(v5)
+
+//! > ==========================================================================
+
+//! > Test literal generic argument.
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: false)
+
+//! > cairo_code
+type Array<T, const N: usize> = (T, felt252);
+#[target_function]
+fn foo(a: Array<felt252, 5>) -> felt252 {
+    felt252_const::<17>()
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > lowering_flat
+Parameters: v0: (core::felt252, core::felt252)
+blk0 (root):
+Statements:
+  (v1: core::felt252) <- core::felt252_const::<17>()
+End:
+  Return(v1)
+
+//! > ==========================================================================
+
+//! > Test passing same argument as two ref params.
+
+//! > Comments
+TODO(spapini): Make this a semantic diagnostic.
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: false)
+
+//! > cairo_code
+#[inline(never)]
+fn bar(ref a: felt252, ref b: felt252) -> felt252 {
+    a = 0;
+    b = 1;
+    a + b
+}
+#[target_function]
+fn foo(mut a: felt252) -> felt252 {
+    bar(ref a, ref a)
+}
+
+//! > semantic_diagnostics
+
+//! > lowering_diagnostics
+
+//! > lowering_flat
+Parameters: v0: core::felt252
+blk0 (root):
+Statements:
+  (v1: core::felt252, v2: core::felt252, v3: core::felt252) <- test::bar(v0, v0)
+End:
+  Return(v3)
+
+//! > ==========================================================================
+
+//! > Test concretization with bad types.
+
+//! > test_runner_name
+test_function_lowering(expect_diagnostics: true)
+
+//! > cairo_code
+#[target_function]
+fn foo(mut data: Span<felt252>) -> u128 {
+    serde::Serde::<u128>::deserialize(ref data)
+}
+
+//! > semantic_diagnostics
+error[E2042]: Unexpected return type. Expected: "u128", found: "Option::<u128>".
+ --> lib.cairo:3:5
+    serde::Serde::<u128>::deserialize(ref data)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+//! > lowering_diagnostics
+
+//! > lowering_flat
+<Failed lowering function - run with RUST_LOG=warn (or less) to see diagnostics>

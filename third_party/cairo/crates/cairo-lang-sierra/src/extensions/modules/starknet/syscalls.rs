@@ -1,0 +1,382 @@
+use itertools::chain;
+
+use super::interoperability::ClassHashType;
+use super::u64_span_ty;
+use crate::extensions::array::ArrayType;
+use crate::extensions::boxing::box_ty;
+use crate::extensions::felt252::Felt252Type;
+use crate::extensions::gas::GasBuiltinType;
+use crate::extensions::int::unsigned::{Uint32Type, Uint64Type};
+use crate::extensions::lib_func::{
+    BranchSignature, DeferredOutputKind, LibfuncSignature, OutputVarInfo, ParamSignature,
+    SierraApChange, SignatureSpecializationContext,
+};
+use crate::extensions::modules::get_u256_type;
+use crate::extensions::starknet::ContractAddressType;
+use crate::extensions::utils::fixed_size_array_ty;
+use crate::extensions::{
+    NamedType, NoGenericArgsGenericLibfunc, NoGenericArgsGenericType, OutputVarReferenceInfo,
+    SpecializationError,
+};
+use crate::ids::{ConcreteTypeId, GenericTypeId};
+
+/// Type for Starknet system object.
+/// Used to make system calls.
+#[derive(Default)]
+pub struct SystemType {}
+impl NoGenericArgsGenericType for SystemType {
+    const ID: GenericTypeId = GenericTypeId::new_inline("System");
+    const STORABLE: bool = true;
+    const DUPLICATABLE: bool = false;
+    const DROPPABLE: bool = false;
+    const ZERO_SIZED: bool = false;
+}
+
+/// Trait for implementing a library function for syscalls.
+pub trait SyscallGenericLibfunc: Default {
+    /// The library function id.
+    const STR_ID: &'static str;
+    /// The non implicits inputs for the libfunc.
+    fn input_tys(
+        context: &dyn SignatureSpecializationContext,
+    ) -> Result<Vec<ConcreteTypeId>, SpecializationError>;
+    /// The success case non implicits outputs of the libfunc.
+    fn success_output_tys(
+        context: &dyn SignatureSpecializationContext,
+    ) -> Result<Vec<ConcreteTypeId>, SpecializationError>;
+}
+
+impl<T: SyscallGenericLibfunc> NoGenericArgsGenericLibfunc for T {
+    const STR_ID: &'static str = T::STR_ID;
+
+    fn specialize_signature(
+        &self,
+        context: &dyn SignatureSpecializationContext,
+    ) -> Result<LibfuncSignature, SpecializationError> {
+        let gas_builtin_ty = context.get_concrete_type(GasBuiltinType::id(), &[])?;
+        let system_ty = context.get_concrete_type(SystemType::id(), &[])?;
+        let felt252_ty = context.get_concrete_type(Felt252Type::id(), &[])?;
+        let felt252_array_ty = context.get_wrapped_concrete_type(ArrayType::id(), felt252_ty)?;
+
+        let gb_output_info = OutputVarInfo {
+            ty: gas_builtin_ty.clone(),
+            ref_info: OutputVarReferenceInfo::Deferred(DeferredOutputKind::Generic),
+        };
+        let system_output_info = OutputVarInfo::new_builtin(system_ty.clone());
+        Ok(LibfuncSignature {
+            param_signatures: chain!(
+                [
+                    // Gas builtin
+                    ParamSignature::new(gas_builtin_ty),
+                    // System
+                    ParamSignature::new(system_ty).with_allow_add_const(),
+                ],
+                T::input_tys(context)?.into_iter().map(ParamSignature::new)
+            )
+            .collect(),
+            branch_signatures: vec![
+                // Success branch.
+                BranchSignature {
+                    vars: chain!(
+                        [
+                            // Gas builtin
+                            gb_output_info.clone(),
+                            // System
+                            system_output_info.clone()
+                        ],
+                        T::success_output_tys(context)?.into_iter().map(|ty| OutputVarInfo {
+                            ty,
+                            ref_info: OutputVarReferenceInfo::Deferred(DeferredOutputKind::Generic),
+                        })
+                    )
+                    .collect(),
+                    ap_change: SierraApChange::Known { new_vars_only: false },
+                },
+                // Failure branch.
+                BranchSignature {
+                    vars: vec![
+                        // Gas builtin
+                        gb_output_info,
+                        // System
+                        system_output_info,
+                        // Revert reason
+                        OutputVarInfo {
+                            ty: felt252_array_ty,
+                            ref_info: OutputVarReferenceInfo::Deferred(DeferredOutputKind::Generic),
+                        },
+                    ],
+                    ap_change: SierraApChange::Known { new_vars_only: false },
+                },
+            ],
+            fallthrough: Some(0),
+        })
+    }
+}
+
+/// Libfunc for the replace_class system call.
+#[derive(Default)]
+pub struct ReplaceClassLibfunc {}
+impl SyscallGenericLibfunc for ReplaceClassLibfunc {
+    const STR_ID: &'static str = "replace_class_syscall";
+
+    fn input_tys(
+        context: &dyn SignatureSpecializationContext,
+    ) -> Result<Vec<crate::ids::ConcreteTypeId>, SpecializationError> {
+        let class_hash_ty = context.get_concrete_type(ClassHashType::id(), &[])?;
+        Ok(vec![
+            // class_hash
+            class_hash_ty,
+        ])
+    }
+
+    fn success_output_tys(
+        _context: &dyn SignatureSpecializationContext,
+    ) -> Result<Vec<crate::ids::ConcreteTypeId>, SpecializationError> {
+        Ok(vec![])
+    }
+}
+
+/// Libfunc for the keccak system call.
+/// The libfunc does not add any padding and the input needs to be a multiple of 1088 bits
+/// (== 17 u64 words).
+#[derive(Default)]
+pub struct KeccakLibfunc {}
+impl SyscallGenericLibfunc for KeccakLibfunc {
+    const STR_ID: &'static str = "keccak_syscall";
+
+    fn input_tys(
+        context: &dyn SignatureSpecializationContext,
+    ) -> Result<Vec<crate::ids::ConcreteTypeId>, SpecializationError> {
+        Ok(vec![
+            // input
+            u64_span_ty(context)?,
+        ])
+    }
+
+    fn success_output_tys(
+        context: &dyn SignatureSpecializationContext,
+    ) -> Result<Vec<crate::ids::ConcreteTypeId>, SpecializationError> {
+        Ok(vec![get_u256_type(context)?])
+    }
+}
+
+/// Type representing the sha256 state handle.
+#[derive(Default)]
+pub struct Sha256StateHandleType {}
+
+impl NoGenericArgsGenericType for Sha256StateHandleType {
+    const ID: GenericTypeId = GenericTypeId::new_inline("Sha256StateHandle");
+    const STORABLE: bool = true;
+    const DUPLICATABLE: bool = true;
+    const DROPPABLE: bool = true;
+    const ZERO_SIZED: bool = false;
+}
+
+/// Libfunc for the sha256_process_block system call.
+/// The input needs a Sha256StateHandleType for the previous state and a span of 16 words
+/// (each word is 32 bits).
+#[derive(Default)]
+pub struct Sha256ProcessBlockLibfunc {}
+impl SyscallGenericLibfunc for Sha256ProcessBlockLibfunc {
+    const STR_ID: &'static str = "sha256_process_block_syscall";
+
+    fn input_tys(
+        context: &dyn SignatureSpecializationContext,
+    ) -> Result<Vec<crate::ids::ConcreteTypeId>, SpecializationError> {
+        Ok(vec![
+            // Previous state of the hash.
+            context.get_concrete_type(Sha256StateHandleType::id(), &[])?,
+            // The current block to process.
+            boxed_u32_fixed_array_ty(context, 16)?,
+        ])
+    }
+
+    fn success_output_tys(
+        context: &dyn SignatureSpecializationContext,
+    ) -> Result<Vec<crate::ids::ConcreteTypeId>, SpecializationError> {
+        Ok(vec![context.get_concrete_type(Sha256StateHandleType::id(), &[])?])
+    }
+}
+
+/// Libfunc for initializing a Sha256StateHandle from its inner state representation.
+#[derive(Default)]
+pub struct Sha256StateHandleInitLibfunc {}
+impl NoGenericArgsGenericLibfunc for Sha256StateHandleInitLibfunc {
+    const STR_ID: &'static str = "sha256_state_handle_init";
+
+    fn specialize_signature(
+        &self,
+        context: &dyn SignatureSpecializationContext,
+    ) -> Result<LibfuncSignature, SpecializationError> {
+        Ok(LibfuncSignature::new_non_branch_ex(
+            vec![
+                ParamSignature::new(sha256_state_handle_unwrapped_type(context)?).with_allow_all(),
+            ],
+            vec![OutputVarInfo {
+                ty: context.get_concrete_type(Sha256StateHandleType::id(), &[])?,
+                ref_info: OutputVarReferenceInfo::Deferred(DeferredOutputKind::Generic),
+            }],
+            SierraApChange::Known { new_vars_only: false },
+        ))
+    }
+}
+
+/// Libfunc for extracting the inner state representation from a Sha256StateHandle.
+#[derive(Default)]
+pub struct Sha256StateHandleDigestLibfunc {}
+impl NoGenericArgsGenericLibfunc for Sha256StateHandleDigestLibfunc {
+    const STR_ID: &'static str = "sha256_state_handle_digest";
+
+    fn specialize_signature(
+        &self,
+        context: &dyn SignatureSpecializationContext,
+    ) -> Result<LibfuncSignature, SpecializationError> {
+        Ok(LibfuncSignature::new_non_branch_ex(
+            vec![
+                ParamSignature::new(context.get_concrete_type(Sha256StateHandleType::id(), &[])?)
+                    .with_allow_all(),
+            ],
+            vec![OutputVarInfo {
+                ty: sha256_state_handle_unwrapped_type(context)?,
+                ref_info: OutputVarReferenceInfo::Deferred(DeferredOutputKind::Generic),
+            }],
+            SierraApChange::Known { new_vars_only: false },
+        ))
+    }
+}
+
+/// The inner type of the Sha256StateHandle: `Box<[u32; 8]>`.
+pub fn sha256_state_handle_unwrapped_type(
+    context: &dyn SignatureSpecializationContext,
+) -> Result<ConcreteTypeId, SpecializationError> {
+    boxed_u32_fixed_array_ty(context, 8)
+}
+
+/// Returns `Box<[u32; size]>` according to the given size.
+fn boxed_u32_fixed_array_ty(
+    context: &dyn SignatureSpecializationContext,
+    size: i16,
+) -> Result<ConcreteTypeId, SpecializationError> {
+    let ty = context.get_concrete_type(Uint32Type::id(), &[])?;
+    box_ty(context, fixed_size_array_ty(context, ty, size)?)
+}
+
+/// Type representing the sha512 state handle.
+#[derive(Default)]
+pub struct Sha512StateHandleType {}
+
+impl NoGenericArgsGenericType for Sha512StateHandleType {
+    const ID: GenericTypeId = GenericTypeId::new_inline("Sha512StateHandle");
+    const STORABLE: bool = true;
+    const DUPLICATABLE: bool = true;
+    const DROPPABLE: bool = true;
+    const ZERO_SIZED: bool = false;
+}
+
+/// Libfunc for the sha512_process_block system call.
+/// The input needs a Sha512StateHandleType for the previous state and a span of 16 words
+/// (each word is 64 bits).
+#[derive(Default)]
+pub struct Sha512ProcessBlockLibfunc {}
+impl SyscallGenericLibfunc for Sha512ProcessBlockLibfunc {
+    const STR_ID: &'static str = "sha512_process_block_syscall";
+
+    fn input_tys(
+        context: &dyn SignatureSpecializationContext,
+    ) -> Result<Vec<crate::ids::ConcreteTypeId>, SpecializationError> {
+        Ok(vec![
+            // Previous state of the hash.
+            context.get_concrete_type(Sha512StateHandleType::id(), &[])?,
+            // The current block to process.
+            boxed_u64_fixed_array_ty(context, 16)?,
+        ])
+    }
+
+    fn success_output_tys(
+        context: &dyn SignatureSpecializationContext,
+    ) -> Result<Vec<crate::ids::ConcreteTypeId>, SpecializationError> {
+        Ok(vec![context.get_concrete_type(Sha512StateHandleType::id(), &[])?])
+    }
+}
+
+/// Libfunc for initializing a Sha512StateHandle from its inner state representation.
+#[derive(Default)]
+pub struct Sha512StateHandleInitLibfunc {}
+impl NoGenericArgsGenericLibfunc for Sha512StateHandleInitLibfunc {
+    const STR_ID: &'static str = "sha512_state_handle_init";
+
+    fn specialize_signature(
+        &self,
+        context: &dyn SignatureSpecializationContext,
+    ) -> Result<LibfuncSignature, SpecializationError> {
+        Ok(LibfuncSignature::new_non_branch_ex(
+            vec![
+                ParamSignature::new(sha512_state_handle_unwrapped_type(context)?).with_allow_all(),
+            ],
+            vec![OutputVarInfo {
+                ty: context.get_concrete_type(Sha512StateHandleType::id(), &[])?,
+                ref_info: OutputVarReferenceInfo::Deferred(DeferredOutputKind::Generic),
+            }],
+            SierraApChange::Known { new_vars_only: false },
+        ))
+    }
+}
+
+/// Libfunc for extracting the inner state representation from a Sha512StateHandle.
+#[derive(Default)]
+pub struct Sha512StateHandleDigestLibfunc {}
+impl NoGenericArgsGenericLibfunc for Sha512StateHandleDigestLibfunc {
+    const STR_ID: &'static str = "sha512_state_handle_digest";
+
+    fn specialize_signature(
+        &self,
+        context: &dyn SignatureSpecializationContext,
+    ) -> Result<LibfuncSignature, SpecializationError> {
+        Ok(LibfuncSignature::new_non_branch_ex(
+            vec![
+                ParamSignature::new(context.get_concrete_type(Sha512StateHandleType::id(), &[])?)
+                    .with_allow_all(),
+            ],
+            vec![OutputVarInfo {
+                ty: sha512_state_handle_unwrapped_type(context)?,
+                ref_info: OutputVarReferenceInfo::Deferred(DeferredOutputKind::Generic),
+            }],
+            SierraApChange::Known { new_vars_only: false },
+        ))
+    }
+}
+
+/// The inner type of the Sha512StateHandle: `Box<[u64; 8]>`.
+pub fn sha512_state_handle_unwrapped_type(
+    context: &dyn SignatureSpecializationContext,
+) -> Result<ConcreteTypeId, SpecializationError> {
+    boxed_u64_fixed_array_ty(context, 8)
+}
+
+/// Returns `Box<[u64; size]>` according to the given size.
+fn boxed_u64_fixed_array_ty(
+    context: &dyn SignatureSpecializationContext,
+    size: i16,
+) -> Result<ConcreteTypeId, SpecializationError> {
+    let ty = context.get_concrete_type(Uint64Type::id(), &[])?;
+    box_ty(context, fixed_size_array_ty(context, ty, size)?)
+}
+
+/// Libfunc for the get_class_hash_at system call.
+#[derive(Default)]
+pub struct GetClassHashAtLibfunc {}
+impl SyscallGenericLibfunc for GetClassHashAtLibfunc {
+    const STR_ID: &'static str = "get_class_hash_at_syscall";
+
+    fn input_tys(
+        context: &dyn SignatureSpecializationContext,
+    ) -> Result<Vec<crate::ids::ConcreteTypeId>, SpecializationError> {
+        Ok(vec![context.get_concrete_type(ContractAddressType::id(), &[])?])
+    }
+
+    fn success_output_tys(
+        context: &dyn SignatureSpecializationContext,
+    ) -> Result<Vec<crate::ids::ConcreteTypeId>, SpecializationError> {
+        Ok(vec![context.get_concrete_type(ClassHashType::id(), &[])?])
+    }
+}

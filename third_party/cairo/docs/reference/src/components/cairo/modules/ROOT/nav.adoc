@@ -1,0 +1,4 @@
+// Introduction
+* Introduction
+** xref:pages/index.adoc[Welcome to Cairo]
+** xref:pages/how-to-contribute.adoc[How to contribute]
