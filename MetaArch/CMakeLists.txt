@@ -16,6 +16,7 @@ option(ARCHDB_FETCH_DEPS "Download missing dependencies with FetchContent" ON)
 option(ARCHDB_BUILD_TOOLS "Build the archdb command-line tool" ON)
 option(ARCHDB_BUILD_TESTS "Build the test suite" ON)
 option(ARCHDB_BUILD_DSL "Build the C++20 API, architecture DSL and assembler" ON)
+option(ARCHDB_TEST_CPP_API "Test the standalone C++17 API" ${ARCHDB_BUILD_DSL})
 set(ARCHDB_DSLTK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../DSLtk" CACHE PATH
     "Directory containing DSLtk.hpp")
 
@@ -139,8 +140,17 @@ endif()
 set_target_properties(metaarch PROPERTIES
   VERSION ${PROJECT_VERSION}
   SOVERSION ${PROJECT_VERSION_MAJOR}
-  PUBLIC_HEADER "ArchDB.h;DSymspec.h;DsymspecIR.h;MetaArchABI.h")
+  PUBLIC_HEADER "ArchDB.h;DSymspec.h;DsymspecIR.h;MetaArchABI.h;MetaArchAPI.hpp")
 set_target_properties(metaarch PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+
+# Header-only C++ API; independent of the optional DSL implementation.
+add_library(metaarch_cpp_api INTERFACE)
+add_library(MetaArch::api ALIAS metaarch_cpp_api)
+target_link_libraries(metaarch_cpp_api INTERFACE metaarch)
+target_compile_features(metaarch_cpp_api INTERFACE cxx_std_17)
+if(ARCHDB_BUILD_TESTS AND ARCHDB_TEST_CPP_API AND NOT ARCHDB_BUILD_DSL)
+  enable_language(CXX)
+endif()
 
 # ---- tool ------------------------------------------------------------------
 if(ARCHDB_BUILD_DSL)
@@ -189,6 +199,12 @@ if(ARCHDB_BUILD_TESTS)
   add_executable(test_abi tests/test_abi.c)
   target_link_libraries(test_abi PRIVATE metaarch)
   add_test(NAME metaarch_c_abi COMMAND test_abi ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/api.yaml)
+  if(ARCHDB_TEST_CPP_API)
+    add_executable(test_cpp_api tests/test_cpp_api.cpp)
+    set_target_properties(test_cpp_api PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+    target_link_libraries(test_cpp_api PRIVATE MetaArch::api)
+    add_test(NAME metaarch_cpp_api COMMAND test_cpp_api ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/api.yaml)
+  endif()
   if(ARCHDB_BUILD_DSL)
     add_executable(test_metaarch_dsl tests/test_dsl.cpp)
     target_link_libraries(test_metaarch_dsl PRIVATE metaarch_dsl)
