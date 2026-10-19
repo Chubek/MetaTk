@@ -52,7 +52,10 @@ if(NOT ARCHDB_YAML_TARGET)
     GIT_REPOSITORY https://github.com/yaml/libyaml.git
     GIT_TAG 0.2.5
     GIT_SHALLOW TRUE)
+  set(ARCHDB_SAVED_SHARED ${BUILD_SHARED_LIBS})
+  set(BUILD_SHARED_LIBS OFF)
   FetchContent_MakeAvailable(libyaml)
+  set(BUILD_SHARED_LIBS ${ARCHDB_SAVED_SHARED})
   set(BUILD_TESTING ${BUILD_TESTING_SAVED} CACHE BOOL "" FORCE)
   set_target_properties(yaml PROPERTIES POSITION_INDEPENDENT_CODE ON)
   target_compile_definitions(yaml PUBLIC YAML_DECLARE_STATIC)
@@ -78,7 +81,10 @@ if(NOT ARCHDB_JSON_TARGET)
     GIT_REPOSITORY https://github.com/ibireme/yyjson.git
     GIT_TAG 0.10.0
     GIT_SHALLOW TRUE)
+  set(ARCHDB_SAVED_SHARED ${BUILD_SHARED_LIBS})
+  set(BUILD_SHARED_LIBS OFF)
   FetchContent_MakeAvailable(yyjson)
+  set(BUILD_SHARED_LIBS ${ARCHDB_SAVED_SHARED})
   set_target_properties(yyjson PROPERTIES POSITION_INDEPENDENT_CODE ON)
   set(ARCHDB_JSON_TARGET yyjson)
 endif()
@@ -109,6 +115,7 @@ endif()
 
 # ---- library ---------------------------------------------------------------
 add_library(metaarch
+  MetaArchABI.c
   Dsymspec.c
   ToYAML.c
   ToJSON.c
@@ -132,7 +139,8 @@ endif()
 set_target_properties(metaarch PROPERTIES
   VERSION ${PROJECT_VERSION}
   SOVERSION ${PROJECT_VERSION_MAJOR}
-  PUBLIC_HEADER "ArchDB.h;DSymspec.h;DsymspecIR.h")
+  PUBLIC_HEADER "ArchDB.h;DSymspec.h;DsymspecIR.h;MetaArchABI.h")
+set_target_properties(metaarch PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
 # ---- tool ------------------------------------------------------------------
 if(ARCHDB_BUILD_DSL)
@@ -178,6 +186,9 @@ if(ARCHDB_BUILD_TESTS)
   add_executable(test_relocations tests/test_relocations.c)
   target_link_libraries(test_relocations PRIVATE metaarch)
   add_test(NAME archdb_relocations COMMAND test_relocations)
+  add_executable(test_abi tests/test_abi.c)
+  target_link_libraries(test_abi PRIVATE metaarch)
+  add_test(NAME metaarch_c_abi COMMAND test_abi ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/api.yaml)
   if(ARCHDB_BUILD_DSL)
     add_executable(test_metaarch_dsl tests/test_dsl.cpp)
     target_link_libraries(test_metaarch_dsl PRIVATE metaarch_dsl)
