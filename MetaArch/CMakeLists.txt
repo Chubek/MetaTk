@@ -17,6 +17,7 @@ option(ARCHDB_BUILD_TOOLS "Build the archdb command-line tool" ON)
 option(ARCHDB_BUILD_TESTS "Build the test suite" ON)
 option(ARCHDB_BUILD_DSL "Build the C++20 API, architecture DSL and assembler" ON)
 option(ARCHDB_TEST_CPP_API "Test the standalone C++17 API" ${ARCHDB_BUILD_DSL})
+option(ARCHDB_TEST_FOREIGN_BINDINGS "Test D and Go bindings (requires a shared build)" OFF)
 set(ARCHDB_DSLTK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../DSLtk" CACHE PATH
     "Directory containing DSLtk.hpp")
 
@@ -205,6 +206,36 @@ if(ARCHDB_BUILD_TESTS)
     target_link_libraries(test_cpp_api PRIVATE MetaArch::api)
     add_test(NAME metaarch_cpp_api COMMAND test_cpp_api ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/api.yaml)
   endif()
+  if(ARCHDB_TEST_FOREIGN_BINDINGS)
+    if(NOT BUILD_SHARED_LIBS)
+      message(FATAL_ERROR "ARCHDB_TEST_FOREIGN_BINDINGS requires BUILD_SHARED_LIBS=ON")
+    endif()
+    find_program(ARCHDB_D_COMPILER NAMES ldc2 dmd)
+    if(ARCHDB_D_COMPILER)
+      add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/test_bindings_d
+        COMMAND ${ARCHDB_D_COMPILER} -I${CMAKE_CURRENT_SOURCE_DIR}/bindings/d
+          ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_bindings.d -L$<TARGET_FILE:metaarch>
+          -of=${CMAKE_CURRENT_BINARY_DIR}/test_bindings_d
+          -L-rpath=$<TARGET_FILE_DIR:metaarch>
+        DEPENDS metaarch tests/test_bindings.d bindings/d/metaarch.di VERBATIM)
+      add_custom_target(metaarch_d_binding_test ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/test_bindings_d)
+      add_test(NAME metaarch_d_api COMMAND ${CMAKE_CURRENT_BINARY_DIR}/test_bindings_d
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/api.yaml)
+    else()
+      message(STATUS "MetaArch D binding test skipped: ldc2/dmd not found")
+    endif()
+    find_program(ARCHDB_GO_EXECUTABLE go)
+    if(ARCHDB_GO_EXECUTABLE)
+      add_test(NAME metaarch_go_api COMMAND ${CMAKE_COMMAND} -E env
+        "CGO_ENABLED=1" "GOTOOLCHAIN=local" "GOPROXY=off" "GOWORK=off"
+        "CGO_CFLAGS=-I${CMAKE_CURRENT_SOURCE_DIR}"
+        "CGO_LDFLAGS=-L$<TARGET_FILE_DIR:metaarch> -Wl,-rpath,$<TARGET_FILE_DIR:metaarch>"
+        ${ARCHDB_GO_EXECUTABLE} test -count=1 ./...)
+      set_tests_properties(metaarch_go_api PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bindings/go)
+    else()
+      message(STATUS "MetaArch Go binding test skipped: go not found")
+    endif()
+  endif()
   if(ARCHDB_BUILD_DSL)
     add_executable(test_metaarch_dsl tests/test_dsl.cpp)
     target_link_libraries(test_metaarch_dsl PRIVATE metaarch_dsl)
@@ -230,6 +261,9 @@ if(ARCHDB_BUILD_TOOLS)
 endif()
 install(DIRECTORY ArchDB DESTINATION ${CMAKE_INSTALL_DATADIR}/metaarch)
 install(FILES ArchDBCatalogue.yaml DESTINATION ${CMAKE_INSTALL_DATADIR}/metaarch)
+install(FILES bindings/d/metaarch.di DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/d)
+install(DIRECTORY bindings/go/ DESTINATION ${CMAKE_INSTALL_DATADIR}/metaarch/bindings/go
+  FILES_MATCHING PATTERN "*.go" PATTERN "go.mod" PATTERN "*_test.go" EXCLUDE)
 if(ARCHDB_BUILD_DSL)
   install(TARGETS metaarch_dsl
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}

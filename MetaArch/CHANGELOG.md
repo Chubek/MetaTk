@@ -4,6 +4,22 @@ All notable changes are documented here, following Keep a Changelog.
 
 ## [Unreleased]
 
+### Added — opaque C ABI and language bindings
+- `MetaArchABI.h` / `MetaArchABI.c`: version-1 owning handles, structured
+  diagnostics, metadata views, load/parse/write and named/form encoding.
+  Results own relocation names and can outlive the spec; views have explicit
+  lifetime rules and no dependency on native Dsym structure layouts.
+- `MetaArchAPI.hpp`: standalone header-only C++17 RAII API (`metaarch::api`),
+  independent of the existing C++20/DSLtk API (`metaarch::Spec`).
+- `bindings/d/metaarch.di`: native C-linkage D interface with matching fixed
+  view layouts, integer widths and explicit ownership.
+- `bindings/go`: dependency-free Go module using cgo, copied results/errors,
+  explicit Close and synchronization against concurrent reads/close/backend load.
+- C/C++ ABI tests and optional shared-library D/Go interoperability tests;
+  installation rules and examples in `docs/BINDINGS.md`.
+- Fetched libyaml/yyjson remain static for shared MetaArch builds, avoiding
+  accidental new shared-library runtime dependencies for binding consumers.
+
 ### Changed — relocation bit metadata (Phase B, second increment)
 - `DsymEncodedReloc` now exposes field-relative LSB `bit_offset`, `bit_width`,
   and resolved field `endian`, retaining the existing byte offset/size fields.

@@ -1,4 +1,85 @@
-# MetaArch — Phase B implementation checkpoint
+# MetaArch — native and cross-language API checkpoint
+
+## Latest addition: C ABI, C++17, D and Go APIs
+
+Implemented the subsequent explicit request for language APIs, without claiming
+completion of the remaining original hardening phases.
+
+- `MetaArchABI.h` / `MetaArchABI.c`: opaque **ABI version 1**, with 28 exported
+  `metaarch_*` functions. Owned spec/diagnostics/result handles hide native
+  layouts. Fixed view types expose copied scalar metadata and borrowed strings.
+  Results own relocation names and outlive their originating specs.
+- `MetaArchAPI.hpp`: standalone, header-only **C++17** RAII API under
+  `metaarch::api`, with move-only specs, owned output/metadata and diagnostic
+  exceptions. Coexists with the existing C++20 DSL API and needs no DSLtk.
+- `bindings/d/metaarch.di`: D module `metaarch`, with matching C linkage,
+  integer widths, view layouts and explicit ownership. All 28 C functions have
+  matching declarations; tested with LDC, DMD and GDC.
+- `bindings/go`: Go 1.20+ local module `metaarch` using cgo, no third-party Go
+  dependencies. Copies outputs/metadata/diagnostics, rejects embedded NUL names,
+  and synchronizes Close/backend mutation against reads. Explicit Close required.
+- Covers load/parse, backend load, target/register/form summaries, encoder
+  lookup, all four writers, named encoding, checked form encoding and complete
+  relocation layout. Catalogue and DSL APIs remain native, not wrapped here.
+- New APIs are additive: no existing native public structure changed this round.
+  The earlier Phase B native ABI change still requires native consumers to
+  rebuild; the new opaque ABI avoids that layout coupling for foreign clients.
+- CMake installs C/C++ headers, the D interface and Go module sources. Optional
+  D/Go tests require shared builds but add no required runtime dependencies.
+  Fetched yyjson/libyaml are configured static when MetaArch is shared.
+
+### Binding verification
+
+| Configuration | Result | CTest time |
+|---|---|---:|
+| GCC Release, native + C/C++ API + existing DSL/CLI | 7/7 pass | 13.35 s |
+| Clang Release, same | 7/7 pass | 13.37 s |
+| GCC ASan+UBSan, same | 7/7 pass | 66.50 s |
+| Clang ASan+UBSan, same | 7/7 pass | 60.17 s |
+| GCC shared, DSL off, C/C++/D/Go bindings | 7/7 pass | 14.53 s |
+| Clang shared, same | 7/7 pass | 12.92 s |
+
+All C/C++ builds use `-Wall -Wextra -Wpedantic -Werror`, with C++ wrapper tests
+explicitly compiled as standard C++17 (no extensions). No sanitizer findings.
+The C ABI adds 57 checks to the prior 1888 C checks: **1945 C checks** pass,
+plus the C++, D and Go assertion suites. No test weakened or removed. A fresh
+C-only build with DSL/C++ tests disabled succeeds without enabling C++.
+
+Additional checks: Go `go test -race` and `GOEXPERIMENT=cgocheck2 go test` pass;
+DMD and GDC independently compile/run the same D interface test; C, C++17,
+LDC and an external Go consumer compile/run against a staged installation.
+`nm -D` confirms every declared `metaarch_*` function is exported (28/28), and
+C-header/D-interface function sets match exactly. The synthetic fixture verifies
+both target byte orders, all four codec round trips, diagnostics, checked form
+ranges, relocation bit metadata and results surviving spec destruction.
+
+The inherited `GOROOT` points at a nonexistent home-directory installation;
+Go verification uses `GOROOT=/usr/lib/go` instead. No vet check was disabled.
+Tests/builds continue using the local yyjson source override documented below
+because network access is unavailable. Installation was staged under
+`/tmp/opencode/metaarch-bindings-install` (not a system directory).
+
+Examples, ownership/lifetime rules, supported scope, compiler flags and full
+reproduction instructions are in `docs/BINDINGS.md`. To run foreign tests use:
+
+```sh
+cmake -S . -B build-bindings -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_SHARED_LIBS=ON -DARCHDB_BUILD_DSL=OFF \
+  -DARCHDB_TEST_CPP_API=ON -DARCHDB_TEST_FOREIGN_BINDINGS=ON \
+  -DCMAKE_C_FLAGS='-Wall -Wextra -Wpedantic -Werror' \
+  -DCMAKE_CXX_FLAGS='-Wall -Wextra -Wpedantic -Werror' \
+  -DFETCHCONTENT_SOURCE_DIR_YYJSON=/mnt/nvme/joltfx/third_party/yyjson
+cmake --build build-bindings -j8
+GOROOT=/usr/lib/go ctest --test-dir build-bindings --output-on-failure
+```
+
+Use a valid local GOROOT (or leave it unset) on other hosts. Static/sanitizer
+builds run C/C++ ABI tests without foreign runtime integration. The latest
+source archive is `/tmp/opencode/MetaArch-bindings.tar.gz` with the original
+`mnt/nvme/metatk/MetaArch/` layout, excluding build products. Earlier checkpoint
+archives remain available. No architecture or generated backend data changed.
+
+## Prior Phase B checkpoint
 
 ## Current API additions / compatibility notes
 
