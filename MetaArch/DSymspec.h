@@ -336,7 +336,7 @@ typedef struct DsymLinkage {
 typedef struct DsymReloc {
     const char *name;
     int64_t width;
-    int64_t offset;
+    int64_t offset; /* LSB-relative bit offset within the most recent emitted field */
     bool has_offset;
     bool is_signed;
     bool has_signed;
@@ -560,6 +560,9 @@ typedef struct DsymEncodedReloc {
     const char *reloc_name;
     uint32_t sym_param; /* operand slot of the symbol */
     int64_t sym_value;  /* value bound to that operand */
+    uint32_t bit_offset; /* LSB-relative bit offset within the emitted integer */
+    uint32_t bit_width;  /* relocation record width, not necessarily size * 8 */
+    DsymEndian endian;   /* actual field byte order: LITTLE or BIG, never TARGET */
 } DsymEncodedReloc;
 
 typedef struct DsymEncoded {

@@ -1752,6 +1752,15 @@ static bool param_is_relocated(const DsymProgram *p, size_t param) {
     return false;
 }
 
+/* The relocation must be wholly contained in the most recent integer field.
+   Subtraction, not offset + width, keeps hostile INT64_MAX metadata safe. */
+static bool reloc_fits_field(const DsymReloc *r, size_t bytes) {
+    uint64_t bits = (uint64_t)bytes * 8;
+    int64_t offset = r->has_offset ? r->offset : 0;
+    return r->width > 0 && offset >= 0 && (uint64_t)r->width <= bits &&
+           (uint64_t)offset <= bits - (uint64_t)r->width;
+}
+
 bool dsym_spec_resolve(DsymSpec *s, uint32_t flags, DsymDiags *diags) {
     if (!s) return false;
     DsymDiags local;
@@ -1893,6 +1902,24 @@ bool dsym_spec_resolve(DsymSpec *s, uint32_t flags, DsymDiags *diags) {
                         rdiag(r, (flags & DSYM_LOAD_STRICT) ? DSYM_ERROR : DSYM_WARNING,
                               "DSYM-W001: encoder '%s', statement %u: suspicious biased modulo: %s",
                               e->name, st->line, st->text);
+                }
+            }
+            if (flags & DSYM_LOAD_LINT) {
+                size_t field_size = 0;
+                for (size_t j = 0; j < e->program->stmt_count; j++) {
+                    const DsymStmt *st = &e->program->stmts[j];
+                    if (st->kind == DSYM_ST_EMIT || st->kind == DSYM_ST_EMIT_IMM ||
+                        st->kind == DSYM_ST_EMIT_MODRM) field_size = st->size;
+                    if (st->kind == DSYM_ST_RELOC && st->reloc_index >= 0 &&
+                        (size_t)st->reloc_index < s->reloc_count) {
+                        const DsymReloc *rel = &s->relocs[st->reloc_index];
+                        if (!reloc_fits_field(rel, field_size))
+                            rdiag(r, DSYM_WARNING,
+                                  "DSYM-W004: encoder '%s', statement %u: relocation '%s' width %"
+                                  PRId64 " at bit offset %" PRId64 " does not fit %zu-byte field",
+                                  e->name, st->line, rel->name, rel->width,
+                                  rel->has_offset ? rel->offset : 0, field_size);
+                    }
                 }
             }
             RPATH(r, "/encoders/%zu", i);
@@ -2782,6 +2809,7 @@ bool dsym_encode(const DsymSpec *s, int32_t ei, size_t ti, const int64_t *args,
                         p->param_count, argc);
     bool target_be = ti < s->target_count && dsym_target_is_big_endian(&s->targets[ti]);
     size_t last_off = 0, last_size = 0;
+    DsymEndian last_endian = DSYM_ENDIAN_LITTLE;
     for (size_t i = 0; i < p->stmt_count; i++) {
         const DsymStmt *st = &p->stmts[i];
         int64_t v = 0, v2 = 0;
@@ -2810,6 +2838,7 @@ bool dsym_encode(const DsymSpec *s, int32_t ei, size_t ti, const int64_t *args,
             }
             last_off = out->size;
             last_size = st->size;
+            last_endian = be ? DSYM_ENDIAN_BIG : DSYM_ENDIAN_LITTLE;
             out->size += st->size;
             break;
         }
@@ -2823,11 +2852,18 @@ bool dsym_encode(const DsymSpec *s, int32_t ei, size_t ti, const int64_t *args,
                 return enc_fail(out, "%s: output too long", e->name);
             last_off = out->size;
             last_size = 1;
+            last_endian = DSYM_ENDIAN_LITTLE;
             out->bytes[out->size++] = (uint8_t)(0xC0 | ((v & 7) << 3) | (v2 & 7));
             break;
         case DSYM_ST_RELOC: {
             if (out->reloc_count >= DSYM_ENCODE_MAX_RELOCS)
                 return enc_fail(out, "%s: too many relocations", e->name);
+            if (st->reloc_index < 0 || (size_t)st->reloc_index >= s->reloc_count)
+                return enc_fail(out, "%s: unresolved relocation '%s'", e->name, st->reloc_name);
+            const DsymReloc *rel = &s->relocs[st->reloc_index];
+            if (!reloc_fits_field(rel, last_size))
+                return enc_fail(out, "%s: relocation '%s' does not fit %zu-byte field",
+                                e->name, rel->name, last_size);
             DsymEncodedReloc *r = &out->relocs[out->reloc_count++];
             r->offset = (uint32_t)last_off;
             r->size = (uint32_t)last_size;
@@ -2835,6 +2871,9 @@ bool dsym_encode(const DsymSpec *s, int32_t ei, size_t ti, const int64_t *args,
             r->reloc_name = st->reloc_name;
             r->sym_param = st->sym_param;
             r->sym_value = args[st->sym_param];
+            r->bit_offset = (uint32_t)(rel->has_offset ? rel->offset : 0);
+            r->bit_width = (uint32_t)rel->width;
+            r->endian = last_endian;
             break;
         }
         }

@@ -298,6 +298,8 @@ static void encodings(const char *dir) {
                   out.relocs[0].reloc_index == dsym_spec_find_reloc(s, "R_386_PLT32") &&
                   out.relocs[0].sym_value == 42,
               "x86 call relocation");
+        CHECK(out.relocs[0].bit_offset == 0 && out.relocs[0].bit_width == 32 &&
+              out.relocs[0].endian == DSYM_ENDIAN_LITTLE, "x86 call relocation bit metadata");
         /* unbound operand is an error */
         CHECK(!dsym_encode_named(s, "add", 0, n, v, 1, false, &out), "unbound operand");
         /* lookups */

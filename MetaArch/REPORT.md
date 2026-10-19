@@ -9,9 +9,17 @@
   Both indices must exist. Count and relocation-kind mismatches are rejected.
 - Existing low-level encode APIs remain available and do not enforce form
   constraints. NULL outputs/argument arrays now return failure instead of
-  dereferencing NULL. No existing public structure changed in this increment.
+  dereferencing NULL.
+- Added `bit_offset`, `bit_width` and resolved `endian` to `DsymEncodedReloc`.
+  Offset is field-relative, LSB-counted; widths are record widths, not byte-field
+  widths. **ABI change:** `DsymEncodedReloc` and `DsymEncoded` grow; rebuild all
+  consumers. No existing field was removed. Non-fitting relocation intervals
+  now fail at encode time instead of returning unusable metadata.
 - New stable resolver lint codes: DSYM-W002 (visible count) and DSYM-W003
   (relocation-parameter kind); strict + lint promotes them to errors.
+- `DSYM-W004` checks relocation containment under lint, promoted by strict.
+  A narrower relocation in a larger field is valid. Offset/width checks use
+  subtraction to avoid overflow on hostile metadata.
 
 Phase B is **in progress**, not finished. No Phase C–G implementation is claimed.
 The original Phase A verification and 51-site data audit remain below.
@@ -32,19 +40,76 @@ existing specs. They are not silently repaired: complex memory decomposition,
 unused declared operands and missing relocation statements require individual
 reviews. Existing low-level encoding remains available for these forms.
 
+The second increment adds a focused `archdb_relocations` test, covering 26-bit
+fields in 32-bit words, nonzero bit offsets, endian-aware linker insertion,
+64-bit fields, repeated relocations, field changes, REQUIRE between emission
+and relocation, and INT64_MAX offset/width metadata. Invalid relocation spans
+are rejected at runtime regardless of load flags. The existing x86 call test
+also asserts bit metadata. The ABI and semantics are documented in the header,
+README and CHANGELOG.
+
+### Latest verification (both Phase B increments)
+
+| Build | CTest result | Total time |
+|---|---|---:|
+| GCC Release | 5/5 pass | 13.62 s |
+| Clang Release | 5/5 pass | 13.08 s |
+| GCC ASan+UBSan | 5/5 pass | 66.14 s |
+| Clang ASan+UBSan | 5/5 pass | 59.96 s |
+
+All retain `-Wall -Wextra -Wpedantic -Werror`; no new warning suppression,
+dependency, spec-data modification or sanitizer finding. C checks total
+**1888**: 1307 full-suite, 292 form-encoding and 289 relocation checks, all
+passing (previous checkpoint: 1300 full-suite checks). Optional C++ DSL and CLI
+tests pass as well. All 61 independent llvm-mc fixtures still agree. Single-run
+timings with concurrent activity are not benchmark regression measurements.
+
+Lint now emits 311 lines: original 112 diagnostics, 39 biased-modulo warnings,
+135 mapping-count warnings, 7 mapping-kind warnings and 18 relocation-span
+warnings. The 18 span issues remain unresolved in the data:
+
+- ARC: b_s_enc, bl_s_enc, breq_s_enc, brne_s_enc, beq_s_enc, bne_s_enc,
+  bgt_s_enc, bge_s_enc, blt_s_enc, ble_s_enc, bhi_s_enc, bhs_s_enc,
+  blo_s_enc, bls_s_enc (32-bit relocations on 16-bit fields).
+- ARM32: tcbz (32-bit relocation on a 16-bit field).
+- AVR: jmp, call (32-bit relocation attaches only to the final 16-bit field,
+  not the two-word instruction).
+- M68K: jsr (32-bit relocation on a 16-bit field).
+
+These require reviewed data/encoder changes, not broader attachment heuristics.
+New runtime behavior intentionally refuses these encodings, avoiding unusable
+linker metadata. The remaining Phase B work is encoder built-ins and inferred
+intervals, comprehensive diagnostic-code policy/suppression, allocation/OOM
+hardening, memory measurements, thread-safety audit and resource limits.
+
+Reproduce with the build commands below plus:
+
+```sh
+./build/test_encode_form
+./build/test_relocations
+ctest --test-dir build --output-on-failure
+```
+
+The latest source archive is `/tmp/opencode/MetaArch-phase-b.tar.gz`, using the
+same `mnt/nvme/metatk/MetaArch/` root layout and excluding build directories.
+The Phase A archive is retained separately. The full seven-phase definition of
+done is still not met.
+
 ## Historical Phase A checkpoint
 
 ## API additions or changes
 
-**None.** The public headers and existing API/ABI are unchanged. Strict loading
-now rejects suspicious biased-modulo encoders with diagnostic `DSYM-W001`.
+At the Phase A checkpoint there were **no** API/ABI changes. Strict loading
+began rejecting suspicious biased-modulo encoders with diagnostic `DSYM-W001`.
+The current Phase B API/ABI additions are listed at the top of this report.
 
 ## Status and scope
 
 This is a partial delivery, **not completion of the seven-phase brief**.
 Baseline work and the Phase A lint/regression infrastructure are complete.
 Twelve data sites are corrected; all remaining 39 are explicitly unresolved.
-Phases B–G have not been started, preserving the requested phase order.
+At that checkpoint Phases B–G had not been started. Phase B is now partially
+implemented as described above; Phases C–G remain unstarted.
 
 No existing test was removed or weakened. No generated backend was edited.
 No dependency or runtime requirement was added. The source remains C11; the
@@ -163,7 +228,7 @@ allow the existing FetchContent fallback). Ninja may be used if installed.
 
 | Phase | Outstanding work |
 |---|---|
-| B | Form-aware encode API/mapping/ranges, relocation bit semantics, built-ins, static intervals, diagnostic codes/suppression policy, allocation hardening/OOM hook, memory measurements, thread-safety audit and resource limits. |
+| B | Built-ins, static intervals, comprehensive diagnostic codes/suppression policy, allocation hardening/OOM hook, memory measurements, thread-safety audit and resource limits. Form-aware encode/mapping/ranges and relocation bit semantics are now implemented above. |
 | C | Comment-preserving YAML/formatting, source flag order, YAML 1.1 warnings, hybrid JSON, JSON positions, UTF-8/XML correction and XSD, grouped S-expression printing and deterministic golden tests. |
 | D | Descriptor reflection/schema sync, output and backend schemas, descriptions, version-dispatch hook. |
 | E | Catalogue freshness/duplicates, aliases/triples/ambiguous lookup, lint/diff/fmt CLI, diagnostic formats/exit codes and form/register-friendly encode. |
@@ -175,7 +240,7 @@ security-hardening release or a claim that all architecture encoders are correct
 
 ## Archive
 
-The checkpoint archive is `/tmp/opencode/MetaArch-phase-a.tar.gz`, rooted at
+The original Phase A archive is `/tmp/opencode/MetaArch-phase-a.tar.gz`, rooted at
 `mnt/nvme/metatk/MetaArch/`, containing sources, backend data, tests and this report.
 Build directories are excluded. The existing optional C++ DSL needs the sibling
 DSLtk checkout; for a standalone C-library build use `-DARCHDB_BUILD_DSL=OFF`.

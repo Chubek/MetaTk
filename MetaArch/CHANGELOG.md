@@ -4,6 +4,17 @@ All notable changes are documented here, following Keep a Changelog.
 
 ## [Unreleased]
 
+### Changed — relocation bit metadata (Phase B, second increment)
+- `DsymEncodedReloc` now exposes field-relative LSB `bit_offset`, `bit_width`,
+  and resolved field `endian`, retaining the existing byte offset/size fields.
+  This changes the ABI of both `DsymEncodedReloc` and `DsymEncoded`; rebuild consumers.
+- Honour relocation `offset` and validate containment without overflowing
+  `offset + width`. Subword relocations remain valid.
+- `DSYM-W004` diagnoses non-fitting fields under lint, with strict promotion;
+  encode-time rejection applies regardless of load flags.
+- Tests cover partial fields, explicit/target byte order, repeated relocations,
+  multiple emitted fields and extreme metadata values. No spec data changes.
+
 ### Added — checked form encoding (Phase B, first increment)
 - `dsym_encode_form`: validates explicit positional operand mapping, scalar
   bounds/signed widths, and hardware register encodings against class and width.

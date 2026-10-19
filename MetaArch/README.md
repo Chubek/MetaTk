@@ -124,9 +124,39 @@ Resolver lint reports mapping issues without changing the spec data:
 | `DSYM-W001` | Suspicious biased modulo | Warning under lint; error under strict, even without lint |
 | `DSYM-W002` | Visible operand count differs from encoder parameter count | Lint warning; strict + lint error |
 | `DSYM-W003` | Symbol/relocation kind and relocation parameter disagree | Lint warning; strict + lint error |
+| `DSYM-W004` | Relocation bit interval does not fit its emitted field | Lint warning; strict + lint error |
 
 Mapping checks need compiled encoders and are skipped with `DSYM_LOAD_NO_COMPILE`.
 The checked API enforces the mapping regardless of whether lint was enabled.
+
+### Relocation bit placement
+
+`EMIT_RELOCATION` describes the most recently emitted integer field, even if
+`REQUIRE` or another relocation intervenes. `DsymEncodedReloc.offset` and `size`
+remain the field's byte offset and byte length. New fields describe placement:
+
+- `bit_offset` is the relocation record's optional `offset` in bits (default 0),
+  counted from the **least significant bit of the integer field**, not from the
+  first byte in memory. It is field-relative, not output-relative.
+- `bit_width` is the relocation record's `width`, not the emitted field width.
+- `endian` is the actual emitted field byte order (`LITTLE` or `BIG`), resolving
+  `EMIT_IMM` through the selected target. Explicit endian emitters override it.
+
+A linker reads the field using `endian`, inserts the value into
+`[bit_offset, bit_offset + bit_width)`, and writes it in the same byte order.
+This describes a contiguous bit interval; it does not invent split-bit ISA
+relocations, symbol resolution, scaling or PC-relative expression evaluation.
+Those still use the relocation record's other semantics.
+
+A 26-bit relocation in a 32-bit field is valid (including offset 6). A 32-bit
+relocation in a byte, or an offset that pushes any bits past the field, is not.
+Lint reports `DSYM-W004`; strict + lint rejects the spec. All encoder entry
+points reject non-fitting relocations at runtime even if lint was not requested,
+instead of returning misleading linker metadata. Discard partial output on failure.
+
+**ABI note:** adding these fields enlarges `DsymEncodedReloc` and consequently
+`DsymEncoded`. Rebuild the library and all consumers together; this is not a
+binary-compatible structure change. Existing source field names are unchanged.
 
 ```c
 DsymSpec *s = dsym_spec_load_file("ArchDB/riscv64.dsymspec.yaml", 0, 0, &diags);
