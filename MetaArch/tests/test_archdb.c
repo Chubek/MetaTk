@@ -14,6 +14,7 @@
 #include "ArchDB.h"
 
 #include <dirent.h>
+#include <errno.h>
 #include <inttypes.h>
 #include <math.h>
 #include <stdlib.h>
@@ -225,6 +226,58 @@ static DsymSpec *load(const char *dir, const char *arch) {
     return s;
 }
 
+static void encoding_table(const char *dir) {
+    FILE *f = fopen(ENCODINGS_TSV, "r");
+    CHECK(f != NULL, "open %s", ENCODINGS_TSV);
+    if (!f) return;
+    char line[2048];
+    size_t lineno = 0, rows = 0;
+    while (fgets(line, sizeof line, f)) {
+        lineno++;
+        if (line[0] == '#' || line[0] == '\n') continue;
+        char *cols[4], *next = line;
+        bool valid = true;
+        for (size_t i = 0; i < 4; i++) {
+            cols[i] = next;
+            char *sep = strchr(next, i < 3 ? '\t' : '\n');
+            if (!sep && i < 3) { valid = false; break; }
+            if (sep) { *sep = 0; next = sep + 1; }
+        }
+        CHECK(valid, "TSV row %zu: expected four tab-separated columns", lineno);
+        if (!valid) continue;
+        cols[3][strcspn(cols[3], "\r")] = 0;
+        const char *names[32];
+        int64_t values[32];
+        size_t n = 0;
+        char *save = NULL;
+        for (char *arg = strtok_r(cols[2], " ", &save); arg;
+             arg = strtok_r(NULL, " ", &save)) {
+            char *eq = strchr(arg, '=');
+            if (!eq || eq == arg || n == 32) { valid = false; break; }
+            *eq++ = 0;
+            char *end;
+            errno = 0;
+            intmax_t value = strtoimax(eq, &end, 0);
+            if (!*eq || *end || errno || value < INT64_MIN || value > INT64_MAX) {
+                valid = false;
+                break;
+            }
+            names[n] = arg;
+            values[n++] = (int64_t)value;
+        }
+        CHECK(valid, "TSV row %zu: invalid operand assignment", lineno);
+        if (!valid) continue;
+        DsymSpec *s = load(dir, cols[0]);
+        if (s) {
+            expect_bytes(s, cols[0], cols[1], names, values, n, cols[3]);
+            dsym_spec_free(s);
+        }
+        rows++;
+    }
+    CHECK(!ferror(f) && rows > 0, "read encoding table");
+    fclose(f);
+}
+
 static void encodings(const char *dir) {
     DsymSpec *s;
     if ((s = load(dir, "x86"))) {
@@ -297,6 +350,51 @@ static void expect_error(const char *doc, const char *needle, uint32_t line) {
 }
 
 #define HEAD "schema: 1\ntargets:\n  - {arch: t, addr_size: 32, byte_order: little}\n"
+
+static void biased_lint_tests(void) {
+    const struct { const char *body; bool biased; } cases[] = {
+        {"EMIT32LE ((imm + 32768) % 65536)", true},
+        {"EMIT32LE 17 + ((imm + (128 * 256)) % (256 * 256))*2", true},
+        {"EMIT32LE ((imm + 65536) % 65536)", false},
+        {"EMIT32LE ((imm + 0) % 65536)", false},
+        {"EMIT32LE ((imm + 3) % 7)", false},
+        {"EMIT32LE ((imm + 32768) % 65536) # biased", false},
+        {"EMIT32LE ((imm + 32768) % 65536) # biasedness", true},
+        {"EMIT32LE ((1 + 32768) % 65536)", false},
+        {"EMIT_MODRM 0, ((imm + 4) % 8)", true},
+        {"REQUIRE ((imm + 4) % 8) == 0", true},
+        {"EMIT_IMM 4, ((imm + 4) % 8)", true},
+    };
+    const uint32_t flags[] = {0, DSYM_LOAD_LINT, DSYM_LOAD_STRICT,
+                              DSYM_LOAD_LINT | DSYM_LOAD_STRICT};
+    for (size_t i = 0; i < sizeof cases / sizeof *cases; i++) {
+        for (size_t j = 0; j < sizeof flags / sizeof *flags; j++) {
+            DsymBuf doc;
+            dsym_buf_init(&doc);
+            dsym_buf_printf(&doc, HEAD "encoders:\n  - name: test_bias\n    body: |\n      %s\n",
+                            cases[i].body);
+            DsymDiags d;
+            dsym_diags_init(&d);
+            DsymSpec *s = dsym_spec_load_buffer(doc.data, doc.len, DSYM_FORMAT_YAML,
+                                               "bias.yaml", flags[j], &d);
+            bool strict_error = cases[i].biased && (flags[j] & DSYM_LOAD_STRICT);
+            CHECK((s != NULL) == !strict_error, "bias case %zu flags %u: load", i, flags[j]);
+            size_t found = 0;
+            for (size_t k = 0; k < d.count; k++) {
+                if (!strstr(d.items[k].msg, "DSYM-W001")) continue;
+                found++;
+                CHECK(d.items[k].severity == (strict_error ? DSYM_ERROR : DSYM_WARNING) &&
+                      strstr(d.items[k].msg, "test_bias") && strstr(d.items[k].msg, "statement 1"),
+                      "bias diagnostic severity and context");
+            }
+            CHECK(found == (size_t)(cases[i].biased && flags[j] != 0),
+                  "bias case %zu flags %u: diagnostic count", i, flags[j]);
+            dsym_spec_free(s);
+            dsym_diags_free(&d);
+            dsym_buf_free(&doc);
+        }
+    }
+}
 
 static void diagnostics(void) {
     expect_error("schema: 2\ntargets: [{arch: t, addr_size: 8, byte_order: le}]\n", "must be 1", 1);
@@ -404,7 +502,9 @@ int main(int argc, char **argv) {
     CHECK(n > 0, "no specs found");
     roundtrip_trees();
     encodings(argv[1]);
+    encoding_table(argv[1]);
     diagnostics();
+    biased_lint_tests();
     catalogue(argv[2], n);
     printf("%d check(s), %d failure(s), %zu spec(s) x %zu formats\n", checks, failures, n,
            sizeof FORMATS / sizeof *FORMATS);

@@ -1709,6 +1709,31 @@ static int32_t reloc_lookup_cb(void *ctx, const char *name) {
     return strmap_get(&((DsymIndex *)ctx)->relocs, name);
 }
 
+/* Match only folded PARAM CONST ADD CONST MOD subexpressions. */
+static bool biased_modulo(const DsymProgram *p, DsymExprRef expr) {
+    for (size_t j = 0; j + 4 < expr.len; j++) {
+        const DsymInsn *c = p->code + expr.start + j;
+        if (c[0].op != DSYM_OP_PARAM || c[1].op != DSYM_OP_CONST ||
+            c[2].op != DSYM_OP_ADD || c[3].op != DSYM_OP_CONST ||
+            c[4].op != DSYM_OP_MOD) continue;
+        int64_t modulus = c[3].imm;
+        if (modulus > 0 && ((uint64_t)modulus & ((uint64_t)modulus - 1)) == 0 &&
+            c[1].imm != 0 && c[1].imm != modulus) return true;
+    }
+    return false;
+}
+
+static bool biased_opt_out(const char *text) {
+    const char *comment = strchr(text, '#');
+    if (!comment) return false;
+    comment++;
+    while (*comment == ' ' || *comment == '\t') comment++;
+    if (strncmp(comment, "biased", 6)) return false;
+    comment += 6;
+    while (*comment == ' ' || *comment == '\t' || *comment == '\r') comment++;
+    return !*comment;
+}
+
 bool dsym_spec_resolve(DsymSpec *s, uint32_t flags, DsymDiags *diags) {
     if (!s) return false;
     DsymDiags local;
@@ -1841,6 +1866,17 @@ bool dsym_spec_resolve(DsymSpec *s, uint32_t flags, DsymDiags *diags) {
             e->program = dsym_program_compile(s->arena, e->body, s->source_path, 0,
                                               r->path, reloc_lookup_cb, ix, diags);
             if (!e->program) continue;
+            if (flags & (DSYM_LOAD_LINT | DSYM_LOAD_STRICT)) {
+                for (size_t j = 0; j < e->program->stmt_count; j++) {
+                    const DsymStmt *st = &e->program->stmts[j];
+                    if (!biased_opt_out(st->text) &&
+                        (biased_modulo(e->program, st->expr[0]) ||
+                         biased_modulo(e->program, st->expr[1])))
+                        rdiag(r, (flags & DSYM_LOAD_STRICT) ? DSYM_ERROR : DSYM_WARNING,
+                              "DSYM-W001: encoder '%s', statement %u: suspicious biased modulo: %s",
+                              e->name, st->line, st->text);
+                }
+            }
             RPATH(r, "/encoders/%zu", i);
             if (e->has_max_bytes && e->program->static_size > (uint64_t)e->max_bytes)
                 rdiag(r, (flags & DSYM_LOAD_LINT) ? DSYM_WARNING : DSYM_NOTE,

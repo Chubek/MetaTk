@@ -75,6 +75,14 @@ parentheses. 64-bit two's-complement arithmetic; `%` is Euclidean. Bodies are
 compiled once to RPN bytecode with constant folding; operands are numbered in
 first-use order (`program->params`). Emitted values must fit their field.
 
+Under `DSYM_LOAD_LINT`, compiled (constant-folded) expressions containing
+`PARAM c1 ADD c2 MOD` warn with `DSYM-W001` when `c2` is a positive power of
+two and `c1` is neither zero nor `c2`. `DSYM_LOAD_STRICT` rejects this pattern
+even without lint. Diagnostics name the encoder and body statement number.
+Intentional bias must be documented with an exact trailing `# biased` comment
+on that statement. This suppresses only this check, not other diagnostics.
+See [the encoder audit](docs/encoder-audit.md) for outstanding ISA data issues.
+
 ```c
 DsymSpec *s = dsym_spec_load_file("ArchDB/riscv64.dsymspec.yaml", 0, 0, &diags);
 const char *n[] = {"rd", "rs1", "imm"};

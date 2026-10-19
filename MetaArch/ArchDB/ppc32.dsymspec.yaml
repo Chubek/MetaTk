@@ -291,7 +291,7 @@ encoders:
   - name: mulli
     max_bytes: 4
     body: |
-      EMIT32BE 0x1C000000 + rd*2097152 + ra*65536 + ((imm + 32768) % 65536)
+      EMIT32BE 0x1C000000 + rd*2097152 + ra*65536 + ((imm + 65536) % 65536)
   - name: mullw
     max_bytes: 4
     body: |
@@ -307,15 +307,15 @@ encoders:
   - name: li
     max_bytes: 4
     body: |
-      EMIT32BE 0x38000000 + rd*2097152 + ((imm + 32768) % 65536)
+      EMIT32BE 0x38000000 + rd*2097152 + ((imm + 65536) % 65536)
   - name: addi
     max_bytes: 4
     body: |
-      EMIT32BE 0x38000000 + rd*2097152 + ra*65536 + ((imm + 32768) % 65536)
+      EMIT32BE 0x38000000 + rd*2097152 + ra*65536 + ((imm + 65536) % 65536)
   - name: addis
     max_bytes: 4
     body: |
-      EMIT32BE 0x3C000000 + rd*2097152 + ra*65536 + ((imm + 32768) % 65536)
+      EMIT32BE 0x3C000000 + rd*2097152 + ra*65536 + ((imm + 65536) % 65536)
   - name: lwz
     max_bytes: 4
     body: |

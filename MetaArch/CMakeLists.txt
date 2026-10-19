@@ -166,6 +166,8 @@ if(ARCHDB_BUILD_TESTS)
   enable_testing()
   add_executable(test_archdb tests/test_archdb.c)
   target_compile_definitions(test_archdb PRIVATE _POSIX_C_SOURCE=200809L)
+  target_compile_definitions(test_archdb PRIVATE
+    ENCODINGS_TSV="${CMAKE_CURRENT_SOURCE_DIR}/tests/encodings.tsv")
   target_link_libraries(test_archdb PRIVATE metaarch)
   add_test(NAME archdb_roundtrip
            COMMAND test_archdb ${CMAKE_CURRENT_SOURCE_DIR}/ArchDB

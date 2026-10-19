@@ -278,11 +278,11 @@ encoders:
   - name: addi
     max_bytes: 4
     body: |
-      EMIT32LE 0x20000000 + rt*65536 + rs*2097152 + ((imm + 32768) % 65536)
+      EMIT32LE 0x20000000 + rt*65536 + rs*2097152 + ((imm + 65536) % 65536)
   - name: addiu
     max_bytes: 4
     body: |
-      EMIT32LE 0x24000000 + rt*65536 + rs*2097152 + ((imm + 32768) % 65536)
+      EMIT32LE 0x24000000 + rt*65536 + rs*2097152 + ((imm + 65536) % 65536)
   - name: lui
     max_bytes: 4
     body: |
