@@ -1,0 +1,813 @@
+# Generated from ArchDB/mips32.dsymspec.yaml by tools/compile_archdb.py.
+# Regenerate from the YAML source; see MetaArchDB/README.md.
+architecture {
+    schema = 1;
+    target {
+        arch = "mips32";
+        subarch = "mips32r2";
+        addr_size = 32;
+        op_size = 32;
+        addr_def = 32;
+        align = 4;
+        byte_order = "little";
+        obj_format = "ELF32";
+        abi = "o32";
+        calling_conv = "o32";
+        features = ["mips32r2", "fpu", "nan2008"];
+    }
+    feature mips32r2 { desc = "MIPS32 Release 2"; }
+    feature fpu { desc = "floating point unit"; }
+    feature mips16 { desc = "MIPS16e"; }
+    feature micromips { desc = "microMIPS"; }
+    feature dsp { desc = "DSP ASE"; }
+    feature dspr2 { desc = "DSP ASE Release 2"; }
+    feature msa { desc = "MIPS SIMD Architecture"; }
+    feature mt { desc = "multi-threading (mftr/mttr)"; }
+    feature nan2008 { desc = "IEEE 754-2008 NaN"; }
+    feature ginv { desc = "global invalidation"; }
+    feature priv { desc = "privileged (CP0/TLB)"; }
+    registers = [
+        { name = "$0"; class = "gpr"; width = 32; enc = 0; flags = ["readable", "writable"]; },
+        { name = "$1"; class = "gpr"; width = 32; enc = 1; flags = ["readable", "writable"]; },
+        { name = "$2"; class = "gpr"; width = 32; enc = 2; flags = ["readable", "writable"]; },
+        { name = "$3"; class = "gpr"; width = 32; enc = 3; flags = ["readable", "writable"]; },
+        { name = "$4"; class = "gpr"; width = 32; enc = 4; flags = ["readable", "writable"]; },
+        { name = "$5"; class = "gpr"; width = 32; enc = 5; flags = ["readable", "writable"]; },
+        { name = "$6"; class = "gpr"; width = 32; enc = 6; flags = ["readable", "writable"]; },
+        { name = "$7"; class = "gpr"; width = 32; enc = 7; flags = ["readable", "writable"]; },
+        { name = "$8"; class = "gpr"; width = 32; enc = 8; flags = ["readable", "writable"]; },
+        { name = "$9"; class = "gpr"; width = 32; enc = 9; flags = ["readable", "writable"]; },
+        { name = "$10"; class = "gpr"; width = 32; enc = 10; flags = ["readable", "writable"]; },
+        { name = "$11"; class = "gpr"; width = 32; enc = 11; flags = ["readable", "writable"]; },
+        { name = "$12"; class = "gpr"; width = 32; enc = 12; flags = ["readable", "writable"]; },
+        { name = "$13"; class = "gpr"; width = 32; enc = 13; flags = ["readable", "writable"]; },
+        { name = "$14"; class = "gpr"; width = 32; enc = 14; flags = ["readable", "writable"]; },
+        { name = "$15"; class = "gpr"; width = 32; enc = 15; flags = ["readable", "writable"]; },
+        { name = "$16"; class = "gpr"; width = 32; enc = 16; flags = ["readable", "writable"]; },
+        { name = "$17"; class = "gpr"; width = 32; enc = 17; flags = ["readable", "writable"]; },
+        { name = "$18"; class = "gpr"; width = 32; enc = 18; flags = ["readable", "writable"]; },
+        { name = "$19"; class = "gpr"; width = 32; enc = 19; flags = ["readable", "writable"]; },
+        { name = "$20"; class = "gpr"; width = 32; enc = 20; flags = ["readable", "writable"]; },
+        { name = "$21"; class = "gpr"; width = 32; enc = 21; flags = ["readable", "writable"]; },
+        { name = "$22"; class = "gpr"; width = 32; enc = 22; flags = ["readable", "writable"]; },
+        { name = "$23"; class = "gpr"; width = 32; enc = 23; flags = ["readable", "writable"]; },
+        { name = "$24"; class = "gpr"; width = 32; enc = 24; flags = ["readable", "writable"]; },
+        { name = "$25"; class = "gpr"; width = 32; enc = 25; flags = ["readable", "writable"]; },
+        { name = "$26"; class = "gpr"; width = 32; enc = 26; flags = ["readable", "writable"]; },
+        { name = "$27"; class = "gpr"; width = 32; enc = 27; flags = ["readable", "writable"]; },
+        { name = "$28"; class = "gpr"; width = 32; enc = 28; flags = ["readable", "writable"]; },
+        { name = "$29"; class = "gpr"; width = 32; enc = 29; flags = ["readable", "writable"]; },
+        { name = "$30"; class = "gpr"; width = 32; enc = 30; flags = ["readable", "writable"]; },
+        { name = "$31"; class = "gpr"; width = 32; enc = 31; flags = ["readable", "writable"]; },
+        { name = "$f0"; class = "fp"; width = 64; enc = 0; flags = ["readable", "writable"]; },
+        { name = "$f1"; class = "fp"; width = 64; enc = 1; flags = ["readable", "writable"]; },
+        { name = "$f2"; class = "fp"; width = 64; enc = 2; flags = ["readable", "writable"]; },
+        { name = "$f3"; class = "fp"; width = 64; enc = 3; flags = ["readable", "writable"]; },
+        { name = "$f4"; class = "fp"; width = 64; enc = 4; flags = ["readable", "writable"]; },
+        { name = "$f5"; class = "fp"; width = 64; enc = 5; flags = ["readable", "writable"]; },
+        { name = "$f6"; class = "fp"; width = 64; enc = 6; flags = ["readable", "writable"]; },
+        { name = "$f7"; class = "fp"; width = 64; enc = 7; flags = ["readable", "writable"]; },
+        { name = "$f8"; class = "fp"; width = 64; enc = 8; flags = ["readable", "writable"]; },
+        { name = "$f9"; class = "fp"; width = 64; enc = 9; flags = ["readable", "writable"]; },
+        { name = "$f10"; class = "fp"; width = 64; enc = 10; flags = ["readable", "writable"]; },
+        { name = "$f11"; class = "fp"; width = 64; enc = 11; flags = ["readable", "writable"]; },
+        { name = "$f12"; class = "fp"; width = 64; enc = 12; flags = ["readable", "writable"]; },
+        { name = "$f13"; class = "fp"; width = 64; enc = 13; flags = ["readable", "writable"]; },
+        { name = "$f14"; class = "fp"; width = 64; enc = 14; flags = ["readable", "writable"]; },
+        { name = "$f15"; class = "fp"; width = 64; enc = 15; flags = ["readable", "writable"]; },
+        { name = "$f16"; class = "fp"; width = 64; enc = 16; flags = ["readable", "writable"]; },
+        { name = "$f17"; class = "fp"; width = 64; enc = 17; flags = ["readable", "writable"]; },
+        { name = "$f18"; class = "fp"; width = 64; enc = 18; flags = ["readable", "writable"]; },
+        { name = "$f19"; class = "fp"; width = 64; enc = 19; flags = ["readable", "writable"]; },
+        { name = "$f20"; class = "fp"; width = 64; enc = 20; flags = ["readable", "writable"]; },
+        { name = "$f21"; class = "fp"; width = 64; enc = 21; flags = ["readable", "writable"]; },
+        { name = "$f22"; class = "fp"; width = 64; enc = 22; flags = ["readable", "writable"]; },
+        { name = "$f23"; class = "fp"; width = 64; enc = 23; flags = ["readable", "writable"]; },
+        { name = "$f24"; class = "fp"; width = 64; enc = 24; flags = ["readable", "writable"]; },
+        { name = "$f25"; class = "fp"; width = 64; enc = 25; flags = ["readable", "writable"]; },
+        { name = "$f26"; class = "fp"; width = 64; enc = 26; flags = ["readable", "writable"]; },
+        { name = "$f27"; class = "fp"; width = 64; enc = 27; flags = ["readable", "writable"]; },
+        { name = "$f28"; class = "fp"; width = 64; enc = 28; flags = ["readable", "writable"]; },
+        { name = "$f29"; class = "fp"; width = 64; enc = 29; flags = ["readable", "writable"]; },
+        { name = "$f30"; class = "fp"; width = 64; enc = 30; flags = ["readable", "writable"]; },
+        { name = "$f31"; class = "fp"; width = 64; enc = 31; flags = ["readable", "writable"]; },
+        { name = "$w0"; class = "vec"; width = 128; enc = 0; flags = ["readable", "writable"]; },
+        { name = "$w1"; class = "vec"; width = 128; enc = 1; flags = ["readable", "writable"]; },
+        { name = "$w2"; class = "vec"; width = 128; enc = 2; flags = ["readable", "writable"]; },
+        { name = "$w3"; class = "vec"; width = 128; enc = 3; flags = ["readable", "writable"]; },
+        { name = "$w4"; class = "vec"; width = 128; enc = 4; flags = ["readable", "writable"]; },
+        { name = "$w5"; class = "vec"; width = 128; enc = 5; flags = ["readable", "writable"]; },
+        { name = "$w6"; class = "vec"; width = 128; enc = 6; flags = ["readable", "writable"]; },
+        { name = "$w7"; class = "vec"; width = 128; enc = 7; flags = ["readable", "writable"]; },
+        { name = "$w8"; class = "vec"; width = 128; enc = 8; flags = ["readable", "writable"]; },
+        { name = "$w9"; class = "vec"; width = 128; enc = 9; flags = ["readable", "writable"]; },
+        { name = "$w10"; class = "vec"; width = 128; enc = 10; flags = ["readable", "writable"]; },
+        { name = "$w11"; class = "vec"; width = 128; enc = 11; flags = ["readable", "writable"]; },
+        { name = "$w12"; class = "vec"; width = 128; enc = 12; flags = ["readable", "writable"]; },
+        { name = "$w13"; class = "vec"; width = 128; enc = 13; flags = ["readable", "writable"]; },
+        { name = "$w14"; class = "vec"; width = 128; enc = 14; flags = ["readable", "writable"]; },
+        { name = "$w15"; class = "vec"; width = 128; enc = 15; flags = ["readable", "writable"]; },
+        { name = "$w16"; class = "vec"; width = 128; enc = 16; flags = ["readable", "writable"]; },
+        { name = "$w17"; class = "vec"; width = 128; enc = 17; flags = ["readable", "writable"]; },
+        { name = "$w18"; class = "vec"; width = 128; enc = 18; flags = ["readable", "writable"]; },
+        { name = "$w19"; class = "vec"; width = 128; enc = 19; flags = ["readable", "writable"]; },
+        { name = "$w20"; class = "vec"; width = 128; enc = 20; flags = ["readable", "writable"]; },
+        { name = "$w21"; class = "vec"; width = 128; enc = 21; flags = ["readable", "writable"]; },
+        { name = "$w22"; class = "vec"; width = 128; enc = 22; flags = ["readable", "writable"]; },
+        { name = "$w23"; class = "vec"; width = 128; enc = 23; flags = ["readable", "writable"]; },
+        { name = "$w24"; class = "vec"; width = 128; enc = 24; flags = ["readable", "writable"]; },
+        { name = "$w25"; class = "vec"; width = 128; enc = 25; flags = ["readable", "writable"]; },
+        { name = "$w26"; class = "vec"; width = 128; enc = 26; flags = ["readable", "writable"]; },
+        { name = "$w27"; class = "vec"; width = 128; enc = 27; flags = ["readable", "writable"]; },
+        { name = "$w28"; class = "vec"; width = 128; enc = 28; flags = ["readable", "writable"]; },
+        { name = "$w29"; class = "vec"; width = 128; enc = 29; flags = ["readable", "writable"]; },
+        { name = "$w30"; class = "vec"; width = 128; enc = 30; flags = ["readable", "writable"]; },
+        { name = "$w31"; class = "vec"; width = 128; enc = 31; flags = ["readable", "writable"]; },
+        { name = "hi"; class = "special"; width = 32; enc = 0; },
+        { name = "lo"; class = "special"; width = 32; enc = 0; },
+        { name = "pc"; class = "special"; width = 32; enc = 0; },
+        { name = "dspctrl"; class = "status"; width = 32; enc = 0; },
+        { name = "$a2"; class = "gpr"; width = 32; enc = 6; flags = ["readable", "writable"]; },
+        { name = "$v1"; class = "gpr"; width = 32; enc = 3; flags = ["readable", "writable"]; },
+        { name = "$s1"; class = "gpr"; width = 32; enc = 17; flags = ["readable", "writable"]; },
+        { name = "$t1"; class = "gpr"; width = 32; enc = 9; flags = ["readable", "writable"]; },
+        { name = "$ra"; class = "gpr"; width = 32; enc = 31; flags = ["readable", "writable"]; },
+        { name = "$k0"; class = "gpr"; width = 32; enc = 26; flags = ["readable", "writable"]; },
+        { name = "$sp"; class = "gpr"; width = 32; enc = 29; flags = ["readable", "writable"]; },
+        { name = "$t5"; class = "gpr"; width = 32; enc = 13; flags = ["readable", "writable"]; },
+        { name = "$s6"; class = "gpr"; width = 32; enc = 22; flags = ["readable", "writable"]; },
+        { name = "$k1"; class = "gpr"; width = 32; enc = 27; flags = ["readable", "writable"]; },
+        { name = "$t2"; class = "gpr"; width = 32; enc = 10; flags = ["readable", "writable"]; },
+        { name = "$a3"; class = "gpr"; width = 32; enc = 7; flags = ["readable", "writable"]; },
+        { name = "$gp"; class = "gpr"; width = 32; enc = 28; flags = ["readable", "writable"]; },
+        { name = "$fp"; class = "gpr"; width = 32; enc = 30; flags = ["readable", "writable"]; },
+        { name = "$at"; class = "gpr"; width = 32; enc = 1; flags = ["readable", "writable"]; },
+        { name = "$t9"; class = "gpr"; width = 32; enc = 25; flags = ["readable", "writable"]; },
+        { name = "$s3"; class = "gpr"; width = 32; enc = 19; flags = ["readable", "writable"]; },
+        { name = "$t3"; class = "gpr"; width = 32; enc = 11; flags = ["readable", "writable"]; },
+        { name = "$t8"; class = "gpr"; width = 32; enc = 24; flags = ["readable", "writable"]; },
+        { name = "$s7"; class = "gpr"; width = 32; enc = 23; flags = ["readable", "writable"]; },
+        { name = "$t0"; class = "gpr"; width = 32; enc = 8; flags = ["readable", "writable"]; },
+        { name = "$t7"; class = "gpr"; width = 32; enc = 15; flags = ["readable", "writable"]; },
+        { name = "$zero"; class = "gpr"; width = 32; enc = 0; flags = ["readable", "writable"]; },
+        { name = "$s0"; class = "gpr"; width = 32; enc = 16; flags = ["readable", "writable"]; },
+        { name = "$t4"; class = "gpr"; width = 32; enc = 12; flags = ["readable", "writable"]; },
+        { name = "$a1"; class = "gpr"; width = 32; enc = 5; flags = ["readable", "writable"]; },
+        { name = "$s5"; class = "gpr"; width = 32; enc = 21; flags = ["readable", "writable"]; },
+        { name = "$s4"; class = "gpr"; width = 32; enc = 20; flags = ["readable", "writable"]; },
+        { name = "$a0"; class = "gpr"; width = 32; enc = 4; flags = ["readable", "writable"]; },
+        { name = "$v0"; class = "gpr"; width = 32; enc = 2; flags = ["readable", "writable"]; },
+        { name = "$s2"; class = "gpr"; width = 32; enc = 18; flags = ["readable", "writable"]; },
+        { name = "$t6"; class = "gpr"; width = 32; enc = 14; flags = ["readable", "writable"]; },
+        { name = "status"; class = "ctrl"; width = 32; enc = 0; flags = ["modedep"]; },
+        { name = "cause"; class = "ctrl"; width = 32; enc = 0; flags = ["modedep"]; },
+        { name = "epc"; class = "ctrl"; width = 32; enc = 0; flags = ["modedep"]; },
+        { name = "badvaddr"; class = "ctrl"; width = 32; enc = 0; flags = ["modedep"]; },
+        { name = "count"; class = "ctrl"; width = 32; enc = 0; flags = ["modedep"]; },
+        { name = "compare"; class = "ctrl"; width = 32; enc = 0; flags = ["modedep"]; },
+        { name = "entryhi"; class = "ctrl"; width = 32; enc = 0; flags = ["modedep"]; },
+        { name = "entrylo0"; class = "ctrl"; width = 32; enc = 0; flags = ["modedep"]; },
+        { name = "entrylo1"; class = "ctrl"; width = 32; enc = 0; flags = ["modedep"]; },
+        { name = "context"; class = "ctrl"; width = 32; enc = 0; flags = ["modedep"]; },
+        { name = "config"; class = "ctrl"; width = 32; enc = 0; flags = ["modedep"]; },
+        { name = "ebase"; class = "ctrl"; width = 32; enc = 0; flags = ["modedep"]; },
+        { name = "hwrena"; class = "ctrl"; width = 32; enc = 0; flags = ["modedep"]; }
+    ];
+    mnemonic nop {  }
+    mnemonic add {  }
+    mnemonic addu {  }
+    mnemonic sub {  }
+    mnemonic and {  }
+    mnemonic or {  }
+    mnemonic xor {  }
+    mnemonic nor {  }
+    mnemonic slt {  }
+    mnemonic sll {  }
+    mnemonic srl {  }
+    mnemonic sra {  }
+    mnemonic addi {  }
+    mnemonic addiu {  }
+    mnemonic lui {  }
+    mnemonic ori {  }
+    mnemonic mul {  }
+    mnemonic mult {  }
+    mnemonic div {  }
+    mnemonic mfhi {  }
+    mnemonic mflo {  }
+    mnemonic lw {  }
+    mnemonic sw {  }
+    mnemonic lb {  }
+    mnemonic lbu {  }
+    mnemonic lh {  }
+    mnemonic sb {  }
+    mnemonic sh {  }
+    mnemonic ld {  }
+    mnemonic sd {  }
+    mnemonic ll {  }
+    mnemonic sc {  }
+    mnemonic beq {  }
+    mnemonic bne {  }
+    mnemonic j {  }
+    mnemonic jal {  }
+    mnemonic jr {  }
+    mnemonic jalr {  }
+    mnemonic syscall {  }
+    mnemonic break {  }
+    mnemonic sync {  }
+    mnemonic eret {  }
+    mnemonic mfc0 {  }
+    mnemonic mtc0 {  }
+    mnemonic tlbwi {  }
+    mnemonic wait {  }
+    mnemonic add.s {  }
+    mnemonic mul.s {  }
+    mnemonic lwc1 {  }
+    mnemonic swc1 {  }
+    mnemonic addq.ph {  }
+    mnemonic msa.addv {  }
+    mnemonic msa.ld {  }
+    encoder nop { max_bytes = 4; body = "EMIT32LE 0x00000000\n"; }
+    encoder add { max_bytes = 4; body = "EMIT32LE 0x00000020 + rd*2048 + rs*2097152 + rt*65536\n"; }
+    encoder addu { max_bytes = 4; body = "EMIT32LE 0x00000021 + rd*2048 + rs*2097152 + rt*65536\n"; }
+    encoder sub { max_bytes = 4; body = "EMIT32LE 0x00000022 + rd*2048 + rs*2097152 + rt*65536\n"; }
+    encoder and { max_bytes = 4; body = "EMIT32LE 0x00000024 + rd*2048 + rs*2097152 + rt*65536\n"; }
+    encoder or { max_bytes = 4; body = "EMIT32LE 0x00000025 + rd*2048 + rs*2097152 + rt*65536\n"; }
+    encoder xor { max_bytes = 4; body = "EMIT32LE 0x00000026 + rd*2048 + rs*2097152 + rt*65536\n"; }
+    encoder nor { max_bytes = 4; body = "EMIT32LE 0x00000027 + rd*2048 + rs*2097152 + rt*65536\n"; }
+    encoder slt { max_bytes = 4; body = "EMIT32LE 0x0000002A + rd*2048 + rs*2097152 + rt*65536\n"; }
+    encoder sll { max_bytes = 4; body = "EMIT32LE 0x00000000 + rd*2048 + rt*65536 + ((sh + 32) % 32)*64\n"; }
+    encoder srl { max_bytes = 4; body = "EMIT32LE 0x00000002 + rd*2048 + rt*65536 + ((sh + 32) % 32)*64\n"; }
+    encoder sra { max_bytes = 4; body = "EMIT32LE 0x00000003 + rd*2048 + rt*65536 + ((sh + 32) % 32)*64\n"; }
+    encoder addi {
+        max_bytes = 4;
+        body = "EMIT32LE 0x20000000 + rt*65536 + rs*2097152 + ((imm + 65536) % 65536)\n";
+    }
+    encoder addiu {
+        max_bytes = 4;
+        body = "EMIT32LE 0x24000000 + rt*65536 + rs*2097152 + ((imm + 65536) % 65536)\n";
+    }
+    encoder lui { max_bytes = 4; body = "EMIT32LE 0x3C000000 + rt*65536 + ((imm + 32768) % 65536)\n"; }
+    encoder ori {
+        max_bytes = 4;
+        body = "EMIT32LE 0x34000000 + rt*65536 + rs*2097152 + ((imm + 65536) % 65536)\n";
+    }
+    encoder mul { max_bytes = 4; body = "EMIT32LE 0x70000002 + rd*2048 + rs*2097152 + rt*65536\n"; }
+    encoder mult { max_bytes = 4; body = "EMIT32LE 0x00000018 + rs*2097152 + rt*65536\n"; }
+    encoder div { max_bytes = 4; body = "EMIT32LE 0x0000001A + rs*2097152 + rt*65536\n"; }
+    encoder mfhi { max_bytes = 4; body = "EMIT32LE 0x00000010 + rd*2048\n"; }
+    encoder mflo { max_bytes = 4; body = "EMIT32LE 0x00000012 + rd*2048\n"; }
+    encoder lw {
+        max_bytes = 4;
+        body = "EMIT32LE 0x8C000000 + rt*65536 + rs*2097152 + ((imm + 32768) % 32768)\n";
+    }
+    encoder sw {
+        max_bytes = 4;
+        body = "EMIT32LE 0xAC000000 + rt*65536 + rs*2097152 + ((imm + 32768) % 32768)\n";
+    }
+    encoder lb {
+        max_bytes = 4;
+        body = "EMIT32LE 0x80000000 + rt*65536 + rs*2097152 + ((imm + 32768) % 32768)\n";
+    }
+    encoder lbu {
+        max_bytes = 4;
+        body = "EMIT32LE 0x90000000 + rt*65536 + rs*2097152 + ((imm + 32768) % 32768)\n";
+    }
+    encoder lh {
+        max_bytes = 4;
+        body = "EMIT32LE 0x84000000 + rt*65536 + rs*2097152 + ((imm + 32768) % 32768)\n";
+    }
+    encoder sb {
+        max_bytes = 4;
+        body = "EMIT32LE 0xA0000000 + rt*65536 + rs*2097152 + ((imm + 32768) % 32768)\n";
+    }
+    encoder sh {
+        max_bytes = 4;
+        body = "EMIT32LE 0xA4000000 + rt*65536 + rs*2097152 + ((imm + 32768) % 32768)\n";
+    }
+    encoder ld {
+        max_bytes = 4;
+        body = "EMIT32LE 0xDC000000 + rt*65536 + rs*2097152 + ((imm + 32768) % 32768)\n";
+    }
+    encoder sd {
+        max_bytes = 4;
+        body = "EMIT32LE 0xFC000000 + rt*65536 + rs*2097152 + ((imm + 32768) % 32768)\n";
+    }
+    encoder ll { max_bytes = 4; body = "EMIT32LE 0xC0000000 + rt*65536 + rs*2097152\n"; }
+    encoder sc { max_bytes = 4; body = "EMIT32LE 0xE0000000 + rt*65536 + rs*2097152\n"; }
+    encoder beq {
+        max_bytes = 4;
+        max_relocs = 1;
+        body = "EMIT32LE 0x10000000 + rs*2097152 + rt*65536\nEMIT_RELOCATION sym, R_MIPS_PC16\n";
+    }
+    encoder bne {
+        max_bytes = 4;
+        max_relocs = 1;
+        body = "EMIT32LE 0x14000000 + rs*2097152 + rt*65536\nEMIT_RELOCATION sym, R_MIPS_PC16\n";
+    }
+    encoder j {
+        max_bytes = 4;
+        max_relocs = 1;
+        body = "EMIT32LE 0x08000000\nEMIT_RELOCATION sym, R_MIPS_26\n";
+    }
+    encoder jal {
+        max_bytes = 4;
+        max_relocs = 1;
+        body = "EMIT32LE 0x0C000000\nEMIT_RELOCATION sym, R_MIPS_26\n";
+    }
+    encoder jr { max_bytes = 4; body = "EMIT32LE 0x00000008 + rs*2097152\n"; }
+    encoder jalr { max_bytes = 4; body = "EMIT32LE 0x00000009 + rd*2048 + rs*2097152\n"; }
+    encoder syscall { max_bytes = 4; body = "EMIT32LE 0x0000000C\n"; }
+    encoder break { max_bytes = 4; body = "EMIT32LE 0x0000000D + ((imm + 1048576) % 1048576)*64\n"; }
+    encoder sync { max_bytes = 4; body = "EMIT32LE 0x0000000F\n"; }
+    encoder eret { max_bytes = 4; body = "EMIT32LE 0x42000018\n"; }
+    encoder mfc0 { max_bytes = 4; body = "EMIT32LE 0x40000000 + rt*65536 + rd*2048\n"; }
+    encoder mtc0 { max_bytes = 4; body = "EMIT32LE 0x40800000 + rt*65536 + rd*2048\n"; }
+    encoder tlbwi { max_bytes = 4; body = "EMIT32LE 0x42000002\n"; }
+    encoder wait { max_bytes = 4; body = "EMIT32LE 0x42000020\n"; }
+    encoder add_s { max_bytes = 4; body = "EMIT32LE 0x46000000 + fd*2048 + fs*2097152 + ft*65536\n"; }
+    encoder mul_s { max_bytes = 4; body = "EMIT32LE 0x46000002 + fd*2048 + fs*2097152 + ft*65536\n"; }
+    encoder lwc1 { max_bytes = 4; body = "EMIT32LE 0xC4000000 + ft*65536 + rs*2097152\n"; }
+    encoder swc1 { max_bytes = 4; body = "EMIT32LE 0xE4000000 + ft*65536 + rs*2097152\n"; }
+    encoder addq { max_bytes = 4; body = "EMIT32LE 0x7C000252 + rd*2048 + rs*2097152 + rt*65536\n"; }
+    encoder msaaddv { max_bytes = 4; body = "EMIT32LE 0x78000019 + wd*2048 + ws*2097152 + wt*65536\n"; }
+    encoder msald { max_bytes = 4; body = "EMIT32LE 0x48000020 + wd*2048 + rs*2097152\n"; }
+    form { mnemonic = "nop"; encoder = "nop"; }
+    form {
+        mnemonic = "add";
+        encoder = "add";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "addu";
+        encoder = "addu";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "sub";
+        encoder = "sub";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "and";
+        encoder = "and";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "or";
+        encoder = "or";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "xor";
+        encoder = "xor";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "nor";
+        encoder = "nor";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "slt";
+        encoder = "slt";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "sll";
+        encoder = "sll";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "imm"; width = 8; imm_min = 0; imm_max = 31; signed = false; }
+        ];
+    }
+    form {
+        mnemonic = "srl";
+        encoder = "srl";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "imm"; width = 8; imm_min = 0; imm_max = 31; signed = false; }
+        ];
+    }
+    form {
+        mnemonic = "sra";
+        encoder = "sra";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "imm"; width = 8; imm_min = 0; imm_max = 31; signed = false; }
+        ];
+    }
+    form {
+        mnemonic = "addi";
+        encoder = "addi";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "imm"; width = 16; imm_min = -32768; imm_max = 32767; signed = true; }
+        ];
+    }
+    form {
+        mnemonic = "addiu";
+        encoder = "addiu";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "imm"; width = 16; imm_min = -32768; imm_max = 32767; signed = true; }
+        ];
+    }
+    form {
+        mnemonic = "lui";
+        encoder = "lui";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "imm"; width = 16; imm_min = 0; imm_max = 65535; signed = false; }
+        ];
+    }
+    form {
+        mnemonic = "ori";
+        encoder = "ori";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "imm"; width = 16; imm_min = 0; imm_max = 65535; signed = false; }
+        ];
+    }
+    form {
+        mnemonic = "mul";
+        encoder = "mul";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "mult";
+        encoder = "mult";
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; }, { kind = "reg"; width = 32; class = "gpr"; }];
+    }
+    form {
+        mnemonic = "div";
+        encoder = "div";
+        flags = ["may_trap"];
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; }, { kind = "reg"; width = 32; class = "gpr"; }];
+    }
+    form {
+        mnemonic = "mfhi";
+        encoder = "mfhi";
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; access = "write"; }];
+    }
+    form {
+        mnemonic = "mflo";
+        encoder = "mflo";
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; access = "write"; }];
+    }
+    form {
+        mnemonic = "lw";
+        encoder = "lw";
+        flags = ["reads_mem"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "mem"; width = 16; imm_min = -32768; imm_max = 32767; signed = true; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "sw";
+        encoder = "sw";
+        flags = ["writes_mem"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "mem"; width = 16; imm_min = -32768; imm_max = 32767; signed = true; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "lb";
+        encoder = "lb";
+        flags = ["reads_mem"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "mem"; width = 16; imm_min = -32768; imm_max = 32767; signed = true; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "lbu";
+        encoder = "lbu";
+        flags = ["reads_mem"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "mem"; width = 16; imm_min = -32768; imm_max = 32767; signed = true; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "lh";
+        encoder = "lh";
+        flags = ["reads_mem"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "mem"; width = 16; imm_min = -32768; imm_max = 32767; signed = true; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "sb";
+        encoder = "sb";
+        flags = ["writes_mem"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "mem"; width = 16; imm_min = -32768; imm_max = 32767; signed = true; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "sh";
+        encoder = "sh";
+        flags = ["writes_mem"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "mem"; width = 16; imm_min = -32768; imm_max = 32767; signed = true; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "ld";
+        encoder = "ld";
+        flags = ["reads_mem"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "mem"; width = 16; imm_min = -32768; imm_max = 32767; signed = true; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "sd";
+        encoder = "sd";
+        flags = ["writes_mem"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "mem"; width = 16; imm_min = -32768; imm_max = 32767; signed = true; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "ll";
+        encoder = "ll";
+        flags = ["reads_mem"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "mem"; width = 32; }
+        ];
+    }
+    form {
+        mnemonic = "sc";
+        encoder = "sc";
+        flags = ["writes_mem"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "mem"; width = 32; }
+        ];
+    }
+    form {
+        mnemonic = "beq";
+        encoder = "beq";
+        flags = ["cond_branch", "delayed", "reloc"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "sym"; width = 32; }
+        ];
+    }
+    form {
+        mnemonic = "bne";
+        encoder = "bne";
+        flags = ["cond_branch", "delayed", "reloc"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "sym"; width = 32; }
+        ];
+    }
+    form {
+        mnemonic = "j";
+        encoder = "j";
+        flags = ["branch", "delayed", "reloc"];
+        operands = [{ kind = "sym"; width = 32; }];
+    }
+    form {
+        mnemonic = "jal";
+        encoder = "jal";
+        flags = ["branch", "delayed", "reloc"];
+        operands = [{ kind = "sym"; width = 32; }];
+    }
+    form {
+        mnemonic = "jr";
+        encoder = "jr";
+        flags = ["branch", "terminator", "delayed"];
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; }];
+    }
+    form {
+        mnemonic = "jalr";
+        encoder = "jalr";
+        flags = ["branch", "delayed"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form { mnemonic = "syscall"; encoder = "syscall"; flags = ["may_trap"]; }
+    form {
+        mnemonic = "break";
+        encoder = "break";
+        flags = ["may_trap"];
+        operands = [{ kind = "imm"; width = 20; imm_min = 0; imm_max = 1048575; signed = false; }];
+    }
+    form { mnemonic = "sync"; encoder = "sync"; }
+    form {
+        mnemonic = "eret";
+        encoder = "eret";
+        flags = ["privileged", "return", "terminator"];
+        required = ["priv"];
+    }
+    form {
+        mnemonic = "mfc0";
+        encoder = "mfc0";
+        flags = ["privileged"];
+        required = ["priv"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "ctrl"; }
+        ];
+    }
+    form {
+        mnemonic = "mtc0";
+        encoder = "mtc0";
+        flags = ["privileged"];
+        required = ["priv"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "ctrl"; }
+        ];
+    }
+    form { mnemonic = "tlbwi"; encoder = "tlbwi"; flags = ["privileged"]; required = ["priv"]; }
+    form { mnemonic = "wait"; encoder = "wait"; flags = ["privileged"]; required = ["priv"]; }
+    form {
+        mnemonic = "add.s";
+        encoder = "add_s";
+        required = ["fpu"];
+        operands = [
+            { kind = "reg"; width = 32; class = "fp"; access = "write"; },
+            { kind = "reg"; width = 32; class = "fp"; },
+            { kind = "reg"; width = 32; class = "fp"; }
+        ];
+    }
+    form {
+        mnemonic = "mul.s";
+        encoder = "mul_s";
+        required = ["fpu"];
+        operands = [
+            { kind = "reg"; width = 32; class = "fp"; access = "write"; },
+            { kind = "reg"; width = 32; class = "fp"; },
+            { kind = "reg"; width = 32; class = "fp"; }
+        ];
+    }
+    form {
+        mnemonic = "lwc1";
+        encoder = "lwc1";
+        flags = ["reads_mem"];
+        required = ["fpu"];
+        operands = [
+            { kind = "reg"; width = 32; class = "fp"; access = "write"; },
+            { kind = "mem"; width = 32; }
+        ];
+    }
+    form {
+        mnemonic = "swc1";
+        encoder = "swc1";
+        flags = ["writes_mem"];
+        required = ["fpu"];
+        operands = [{ kind = "reg"; width = 32; class = "fp"; }, { kind = "mem"; width = 32; }];
+    }
+    form {
+        mnemonic = "addq.ph";
+        encoder = "addq";
+        required = ["dsp"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "msa.addv";
+        encoder = "msaaddv";
+        required = ["msa"];
+        operands = [
+            { kind = "reg"; width = 128; class = "vec"; access = "write"; },
+            { kind = "reg"; width = 128; class = "vec"; },
+            { kind = "reg"; width = 128; class = "vec"; }
+        ];
+    }
+    form {
+        mnemonic = "msa.ld";
+        encoder = "msald";
+        flags = ["reads_mem"];
+        required = ["msa"];
+        operands = [
+            { kind = "reg"; width = 128; class = "vec"; access = "write"; },
+            { kind = "mem"; width = 128; }
+        ];
+    }
+    syntax default { comment = "#"; separator = ", "; }
+    syntax numeric { comment = "#"; separator = ", "; }
+    sections = [
+        { name = ".text"; flags = ["exec", "alloc", "code"]; align = 4; content = "code"; },
+        { name = ".rodata"; flags = ["alloc", "readonly", "data"]; align = 8; content = "data"; },
+        { name = ".data"; flags = ["write", "alloc", "data"]; align = 8; content = "data"; },
+        {
+            name = ".bss";
+            flags = ["write", "alloc", "zerofill", "data"];
+            align = 8;
+            content = "data";
+        },
+        { name = ".tdata"; flags = ["write", "alloc", "tls", "data"]; align = 8; content = "data"; },
+        {
+            name = ".mips.options";
+            flags = ["alloc", "readonly", "meta"];
+            align = 4;
+            content = "meta";
+        },
+        { name = ".got"; flags = ["write", "alloc", "data"]; align = 8; content = "data"; },
+        { name = ".eh_frame"; flags = ["alloc", "readonly", "data"]; align = 8; content = "data"; }
+    ];
+    linkages = [
+        { name = "func_global"; binding = "global"; visibility = "default"; symtype = "func"; },
+        { name = "func_weak"; binding = "weak"; visibility = "default"; symtype = "func"; },
+        { name = "object_global"; binding = "global"; visibility = "default"; symtype = "object"; },
+        { name = "tls_var"; binding = "tls"; visibility = "default"; symtype = "object"; },
+        { name = "local_sym"; binding = "local"; visibility = "default"; symtype = "none"; },
+        { name = "micro_func"; binding = "global"; visibility = "default"; symtype = "func"; }
+    ];
+    reloc R_MIPS_NONE { width = 32; expr = "S + A"; }
+    reloc R_MIPS_16 { width = 32; expr = "S + A"; }
+    reloc R_MIPS_32 { width = 32; expr = "S + A"; }
+    reloc R_MIPS_REL32 { width = 32; expr = "S + A"; }
+    reloc R_MIPS_26 { width = 32; expr = "S + A"; }
+    reloc R_MIPS_HI16 { width = 32; expr = "S + A"; }
+    reloc R_MIPS_LO16 { width = 32; expr = "S + A"; }
+    reloc R_MIPS_PC16 { width = 32; signed = true; pcrel = true; expr = "S + A - P"; }
+    reloc R_MIPS_CALL16 { width = 32; signed = true; pcrel = true; expr = "PLT(S) + A - P"; }
+    reloc R_MIPS_GOT16 { width = 32; expr = "GOT(S) + A"; }
+    reloc R_MIPS_GOT_PAGE { width = 32; expr = "GOT(S) + A"; }
+    reloc R_MIPS_TLS_GD { width = 32; expr = "TLS(S) + A"; }
+    reloc R_MIPS_TLS_LDM { width = 32; expr = "TLS(S) + A"; }
+    reloc R_MIPS_TLS_TPREL_HI16 { width = 32; expr = "TLS(S) + A"; }
+    reloc R_MIPS_TLS_TPREL_LO16 { width = 32; expr = "TLS(S) + A"; }
+    reloc R_MIPS_JALR { width = 32; signed = true; pcrel = true; expr = "S + A - P"; }
+    reloc R_MIPS_JUMP_SLOT { width = 32; expr = "S + A"; }
+    reloc R_MIPS_GLOB_DAT { width = 32; expr = "S + A"; }
+    reloc R_MIPS_RELATIVE { width = 32; expr = "B + A"; }
+    reloc R_MIPS_GOT_DISP { width = 32; expr = "GOT(S) + A"; }
+    debug = [
+        { kind = "target"; msg = "mips32r2 base+fpu+dsp/msa+priv(delayed branches)"; ref = ""; },
+        { kind = "form"; msg = "delayed branch forms carry delayed flag"; ref = "j"; },
+        { kind = "form"; msg = "privileged CP0/TLB forms need priv"; ref = "eret"; }
+    ];
+    backend = { file = "backend/mips32.json"; };
+}

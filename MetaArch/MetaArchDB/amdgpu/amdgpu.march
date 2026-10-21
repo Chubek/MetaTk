@@ -1,0 +1,966 @@
+# Generated from ArchDB/amdgpu.dsymspec.yaml by tools/compile_archdb.py.
+# Regenerate from the YAML source; see MetaArchDB/README.md.
+architecture {
+    schema = 1;
+    target {
+        arch = "amdgpu";
+        subarch = "gfx900";
+        addr_size = 64;
+        op_size = 32;
+        addr_def = 64;
+        align = 4;
+        byte_order = "little";
+        obj_format = "ELF64";
+        abi = "amdgpu-HSA";
+        calling_conv = "amdgpu-hsa-kernel";
+        features = ["base", "gcn", "wave64"];
+    }
+    feature base { desc = "scalar SOP base"; }
+    feature gcn { desc = "Graphics Core Next"; }
+    feature rdna { desc = "RDNA"; }
+    feature cdna { desc = "CDNA (matrix cores)"; }
+    feature wave32 { desc = "32-lane wavefront"; }
+    feature wave64 { desc = "64-lane wavefront"; }
+    feature flat { desc = "flat addressing (FLAT/GLOBAL)"; }
+    feature xnack { desc = "execute-mask XNACK"; }
+    feature priv { desc = "privileged (s_getreg/s_setreg)"; }
+    feature image { desc = "image/memory ops (MUBUF/MTBUF/MIMG)"; }
+    feature mfma { desc = "matrix-fused multiply-add (CDNA)"; }
+    register s0 { class = "gpr"; width = 32; enc = 0; flags = ["readable", "writable"]; }
+    register s1 { class = "gpr"; width = 32; enc = 1; flags = ["readable", "writable"]; }
+    register s2 { class = "gpr"; width = 32; enc = 2; flags = ["readable", "writable"]; }
+    register s3 { class = "gpr"; width = 32; enc = 3; flags = ["readable", "writable"]; }
+    register s4 { class = "gpr"; width = 32; enc = 4; flags = ["readable", "writable"]; }
+    register s5 { class = "gpr"; width = 32; enc = 5; flags = ["readable", "writable"]; }
+    register s6 { class = "gpr"; width = 32; enc = 6; flags = ["readable", "writable"]; }
+    register s7 { class = "gpr"; width = 32; enc = 7; flags = ["readable", "writable"]; }
+    register s8 { class = "gpr"; width = 32; enc = 8; flags = ["readable", "writable"]; }
+    register s9 { class = "gpr"; width = 32; enc = 9; flags = ["readable", "writable"]; }
+    register s10 { class = "gpr"; width = 32; enc = 10; flags = ["readable", "writable"]; }
+    register s11 { class = "gpr"; width = 32; enc = 11; flags = ["readable", "writable"]; }
+    register s12 { class = "gpr"; width = 32; enc = 12; flags = ["readable", "writable"]; }
+    register s13 { class = "gpr"; width = 32; enc = 13; flags = ["readable", "writable"]; }
+    register s14 { class = "gpr"; width = 32; enc = 14; flags = ["readable", "writable"]; }
+    register s15 { class = "gpr"; width = 32; enc = 15; flags = ["readable", "writable"]; }
+    register s16 { class = "gpr"; width = 32; enc = 16; flags = ["readable", "writable"]; }
+    register s17 { class = "gpr"; width = 32; enc = 17; flags = ["readable", "writable"]; }
+    register s18 { class = "gpr"; width = 32; enc = 18; flags = ["readable", "writable"]; }
+    register s19 { class = "gpr"; width = 32; enc = 19; flags = ["readable", "writable"]; }
+    register s20 { class = "gpr"; width = 32; enc = 20; flags = ["readable", "writable"]; }
+    register s21 { class = "gpr"; width = 32; enc = 21; flags = ["readable", "writable"]; }
+    register s22 { class = "gpr"; width = 32; enc = 22; flags = ["readable", "writable"]; }
+    register s23 { class = "gpr"; width = 32; enc = 23; flags = ["readable", "writable"]; }
+    register s24 { class = "gpr"; width = 32; enc = 24; flags = ["readable", "writable"]; }
+    register s25 { class = "gpr"; width = 32; enc = 25; flags = ["readable", "writable"]; }
+    register s26 { class = "gpr"; width = 32; enc = 26; flags = ["readable", "writable"]; }
+    register s27 { class = "gpr"; width = 32; enc = 27; flags = ["readable", "writable"]; }
+    register s28 { class = "gpr"; width = 32; enc = 28; flags = ["readable", "writable"]; }
+    register s29 { class = "gpr"; width = 32; enc = 29; flags = ["readable", "writable"]; }
+    register s30 { class = "gpr"; width = 32; enc = 30; flags = ["readable", "writable"]; }
+    register s31 { class = "gpr"; width = 32; enc = 31; flags = ["readable", "writable"]; }
+    register s32 { class = "gpr"; width = 32; enc = 32; flags = ["readable", "writable"]; }
+    register s33 { class = "gpr"; width = 32; enc = 33; flags = ["readable", "writable"]; }
+    register s34 { class = "gpr"; width = 32; enc = 34; flags = ["readable", "writable"]; }
+    register s35 { class = "gpr"; width = 32; enc = 35; flags = ["readable", "writable"]; }
+    register s36 { class = "gpr"; width = 32; enc = 36; flags = ["readable", "writable"]; }
+    register s37 { class = "gpr"; width = 32; enc = 37; flags = ["readable", "writable"]; }
+    register s38 { class = "gpr"; width = 32; enc = 38; flags = ["readable", "writable"]; }
+    register s39 { class = "gpr"; width = 32; enc = 39; flags = ["readable", "writable"]; }
+    register s40 { class = "gpr"; width = 32; enc = 40; flags = ["readable", "writable"]; }
+    register s41 { class = "gpr"; width = 32; enc = 41; flags = ["readable", "writable"]; }
+    register s42 { class = "gpr"; width = 32; enc = 42; flags = ["readable", "writable"]; }
+    register s43 { class = "gpr"; width = 32; enc = 43; flags = ["readable", "writable"]; }
+    register s44 { class = "gpr"; width = 32; enc = 44; flags = ["readable", "writable"]; }
+    register s45 { class = "gpr"; width = 32; enc = 45; flags = ["readable", "writable"]; }
+    register s46 { class = "gpr"; width = 32; enc = 46; flags = ["readable", "writable"]; }
+    register s47 { class = "gpr"; width = 32; enc = 47; flags = ["readable", "writable"]; }
+    register s48 { class = "gpr"; width = 32; enc = 48; flags = ["readable", "writable"]; }
+    register s49 { class = "gpr"; width = 32; enc = 49; flags = ["readable", "writable"]; }
+    register s50 { class = "gpr"; width = 32; enc = 50; flags = ["readable", "writable"]; }
+    register s51 { class = "gpr"; width = 32; enc = 51; flags = ["readable", "writable"]; }
+    register s52 { class = "gpr"; width = 32; enc = 52; flags = ["readable", "writable"]; }
+    register s53 { class = "gpr"; width = 32; enc = 53; flags = ["readable", "writable"]; }
+    register s54 { class = "gpr"; width = 32; enc = 54; flags = ["readable", "writable"]; }
+    register s55 { class = "gpr"; width = 32; enc = 55; flags = ["readable", "writable"]; }
+    register s56 { class = "gpr"; width = 32; enc = 56; flags = ["readable", "writable"]; }
+    register s57 { class = "gpr"; width = 32; enc = 57; flags = ["readable", "writable"]; }
+    register s58 { class = "gpr"; width = 32; enc = 58; flags = ["readable", "writable"]; }
+    register s59 { class = "gpr"; width = 32; enc = 59; flags = ["readable", "writable"]; }
+    register s60 { class = "gpr"; width = 32; enc = 60; flags = ["readable", "writable"]; }
+    register s61 { class = "gpr"; width = 32; enc = 61; flags = ["readable", "writable"]; }
+    register s62 { class = "gpr"; width = 32; enc = 62; flags = ["readable", "writable"]; }
+    register s63 { class = "gpr"; width = 32; enc = 63; flags = ["readable", "writable"]; }
+    register s64 { class = "gpr"; width = 32; enc = 64; flags = ["readable", "writable"]; }
+    register s65 { class = "gpr"; width = 32; enc = 65; flags = ["readable", "writable"]; }
+    register s66 { class = "gpr"; width = 32; enc = 66; flags = ["readable", "writable"]; }
+    register s67 { class = "gpr"; width = 32; enc = 67; flags = ["readable", "writable"]; }
+    register s68 { class = "gpr"; width = 32; enc = 68; flags = ["readable", "writable"]; }
+    register s69 { class = "gpr"; width = 32; enc = 69; flags = ["readable", "writable"]; }
+    register s70 { class = "gpr"; width = 32; enc = 70; flags = ["readable", "writable"]; }
+    register s71 { class = "gpr"; width = 32; enc = 71; flags = ["readable", "writable"]; }
+    register s72 { class = "gpr"; width = 32; enc = 72; flags = ["readable", "writable"]; }
+    register s73 { class = "gpr"; width = 32; enc = 73; flags = ["readable", "writable"]; }
+    register s74 { class = "gpr"; width = 32; enc = 74; flags = ["readable", "writable"]; }
+    register s75 { class = "gpr"; width = 32; enc = 75; flags = ["readable", "writable"]; }
+    register s76 { class = "gpr"; width = 32; enc = 76; flags = ["readable", "writable"]; }
+    register s77 { class = "gpr"; width = 32; enc = 77; flags = ["readable", "writable"]; }
+    register s78 { class = "gpr"; width = 32; enc = 78; flags = ["readable", "writable"]; }
+    register s79 { class = "gpr"; width = 32; enc = 79; flags = ["readable", "writable"]; }
+    register s80 { class = "gpr"; width = 32; enc = 80; flags = ["readable", "writable"]; }
+    register s81 { class = "gpr"; width = 32; enc = 81; flags = ["readable", "writable"]; }
+    register s82 { class = "gpr"; width = 32; enc = 82; flags = ["readable", "writable"]; }
+    register s83 { class = "gpr"; width = 32; enc = 83; flags = ["readable", "writable"]; }
+    register s84 { class = "gpr"; width = 32; enc = 84; flags = ["readable", "writable"]; }
+    register s85 { class = "gpr"; width = 32; enc = 85; flags = ["readable", "writable"]; }
+    register s86 { class = "gpr"; width = 32; enc = 86; flags = ["readable", "writable"]; }
+    register s87 { class = "gpr"; width = 32; enc = 87; flags = ["readable", "writable"]; }
+    register s88 { class = "gpr"; width = 32; enc = 88; flags = ["readable", "writable"]; }
+    register s89 { class = "gpr"; width = 32; enc = 89; flags = ["readable", "writable"]; }
+    register s90 { class = "gpr"; width = 32; enc = 90; flags = ["readable", "writable"]; }
+    register s91 { class = "gpr"; width = 32; enc = 91; flags = ["readable", "writable"]; }
+    register s92 { class = "gpr"; width = 32; enc = 92; flags = ["readable", "writable"]; }
+    register s93 { class = "gpr"; width = 32; enc = 93; flags = ["readable", "writable"]; }
+    register s94 { class = "gpr"; width = 32; enc = 94; flags = ["readable", "writable"]; }
+    register s95 { class = "gpr"; width = 32; enc = 95; flags = ["readable", "writable"]; }
+    register s96 { class = "gpr"; width = 32; enc = 96; flags = ["readable", "writable"]; }
+    register s97 { class = "gpr"; width = 32; enc = 97; flags = ["readable", "writable"]; }
+    register s98 { class = "gpr"; width = 32; enc = 98; flags = ["readable", "writable"]; }
+    register s99 { class = "gpr"; width = 32; enc = 99; flags = ["readable", "writable"]; }
+    register s100 { class = "gpr"; width = 32; enc = 100; flags = ["readable", "writable"]; }
+    register s101 { class = "gpr"; width = 32; enc = 101; flags = ["readable", "writable"]; }
+    register s102 { class = "gpr"; width = 32; enc = 102; flags = ["readable", "writable"]; }
+    register s103 { class = "gpr"; width = 32; enc = 103; flags = ["readable", "writable"]; }
+    register s104 { class = "gpr"; width = 32; enc = 104; flags = ["readable", "writable"]; }
+    register s105 { class = "gpr"; width = 32; enc = 105; flags = ["readable", "writable"]; }
+    register v0 { class = "gpr"; width = 32; enc = 0; flags = ["readable", "writable"]; }
+    register v1 { class = "gpr"; width = 32; enc = 1; flags = ["readable", "writable"]; }
+    register v2 { class = "gpr"; width = 32; enc = 2; flags = ["readable", "writable"]; }
+    register v3 { class = "gpr"; width = 32; enc = 3; flags = ["readable", "writable"]; }
+    register v4 { class = "gpr"; width = 32; enc = 4; flags = ["readable", "writable"]; }
+    register v5 { class = "gpr"; width = 32; enc = 5; flags = ["readable", "writable"]; }
+    register v6 { class = "gpr"; width = 32; enc = 6; flags = ["readable", "writable"]; }
+    register v7 { class = "gpr"; width = 32; enc = 7; flags = ["readable", "writable"]; }
+    register v8 { class = "gpr"; width = 32; enc = 8; flags = ["readable", "writable"]; }
+    register v9 { class = "gpr"; width = 32; enc = 9; flags = ["readable", "writable"]; }
+    register v10 { class = "gpr"; width = 32; enc = 10; flags = ["readable", "writable"]; }
+    register v11 { class = "gpr"; width = 32; enc = 11; flags = ["readable", "writable"]; }
+    register v12 { class = "gpr"; width = 32; enc = 12; flags = ["readable", "writable"]; }
+    register v13 { class = "gpr"; width = 32; enc = 13; flags = ["readable", "writable"]; }
+    register v14 { class = "gpr"; width = 32; enc = 14; flags = ["readable", "writable"]; }
+    register v15 { class = "gpr"; width = 32; enc = 15; flags = ["readable", "writable"]; }
+    register v16 { class = "gpr"; width = 32; enc = 16; flags = ["readable", "writable"]; }
+    register v17 { class = "gpr"; width = 32; enc = 17; flags = ["readable", "writable"]; }
+    register v18 { class = "gpr"; width = 32; enc = 18; flags = ["readable", "writable"]; }
+    register v19 { class = "gpr"; width = 32; enc = 19; flags = ["readable", "writable"]; }
+    register v20 { class = "gpr"; width = 32; enc = 20; flags = ["readable", "writable"]; }
+    register v21 { class = "gpr"; width = 32; enc = 21; flags = ["readable", "writable"]; }
+    register v22 { class = "gpr"; width = 32; enc = 22; flags = ["readable", "writable"]; }
+    register v23 { class = "gpr"; width = 32; enc = 23; flags = ["readable", "writable"]; }
+    register v24 { class = "gpr"; width = 32; enc = 24; flags = ["readable", "writable"]; }
+    register v25 { class = "gpr"; width = 32; enc = 25; flags = ["readable", "writable"]; }
+    register v26 { class = "gpr"; width = 32; enc = 26; flags = ["readable", "writable"]; }
+    register v27 { class = "gpr"; width = 32; enc = 27; flags = ["readable", "writable"]; }
+    register v28 { class = "gpr"; width = 32; enc = 28; flags = ["readable", "writable"]; }
+    register v29 { class = "gpr"; width = 32; enc = 29; flags = ["readable", "writable"]; }
+    register v30 { class = "gpr"; width = 32; enc = 30; flags = ["readable", "writable"]; }
+    register v31 { class = "gpr"; width = 32; enc = 31; flags = ["readable", "writable"]; }
+    register v32 { class = "gpr"; width = 32; enc = 32; flags = ["readable", "writable"]; }
+    register v33 { class = "gpr"; width = 32; enc = 33; flags = ["readable", "writable"]; }
+    register v34 { class = "gpr"; width = 32; enc = 34; flags = ["readable", "writable"]; }
+    register v35 { class = "gpr"; width = 32; enc = 35; flags = ["readable", "writable"]; }
+    register v36 { class = "gpr"; width = 32; enc = 36; flags = ["readable", "writable"]; }
+    register v37 { class = "gpr"; width = 32; enc = 37; flags = ["readable", "writable"]; }
+    register v38 { class = "gpr"; width = 32; enc = 38; flags = ["readable", "writable"]; }
+    register v39 { class = "gpr"; width = 32; enc = 39; flags = ["readable", "writable"]; }
+    register v40 { class = "gpr"; width = 32; enc = 40; flags = ["readable", "writable"]; }
+    register v41 { class = "gpr"; width = 32; enc = 41; flags = ["readable", "writable"]; }
+    register v42 { class = "gpr"; width = 32; enc = 42; flags = ["readable", "writable"]; }
+    register v43 { class = "gpr"; width = 32; enc = 43; flags = ["readable", "writable"]; }
+    register v44 { class = "gpr"; width = 32; enc = 44; flags = ["readable", "writable"]; }
+    register v45 { class = "gpr"; width = 32; enc = 45; flags = ["readable", "writable"]; }
+    register v46 { class = "gpr"; width = 32; enc = 46; flags = ["readable", "writable"]; }
+    register v47 { class = "gpr"; width = 32; enc = 47; flags = ["readable", "writable"]; }
+    register v48 { class = "gpr"; width = 32; enc = 48; flags = ["readable", "writable"]; }
+    register v49 { class = "gpr"; width = 32; enc = 49; flags = ["readable", "writable"]; }
+    register v50 { class = "gpr"; width = 32; enc = 50; flags = ["readable", "writable"]; }
+    register v51 { class = "gpr"; width = 32; enc = 51; flags = ["readable", "writable"]; }
+    register v52 { class = "gpr"; width = 32; enc = 52; flags = ["readable", "writable"]; }
+    register v53 { class = "gpr"; width = 32; enc = 53; flags = ["readable", "writable"]; }
+    register v54 { class = "gpr"; width = 32; enc = 54; flags = ["readable", "writable"]; }
+    register v55 { class = "gpr"; width = 32; enc = 55; flags = ["readable", "writable"]; }
+    register v56 { class = "gpr"; width = 32; enc = 56; flags = ["readable", "writable"]; }
+    register v57 { class = "gpr"; width = 32; enc = 57; flags = ["readable", "writable"]; }
+    register v58 { class = "gpr"; width = 32; enc = 58; flags = ["readable", "writable"]; }
+    register v59 { class = "gpr"; width = 32; enc = 59; flags = ["readable", "writable"]; }
+    register v60 { class = "gpr"; width = 32; enc = 60; flags = ["readable", "writable"]; }
+    register v61 { class = "gpr"; width = 32; enc = 61; flags = ["readable", "writable"]; }
+    register v62 { class = "gpr"; width = 32; enc = 62; flags = ["readable", "writable"]; }
+    register v63 { class = "gpr"; width = 32; enc = 63; flags = ["readable", "writable"]; }
+    register v64 { class = "gpr"; width = 32; enc = 64; flags = ["readable", "writable"]; }
+    register v65 { class = "gpr"; width = 32; enc = 65; flags = ["readable", "writable"]; }
+    register v66 { class = "gpr"; width = 32; enc = 66; flags = ["readable", "writable"]; }
+    register v67 { class = "gpr"; width = 32; enc = 67; flags = ["readable", "writable"]; }
+    register v68 { class = "gpr"; width = 32; enc = 68; flags = ["readable", "writable"]; }
+    register v69 { class = "gpr"; width = 32; enc = 69; flags = ["readable", "writable"]; }
+    register v70 { class = "gpr"; width = 32; enc = 70; flags = ["readable", "writable"]; }
+    register v71 { class = "gpr"; width = 32; enc = 71; flags = ["readable", "writable"]; }
+    register v72 { class = "gpr"; width = 32; enc = 72; flags = ["readable", "writable"]; }
+    register v73 { class = "gpr"; width = 32; enc = 73; flags = ["readable", "writable"]; }
+    register v74 { class = "gpr"; width = 32; enc = 74; flags = ["readable", "writable"]; }
+    register v75 { class = "gpr"; width = 32; enc = 75; flags = ["readable", "writable"]; }
+    register v76 { class = "gpr"; width = 32; enc = 76; flags = ["readable", "writable"]; }
+    register v77 { class = "gpr"; width = 32; enc = 77; flags = ["readable", "writable"]; }
+    register v78 { class = "gpr"; width = 32; enc = 78; flags = ["readable", "writable"]; }
+    register v79 { class = "gpr"; width = 32; enc = 79; flags = ["readable", "writable"]; }
+    register v80 { class = "gpr"; width = 32; enc = 80; flags = ["readable", "writable"]; }
+    register v81 { class = "gpr"; width = 32; enc = 81; flags = ["readable", "writable"]; }
+    register v82 { class = "gpr"; width = 32; enc = 82; flags = ["readable", "writable"]; }
+    register v83 { class = "gpr"; width = 32; enc = 83; flags = ["readable", "writable"]; }
+    register v84 { class = "gpr"; width = 32; enc = 84; flags = ["readable", "writable"]; }
+    register v85 { class = "gpr"; width = 32; enc = 85; flags = ["readable", "writable"]; }
+    register v86 { class = "gpr"; width = 32; enc = 86; flags = ["readable", "writable"]; }
+    register v87 { class = "gpr"; width = 32; enc = 87; flags = ["readable", "writable"]; }
+    register v88 { class = "gpr"; width = 32; enc = 88; flags = ["readable", "writable"]; }
+    register v89 { class = "gpr"; width = 32; enc = 89; flags = ["readable", "writable"]; }
+    register v90 { class = "gpr"; width = 32; enc = 90; flags = ["readable", "writable"]; }
+    register v91 { class = "gpr"; width = 32; enc = 91; flags = ["readable", "writable"]; }
+    register v92 { class = "gpr"; width = 32; enc = 92; flags = ["readable", "writable"]; }
+    register v93 { class = "gpr"; width = 32; enc = 93; flags = ["readable", "writable"]; }
+    register v94 { class = "gpr"; width = 32; enc = 94; flags = ["readable", "writable"]; }
+    register v95 { class = "gpr"; width = 32; enc = 95; flags = ["readable", "writable"]; }
+    register v96 { class = "gpr"; width = 32; enc = 96; flags = ["readable", "writable"]; }
+    register v97 { class = "gpr"; width = 32; enc = 97; flags = ["readable", "writable"]; }
+    register v98 { class = "gpr"; width = 32; enc = 98; flags = ["readable", "writable"]; }
+    register v99 { class = "gpr"; width = 32; enc = 99; flags = ["readable", "writable"]; }
+    register v100 { class = "gpr"; width = 32; enc = 100; flags = ["readable", "writable"]; }
+    register v101 { class = "gpr"; width = 32; enc = 101; flags = ["readable", "writable"]; }
+    register v102 { class = "gpr"; width = 32; enc = 102; flags = ["readable", "writable"]; }
+    register v103 { class = "gpr"; width = 32; enc = 103; flags = ["readable", "writable"]; }
+    register v104 { class = "gpr"; width = 32; enc = 104; flags = ["readable", "writable"]; }
+    register v105 { class = "gpr"; width = 32; enc = 105; flags = ["readable", "writable"]; }
+    register v106 { class = "gpr"; width = 32; enc = 106; flags = ["readable", "writable"]; }
+    register v107 { class = "gpr"; width = 32; enc = 107; flags = ["readable", "writable"]; }
+    register v108 { class = "gpr"; width = 32; enc = 108; flags = ["readable", "writable"]; }
+    register v109 { class = "gpr"; width = 32; enc = 109; flags = ["readable", "writable"]; }
+    register v110 { class = "gpr"; width = 32; enc = 110; flags = ["readable", "writable"]; }
+    register v111 { class = "gpr"; width = 32; enc = 111; flags = ["readable", "writable"]; }
+    register v112 { class = "gpr"; width = 32; enc = 112; flags = ["readable", "writable"]; }
+    register v113 { class = "gpr"; width = 32; enc = 113; flags = ["readable", "writable"]; }
+    register v114 { class = "gpr"; width = 32; enc = 114; flags = ["readable", "writable"]; }
+    register v115 { class = "gpr"; width = 32; enc = 115; flags = ["readable", "writable"]; }
+    register v116 { class = "gpr"; width = 32; enc = 116; flags = ["readable", "writable"]; }
+    register v117 { class = "gpr"; width = 32; enc = 117; flags = ["readable", "writable"]; }
+    register v118 { class = "gpr"; width = 32; enc = 118; flags = ["readable", "writable"]; }
+    register v119 { class = "gpr"; width = 32; enc = 119; flags = ["readable", "writable"]; }
+    register v120 { class = "gpr"; width = 32; enc = 120; flags = ["readable", "writable"]; }
+    register v121 { class = "gpr"; width = 32; enc = 121; flags = ["readable", "writable"]; }
+    register v122 { class = "gpr"; width = 32; enc = 122; flags = ["readable", "writable"]; }
+    register v123 { class = "gpr"; width = 32; enc = 123; flags = ["readable", "writable"]; }
+    register v124 { class = "gpr"; width = 32; enc = 124; flags = ["readable", "writable"]; }
+    register v125 { class = "gpr"; width = 32; enc = 125; flags = ["readable", "writable"]; }
+    register v126 { class = "gpr"; width = 32; enc = 126; flags = ["readable", "writable"]; }
+    register v127 { class = "gpr"; width = 32; enc = 127; flags = ["readable", "writable"]; }
+    register v128 { class = "gpr"; width = 32; enc = 128; flags = ["readable", "writable"]; }
+    register v129 { class = "gpr"; width = 32; enc = 129; flags = ["readable", "writable"]; }
+    register v130 { class = "gpr"; width = 32; enc = 130; flags = ["readable", "writable"]; }
+    register v131 { class = "gpr"; width = 32; enc = 131; flags = ["readable", "writable"]; }
+    register v132 { class = "gpr"; width = 32; enc = 132; flags = ["readable", "writable"]; }
+    register v133 { class = "gpr"; width = 32; enc = 133; flags = ["readable", "writable"]; }
+    register v134 { class = "gpr"; width = 32; enc = 134; flags = ["readable", "writable"]; }
+    register v135 { class = "gpr"; width = 32; enc = 135; flags = ["readable", "writable"]; }
+    register v136 { class = "gpr"; width = 32; enc = 136; flags = ["readable", "writable"]; }
+    register v137 { class = "gpr"; width = 32; enc = 137; flags = ["readable", "writable"]; }
+    register v138 { class = "gpr"; width = 32; enc = 138; flags = ["readable", "writable"]; }
+    register v139 { class = "gpr"; width = 32; enc = 139; flags = ["readable", "writable"]; }
+    register v140 { class = "gpr"; width = 32; enc = 140; flags = ["readable", "writable"]; }
+    register v141 { class = "gpr"; width = 32; enc = 141; flags = ["readable", "writable"]; }
+    register v142 { class = "gpr"; width = 32; enc = 142; flags = ["readable", "writable"]; }
+    register v143 { class = "gpr"; width = 32; enc = 143; flags = ["readable", "writable"]; }
+    register v144 { class = "gpr"; width = 32; enc = 144; flags = ["readable", "writable"]; }
+    register v145 { class = "gpr"; width = 32; enc = 145; flags = ["readable", "writable"]; }
+    register v146 { class = "gpr"; width = 32; enc = 146; flags = ["readable", "writable"]; }
+    register v147 { class = "gpr"; width = 32; enc = 147; flags = ["readable", "writable"]; }
+    register v148 { class = "gpr"; width = 32; enc = 148; flags = ["readable", "writable"]; }
+    register v149 { class = "gpr"; width = 32; enc = 149; flags = ["readable", "writable"]; }
+    register v150 { class = "gpr"; width = 32; enc = 150; flags = ["readable", "writable"]; }
+    register v151 { class = "gpr"; width = 32; enc = 151; flags = ["readable", "writable"]; }
+    register v152 { class = "gpr"; width = 32; enc = 152; flags = ["readable", "writable"]; }
+    register v153 { class = "gpr"; width = 32; enc = 153; flags = ["readable", "writable"]; }
+    register v154 { class = "gpr"; width = 32; enc = 154; flags = ["readable", "writable"]; }
+    register v155 { class = "gpr"; width = 32; enc = 155; flags = ["readable", "writable"]; }
+    register v156 { class = "gpr"; width = 32; enc = 156; flags = ["readable", "writable"]; }
+    register v157 { class = "gpr"; width = 32; enc = 157; flags = ["readable", "writable"]; }
+    register v158 { class = "gpr"; width = 32; enc = 158; flags = ["readable", "writable"]; }
+    register v159 { class = "gpr"; width = 32; enc = 159; flags = ["readable", "writable"]; }
+    register v160 { class = "gpr"; width = 32; enc = 160; flags = ["readable", "writable"]; }
+    register v161 { class = "gpr"; width = 32; enc = 161; flags = ["readable", "writable"]; }
+    register v162 { class = "gpr"; width = 32; enc = 162; flags = ["readable", "writable"]; }
+    register v163 { class = "gpr"; width = 32; enc = 163; flags = ["readable", "writable"]; }
+    register v164 { class = "gpr"; width = 32; enc = 164; flags = ["readable", "writable"]; }
+    register v165 { class = "gpr"; width = 32; enc = 165; flags = ["readable", "writable"]; }
+    register v166 { class = "gpr"; width = 32; enc = 166; flags = ["readable", "writable"]; }
+    register v167 { class = "gpr"; width = 32; enc = 167; flags = ["readable", "writable"]; }
+    register v168 { class = "gpr"; width = 32; enc = 168; flags = ["readable", "writable"]; }
+    register v169 { class = "gpr"; width = 32; enc = 169; flags = ["readable", "writable"]; }
+    register v170 { class = "gpr"; width = 32; enc = 170; flags = ["readable", "writable"]; }
+    register v171 { class = "gpr"; width = 32; enc = 171; flags = ["readable", "writable"]; }
+    register v172 { class = "gpr"; width = 32; enc = 172; flags = ["readable", "writable"]; }
+    register v173 { class = "gpr"; width = 32; enc = 173; flags = ["readable", "writable"]; }
+    register v174 { class = "gpr"; width = 32; enc = 174; flags = ["readable", "writable"]; }
+    register v175 { class = "gpr"; width = 32; enc = 175; flags = ["readable", "writable"]; }
+    register v176 { class = "gpr"; width = 32; enc = 176; flags = ["readable", "writable"]; }
+    register v177 { class = "gpr"; width = 32; enc = 177; flags = ["readable", "writable"]; }
+    register v178 { class = "gpr"; width = 32; enc = 178; flags = ["readable", "writable"]; }
+    register v179 { class = "gpr"; width = 32; enc = 179; flags = ["readable", "writable"]; }
+    register v180 { class = "gpr"; width = 32; enc = 180; flags = ["readable", "writable"]; }
+    register v181 { class = "gpr"; width = 32; enc = 181; flags = ["readable", "writable"]; }
+    register v182 { class = "gpr"; width = 32; enc = 182; flags = ["readable", "writable"]; }
+    register v183 { class = "gpr"; width = 32; enc = 183; flags = ["readable", "writable"]; }
+    register v184 { class = "gpr"; width = 32; enc = 184; flags = ["readable", "writable"]; }
+    register v185 { class = "gpr"; width = 32; enc = 185; flags = ["readable", "writable"]; }
+    register v186 { class = "gpr"; width = 32; enc = 186; flags = ["readable", "writable"]; }
+    register v187 { class = "gpr"; width = 32; enc = 187; flags = ["readable", "writable"]; }
+    register v188 { class = "gpr"; width = 32; enc = 188; flags = ["readable", "writable"]; }
+    register v189 { class = "gpr"; width = 32; enc = 189; flags = ["readable", "writable"]; }
+    register v190 { class = "gpr"; width = 32; enc = 190; flags = ["readable", "writable"]; }
+    register v191 { class = "gpr"; width = 32; enc = 191; flags = ["readable", "writable"]; }
+    register v192 { class = "gpr"; width = 32; enc = 192; flags = ["readable", "writable"]; }
+    register v193 { class = "gpr"; width = 32; enc = 193; flags = ["readable", "writable"]; }
+    register v194 { class = "gpr"; width = 32; enc = 194; flags = ["readable", "writable"]; }
+    register v195 { class = "gpr"; width = 32; enc = 195; flags = ["readable", "writable"]; }
+    register v196 { class = "gpr"; width = 32; enc = 196; flags = ["readable", "writable"]; }
+    register v197 { class = "gpr"; width = 32; enc = 197; flags = ["readable", "writable"]; }
+    register v198 { class = "gpr"; width = 32; enc = 198; flags = ["readable", "writable"]; }
+    register v199 { class = "gpr"; width = 32; enc = 199; flags = ["readable", "writable"]; }
+    register v200 { class = "gpr"; width = 32; enc = 200; flags = ["readable", "writable"]; }
+    register v201 { class = "gpr"; width = 32; enc = 201; flags = ["readable", "writable"]; }
+    register v202 { class = "gpr"; width = 32; enc = 202; flags = ["readable", "writable"]; }
+    register v203 { class = "gpr"; width = 32; enc = 203; flags = ["readable", "writable"]; }
+    register v204 { class = "gpr"; width = 32; enc = 204; flags = ["readable", "writable"]; }
+    register v205 { class = "gpr"; width = 32; enc = 205; flags = ["readable", "writable"]; }
+    register v206 { class = "gpr"; width = 32; enc = 206; flags = ["readable", "writable"]; }
+    register v207 { class = "gpr"; width = 32; enc = 207; flags = ["readable", "writable"]; }
+    register v208 { class = "gpr"; width = 32; enc = 208; flags = ["readable", "writable"]; }
+    register v209 { class = "gpr"; width = 32; enc = 209; flags = ["readable", "writable"]; }
+    register v210 { class = "gpr"; width = 32; enc = 210; flags = ["readable", "writable"]; }
+    register v211 { class = "gpr"; width = 32; enc = 211; flags = ["readable", "writable"]; }
+    register v212 { class = "gpr"; width = 32; enc = 212; flags = ["readable", "writable"]; }
+    register v213 { class = "gpr"; width = 32; enc = 213; flags = ["readable", "writable"]; }
+    register v214 { class = "gpr"; width = 32; enc = 214; flags = ["readable", "writable"]; }
+    register v215 { class = "gpr"; width = 32; enc = 215; flags = ["readable", "writable"]; }
+    register v216 { class = "gpr"; width = 32; enc = 216; flags = ["readable", "writable"]; }
+    register v217 { class = "gpr"; width = 32; enc = 217; flags = ["readable", "writable"]; }
+    register v218 { class = "gpr"; width = 32; enc = 218; flags = ["readable", "writable"]; }
+    register v219 { class = "gpr"; width = 32; enc = 219; flags = ["readable", "writable"]; }
+    register v220 { class = "gpr"; width = 32; enc = 220; flags = ["readable", "writable"]; }
+    register v221 { class = "gpr"; width = 32; enc = 221; flags = ["readable", "writable"]; }
+    register v222 { class = "gpr"; width = 32; enc = 222; flags = ["readable", "writable"]; }
+    register v223 { class = "gpr"; width = 32; enc = 223; flags = ["readable", "writable"]; }
+    register v224 { class = "gpr"; width = 32; enc = 224; flags = ["readable", "writable"]; }
+    register v225 { class = "gpr"; width = 32; enc = 225; flags = ["readable", "writable"]; }
+    register v226 { class = "gpr"; width = 32; enc = 226; flags = ["readable", "writable"]; }
+    register v227 { class = "gpr"; width = 32; enc = 227; flags = ["readable", "writable"]; }
+    register v228 { class = "gpr"; width = 32; enc = 228; flags = ["readable", "writable"]; }
+    register v229 { class = "gpr"; width = 32; enc = 229; flags = ["readable", "writable"]; }
+    register v230 { class = "gpr"; width = 32; enc = 230; flags = ["readable", "writable"]; }
+    register v231 { class = "gpr"; width = 32; enc = 231; flags = ["readable", "writable"]; }
+    register v232 { class = "gpr"; width = 32; enc = 232; flags = ["readable", "writable"]; }
+    register v233 { class = "gpr"; width = 32; enc = 233; flags = ["readable", "writable"]; }
+    register v234 { class = "gpr"; width = 32; enc = 234; flags = ["readable", "writable"]; }
+    register v235 { class = "gpr"; width = 32; enc = 235; flags = ["readable", "writable"]; }
+    register v236 { class = "gpr"; width = 32; enc = 236; flags = ["readable", "writable"]; }
+    register v237 { class = "gpr"; width = 32; enc = 237; flags = ["readable", "writable"]; }
+    register v238 { class = "gpr"; width = 32; enc = 238; flags = ["readable", "writable"]; }
+    register v239 { class = "gpr"; width = 32; enc = 239; flags = ["readable", "writable"]; }
+    register v240 { class = "gpr"; width = 32; enc = 240; flags = ["readable", "writable"]; }
+    register v241 { class = "gpr"; width = 32; enc = 241; flags = ["readable", "writable"]; }
+    register v242 { class = "gpr"; width = 32; enc = 242; flags = ["readable", "writable"]; }
+    register v243 { class = "gpr"; width = 32; enc = 243; flags = ["readable", "writable"]; }
+    register v244 { class = "gpr"; width = 32; enc = 244; flags = ["readable", "writable"]; }
+    register v245 { class = "gpr"; width = 32; enc = 245; flags = ["readable", "writable"]; }
+    register v246 { class = "gpr"; width = 32; enc = 246; flags = ["readable", "writable"]; }
+    register v247 { class = "gpr"; width = 32; enc = 247; flags = ["readable", "writable"]; }
+    register v248 { class = "gpr"; width = 32; enc = 248; flags = ["readable", "writable"]; }
+    register v249 { class = "gpr"; width = 32; enc = 249; flags = ["readable", "writable"]; }
+    register v250 { class = "gpr"; width = 32; enc = 250; flags = ["readable", "writable"]; }
+    register v251 { class = "gpr"; width = 32; enc = 251; flags = ["readable", "writable"]; }
+    register v252 { class = "gpr"; width = 32; enc = 252; flags = ["readable", "writable"]; }
+    register v253 { class = "gpr"; width = 32; enc = 253; flags = ["readable", "writable"]; }
+    register v254 { class = "gpr"; width = 32; enc = 254; flags = ["readable", "writable"]; }
+    register v255 { class = "gpr"; width = 32; enc = 255; flags = ["readable", "writable"]; }
+    register a0 { class = "gpr"; width = 32; enc = 0; flags = ["readable", "writable"]; }
+    register a1 { class = "gpr"; width = 32; enc = 1; flags = ["readable", "writable"]; }
+    register a2 { class = "gpr"; width = 32; enc = 2; flags = ["readable", "writable"]; }
+    register a3 { class = "gpr"; width = 32; enc = 3; flags = ["readable", "writable"]; }
+    register a4 { class = "gpr"; width = 32; enc = 4; flags = ["readable", "writable"]; }
+    register a5 { class = "gpr"; width = 32; enc = 5; flags = ["readable", "writable"]; }
+    register a6 { class = "gpr"; width = 32; enc = 6; flags = ["readable", "writable"]; }
+    register a7 { class = "gpr"; width = 32; enc = 7; flags = ["readable", "writable"]; }
+    register a8 { class = "gpr"; width = 32; enc = 8; flags = ["readable", "writable"]; }
+    register a9 { class = "gpr"; width = 32; enc = 9; flags = ["readable", "writable"]; }
+    register a10 { class = "gpr"; width = 32; enc = 10; flags = ["readable", "writable"]; }
+    register a11 { class = "gpr"; width = 32; enc = 11; flags = ["readable", "writable"]; }
+    register a12 { class = "gpr"; width = 32; enc = 12; flags = ["readable", "writable"]; }
+    register a13 { class = "gpr"; width = 32; enc = 13; flags = ["readable", "writable"]; }
+    register a14 { class = "gpr"; width = 32; enc = 14; flags = ["readable", "writable"]; }
+    register a15 { class = "gpr"; width = 32; enc = 15; flags = ["readable", "writable"]; }
+    register a16 { class = "gpr"; width = 32; enc = 16; flags = ["readable", "writable"]; }
+    register a17 { class = "gpr"; width = 32; enc = 17; flags = ["readable", "writable"]; }
+    register a18 { class = "gpr"; width = 32; enc = 18; flags = ["readable", "writable"]; }
+    register a19 { class = "gpr"; width = 32; enc = 19; flags = ["readable", "writable"]; }
+    register a20 { class = "gpr"; width = 32; enc = 20; flags = ["readable", "writable"]; }
+    register a21 { class = "gpr"; width = 32; enc = 21; flags = ["readable", "writable"]; }
+    register a22 { class = "gpr"; width = 32; enc = 22; flags = ["readable", "writable"]; }
+    register a23 { class = "gpr"; width = 32; enc = 23; flags = ["readable", "writable"]; }
+    register a24 { class = "gpr"; width = 32; enc = 24; flags = ["readable", "writable"]; }
+    register a25 { class = "gpr"; width = 32; enc = 25; flags = ["readable", "writable"]; }
+    register a26 { class = "gpr"; width = 32; enc = 26; flags = ["readable", "writable"]; }
+    register a27 { class = "gpr"; width = 32; enc = 27; flags = ["readable", "writable"]; }
+    register a28 { class = "gpr"; width = 32; enc = 28; flags = ["readable", "writable"]; }
+    register a29 { class = "gpr"; width = 32; enc = 29; flags = ["readable", "writable"]; }
+    register a30 { class = "gpr"; width = 32; enc = 30; flags = ["readable", "writable"]; }
+    register a31 { class = "gpr"; width = 32; enc = 31; flags = ["readable", "writable"]; }
+    register a32 { class = "gpr"; width = 32; enc = 32; flags = ["readable", "writable"]; }
+    register a33 { class = "gpr"; width = 32; enc = 33; flags = ["readable", "writable"]; }
+    register a34 { class = "gpr"; width = 32; enc = 34; flags = ["readable", "writable"]; }
+    register a35 { class = "gpr"; width = 32; enc = 35; flags = ["readable", "writable"]; }
+    register a36 { class = "gpr"; width = 32; enc = 36; flags = ["readable", "writable"]; }
+    register a37 { class = "gpr"; width = 32; enc = 37; flags = ["readable", "writable"]; }
+    register a38 { class = "gpr"; width = 32; enc = 38; flags = ["readable", "writable"]; }
+    register a39 { class = "gpr"; width = 32; enc = 39; flags = ["readable", "writable"]; }
+    register a40 { class = "gpr"; width = 32; enc = 40; flags = ["readable", "writable"]; }
+    register a41 { class = "gpr"; width = 32; enc = 41; flags = ["readable", "writable"]; }
+    register a42 { class = "gpr"; width = 32; enc = 42; flags = ["readable", "writable"]; }
+    register a43 { class = "gpr"; width = 32; enc = 43; flags = ["readable", "writable"]; }
+    register a44 { class = "gpr"; width = 32; enc = 44; flags = ["readable", "writable"]; }
+    register a45 { class = "gpr"; width = 32; enc = 45; flags = ["readable", "writable"]; }
+    register a46 { class = "gpr"; width = 32; enc = 46; flags = ["readable", "writable"]; }
+    register a47 { class = "gpr"; width = 32; enc = 47; flags = ["readable", "writable"]; }
+    register a48 { class = "gpr"; width = 32; enc = 48; flags = ["readable", "writable"]; }
+    register a49 { class = "gpr"; width = 32; enc = 49; flags = ["readable", "writable"]; }
+    register a50 { class = "gpr"; width = 32; enc = 50; flags = ["readable", "writable"]; }
+    register a51 { class = "gpr"; width = 32; enc = 51; flags = ["readable", "writable"]; }
+    register a52 { class = "gpr"; width = 32; enc = 52; flags = ["readable", "writable"]; }
+    register a53 { class = "gpr"; width = 32; enc = 53; flags = ["readable", "writable"]; }
+    register a54 { class = "gpr"; width = 32; enc = 54; flags = ["readable", "writable"]; }
+    register a55 { class = "gpr"; width = 32; enc = 55; flags = ["readable", "writable"]; }
+    register a56 { class = "gpr"; width = 32; enc = 56; flags = ["readable", "writable"]; }
+    register a57 { class = "gpr"; width = 32; enc = 57; flags = ["readable", "writable"]; }
+    register a58 { class = "gpr"; width = 32; enc = 58; flags = ["readable", "writable"]; }
+    register a59 { class = "gpr"; width = 32; enc = 59; flags = ["readable", "writable"]; }
+    register a60 { class = "gpr"; width = 32; enc = 60; flags = ["readable", "writable"]; }
+    register a61 { class = "gpr"; width = 32; enc = 61; flags = ["readable", "writable"]; }
+    register a62 { class = "gpr"; width = 32; enc = 62; flags = ["readable", "writable"]; }
+    register a63 { class = "gpr"; width = 32; enc = 63; flags = ["readable", "writable"]; }
+    register a64 { class = "gpr"; width = 32; enc = 64; flags = ["readable", "writable"]; }
+    register a65 { class = "gpr"; width = 32; enc = 65; flags = ["readable", "writable"]; }
+    register a66 { class = "gpr"; width = 32; enc = 66; flags = ["readable", "writable"]; }
+    register a67 { class = "gpr"; width = 32; enc = 67; flags = ["readable", "writable"]; }
+    register a68 { class = "gpr"; width = 32; enc = 68; flags = ["readable", "writable"]; }
+    register a69 { class = "gpr"; width = 32; enc = 69; flags = ["readable", "writable"]; }
+    register a70 { class = "gpr"; width = 32; enc = 70; flags = ["readable", "writable"]; }
+    register a71 { class = "gpr"; width = 32; enc = 71; flags = ["readable", "writable"]; }
+    register a72 { class = "gpr"; width = 32; enc = 72; flags = ["readable", "writable"]; }
+    register a73 { class = "gpr"; width = 32; enc = 73; flags = ["readable", "writable"]; }
+    register a74 { class = "gpr"; width = 32; enc = 74; flags = ["readable", "writable"]; }
+    register a75 { class = "gpr"; width = 32; enc = 75; flags = ["readable", "writable"]; }
+    register a76 { class = "gpr"; width = 32; enc = 76; flags = ["readable", "writable"]; }
+    register a77 { class = "gpr"; width = 32; enc = 77; flags = ["readable", "writable"]; }
+    register a78 { class = "gpr"; width = 32; enc = 78; flags = ["readable", "writable"]; }
+    register a79 { class = "gpr"; width = 32; enc = 79; flags = ["readable", "writable"]; }
+    register a80 { class = "gpr"; width = 32; enc = 80; flags = ["readable", "writable"]; }
+    register a81 { class = "gpr"; width = 32; enc = 81; flags = ["readable", "writable"]; }
+    register a82 { class = "gpr"; width = 32; enc = 82; flags = ["readable", "writable"]; }
+    register a83 { class = "gpr"; width = 32; enc = 83; flags = ["readable", "writable"]; }
+    register a84 { class = "gpr"; width = 32; enc = 84; flags = ["readable", "writable"]; }
+    register a85 { class = "gpr"; width = 32; enc = 85; flags = ["readable", "writable"]; }
+    register a86 { class = "gpr"; width = 32; enc = 86; flags = ["readable", "writable"]; }
+    register a87 { class = "gpr"; width = 32; enc = 87; flags = ["readable", "writable"]; }
+    register a88 { class = "gpr"; width = 32; enc = 88; flags = ["readable", "writable"]; }
+    register a89 { class = "gpr"; width = 32; enc = 89; flags = ["readable", "writable"]; }
+    register a90 { class = "gpr"; width = 32; enc = 90; flags = ["readable", "writable"]; }
+    register a91 { class = "gpr"; width = 32; enc = 91; flags = ["readable", "writable"]; }
+    register a92 { class = "gpr"; width = 32; enc = 92; flags = ["readable", "writable"]; }
+    register a93 { class = "gpr"; width = 32; enc = 93; flags = ["readable", "writable"]; }
+    register a94 { class = "gpr"; width = 32; enc = 94; flags = ["readable", "writable"]; }
+    register a95 { class = "gpr"; width = 32; enc = 95; flags = ["readable", "writable"]; }
+    register a96 { class = "gpr"; width = 32; enc = 96; flags = ["readable", "writable"]; }
+    register a97 { class = "gpr"; width = 32; enc = 97; flags = ["readable", "writable"]; }
+    register a98 { class = "gpr"; width = 32; enc = 98; flags = ["readable", "writable"]; }
+    register a99 { class = "gpr"; width = 32; enc = 99; flags = ["readable", "writable"]; }
+    register a100 { class = "gpr"; width = 32; enc = 100; flags = ["readable", "writable"]; }
+    register a101 { class = "gpr"; width = 32; enc = 101; flags = ["readable", "writable"]; }
+    register a102 { class = "gpr"; width = 32; enc = 102; flags = ["readable", "writable"]; }
+    register a103 { class = "gpr"; width = 32; enc = 103; flags = ["readable", "writable"]; }
+    register a104 { class = "gpr"; width = 32; enc = 104; flags = ["readable", "writable"]; }
+    register a105 { class = "gpr"; width = 32; enc = 105; flags = ["readable", "writable"]; }
+    register a106 { class = "gpr"; width = 32; enc = 106; flags = ["readable", "writable"]; }
+    register a107 { class = "gpr"; width = 32; enc = 107; flags = ["readable", "writable"]; }
+    register a108 { class = "gpr"; width = 32; enc = 108; flags = ["readable", "writable"]; }
+    register a109 { class = "gpr"; width = 32; enc = 109; flags = ["readable", "writable"]; }
+    register a110 { class = "gpr"; width = 32; enc = 110; flags = ["readable", "writable"]; }
+    register a111 { class = "gpr"; width = 32; enc = 111; flags = ["readable", "writable"]; }
+    register a112 { class = "gpr"; width = 32; enc = 112; flags = ["readable", "writable"]; }
+    register a113 { class = "gpr"; width = 32; enc = 113; flags = ["readable", "writable"]; }
+    register a114 { class = "gpr"; width = 32; enc = 114; flags = ["readable", "writable"]; }
+    register a115 { class = "gpr"; width = 32; enc = 115; flags = ["readable", "writable"]; }
+    register a116 { class = "gpr"; width = 32; enc = 116; flags = ["readable", "writable"]; }
+    register a117 { class = "gpr"; width = 32; enc = 117; flags = ["readable", "writable"]; }
+    register a118 { class = "gpr"; width = 32; enc = 118; flags = ["readable", "writable"]; }
+    register a119 { class = "gpr"; width = 32; enc = 119; flags = ["readable", "writable"]; }
+    register a120 { class = "gpr"; width = 32; enc = 120; flags = ["readable", "writable"]; }
+    register a121 { class = "gpr"; width = 32; enc = 121; flags = ["readable", "writable"]; }
+    register a122 { class = "gpr"; width = 32; enc = 122; flags = ["readable", "writable"]; }
+    register a123 { class = "gpr"; width = 32; enc = 123; flags = ["readable", "writable"]; }
+    register a124 { class = "gpr"; width = 32; enc = 124; flags = ["readable", "writable"]; }
+    register a125 { class = "gpr"; width = 32; enc = 125; flags = ["readable", "writable"]; }
+    register a126 { class = "gpr"; width = 32; enc = 126; flags = ["readable", "writable"]; }
+    register a127 { class = "gpr"; width = 32; enc = 127; flags = ["readable", "writable"]; }
+    register a128 { class = "gpr"; width = 32; enc = 128; flags = ["readable", "writable"]; }
+    register a129 { class = "gpr"; width = 32; enc = 129; flags = ["readable", "writable"]; }
+    register a130 { class = "gpr"; width = 32; enc = 130; flags = ["readable", "writable"]; }
+    register a131 { class = "gpr"; width = 32; enc = 131; flags = ["readable", "writable"]; }
+    register a132 { class = "gpr"; width = 32; enc = 132; flags = ["readable", "writable"]; }
+    register a133 { class = "gpr"; width = 32; enc = 133; flags = ["readable", "writable"]; }
+    register a134 { class = "gpr"; width = 32; enc = 134; flags = ["readable", "writable"]; }
+    register a135 { class = "gpr"; width = 32; enc = 135; flags = ["readable", "writable"]; }
+    register a136 { class = "gpr"; width = 32; enc = 136; flags = ["readable", "writable"]; }
+    register a137 { class = "gpr"; width = 32; enc = 137; flags = ["readable", "writable"]; }
+    register a138 { class = "gpr"; width = 32; enc = 138; flags = ["readable", "writable"]; }
+    register a139 { class = "gpr"; width = 32; enc = 139; flags = ["readable", "writable"]; }
+    register a140 { class = "gpr"; width = 32; enc = 140; flags = ["readable", "writable"]; }
+    register a141 { class = "gpr"; width = 32; enc = 141; flags = ["readable", "writable"]; }
+    register a142 { class = "gpr"; width = 32; enc = 142; flags = ["readable", "writable"]; }
+    register a143 { class = "gpr"; width = 32; enc = 143; flags = ["readable", "writable"]; }
+    register a144 { class = "gpr"; width = 32; enc = 144; flags = ["readable", "writable"]; }
+    register a145 { class = "gpr"; width = 32; enc = 145; flags = ["readable", "writable"]; }
+    register a146 { class = "gpr"; width = 32; enc = 146; flags = ["readable", "writable"]; }
+    register a147 { class = "gpr"; width = 32; enc = 147; flags = ["readable", "writable"]; }
+    register a148 { class = "gpr"; width = 32; enc = 148; flags = ["readable", "writable"]; }
+    register a149 { class = "gpr"; width = 32; enc = 149; flags = ["readable", "writable"]; }
+    register a150 { class = "gpr"; width = 32; enc = 150; flags = ["readable", "writable"]; }
+    register a151 { class = "gpr"; width = 32; enc = 151; flags = ["readable", "writable"]; }
+    register a152 { class = "gpr"; width = 32; enc = 152; flags = ["readable", "writable"]; }
+    register a153 { class = "gpr"; width = 32; enc = 153; flags = ["readable", "writable"]; }
+    register a154 { class = "gpr"; width = 32; enc = 154; flags = ["readable", "writable"]; }
+    register a155 { class = "gpr"; width = 32; enc = 155; flags = ["readable", "writable"]; }
+    register a156 { class = "gpr"; width = 32; enc = 156; flags = ["readable", "writable"]; }
+    register a157 { class = "gpr"; width = 32; enc = 157; flags = ["readable", "writable"]; }
+    register a158 { class = "gpr"; width = 32; enc = 158; flags = ["readable", "writable"]; }
+    register a159 { class = "gpr"; width = 32; enc = 159; flags = ["readable", "writable"]; }
+    register a160 { class = "gpr"; width = 32; enc = 160; flags = ["readable", "writable"]; }
+    register a161 { class = "gpr"; width = 32; enc = 161; flags = ["readable", "writable"]; }
+    register a162 { class = "gpr"; width = 32; enc = 162; flags = ["readable", "writable"]; }
+    register a163 { class = "gpr"; width = 32; enc = 163; flags = ["readable", "writable"]; }
+    register a164 { class = "gpr"; width = 32; enc = 164; flags = ["readable", "writable"]; }
+    register a165 { class = "gpr"; width = 32; enc = 165; flags = ["readable", "writable"]; }
+    register a166 { class = "gpr"; width = 32; enc = 166; flags = ["readable", "writable"]; }
+    register a167 { class = "gpr"; width = 32; enc = 167; flags = ["readable", "writable"]; }
+    register a168 { class = "gpr"; width = 32; enc = 168; flags = ["readable", "writable"]; }
+    register a169 { class = "gpr"; width = 32; enc = 169; flags = ["readable", "writable"]; }
+    register a170 { class = "gpr"; width = 32; enc = 170; flags = ["readable", "writable"]; }
+    register a171 { class = "gpr"; width = 32; enc = 171; flags = ["readable", "writable"]; }
+    register a172 { class = "gpr"; width = 32; enc = 172; flags = ["readable", "writable"]; }
+    register a173 { class = "gpr"; width = 32; enc = 173; flags = ["readable", "writable"]; }
+    register a174 { class = "gpr"; width = 32; enc = 174; flags = ["readable", "writable"]; }
+    register a175 { class = "gpr"; width = 32; enc = 175; flags = ["readable", "writable"]; }
+    register a176 { class = "gpr"; width = 32; enc = 176; flags = ["readable", "writable"]; }
+    register a177 { class = "gpr"; width = 32; enc = 177; flags = ["readable", "writable"]; }
+    register a178 { class = "gpr"; width = 32; enc = 178; flags = ["readable", "writable"]; }
+    register a179 { class = "gpr"; width = 32; enc = 179; flags = ["readable", "writable"]; }
+    register a180 { class = "gpr"; width = 32; enc = 180; flags = ["readable", "writable"]; }
+    register a181 { class = "gpr"; width = 32; enc = 181; flags = ["readable", "writable"]; }
+    register a182 { class = "gpr"; width = 32; enc = 182; flags = ["readable", "writable"]; }
+    register a183 { class = "gpr"; width = 32; enc = 183; flags = ["readable", "writable"]; }
+    register a184 { class = "gpr"; width = 32; enc = 184; flags = ["readable", "writable"]; }
+    register a185 { class = "gpr"; width = 32; enc = 185; flags = ["readable", "writable"]; }
+    register a186 { class = "gpr"; width = 32; enc = 186; flags = ["readable", "writable"]; }
+    register a187 { class = "gpr"; width = 32; enc = 187; flags = ["readable", "writable"]; }
+    register a188 { class = "gpr"; width = 32; enc = 188; flags = ["readable", "writable"]; }
+    register a189 { class = "gpr"; width = 32; enc = 189; flags = ["readable", "writable"]; }
+    register a190 { class = "gpr"; width = 32; enc = 190; flags = ["readable", "writable"]; }
+    register a191 { class = "gpr"; width = 32; enc = 191; flags = ["readable", "writable"]; }
+    register a192 { class = "gpr"; width = 32; enc = 192; flags = ["readable", "writable"]; }
+    register a193 { class = "gpr"; width = 32; enc = 193; flags = ["readable", "writable"]; }
+    register a194 { class = "gpr"; width = 32; enc = 194; flags = ["readable", "writable"]; }
+    register a195 { class = "gpr"; width = 32; enc = 195; flags = ["readable", "writable"]; }
+    register a196 { class = "gpr"; width = 32; enc = 196; flags = ["readable", "writable"]; }
+    register a197 { class = "gpr"; width = 32; enc = 197; flags = ["readable", "writable"]; }
+    register a198 { class = "gpr"; width = 32; enc = 198; flags = ["readable", "writable"]; }
+    register a199 { class = "gpr"; width = 32; enc = 199; flags = ["readable", "writable"]; }
+    register a200 { class = "gpr"; width = 32; enc = 200; flags = ["readable", "writable"]; }
+    register a201 { class = "gpr"; width = 32; enc = 201; flags = ["readable", "writable"]; }
+    register a202 { class = "gpr"; width = 32; enc = 202; flags = ["readable", "writable"]; }
+    register a203 { class = "gpr"; width = 32; enc = 203; flags = ["readable", "writable"]; }
+    register a204 { class = "gpr"; width = 32; enc = 204; flags = ["readable", "writable"]; }
+    register a205 { class = "gpr"; width = 32; enc = 205; flags = ["readable", "writable"]; }
+    register a206 { class = "gpr"; width = 32; enc = 206; flags = ["readable", "writable"]; }
+    register a207 { class = "gpr"; width = 32; enc = 207; flags = ["readable", "writable"]; }
+    register a208 { class = "gpr"; width = 32; enc = 208; flags = ["readable", "writable"]; }
+    register a209 { class = "gpr"; width = 32; enc = 209; flags = ["readable", "writable"]; }
+    register a210 { class = "gpr"; width = 32; enc = 210; flags = ["readable", "writable"]; }
+    register a211 { class = "gpr"; width = 32; enc = 211; flags = ["readable", "writable"]; }
+    register a212 { class = "gpr"; width = 32; enc = 212; flags = ["readable", "writable"]; }
+    register a213 { class = "gpr"; width = 32; enc = 213; flags = ["readable", "writable"]; }
+    register a214 { class = "gpr"; width = 32; enc = 214; flags = ["readable", "writable"]; }
+    register a215 { class = "gpr"; width = 32; enc = 215; flags = ["readable", "writable"]; }
+    register a216 { class = "gpr"; width = 32; enc = 216; flags = ["readable", "writable"]; }
+    register a217 { class = "gpr"; width = 32; enc = 217; flags = ["readable", "writable"]; }
+    register a218 { class = "gpr"; width = 32; enc = 218; flags = ["readable", "writable"]; }
+    register a219 { class = "gpr"; width = 32; enc = 219; flags = ["readable", "writable"]; }
+    register a220 { class = "gpr"; width = 32; enc = 220; flags = ["readable", "writable"]; }
+    register a221 { class = "gpr"; width = 32; enc = 221; flags = ["readable", "writable"]; }
+    register a222 { class = "gpr"; width = 32; enc = 222; flags = ["readable", "writable"]; }
+    register a223 { class = "gpr"; width = 32; enc = 223; flags = ["readable", "writable"]; }
+    register a224 { class = "gpr"; width = 32; enc = 224; flags = ["readable", "writable"]; }
+    register a225 { class = "gpr"; width = 32; enc = 225; flags = ["readable", "writable"]; }
+    register a226 { class = "gpr"; width = 32; enc = 226; flags = ["readable", "writable"]; }
+    register a227 { class = "gpr"; width = 32; enc = 227; flags = ["readable", "writable"]; }
+    register a228 { class = "gpr"; width = 32; enc = 228; flags = ["readable", "writable"]; }
+    register a229 { class = "gpr"; width = 32; enc = 229; flags = ["readable", "writable"]; }
+    register a230 { class = "gpr"; width = 32; enc = 230; flags = ["readable", "writable"]; }
+    register a231 { class = "gpr"; width = 32; enc = 231; flags = ["readable", "writable"]; }
+    register a232 { class = "gpr"; width = 32; enc = 232; flags = ["readable", "writable"]; }
+    register a233 { class = "gpr"; width = 32; enc = 233; flags = ["readable", "writable"]; }
+    register a234 { class = "gpr"; width = 32; enc = 234; flags = ["readable", "writable"]; }
+    register a235 { class = "gpr"; width = 32; enc = 235; flags = ["readable", "writable"]; }
+    register a236 { class = "gpr"; width = 32; enc = 236; flags = ["readable", "writable"]; }
+    register a237 { class = "gpr"; width = 32; enc = 237; flags = ["readable", "writable"]; }
+    register a238 { class = "gpr"; width = 32; enc = 238; flags = ["readable", "writable"]; }
+    register a239 { class = "gpr"; width = 32; enc = 239; flags = ["readable", "writable"]; }
+    register a240 { class = "gpr"; width = 32; enc = 240; flags = ["readable", "writable"]; }
+    register a241 { class = "gpr"; width = 32; enc = 241; flags = ["readable", "writable"]; }
+    register a242 { class = "gpr"; width = 32; enc = 242; flags = ["readable", "writable"]; }
+    register a243 { class = "gpr"; width = 32; enc = 243; flags = ["readable", "writable"]; }
+    register a244 { class = "gpr"; width = 32; enc = 244; flags = ["readable", "writable"]; }
+    register a245 { class = "gpr"; width = 32; enc = 245; flags = ["readable", "writable"]; }
+    register a246 { class = "gpr"; width = 32; enc = 246; flags = ["readable", "writable"]; }
+    register a247 { class = "gpr"; width = 32; enc = 247; flags = ["readable", "writable"]; }
+    register a248 { class = "gpr"; width = 32; enc = 248; flags = ["readable", "writable"]; }
+    register a249 { class = "gpr"; width = 32; enc = 249; flags = ["readable", "writable"]; }
+    register a250 { class = "gpr"; width = 32; enc = 250; flags = ["readable", "writable"]; }
+    register a251 { class = "gpr"; width = 32; enc = 251; flags = ["readable", "writable"]; }
+    register a252 { class = "gpr"; width = 32; enc = 252; flags = ["readable", "writable"]; }
+    register a253 { class = "gpr"; width = 32; enc = 253; flags = ["readable", "writable"]; }
+    register a254 { class = "gpr"; width = 32; enc = 254; flags = ["readable", "writable"]; }
+    register a255 { class = "gpr"; width = 32; enc = 255; flags = ["readable", "writable"]; }
+    register exec { class = "mask"; width = 64; enc = 0; flags = ["readable", "writable"]; }
+    register vcc { class = "mask"; width = 64; enc = 0; flags = ["readable", "writable"]; }
+    register scc { class = "status"; width = 8; enc = 0; flags = ["readable", "writable"]; }
+    register m0 { class = "special"; width = 32; enc = 0; flags = ["readable", "writable"]; }
+    register flat_scratch { class = "special"; width = 64; enc = 0; flags = ["readable", "writable"]; }
+    register xnack_mask { class = "mask"; width = 64; enc = 0; flags = ["readable", "writable"]; }
+    register pc { class = "special"; width = 64; enc = 0; }
+    mnemonic s_nop {  }
+    mnemonic s_add {  }
+    mnemonic s_sub {  }
+    mnemonic s_and {  }
+    mnemonic s_or {  }
+    mnemonic s_mov {  }
+    mnemonic s_branch {  }
+    mnemonic s_cbranch {  }
+    mnemonic s_endpgm {  }
+    mnemonic s_waitcnt {  }
+    mnemonic s_barrier {  }
+    mnemonic s_load {  }
+    mnemonic s_store {  }
+    mnemonic s_getreg {  }
+    mnemonic v_add {  }
+    mnemonic v_sub {  }
+    mnemonic v_mul {  }
+    mnemonic v_mov {  }
+    mnemonic v_cmp {  }
+    mnemonic v_cndmask {  }
+    mnemonic flat_load {  }
+    mnemonic flat_store {  }
+    mnemonic ds_read {  }
+    mnemonic ds_write {  }
+    mnemonic buffer_load {  }
+    mnemonic buffer_store {  }
+    mnemonic image_load {  }
+    mnemonic mfma {  }
+    encoder s_nop { max_bytes = 4; body = "EMIT32LE 0xBF800000\n"; }
+    encoder s_add { max_bytes = 4; body = "EMIT32LE 0x81000000 + dst*16777216 + src0*256 + src1\n"; }
+    encoder s_sub { max_bytes = 4; body = "EMIT32LE 0x82000000 + dst*16777216 + src0*256 + src1\n"; }
+    encoder s_and { max_bytes = 4; body = "EMIT32LE 0x88000000 + dst*16777216 + src0*256 + src1\n"; }
+    encoder s_or { max_bytes = 4; body = "EMIT32LE 0x8A000000 + dst*16777216 + src0*256 + src1\n"; }
+    encoder s_mov { max_bytes = 4; body = "EMIT32LE 0xBE000000 + dst*16777216 + src0\n"; }
+    encoder s_branch {
+        max_bytes = 4;
+        max_relocs = 1;
+        body = "EMIT32LE 0xBF800002\nEMIT_RELOCATION sym, R_AMDGPU_REL32\n";
+    }
+    encoder s_cbranch {
+        max_bytes = 4;
+        max_relocs = 1;
+        body = "EMIT32LE 0xBF840000\nEMIT_RELOCATION sym, R_AMDGPU_REL32\n";
+    }
+    encoder s_endpgm { max_bytes = 4; body = "EMIT32LE 0xBF810000\n"; }
+    encoder s_waitcnt { max_bytes = 4; body = "EMIT32LE 0xBF8C0000 + imm\n"; }
+    encoder s_barrier { max_bytes = 4; body = "EMIT32LE 0xBF8A0000\n"; }
+    encoder s_load { max_bytes = 4; body = "EMIT32LE 0xC0000000 + dst*16777216 + src0*256\n"; }
+    encoder s_store { max_bytes = 4; body = "EMIT32LE 0xC8000000 + src0*256 + src1\n"; }
+    encoder s_getreg { max_bytes = 4; body = "EMIT32LE 0xB0000000 + dst*16777216 + src0\n"; }
+    encoder v_add { max_bytes = 4; body = "EMIT32LE 0x4A000000 + dst*16777216 + src0*256 + src1\n"; }
+    encoder v_sub { max_bytes = 4; body = "EMIT32LE 0x4A800000 + dst*16777216 + src0*256 + src1\n"; }
+    encoder v_mul { max_bytes = 4; body = "EMIT32LE 0x4C000000 + dst*16777216 + src0*256 + src1\n"; }
+    encoder v_mov { max_bytes = 4; body = "EMIT32LE 0x7E000000 + dst*16777216 + src0\n"; }
+    encoder v_cmp { max_bytes = 4; body = "EMIT32LE 0x4F000000 + src0*256 + src1\n"; }
+    encoder v_cndmask { max_bytes = 4; body = "EMIT32LE 0x4E000000 + dst*16777216 + src0*256 + src1\n"; }
+    encoder flat_load { max_bytes = 8; body = "EMIT64LE 0xDC50000000000000 + dst*16777216 + src0*4294967296\n"; }
+    encoder flat_store { max_bytes = 8; body = "EMIT64LE 0xDC70000000000000 + src0*4294967296 + src1*16777216\n"; }
+    encoder ds_read { max_bytes = 4; body = "EMIT32LE 0xD8000000 + dst*16777216 + src0*256\n"; }
+    encoder ds_write { max_bytes = 4; body = "EMIT32LE 0xD9000000 + src0*256 + src1\n"; }
+    encoder buffer_load { max_bytes = 4; body = "EMIT32LE 0xE0000000 + dst*16777216 + src0*256\n"; }
+    encoder buffer_store { max_bytes = 4; body = "EMIT32LE 0xE8000000 + src0*256 + src1\n"; }
+    encoder image_load { max_bytes = 4; body = "EMIT32LE 0xF0000000 + dst*16777216 + src0*256\n"; }
+    encoder mfma { max_bytes = 8; body = "EMIT64LE 0xD000000000000000 + dst*16777216 + src0*4294967296\n"; }
+    form { mnemonic = "s_nop"; encoder = "s_nop"; }
+    form {
+        mnemonic = "s_add";
+        encoder = "s_add";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "s_sub";
+        encoder = "s_sub";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "s_and";
+        encoder = "s_and";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "s_or";
+        encoder = "s_or";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "s_mov";
+        encoder = "s_mov";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "s_branch";
+        encoder = "s_branch";
+        flags = ["branch", "terminator", "reloc"];
+        operands = [{ kind = "sym"; width = 64; }];
+    }
+    form {
+        mnemonic = "s_cbranch";
+        encoder = "s_cbranch";
+        flags = ["cond_branch", "reloc"];
+        operands = [{ kind = "sym"; width = 64; }];
+    }
+    form { mnemonic = "s_endpgm"; encoder = "s_endpgm"; flags = ["return", "terminator"]; }
+    form {
+        mnemonic = "s_waitcnt";
+        encoder = "s_waitcnt";
+        operands = [{ kind = "imm"; width = 16; imm_min = 0; imm_max = 65535; signed = false; }];
+    }
+    form { mnemonic = "s_barrier"; encoder = "s_barrier"; }
+    form {
+        mnemonic = "s_load";
+        encoder = "s_load";
+        flags = ["reads_mem"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "mem"; width = 32; }
+        ];
+    }
+    form {
+        mnemonic = "s_store";
+        encoder = "s_store";
+        flags = ["writes_mem"];
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; }, { kind = "mem"; width = 32; }];
+    }
+    form {
+        mnemonic = "s_getreg";
+        encoder = "s_getreg";
+        flags = ["privileged"];
+        required = ["priv"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "v_add";
+        encoder = "v_add";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "v_sub";
+        encoder = "v_sub";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "v_mul";
+        encoder = "v_mul";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "v_mov";
+        encoder = "v_mov";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "v_cmp";
+        encoder = "v_cmp";
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; }, { kind = "reg"; width = 32; class = "gpr"; }];
+    }
+    form {
+        mnemonic = "v_cndmask";
+        encoder = "v_cndmask";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "flat_load";
+        encoder = "flat_load";
+        flags = ["reads_mem"];
+        required = ["flat"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "mem"; width = 32; }
+        ];
+    }
+    form {
+        mnemonic = "flat_store";
+        encoder = "flat_store";
+        flags = ["writes_mem"];
+        required = ["flat"];
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; }, { kind = "mem"; width = 32; }];
+    }
+    form {
+        mnemonic = "ds_read";
+        encoder = "ds_read";
+        flags = ["reads_mem"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "mem"; width = 32; }
+        ];
+    }
+    form {
+        mnemonic = "ds_write";
+        encoder = "ds_write";
+        flags = ["writes_mem"];
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; }, { kind = "mem"; width = 32; }];
+    }
+    form {
+        mnemonic = "buffer_load";
+        encoder = "buffer_load";
+        flags = ["reads_mem"];
+        required = ["image"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "mem"; width = 32; }
+        ];
+    }
+    form {
+        mnemonic = "buffer_store";
+        encoder = "buffer_store";
+        flags = ["writes_mem"];
+        required = ["image"];
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; }, { kind = "mem"; width = 32; }];
+    }
+    form {
+        mnemonic = "image_load";
+        encoder = "image_load";
+        flags = ["reads_mem"];
+        required = ["image"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "mem"; width = 32; }
+        ];
+    }
+    form {
+        mnemonic = "mfma";
+        encoder = "mfma";
+        required = ["mfma"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    syntax default { comment = ";"; separator = ", "; }
+    sections = [
+        { name = ".text"; flags = ["exec", "alloc", "code"]; align = 4; content = "code"; },
+        { name = ".rodata"; flags = ["alloc", "readonly", "data"]; align = 4; content = "data"; },
+        { name = ".data"; flags = ["write", "alloc", "data"]; align = 4; content = "data"; },
+        {
+            name = ".AMDGPU.config";
+            flags = ["alloc", "readonly", "meta"];
+            align = 4;
+            content = "meta";
+        },
+        {
+            name = ".AMDGPU.disasm";
+            flags = ["alloc", "readonly", "meta"];
+            align = 4;
+            content = "meta";
+        },
+        { name = ".note"; flags = ["alloc", "readonly", "meta"]; align = 4; content = "meta"; }
+    ];
+    linkages = [
+        { name = "kernel_entry"; binding = "global"; visibility = "default"; symtype = "func"; },
+        { name = "func_local"; binding = "local"; visibility = "default"; symtype = "func"; },
+        { name = "object_global"; binding = "global"; visibility = "default"; symtype = "object"; }
+    ];
+    reloc R_AMDGPU_NONE { width = 32; expr = "S + A"; }
+    reloc R_AMDGPU_ABS32 { width = 32; expr = "S + A"; }
+    reloc R_AMDGPU_ABS64 { width = 64; expr = "S + A"; }
+    reloc R_AMDGPU_REL32 { width = 32; signed = true; pcrel = true; expr = "S + A - P"; }
+    reloc R_AMDGPU_GOT { width = 64; expr = "GOT(S) + A"; }
+    reloc R_AMDGPU_RELATIVE { width = 64; expr = "B + A"; }
+    reloc R_AMDGPU_GLOB_DAT { width = 64; expr = "S + A"; }
+    debug = [
+        {
+            kind = "target";
+            msg = "amdgpu SIMT: sop+vop+flat/ds/image+mfma stratification";
+            ref = "";
+        },
+        { kind = "form"; msg = "flat forms require flat"; ref = "flat_load"; },
+        { kind = "form"; msg = "mfma forms require cdna/mfma"; ref = "mfma"; }
+    ];
+    backend = { file = "backend/amdgpu.json"; };
+}

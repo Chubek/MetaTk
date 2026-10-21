@@ -1,0 +1,913 @@
+# Generated from ArchDB/x86.dsymspec.yaml by tools/compile_archdb.py.
+# Regenerate from the YAML source; see MetaArchDB/README.md.
+architecture {
+    schema = 1;
+    target {
+        arch = "x86";
+        subarch = "i386";
+        addr_size = 32;
+        op_size = 32;
+        addr_def = 32;
+        align = 1;
+        byte_order = "little";
+        obj_format = "ELF32";
+        abi = "SysV";
+        calling_conv = "cdecl";
+        features = ["base", "sse", "sse2"];
+    }
+    feature base { desc = "x86-64 base integer"; }
+    feature sse { desc = "Streaming SIMD Extensions"; }
+    feature sse2 { desc = "SSE2"; }
+    feature sse3 { desc = "SSE3"; }
+    feature ssse3 { desc = "SSSE3"; }
+    feature sse4.1 { desc = "SSE4.1"; }
+    feature sse4.2 { desc = "SSE4.2"; }
+    feature avx { desc = "Advanced Vector Extensions"; }
+    feature avx2 { desc = "AVX2"; }
+    feature avx512 { desc = "AVX-512"; }
+    feature fma { desc = "FMA3"; }
+    feature bmi1 { desc = "Bit Manipulation Instruction Set 1"; }
+    feature bmi2 { desc = "Bit Manipulation Instruction Set 2"; }
+    feature aes { desc = "AES-NI"; }
+    feature vaes { desc = "vector AES"; }
+    feature pclmulqdq { desc = "carry-less multiply"; }
+    feature popcnt { desc = "POPCNT"; }
+    feature lzcnt { desc = "LZCNT"; }
+    feature movbe { desc = "MOVBE"; }
+    feature rdrnd { desc = "RDRAND"; }
+    feature rdseed { desc = "RDSEED"; }
+    feature sha { desc = "SHA extensions"; }
+    feature gfni { desc = "Galois Field New Instructions"; }
+    feature fsgsbase { desc = "FSGSBASE"; }
+    feature adx { desc = "ADX multi-precision add"; }
+    feature rdpid { desc = "RDPID"; }
+    feature clflushopt { desc = "CLFLUSHOPT"; }
+    feature clwb { desc = "CLWB"; }
+    feature x87 { desc = "x87 floating point stack"; }
+    feature mmx { desc = "MMX"; }
+    feature cet { desc = "Control-flow Enforcement (SHSTK+IBT)"; }
+    feature rtm { desc = "Restricted Transactional Memory"; }
+    feature sgx { desc = "Software Guard Extensions"; }
+    feature serialize { desc = "SERIALIZE"; }
+    feature uintr { desc = "user interrupts"; }
+    feature cldemote { desc = "cache line demote"; }
+    feature movdiri { desc = "MOVDIRI direct store"; }
+    feature waitpkg { desc = "UMONITOR/UMWAIT/TPAUSE"; }
+    feature clzero { desc = "CLZERO"; }
+    feature priv { desc = "privileged system instructions"; }
+    register rax { class = "gpr"; width = 64; enc = 0; flags = ["readable", "writable"]; }
+    register eax {
+        class = "gpr";
+        width = 32;
+        enc = 0;
+        parent = "rax";
+        sub_lo = 0;
+        sub_hi = 32;
+        flags = ["readable", "writable"];
+    }
+    register ax {
+        class = "gpr";
+        width = 16;
+        enc = 0;
+        parent = "eax";
+        sub_lo = 0;
+        sub_hi = 16;
+        flags = ["readable", "writable"];
+    }
+    register al {
+        class = "gpr";
+        width = 8;
+        enc = 0;
+        parent = "eax";
+        sub_lo = 0;
+        sub_hi = 8;
+        flags = ["readable", "writable"];
+    }
+    register rcx { class = "gpr"; width = 64; enc = 1; flags = ["readable", "writable"]; }
+    register ecx {
+        class = "gpr";
+        width = 32;
+        enc = 1;
+        parent = "rcx";
+        sub_lo = 0;
+        sub_hi = 32;
+        flags = ["readable", "writable"];
+    }
+    register cx {
+        class = "gpr";
+        width = 16;
+        enc = 1;
+        parent = "ecx";
+        sub_lo = 0;
+        sub_hi = 16;
+        flags = ["readable", "writable"];
+    }
+    register cl {
+        class = "gpr";
+        width = 8;
+        enc = 1;
+        parent = "ecx";
+        sub_lo = 0;
+        sub_hi = 8;
+        flags = ["readable", "writable"];
+    }
+    register rdx { class = "gpr"; width = 64; enc = 2; flags = ["readable", "writable"]; }
+    register edx {
+        class = "gpr";
+        width = 32;
+        enc = 2;
+        parent = "rdx";
+        sub_lo = 0;
+        sub_hi = 32;
+        flags = ["readable", "writable"];
+    }
+    register dx {
+        class = "gpr";
+        width = 16;
+        enc = 2;
+        parent = "edx";
+        sub_lo = 0;
+        sub_hi = 16;
+        flags = ["readable", "writable"];
+    }
+    register dl {
+        class = "gpr";
+        width = 8;
+        enc = 2;
+        parent = "edx";
+        sub_lo = 0;
+        sub_hi = 8;
+        flags = ["readable", "writable"];
+    }
+    register rbx { class = "gpr"; width = 64; enc = 3; flags = ["readable", "writable"]; }
+    register ebx {
+        class = "gpr";
+        width = 32;
+        enc = 3;
+        parent = "rbx";
+        sub_lo = 0;
+        sub_hi = 32;
+        flags = ["readable", "writable"];
+    }
+    register bx {
+        class = "gpr";
+        width = 16;
+        enc = 3;
+        parent = "ebx";
+        sub_lo = 0;
+        sub_hi = 16;
+        flags = ["readable", "writable"];
+    }
+    register bl {
+        class = "gpr";
+        width = 8;
+        enc = 3;
+        parent = "ebx";
+        sub_lo = 0;
+        sub_hi = 8;
+        flags = ["readable", "writable"];
+    }
+    register rsp { class = "gpr"; width = 64; enc = 4; flags = ["readable", "writable"]; }
+    register esp {
+        class = "gpr";
+        width = 32;
+        enc = 4;
+        parent = "rsp";
+        sub_lo = 0;
+        sub_hi = 32;
+        flags = ["readable", "writable"];
+    }
+    register sp {
+        class = "gpr";
+        width = 16;
+        enc = 4;
+        parent = "esp";
+        sub_lo = 0;
+        sub_hi = 16;
+        flags = ["readable", "writable"];
+    }
+    register spl {
+        class = "gpr";
+        width = 8;
+        enc = 4;
+        parent = "esp";
+        sub_lo = 0;
+        sub_hi = 8;
+        flags = ["readable", "writable"];
+    }
+    register rbp { class = "gpr"; width = 64; enc = 5; flags = ["readable", "writable"]; }
+    register ebp {
+        class = "gpr";
+        width = 32;
+        enc = 5;
+        parent = "rbp";
+        sub_lo = 0;
+        sub_hi = 32;
+        flags = ["readable", "writable"];
+    }
+    register bp {
+        class = "gpr";
+        width = 16;
+        enc = 5;
+        parent = "ebp";
+        sub_lo = 0;
+        sub_hi = 16;
+        flags = ["readable", "writable"];
+    }
+    register bpl {
+        class = "gpr";
+        width = 8;
+        enc = 5;
+        parent = "ebp";
+        sub_lo = 0;
+        sub_hi = 8;
+        flags = ["readable", "writable"];
+    }
+    register rsi { class = "gpr"; width = 64; enc = 6; flags = ["readable", "writable"]; }
+    register esi {
+        class = "gpr";
+        width = 32;
+        enc = 6;
+        parent = "rsi";
+        sub_lo = 0;
+        sub_hi = 32;
+        flags = ["readable", "writable"];
+    }
+    register si {
+        class = "gpr";
+        width = 16;
+        enc = 6;
+        parent = "esi";
+        sub_lo = 0;
+        sub_hi = 16;
+        flags = ["readable", "writable"];
+    }
+    register sil {
+        class = "gpr";
+        width = 8;
+        enc = 6;
+        parent = "esi";
+        sub_lo = 0;
+        sub_hi = 8;
+        flags = ["readable", "writable"];
+    }
+    register rdi { class = "gpr"; width = 64; enc = 7; flags = ["readable", "writable"]; }
+    register edi {
+        class = "gpr";
+        width = 32;
+        enc = 7;
+        parent = "rdi";
+        sub_lo = 0;
+        sub_hi = 32;
+        flags = ["readable", "writable"];
+    }
+    register di {
+        class = "gpr";
+        width = 16;
+        enc = 7;
+        parent = "edi";
+        sub_lo = 0;
+        sub_hi = 16;
+        flags = ["readable", "writable"];
+    }
+    register dil {
+        class = "gpr";
+        width = 8;
+        enc = 7;
+        parent = "edi";
+        sub_lo = 0;
+        sub_hi = 8;
+        flags = ["readable", "writable"];
+    }
+    register ah { class = "gpr"; width = 8; enc = 4; parent = "eax"; sub_lo = 8; sub_hi = 16; }
+    register bh { class = "gpr"; width = 8; enc = 7; parent = "ebx"; sub_lo = 8; sub_hi = 16; }
+    register ch { class = "gpr"; width = 8; enc = 5; parent = "ecx"; sub_lo = 8; sub_hi = 16; }
+    register dh { class = "gpr"; width = 8; enc = 6; parent = "edx"; sub_lo = 8; sub_hi = 16; }
+    register ymm0 { class = "vec"; width = 256; enc = 0; flags = ["readable", "writable"]; }
+    register ymm1 { class = "vec"; width = 256; enc = 1; flags = ["readable", "writable"]; }
+    register ymm2 { class = "vec"; width = 256; enc = 2; flags = ["readable", "writable"]; }
+    register ymm3 { class = "vec"; width = 256; enc = 3; flags = ["readable", "writable"]; }
+    register ymm4 { class = "vec"; width = 256; enc = 4; flags = ["readable", "writable"]; }
+    register ymm5 { class = "vec"; width = 256; enc = 5; flags = ["readable", "writable"]; }
+    register ymm6 { class = "vec"; width = 256; enc = 6; flags = ["readable", "writable"]; }
+    register ymm7 { class = "vec"; width = 256; enc = 7; flags = ["readable", "writable"]; }
+    register xmm0 {
+        class = "vec";
+        width = 128;
+        enc = 0;
+        parent = "ymm0";
+        sub_lo = 0;
+        sub_hi = 128;
+        flags = ["readable", "writable"];
+    }
+    register xmm1 {
+        class = "vec";
+        width = 128;
+        enc = 1;
+        parent = "ymm1";
+        sub_lo = 0;
+        sub_hi = 128;
+        flags = ["readable", "writable"];
+    }
+    register xmm2 {
+        class = "vec";
+        width = 128;
+        enc = 2;
+        parent = "ymm2";
+        sub_lo = 0;
+        sub_hi = 128;
+        flags = ["readable", "writable"];
+    }
+    register xmm3 {
+        class = "vec";
+        width = 128;
+        enc = 3;
+        parent = "ymm3";
+        sub_lo = 0;
+        sub_hi = 128;
+        flags = ["readable", "writable"];
+    }
+    register xmm4 {
+        class = "vec";
+        width = 128;
+        enc = 4;
+        parent = "ymm4";
+        sub_lo = 0;
+        sub_hi = 128;
+        flags = ["readable", "writable"];
+    }
+    register xmm5 {
+        class = "vec";
+        width = 128;
+        enc = 5;
+        parent = "ymm5";
+        sub_lo = 0;
+        sub_hi = 128;
+        flags = ["readable", "writable"];
+    }
+    register xmm6 {
+        class = "vec";
+        width = 128;
+        enc = 6;
+        parent = "ymm6";
+        sub_lo = 0;
+        sub_hi = 128;
+        flags = ["readable", "writable"];
+    }
+    register xmm7 {
+        class = "vec";
+        width = 128;
+        enc = 7;
+        parent = "ymm7";
+        sub_lo = 0;
+        sub_hi = 128;
+        flags = ["readable", "writable"];
+    }
+    register st0 { class = "fp"; width = 80; enc = 0; flags = ["readable", "writable"]; }
+    register st1 { class = "fp"; width = 80; enc = 1; flags = ["readable", "writable"]; }
+    register st2 { class = "fp"; width = 80; enc = 2; flags = ["readable", "writable"]; }
+    register st3 { class = "fp"; width = 80; enc = 3; flags = ["readable", "writable"]; }
+    register st4 { class = "fp"; width = 80; enc = 4; flags = ["readable", "writable"]; }
+    register st5 { class = "fp"; width = 80; enc = 5; flags = ["readable", "writable"]; }
+    register st6 { class = "fp"; width = 80; enc = 6; flags = ["readable", "writable"]; }
+    register st7 { class = "fp"; width = 80; enc = 7; flags = ["readable", "writable"]; }
+    register mm0 { class = "vec"; width = 64; enc = 0; flags = ["readable", "writable"]; }
+    register mm1 { class = "vec"; width = 64; enc = 1; flags = ["readable", "writable"]; }
+    register mm2 { class = "vec"; width = 64; enc = 2; flags = ["readable", "writable"]; }
+    register mm3 { class = "vec"; width = 64; enc = 3; flags = ["readable", "writable"]; }
+    register mm4 { class = "vec"; width = 64; enc = 4; flags = ["readable", "writable"]; }
+    register mm5 { class = "vec"; width = 64; enc = 5; flags = ["readable", "writable"]; }
+    register mm6 { class = "vec"; width = 64; enc = 6; flags = ["readable", "writable"]; }
+    register mm7 { class = "vec"; width = 64; enc = 7; flags = ["readable", "writable"]; }
+    register eip { class = "special"; width = 32; enc = 0; }
+    register eflags { class = "status"; width = 32; enc = 0; }
+    register cs { class = "seg"; width = 16; enc = 0; }
+    register ss { class = "seg"; width = 16; enc = 0; }
+    register ds { class = "seg"; width = 16; enc = 0; }
+    register es { class = "seg"; width = 16; enc = 0; }
+    register fs { class = "seg"; width = 16; enc = 0; }
+    register gs { class = "seg"; width = 16; enc = 0; }
+    register cr0 { class = "ctrl"; width = 32; enc = 0; flags = ["modedep"]; }
+    register cr2 { class = "ctrl"; width = 32; enc = 0; flags = ["modedep"]; }
+    register cr3 { class = "ctrl"; width = 32; enc = 0; flags = ["modedep"]; }
+    register cr4 { class = "ctrl"; width = 32; enc = 0; flags = ["modedep"]; }
+    register dr0 { class = "debug"; width = 32; enc = 0; flags = ["modedep"]; }
+    register dr1 { class = "debug"; width = 32; enc = 1; flags = ["modedep"]; }
+    register dr2 { class = "debug"; width = 32; enc = 2; flags = ["modedep"]; }
+    register dr3 { class = "debug"; width = 32; enc = 3; flags = ["modedep"]; }
+    register dr4 { class = "debug"; width = 32; enc = 4; flags = ["modedep"]; }
+    register dr5 { class = "debug"; width = 32; enc = 5; flags = ["modedep"]; }
+    register dr6 { class = "debug"; width = 32; enc = 6; flags = ["modedep"]; }
+    register dr7 { class = "debug"; width = 32; enc = 7; flags = ["modedep"]; }
+    mnemonic nop {  }
+    mnemonic ret {  }
+    mnemonic mov {  }
+    mnemonic movabs {  }
+    mnemonic movzx {  }
+    mnemonic movsx {  }
+    mnemonic xchg {  }
+    mnemonic lea {  }
+    mnemonic add {  }
+    mnemonic sub {  }
+    mnemonic and {  }
+    mnemonic or {  }
+    mnemonic xor {  }
+    mnemonic adc {  }
+    mnemonic sbb {  }
+    mnemonic cmp {  }
+    mnemonic test {  }
+    mnemonic inc {  }
+    mnemonic dec {  }
+    mnemonic neg {  }
+    mnemonic not {  }
+    mnemonic imul {  }
+    mnemonic div {  }
+    mnemonic idiv {  }
+    mnemonic shl {  }
+    mnemonic shr {  }
+    mnemonic sar {  }
+    mnemonic andn {  }
+    mnemonic popcnt {  }
+    mnemonic tzcnt {  }
+    mnemonic push {  }
+    mnemonic pop {  }
+    mnemonic pushf {  }
+    mnemonic popf {  }
+    mnemonic call {  }
+    mnemonic jmp {  }
+    mnemonic jcc {  }
+    mnemonic leave {  }
+    mnemonic syscall {  }
+    mnemonic int {  }
+    mnemonic cpuid {  }
+    mnemonic movaps {  }
+    mnemonic addps {  }
+    mnemonic vaddps {  }
+    mnemonic vfmadd {  }
+    mnemonic aesenc {  }
+    mnemonic fld {  }
+    mnemonic fadd {  }
+    mnemonic rdrnd {  }
+    mnemonic cli {  }
+    mnemonic sti {  }
+    mnemonic hlt {  }
+    mnemonic pause {  }
+    encoder nop { max_bytes = 1; body = "EMIT8 0x90\n"; }
+    encoder ret { max_bytes = 1; body = "EMIT8 0xC3\n"; }
+    encoder mov { max_bytes = 3; body = "EMIT8 0x89\nEMIT_MODRM src, dst\n"; }
+    encoder movimm { max_bytes = 10; body = "EMIT8 0xB8 + dst\nEMIT_IMM 8, imm\n"; }
+    encoder movzx { max_bytes = 4; body = "EMIT8 0x0F\nEMIT8 0xB7\nEMIT_MODRM src, dst\n"; }
+    encoder movsx { max_bytes = 4; body = "EMIT8 0x0F\nEMIT8 0xBF\nEMIT_MODRM src, dst\n"; }
+    encoder xchg { max_bytes = 3; body = "EMIT8 0x87\nEMIT_MODRM src, dst\n"; }
+    encoder lea { max_bytes = 3; body = "EMIT8 0x8D\nEMIT_MODRM src, dst\n"; }
+    encoder add { max_bytes = 3; body = "EMIT8 0x01\nEMIT_MODRM src, dst\n"; }
+    encoder sub { max_bytes = 3; body = "EMIT8 0x29\nEMIT_MODRM src, dst\n"; }
+    encoder and { max_bytes = 3; body = "EMIT8 0x21\nEMIT_MODRM src, dst\n"; }
+    encoder or { max_bytes = 3; body = "EMIT8 0x09\nEMIT_MODRM src, dst\n"; }
+    encoder xor { max_bytes = 3; body = "EMIT8 0x31\nEMIT_MODRM src, dst\n"; }
+    encoder adc { max_bytes = 3; body = "EMIT8 0x11\nEMIT_MODRM src, dst\n"; }
+    encoder sbb { max_bytes = 3; body = "EMIT8 0x19\nEMIT_MODRM src, dst\n"; }
+    encoder cmp { max_bytes = 3; body = "EMIT8 0x39\nEMIT_MODRM src, dst\n"; }
+    encoder test { max_bytes = 3; body = "EMIT8 0x85\nEMIT_MODRM src, dst\n"; }
+    encoder inc { max_bytes = 3; body = "EMIT8 0xFF\nEMIT_MODRM 0, dst\n"; }
+    encoder dec { max_bytes = 3; body = "EMIT8 0xFF\nEMIT_MODRM 1, dst\n"; }
+    encoder neg { max_bytes = 3; body = "EMIT8 0xF7\nEMIT_MODRM 3, dst\n"; }
+    encoder not { max_bytes = 3; body = "EMIT8 0xF7\nEMIT_MODRM 2, dst\n"; }
+    encoder imul { max_bytes = 4; body = "EMIT8 0x0F\nEMIT8 0xAF\nEMIT_MODRM src, dst\n"; }
+    encoder div { max_bytes = 3; body = "EMIT8 0xF7\nEMIT_MODRM 6, src\n"; }
+    encoder idiv { max_bytes = 3; body = "EMIT8 0xF7\nEMIT_MODRM 7, src\n"; }
+    encoder shl { max_bytes = 3; body = "EMIT8 0xD3\nEMIT_MODRM 4, dst\n"; }
+    encoder shr { max_bytes = 3; body = "EMIT8 0xD3\nEMIT_MODRM 5, dst\n"; }
+    encoder sar { max_bytes = 3; body = "EMIT8 0xD3\nEMIT_MODRM 7, dst\n"; }
+    encoder andn {
+        max_bytes = 5;
+        body = "EMIT8 0xC4\nEMIT8 0xE2\nEMIT8 0xF0\nEMIT_MODRM src, dst\nEMIT8 0xC0 + src2\n";
+    }
+    encoder popcnt { max_bytes = 5; body = "EMIT8 0xF3\nEMIT8 0x0F\nEMIT8 0xB8\nEMIT_MODRM src, dst\n"; }
+    encoder tzcnt { max_bytes = 5; body = "EMIT8 0xF3\nEMIT8 0x0F\nEMIT8 0xBC\nEMIT_MODRM src, dst\n"; }
+    encoder push { max_bytes = 1; body = "EMIT8 0x50 + dst\n"; }
+    encoder pop { max_bytes = 1; body = "EMIT8 0x58 + dst\n"; }
+    encoder pushf { max_bytes = 1; body = "EMIT8 0x9C\n"; }
+    encoder popf { max_bytes = 1; body = "EMIT8 0x9D\n"; }
+    encoder call {
+        max_bytes = 5;
+        max_relocs = 1;
+        body = "EMIT8 0xE8\nEMIT_IMM 4, 0\nEMIT_RELOCATION sym, R_386_PLT32\n";
+    }
+    encoder jmp {
+        max_bytes = 5;
+        max_relocs = 1;
+        body = "EMIT8 0xE9\nEMIT_IMM 4, 0\nEMIT_RELOCATION sym, R_386_PLT32\n";
+    }
+    encoder jcc {
+        max_bytes = 6;
+        max_relocs = 1;
+        body = "EMIT8 0x0F\nEMIT8 0x80 + cond\nEMIT_IMM 4, 0\nEMIT_RELOCATION sym, R_386_PC32\n";
+    }
+    encoder leave { max_bytes = 1; body = "EMIT8 0xC9\n"; }
+    encoder syscall { max_bytes = 2; body = "EMIT8 0x0F\nEMIT8 0x05\n"; }
+    encoder int { max_bytes = 2; body = "EMIT8 0xCD\nEMIT8 imm\n"; }
+    encoder cpuid { max_bytes = 2; body = "EMIT8 0x0F\nEMIT8 0xA2\n"; }
+    encoder movaps { max_bytes = 3; body = "EMIT8 0x0F\nEMIT8 0x28\nEMIT_MODRM src, dst\n"; }
+    encoder addps { max_bytes = 3; body = "EMIT8 0x0F\nEMIT8 0x58\nEMIT_MODRM src, dst\n"; }
+    encoder vaddps {
+        max_bytes = 5;
+        body = "EMIT8 0xC5\nEMIT8 0xF8\nEMIT8 0x58\nEMIT_MODRM src, dst\nEMIT8 0xC0 + src2\n";
+    }
+    encoder vfmadd {
+        max_bytes = 6;
+        body = "EMIT8 0xC4\nEMIT8 0xE2\nEMIT8 0x78\nEMIT8 0x98\nEMIT_MODRM src, dst\nEMIT8 0xC0 + src2\n";
+    }
+    encoder aesenc {
+        max_bytes = 5;
+        body = "EMIT8 0x66\nEMIT8 0x0F\nEMIT8 0x38\nEMIT8 0xDC\nEMIT_MODRM src, dst\n";
+    }
+    encoder fld { max_bytes = 2; body = "EMIT8 0xD9\nEMIT8 0x00 + dst\n"; }
+    encoder fadd { max_bytes = 2; body = "EMIT8 0xD8\nEMIT8 0xC0 + dst\n"; }
+    encoder rdrnd { max_bytes = 4; body = "EMIT8 0x0F\nEMIT8 0xC7\nEMIT_MODRM 6, dst\n"; }
+    encoder cli { max_bytes = 1; body = "EMIT8 0xFA\n"; }
+    encoder sti { max_bytes = 1; body = "EMIT8 0xFB\n"; }
+    encoder hlt { max_bytes = 1; body = "EMIT8 0xF4\n"; }
+    encoder pause { max_bytes = 2; body = "EMIT8 0xF3\nEMIT8 0x90\n"; }
+    form { mnemonic = "nop"; encoder = "nop"; }
+    form { mnemonic = "ret"; encoder = "ret"; flags = ["return", "terminator"]; }
+    form {
+        mnemonic = "mov";
+        encoder = "mov";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "movabs";
+        encoder = "movimm";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            {
+                kind = "imm";
+                width = 32;
+                imm_min = -2147483648;
+                imm_max = 2147483647;
+                signed = true;
+            }
+        ];
+    }
+    form {
+        mnemonic = "movzx";
+        encoder = "movzx";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "movsx";
+        encoder = "movsx";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "xchg";
+        encoder = "xchg";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "readwrite"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "lea";
+        encoder = "lea";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "mem"; width = 32; }
+        ];
+    }
+    form {
+        mnemonic = "add";
+        encoder = "add";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "readwrite"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "sub";
+        encoder = "sub";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "readwrite"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "and";
+        encoder = "and";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "readwrite"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "or";
+        encoder = "or";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "readwrite"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "xor";
+        encoder = "xor";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "readwrite"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "adc";
+        encoder = "adc";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "readwrite"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "sbb";
+        encoder = "sbb";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "readwrite"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "cmp";
+        encoder = "cmp";
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; }, { kind = "reg"; width = 32; class = "gpr"; }];
+    }
+    form {
+        mnemonic = "test";
+        encoder = "test";
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; }, { kind = "reg"; width = 32; class = "gpr"; }];
+    }
+    form {
+        mnemonic = "inc";
+        encoder = "inc";
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; access = "readwrite"; }];
+    }
+    form {
+        mnemonic = "dec";
+        encoder = "dec";
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; access = "readwrite"; }];
+    }
+    form {
+        mnemonic = "neg";
+        encoder = "neg";
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; access = "readwrite"; }];
+    }
+    form {
+        mnemonic = "not";
+        encoder = "not";
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; access = "readwrite"; }];
+    }
+    form {
+        mnemonic = "imul";
+        encoder = "imul";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "div";
+        encoder = "div";
+        flags = ["may_trap"];
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; }];
+    }
+    form {
+        mnemonic = "idiv";
+        encoder = "idiv";
+        flags = ["may_trap"];
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; }];
+    }
+    form {
+        mnemonic = "shl";
+        encoder = "shl";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "readwrite"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "shr";
+        encoder = "shr";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "readwrite"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "sar";
+        encoder = "sar";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "readwrite"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "andn";
+        encoder = "andn";
+        required = ["bmi1"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "popcnt";
+        encoder = "popcnt";
+        required = ["popcnt"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "tzcnt";
+        encoder = "tzcnt";
+        required = ["lzcnt"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "push";
+        encoder = "push";
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; }];
+    }
+    form {
+        mnemonic = "pop";
+        encoder = "pop";
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; access = "write"; }];
+    }
+    form { mnemonic = "pushf"; encoder = "pushf"; }
+    form { mnemonic = "popf"; encoder = "popf"; }
+    form {
+        mnemonic = "call";
+        encoder = "call";
+        flags = ["branch", "reloc"];
+        operands = [{ kind = "sym"; width = 32; }];
+    }
+    form {
+        mnemonic = "jmp";
+        encoder = "jmp";
+        flags = ["branch", "terminator", "reloc"];
+        operands = [{ kind = "sym"; width = 32; }];
+    }
+    form {
+        mnemonic = "jcc";
+        encoder = "jcc";
+        flags = ["cond_branch", "reloc"];
+        operands = [{ kind = "cond"; width = 8; }, { kind = "sym"; width = 32; }];
+    }
+    form { mnemonic = "leave"; encoder = "leave"; }
+    form { mnemonic = "syscall"; encoder = "syscall"; flags = ["privileged", "may_trap"]; }
+    form {
+        mnemonic = "int";
+        encoder = "int";
+        flags = ["may_trap"];
+        operands = [{ kind = "imm"; width = 8; imm_min = 0; imm_max = 255; signed = false; }];
+    }
+    form { mnemonic = "cpuid"; encoder = "cpuid"; }
+    form {
+        mnemonic = "movaps";
+        encoder = "movaps";
+        required = ["sse"];
+        operands = [
+            { kind = "reg"; width = 128; class = "vec"; access = "write"; },
+            { kind = "reg"; width = 128; class = "vec"; }
+        ];
+    }
+    form {
+        mnemonic = "addps";
+        encoder = "addps";
+        required = ["sse"];
+        operands = [
+            { kind = "reg"; width = 128; class = "vec"; access = "write"; },
+            { kind = "reg"; width = 128; class = "vec"; }
+        ];
+    }
+    form {
+        mnemonic = "vaddps";
+        encoder = "vaddps";
+        required = ["avx"];
+        operands = [
+            { kind = "reg"; width = 128; class = "vec"; access = "write"; },
+            { kind = "reg"; width = 128; class = "vec"; },
+            { kind = "reg"; width = 128; class = "vec"; }
+        ];
+    }
+    form {
+        mnemonic = "vfmadd";
+        encoder = "vfmadd";
+        required = ["fma"];
+        operands = [
+            { kind = "reg"; width = 128; class = "vec"; access = "write"; },
+            { kind = "reg"; width = 128; class = "vec"; },
+            { kind = "reg"; width = 128; class = "vec"; }
+        ];
+    }
+    form {
+        mnemonic = "aesenc";
+        encoder = "aesenc";
+        required = ["aes"];
+        operands = [
+            { kind = "reg"; width = 128; class = "vec"; access = "write"; },
+            { kind = "reg"; width = 128; class = "vec"; }
+        ];
+    }
+    form {
+        mnemonic = "fld";
+        encoder = "fld";
+        required = ["x87"];
+        operands = [{ kind = "mem"; width = 80; }];
+    }
+    form {
+        mnemonic = "fadd";
+        encoder = "fadd";
+        required = ["x87"];
+        operands = [{ kind = "reg"; width = 80; class = "fp"; access = "readwrite"; }];
+    }
+    form {
+        mnemonic = "rdrnd";
+        encoder = "rdrnd";
+        required = ["rdrnd"];
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; access = "write"; }];
+    }
+    form { mnemonic = "cli"; encoder = "cli"; flags = ["privileged"]; required = ["priv"]; }
+    form { mnemonic = "sti"; encoder = "sti"; flags = ["privileged"]; required = ["priv"]; }
+    form { mnemonic = "hlt"; encoder = "hlt"; flags = ["privileged"]; required = ["priv"]; }
+    form { mnemonic = "pause"; encoder = "pause"; }
+    syntax intel { comment = ";"; separator = ", "; }
+    syntax att { order = 1; reg_prefix = "%"; imm_prefix = "$"; comment = "#"; separator = ", "; }
+    sections = [
+        { name = ".text"; flags = ["exec", "alloc", "code"]; align = 16; content = "code"; },
+        { name = ".rodata"; flags = ["alloc", "readonly", "data"]; align = 8; content = "data"; },
+        { name = ".data"; flags = ["write", "alloc", "data"]; align = 8; content = "data"; },
+        {
+            name = ".bss";
+            flags = ["write", "alloc", "zerofill", "data"];
+            align = 8;
+            content = "data";
+        },
+        { name = ".tdata"; flags = ["write", "alloc", "tls", "data"]; align = 8; content = "data"; },
+        {
+            name = ".tbss";
+            flags = ["write", "alloc", "zerofill", "tls", "data"];
+            align = 8;
+            content = "data";
+        },
+        { name = ".init"; flags = ["exec", "alloc", "code"]; align = 16; content = "code"; },
+        { name = ".fini"; flags = ["exec", "alloc", "code"]; align = 16; content = "code"; },
+        { name = ".plt"; flags = ["exec", "alloc", "code"]; align = 16; content = "code"; },
+        { name = ".got"; flags = ["write", "alloc", "data"]; align = 8; content = "data"; },
+        { name = ".eh_frame"; flags = ["alloc", "readonly", "data"]; align = 8; content = "data"; },
+        { name = ".comment"; flags = ["readonly", "merge", "meta"]; align = 1; content = "meta"; }
+    ];
+    linkages = [
+        { name = "func_global"; binding = "global"; visibility = "default"; symtype = "func"; },
+        { name = "func_weak"; binding = "weak"; visibility = "default"; symtype = "func"; },
+        { name = "object_global"; binding = "global"; visibility = "default"; symtype = "object"; },
+        { name = "tls_var"; binding = "tls"; visibility = "default"; symtype = "object"; },
+        { name = "local_sym"; binding = "local"; visibility = "default"; symtype = "none"; },
+        { name = "hidden_func"; binding = "global"; visibility = "hidden"; symtype = "func"; }
+    ];
+    reloc R_386_NONE { width = 32; expr = "S + A"; }
+    reloc R_386_32 { width = 32; expr = "S + A"; }
+    reloc R_386_PC8 { width = 32; signed = true; pcrel = true; expr = "S + A - P"; }
+    reloc R_386_PC16 { width = 32; signed = true; pcrel = true; expr = "S + A - P"; }
+    reloc R_386_PC32 { width = 32; signed = true; pcrel = true; expr = "S + A - P"; }
+    reloc R_386_PLT32 { width = 32; signed = true; pcrel = true; expr = "PLT(S) + A - P"; }
+    reloc R_386_GOT32 { width = 32; expr = "GOT(S) + A"; }
+    reloc R_386_GOTPC { width = 32; pcrel = true; expr = "GOT + A - P"; }
+    reloc R_386_GOTOFF { width = 32; expr = "S + A - GOT"; }
+    reloc R_386_GOT32X { width = 32; expr = "GOT(S) + A"; }
+    reloc R_386_TLS_GD { width = 32; pcrel = true; expr = "TLS(S) + A - P"; }
+    reloc R_386_TLS_LD { width = 32; pcrel = true; expr = "TLS(S) + A - P"; }
+    reloc R_386_TLS_TPOFF32 { width = 32; expr = "TLS(S) + A"; }
+    reloc R_386_TLS_DTPOFF32 { width = 32; expr = "TLS(S) + A"; }
+    reloc R_386_GLOB_DAT { width = 32; expr = "S"; }
+    reloc R_386_JMP_SLOT { width = 32; expr = "S"; }
+    reloc R_386_RELATIVE { width = 32; expr = "B + A"; }
+    reloc R_386_IRELATIVE { width = 32; expr = "B + A"; }
+    reloc R_386_COPY { width = 32; expr = "S"; }
+    debug = [
+        { kind = "target"; msg = "i386 base + bmi + sse/avx/fma + aes + x87 + priv"; ref = ""; },
+        { kind = "form"; msg = "vector forms require sse/avx/fma"; ref = "vaddps"; },
+        { kind = "form"; msg = "privileged forms require priv"; ref = "cli"; }
+    ];
+    backend = { file = "backend/x86.json"; };
+}

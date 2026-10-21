@@ -6,6 +6,8 @@ C11 library + `archdb` tool for the DomSymAsCC architecture specifications in
 An optional **C++20 API, DSLtk-based architecture DSL and spec-driven assembler**
 are available through `MetaArch.hpp`, `MetaArch::dsl` and the `metaarch` tool.
 See [the DSL/API guide](docs/DSL.md) and [runnable example](examples/toy.march).
+The [generated DSL database](MetaArchDB/README.md) contains all 28 architectures
+at `MetaArchDB/<architecture>/<architecture>.march`.
 The C library and `archdb` remain available without C++ (`ARCHDB_BUILD_DSL=OFF`).
 
 For cross-language use, see [the bindings guide](docs/BINDINGS.md):
