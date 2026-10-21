@@ -207,6 +207,39 @@ if(ARCHDB_BUILD_TESTS)
   add_executable(test_relocations tests/test_relocations.c)
   target_link_libraries(test_relocations PRIVATE metaarch)
   add_test(NAME archdb_relocations COMMAND test_relocations)
+  add_executable(test_archbfd tests/test_archbfd.c)
+  target_compile_definitions(test_archbfd PRIVATE _POSIX_C_SOURCE=200809L)
+  target_link_libraries(test_archbfd PRIVATE metaarch)
+  add_test(NAME archbfd_catalogue
+           COMMAND test_archbfd ${CMAKE_CURRENT_SOURCE_DIR}/ArchBFD
+                   ${CMAKE_CURRENT_BINARY_DIR}/archbfd-test.o)
+  find_package(Python3 COMPONENTS Interpreter QUIET)
+  if(Python3_Interpreter_FOUND)
+    add_test(NAME archbfd_schema_check
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_bfd_schema.py
+                     ${CMAKE_CURRENT_SOURCE_DIR}/ArchBFD)
+    set_tests_properties(archbfd_schema_check PROPERTIES SKIP_RETURN_CODE 77)
+    add_test(NAME archbfd_data_check
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_bfd_data.py
+                     ${CMAKE_CURRENT_SOURCE_DIR}/ArchBFD)
+    set_tests_properties(archbfd_data_check PROPERTIES SKIP_RETURN_CODE 77)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/binutils/bfd/bfd.c")
+      add_test(NAME archbfd_extractor_check
+               COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/extract_bfd.py
+                       --check --binutils ${CMAKE_CURRENT_SOURCE_DIR}/binutils
+                       --out ${CMAKE_CURRENT_SOURCE_DIR}/ArchBFD)
+    endif()
+  endif()
+  if(ARCHDB_BUILD_TOOLS)
+    add_test(NAME archbfd_cli
+             COMMAND ${CMAKE_COMMAND}
+               -DTOOL=$<TARGET_FILE:archbfd>
+               -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}
+               -DWORK=${CMAKE_CURRENT_BINARY_DIR}/archbfd-cli-test
+               -DOBJECT=${CMAKE_CURRENT_BINARY_DIR}/archbfd-test.o
+               -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_archbfd_cli.cmake)
+    set_tests_properties(archbfd_cli PROPERTIES DEPENDS archbfd_catalogue)
+  endif()
   add_executable(test_abi tests/test_abi.c)
   target_link_libraries(test_abi PRIVATE metaarch)
   add_test(NAME metaarch_c_abi COMMAND test_abi ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/api.yaml)
