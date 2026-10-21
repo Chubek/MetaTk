@@ -110,7 +110,7 @@ The ArchBFD object-format catalogue added five CTest cases to the tree
 - GCC Release: 12/12 CTest, 12.5 s. GCC ASan+UBSan (`RelWithDebInfo`,
   `-fsanitize=address,undefined -fno-omit-frame-pointer` for C *and* C++):
   12/12, 63.8 s, no findings.
-- New checks: `test_archbfd` reports 3463 checks, 0 failures
+- New checks: `test_archbfd` reports 3492 checks, 0 failures
   (9 documents x 4 formats). The pre-existing suites are unchanged
   (1307 architecture, 292 form-encoding, 289 relocation checks).
 - The extractor check compares the committed `ArchBFD/*.bfd.yaml` with a

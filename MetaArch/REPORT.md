@@ -27,7 +27,7 @@ describes the object formats they are packed into.
   the description alone — the record layouts, the constant groups and the
   relocation table come from the document.
 - `ArchBFD/schema/MetaBFD.schema.json`: the document schema.
-- Tests: `tests/test_archbfd.c` (3463 checks), `tests/check_bfd_schema.py`
+- Tests: `tests/test_archbfd.c` (3492 checks), `tests/check_bfd_schema.py`
   (schema validation) and `tests/check_bfd_data.py` (cross-check against an
   object produced by the system compiler), all registered with CTest.
 - `manual/bfd.md`: the object-format guide.
