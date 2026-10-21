@@ -4,6 +4,28 @@ All notable changes are documented here, following Keep a Changelog.
 
 ## [Unreleased]
 
+### Added — ArchBFD C++, XBind specs and language bindings
+- `ArchBFD.hpp`: standalone C++17 RAII API over the object-format catalogue
+  (`archbfd::api`): `Catalogue`, `Spec`, `SpecView` and `Object`, with copied
+  values, `std::logic_error` for closed handles and `archbfd::api::Error`
+  carrying the diagnostics.  It needs neither DSLtk nor `MetaArch.hpp`.
+- `MetaArch.xbind`, `ArchBFD.xbind`, `MetaBFD.xbind`: XBind binding specs for
+  the architecture component, the object-format component and the aggregate of
+  both.  They list the full target inventory and bind the query and lifecycle
+  functions; the out-parameter and buffer APIs are deliberately left out because
+  XBind cannot marshal them yet.  The specs validate, their C signatures match
+  the headers and the Lua emitter lowers them (checked by CTest when the XBind
+  tool is configured).
+- `bindings/d/archbfd.di`: the D interface of the object-format catalogue,
+  including the diagnostics collector of the core library.
+- `bindings/go/archbfd`: a Go/cgo package over the same API with copied
+  values, an explicit `Close` and structured diagnostics.
+- `bindings/python`: the `metaarch.archbfd` subpackage over the nanobind
+  extension, with type stubs, plus the `ArchBFD*` classes in the extension.
+- Tests: `tests/test_archbfd_cpp.cpp` (the C++ API), `tests/test_bindings_bfd.d`
+  (the D interface) and `bindings/go/archbfd/archbfd_test.go` (the Go package),
+  and `bindings/python/tests/test_archbfd.py` (the Python subpackage).
+
 ### Added — ArchBFD object-format catalogue
 - `ArchBFD.h` / `ArchBFD.c`: a second catalogue next to `ArchDB`, describing the
   object formats BFD (binutils/bfd) implements — the container layouts, the

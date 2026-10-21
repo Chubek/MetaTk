@@ -165,6 +165,48 @@ safe but does not offer parallel native throughput. No free-threaded/Python
 subinterpreter support is claimed. Catalogue access and the optional C++20 DSL
 and assembler are **not** wrapped; use the native APIs/CLI for those.
 
+## Object formats
+
+The `metaarch.archbfd` subpackage wraps the object-format catalogue: the
+documents that describe ELF, COFF, PE, Mach-O, ECOFF and WebAssembly, and the
+reader that uses them.
+
+```python
+from metaarch import archbfd
+
+with archbfd.open_catalogue("ArchBFDCatalogue.yaml") as db:
+    spec = db.load("ELF64")
+    print(spec.target_vector, spec.record_count, spec.reloc_count)
+    index = spec.find_reloc("R_X86_64_PC32")
+    print(spec.relocation(index).number)
+
+with archbfd.open_catalogue("ArchBFDCatalogue.yaml") as db:
+    spec = db.load("ELF64")
+    with archbfd.ArchBFDObject.open("a.out.o", spec) as obj:
+        print(obj.kind, obj.section_count, obj.symbol_count)
+```
+
+| Operation | Contract |
+|---|---|
+| `archbfd.load(path, format=DocumentFormat.AUTO, flags=0)` | One document; an owning `ArchBFDSpec` |
+| `archbfd.load_buffer(data, format, path="<memory>", flags=0)` | `str` or `bytes`; explicit format |
+| `archbfd.open_catalogue(path)` | A catalogue file; a directory is scanned instead |
+| `archbfd.scan_catalogue(directory)` | A catalogue from every document in a directory |
+| `db.load(name, flags=0)` | A document of the catalogue; borrowed from it |
+| `spec.record(i)`, `relocation(i)`, `constant_group(i)`, `section(i)`, `source(i)` | Copied records |
+| `spec.find_reloc(name)`, `find_reloc_number(n)`, `find_record(name)`, `constant(group, name)` | Index, or -1/`None` |
+| `spec.write(format, flags=0)` | The document in any of the four formats |
+| `ArchBFDObject.open(path, spec)`, `open_buffer(data, spec)` | An object file read with the description |
+| `obj.section(i)`, `symbol(i)`, `relocation(i)` | Copied records of the object |
+
+The catalogue owns the documents it loads: a document returned by `db.load()`
+is only valid while the catalogue is open, and the object reader needs the
+description to outlive it.  The object-format errors raise
+`archbfd.ArchBFDError` (a `RuntimeError`) with their own `diagnostics` list;
+the enumeration names are `Format` (the object format family),
+`DocumentFormat` (the wire format), `ByteOrder` and `Overflow`.  See
+[the object-format guide](../../manual/bfd.md).
+
 ## Tests
 
 ```sh

@@ -9,9 +9,15 @@ No D, Go or Python compiler/runtime is needed to build or use the C library.
 |---|---|---|
 | Opaque C ABI | `MetaArchABI.h`, `metaarch_*` exported functions | C11 library |
 | Standalone C++ | `MetaArchAPI.hpp`, `metaarch::api::Spec` | C++17, header-only wrapper over the C ABI |
+| Object formats (C) | `ArchBFD.h`, `archbfd_*` functions | C11 library |
+| Object formats (C++) | `ArchBFD.hpp`, `archbfd::api::Catalogue` | C++17, header-only wrapper over the C API |
 | D | `bindings/d/metaarch.di`, module `metaarch` | D compiler; links to the C library |
+| D (object formats) | `bindings/d/archbfd.di`, module `archbfd` | D compiler; links to the C library |
 | Go | `bindings/go`, module/package `metaarch` | Go 1.20+, cgo and C compiler; links to the C library |
+| Go (object formats) | `bindings/go/archbfd`, package `archbfd` | Go 1.20+, cgo and C compiler; links to the C library |
 | Python | `bindings/python`, package `metaarch` | Python 3.9+ extension; C++17/nanobind at build time; static or shared core |
+| Python (object formats) | `bindings/python`, package `metaarch.archbfd` | Same extension as above |
+| Binding specifications | `MetaArch.xbind`, `ArchBFD.xbind`, `MetaBFD.xbind` | XBind spec runner; optional |
 | Existing native model | `DSymspec.h`, `ArchDB.h` | C11, exposes native model layout |
 | Existing architecture DSL/assembler | `MetaArch.hpp`, `metaarch::Spec` | Optional C++20/DSLtk implementation |
 
@@ -253,3 +259,50 @@ For an installed library set `CGO_CFLAGS=-I/prefix/include/metaarch` and
 the checkout is automatic; cgo always adds `-lmetaarch`. No third-party Go
 modules are downloaded. Use `errors.As(err, &metaarchError)` with a
 `*metaarch.Error` variable to access structured diagnostic positions/messages.
+
+## Object-format bindings
+
+The object-format catalogue has the same three language surfaces:
+
+```go
+// bindings/go/archbfd: the catalogue owns the documents it loads.
+db, err := archbfd.Open("ArchBFDCatalogue.yaml")
+if err != nil { log.Fatal(err) }
+defer db.Close()
+doc, err := db.LoadName("ELF64", 0)
+if err != nil { log.Fatal(err) }
+fmt.Println(doc.TargetVector(), doc.RecordCount(), doc.RelocationCount())
+```
+
+```python
+# metaarch.archbfd
+with archbfd.open_catalogue("ArchBFDCatalogue.yaml") as db:
+    spec = db.load("ELF64")
+    print(spec.target_vector, spec.record_count, spec.reloc_count)
+```
+
+```d
+// bindings/d/archbfd.di
+auto db = archbfd_open(toStringz("ArchBFDCatalogue.yaml"), &d);
+auto spec = archbfd_load_name(db, "ELF64", 0, &d);
+```
+
+The Go and Python surfaces copy the values they return; the D module declares
+the C handles and their ownership rules.  The C++ surface is `ArchBFD.hpp`
+(`archbfd::api`).
+
+## Binding specifications
+
+`MetaArch.xbind`, `ArchBFD.xbind` and `MetaBFD.xbind` describe the same C
+surfaces for the [XBind](../../third_party/bintoolchest) generator: the
+architecture component, the object-format component and the aggregate of
+both.  They list the full target inventory and bind the query and lifecycle
+functions; the out-parameter and buffer APIs are left out because XBind cannot
+marshal them yet.  With the tool available, CTest validates the specs,
+compiles their declared C signatures against the headers and runs the Lua
+emitter over them:
+
+```sh
+cmake -S . -B build -DARCHDB_XBIND_CLI=/path/to/xbind
+ctest --test-dir build -R xbind --output-on-failure
+```

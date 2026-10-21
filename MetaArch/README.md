@@ -36,6 +36,7 @@ exposing internal struct layouts.
 | `DSymspec.h` | Typed, validated model of a spec (`DsymSpec`, `DsymRegister`, `DsymForm`, …), load / write / lookup / encode API |
 | `ArchDB.h` | Catalogue of specs (`ArchDBCatalogue.yaml` or a directory), lazy loading |
 | `ArchBFD.h` | Catalogue of BFD object-format descriptions (`ArchBFDCatalogue.yaml`), the description model and the object reader |
+| `ArchBFD.hpp` | Standalone C++17 RAII API over the object-format catalogue |
 | `Dsymspec.c` | Infrastructure, descriptor-driven schema binder (tree ⇄ struct), cross-reference resolution, encoder compiler + VM |
 | `ToYAML.c` | YAML codec — **libyaml** event parser/emitter, YAML 1.2 core-schema resolution |
 | `ToJSON.c` | JSON codec — **yyjson** |
@@ -48,6 +49,7 @@ exposing internal struct layouts.
 | `tools/extract_bfd.py` | Generates `ArchBFD/*.bfd.yaml` from the binutils checkout |
 | `tests/test_archdb.c` | Round-trip, encoding, diagnostics and catalogue tests |
 | `tests/test_archbfd.c` | Object-format round trips, binutils facts, diagnostics and reader tests |
+| `MetaArch.xbind`, `MetaBFD.xbind`, `ArchBFD.xbind` | XBind specs for the C, C++ and object-format surfaces |
 
 ### Design
 

@@ -129,6 +129,47 @@ A document may inherit the container of another one (`container: ELF32`), so
 the HP PA-RISC and m68k documents only carry their own relocations.  The
 catalogue resolves the reference when it loads a document.
 
+### C++
+
+`ArchBFD.hpp` is a standalone C++17 header over the same C API; it needs
+neither DSLtk nor `MetaArch.hpp`:
+
+```cpp
+#include "ArchBFD.hpp"
+
+archbfd::api::Catalogue db = archbfd::api::Catalogue::open("ArchBFDCatalogue.yaml");
+archbfd::api::SpecView spec = db.load("ELF64");
+for (const auto &reloc : spec.relocations())
+    if (reloc.pcrel) std::cout << reloc.name << "\n";
+```
+
+`Spec` owns a document loaded on its own, `Catalogue` owns the documents it
+loads, and `Object` owns a read object file.  Every string is copied into the
+caller, so it stays valid after the owner is closed.
+
+### XBind
+
+Three specs describe the C surface for [XBind](../../third_party/bintoolchest):
+
+| Spec | Library | Surface |
+|---|---|---|
+| `MetaArch.xbind` | `metaarch` | the architecture catalogue behind `MetaArchABI.h` |
+| `ArchBFD.xbind` | `archbfd` | the object-format catalogue behind `ArchBFD.h` |
+| `MetaBFD.xbind` | `metabfd` | the aggregate of both |
+
+They list the full target inventory, bind the query and lifecycle functions
+and leave the out-parameter and buffer APIs out: XBind cannot marshal those
+yet, and a fake wrapper would be worse than none.  With the XBind tool
+available, the specs are checked by CTest:
+
+```sh
+cmake -S . -B build -DARCHDB_XBIND_CLI=/path/to/xbind
+ctest --test-dir build -R xbind
+```
+
+The check validates every spec, compiles the exact C signatures it declares
+against the headers and runs the Lua emitter over it.
+
 ## CLI
 
 ```

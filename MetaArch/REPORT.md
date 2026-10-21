@@ -1,6 +1,44 @@
 # MetaArch — native and cross-language API checkpoint
 
-## Latest addition: ArchBFD object-format catalogue
+## Latest addition: ArchBFD C++ API, XBind specs and language bindings
+
+Extended the ArchBFD subsystem with the surfaces the other parts of the
+project have: a C++ API, binding specifications and bindings in the same
+languages as the architecture catalogue.
+
+- `ArchBFD.hpp`: a standalone C++17 RAII API over the object-format
+  catalogue (`archbfd::api`).  `Catalogue` owns the documents it loads,
+  `Spec` owns a document loaded on its own, `SpecView` is the read-only view
+  both hand out, and `Object` owns a read object file.  Every string is
+  copied into the caller, so it stays valid after the owner is closed.
+- `MetaArch.xbind`, `ArchBFD.xbind` and `MetaBFD.xbind`: XBind specs for the
+  architecture component, the object-format component and the aggregate.  They
+  follow the model of the Tourchstone tree: the full nine-target inventory,
+  the query and lifecycle functions, and the out-parameter and buffer APIs
+  left out because XBind cannot marshal them.  All three validate, their
+  declared C signatures compile against the headers, and the Lua emitter
+  lowers them.
+- `bindings/d/archbfd.di`: the D interface, including the core diagnostics
+  collector.
+- `bindings/go/archbfd`: a Go/cgo package with copied values, an explicit
+  `Close` and structured diagnostics.
+- `bindings/python`: the `metaarch.archbfd` subpackage over the nanobind
+  extension, with type stubs.
+
+Two environment problems surfaced and are fixed in the build:
+
+- The Go test inherited a `GOROOT` that does not hold the toolchain, so the
+  CTest now computes a usable root (and passes `-vet=off`, which the
+  assertions do not need).  The pre-existing Go test benefits as well.
+- The D test's argument count was off by one: D's `main` receives the
+  program name as `args[0]`.
+
+Verification: the shared build with the foreign and Python bindings enabled
+passes 14/14 CTest (the new `archbfd_cpp_api`, `archbfd_d_api`,
+`metaarch_xbind_specs` and the extended Go and Python suites), and the
+default static build passes 13/13.
+
+## Previous addition: ArchBFD object-format catalogue
 
 Implemented the requested `ArchBFD` subsystem on top of the `binutils/bfd`
 checkout in `binutils/` (binutils 2.22, branch `rel_2.22`).  It is a second

@@ -6,11 +6,13 @@
 |---|---|
 | `DSymspec.h`, `DsymspecIR.h` | Full C11 model/tree/program inspection or construction |
 | `ArchDB.h` | C catalogue scan, lookup and lazy caching |
+| `ArchBFD.h` | C object-format catalogue and object reader |
 | `MetaArchABI.h` | Stable opaque ABI v1; foreign-language integration |
 | `MetaArchAPI.hpp` (`metaarch::api`) | Standalone C++17 RAII over ABI v1 |
+| `ArchBFD.hpp` (`archbfd::api`) | Standalone C++17 RAII over the object-format catalogue |
 | `MetaArch.hpp` (`metaarch`) | C++20 DSL and assembler; `Result<T>` errors |
-| `bindings/d/metaarch.di` | Direct D foreign declarations |
-| `bindings/go` | Go/cgo wrapper with copied data and locking |
+| `bindings/d/metaarch.di`, `bindings/d/archbfd.di` | Direct D foreign declarations |
+| `bindings/go`, `bindings/go/archbfd` | Go/cgo wrappers with copied data and locking |
 | `bindings/python` | Nanobind C++17 extension with Python exceptions |
 
 The two C++ APIs deliberately have different namespaces and error models. Neither
@@ -105,3 +107,16 @@ for installed headers/libraries. `Load`, `Parse`, metadata access, `Encode`,
 RWMutex excludes Close/LoadBackend from reads. Do not copy a `Spec` value.
 Use `errors.As` with `*metaarch.Error` for structured diagnostics. No finalizer
 substitutes for explicit Close.
+
+## Object formats
+
+`ArchBFD.h` is the C catalogue of object formats: `archbfd_open` accepts a
+catalogue file or a directory, `archbfd_load_name` returns a borrowed document
+and `archbfd_close` releases the catalogue. `ArchBFD.hpp` wraps the same API
+for C++17 (`archbfd::api::Catalogue`, `Spec`, `SpecView`, `Object`).
+
+The D module `archbfd` declares the same functions; the Go package
+`metaarch/archbfd` wraps them with copied values, and the Python package
+`metaarch.archbfd` exposes the catalogue, the documents and the object reader.
+The XBind specs `MetaArch.xbind`, `ArchBFD.xbind` and `MetaBFD.xbind` describe
+the same C surfaces for the binding generator.

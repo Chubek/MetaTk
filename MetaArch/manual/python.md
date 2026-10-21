@@ -68,3 +68,31 @@ subinterpreter support is claimed.
 Load backends explicitly before writing embedded data; loading is a mutation.
 Use REF_BACKEND when a portable reference rather than a large payload is wanted.
 No native catalogue, `.march` parser or text assembler is exposed in Python v1.
+
+## Object formats
+
+The `metaarch.archbfd` subpackage exposes the object-format catalogue: the
+documents that describe ELF, COFF, PE, Mach-O, ECOFF and WebAssembly, and the
+reader that uses them.
+
+```python
+from metaarch import archbfd
+
+with archbfd.open_catalogue("ArchBFDCatalogue.yaml") as db:
+    spec = db.load("ELF64")
+    print(spec.target_vector, spec.record_count, spec.reloc_count)
+    for reloc in [spec.relocation(i) for i in range(spec.reloc_count)]:
+        if reloc.pcrel:
+            print(reloc.name, reloc.number, reloc.size)
+
+with archbfd.open_catalogue("ArchBFDCatalogue.yaml") as db:
+    spec = db.load("ELF64")
+    with archbfd.ArchBFDObject.open("a.out.o", spec) as obj:
+        print(obj.kind, obj.section_count, obj.symbol_count)
+```
+
+`archbfd.load` loads a single document, `archbfd.scan_catalogue` builds a
+catalogue from a directory, and `archbfd.load_buffer` parses a document from
+memory.  The catalogue owns the documents it loads: a document returned by
+`db.load()` is only valid while the catalogue is open.  Errors raise
+`archbfd.ArchBFDError`, which carries its own `diagnostics` list.
