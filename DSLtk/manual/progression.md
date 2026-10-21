@@ -1,7 +1,8 @@
 # DSLtk Development Progression
 
 This record covers the progression from the C++ toolkit to its D counterpart,
-then to the shared language-construction facilities and their documentation.
+then to the shared language-construction facilities, graph and term reduction,
+and their documentation.
 It describes implemented work. API details and tutorials are linked below.
 
 ## 1. Starting point: the C++ toolkit
@@ -167,7 +168,88 @@ chapters.
 
 ## 11. Manual progression
 
-Chapter 30 provides a shared overview. Chapters 31–36 expand that overview into
+Chapter 30 provides a shared overview. Chapters 31–37 expand that overview into
 a D guide and focused tutorials for every added facility. The introduction,
 getting-started guide, enum chapter, and table of contents now connect the
 original C++ material to the two-language toolkit.
+
+## 12. Directed graphs and DOT rendering
+
+Both implementations gained `DirectedGraph` with configurable node and edge
+payloads, stable graph-local handles, ordered adjacency, parallel edges,
+self-loops, and disconnected nodes. Mutation includes removing nodes and their
+incident edges, replacing node payloads, and redirecting incoming edges while
+preserving edge handles. Removed handles are not reused.
+
+The graph algorithms include breadth-first and depth-first traversal, optional
+DFS postorder, unweighted shortest paths, topological sorting with cycle
+rejection, and strongly connected components. Traversals terminate on cyclic
+graphs. C++ graphs are values; D graphs are reference types.
+
+`to_dot` renders complete directed Graphviz DOT text with deterministic ordering,
+quoted labels, escaping, and optional payload-to-label callbacks. Isolated
+nodes and parallel edges remain visible. DOT generation needs no external
+library; rendering that text as an image is an optional Graphviz step.
+
+## 13. First-order terms and unification
+
+`Term` adds deeply copied structural values with explicit function symbols,
+ordered arguments, and variables. The S-expression substrate supplies term
+parsing and printing: `?x` is a variable, while `"?x"` is a literal symbol.
+Terms support variable collection, groundness checks, node counts, subterm
+positions, and replacement without changing the original value.
+
+`match_term` produces substitutions and checks structural equality for repeated
+variables. `substitute` applies simultaneous substitutions. `unify_terms`
+composes bindings and performs an occurs check, rejecting cyclic equations
+such as `?x = (f ?x)`. C++ uses `std::optional` for optional results; D uses
+`Nullable`. D's function-term factory is named `Term.function_` because
+`function` is a language keyword.
+
+## 14. Term rewriting and shared graph reduction
+
+`TermRewriteSystem` validates and owns ordered `TermRule` values. A rule must
+have a nonvariable left side, and all right-side variables must be bound on
+the left. Rules use the existing `(rewrite name lhs rhs)`, `(= lhs rhs)`, and
+`(=> lhs rhs)` notation. Single-step rewriting reports the rewritten term,
+rule index, and redex position. Normalization supports left-to-right outermost
+and innermost strategies with explicit step budgets and distinct `NormalForm`
+and `StepLimit` outcomes.
+
+`TermGraph` builds acyclic term graphs with optional sharing through a hash
+index of node labels and child handles. Graph matching operates on handles,
+and repeated variables compare subgraphs structurally even without physical
+sharing. Reduction reuses nodes bound to right-side variables, redirects all
+incoming edges of a redex, and removes that redex. Thus reducing the shared
+`(add a 0)` in `(pair (add a 0) (add a 0))` takes one graph step, while tree
+rewriting takes two steps.
+
+Graph reduction reports the resulting root; single-step reports also identify
+the removed redex and its replacement. Callers update external root handles
+and explicitly collect garbage with all roots they want to retain. The general
+graph supports cycles, while term graph reduction operates on finite acyclic
+terms. Step budgets bound rewrite counts, not memory use or recursion depth.
+
+The feature tags are `Graphs`, `Terms`, `TermRewriting`, and `GraphReduction`.
+The complete API contracts, C++ and D examples, DOT workflow, and limitations
+are documented in [Chapter 37](ch37-graphs-terms-and-reduction.md).
+
+## 15. Graph and term verification — October 21, 2026
+
+Matching regression suites were added in
+[`test_graph_terms.cpp`](../tests/test_graph_terms.cpp) and
+[`test_graph_terms.d`](../tests/test_graph_terms.d). They exercise graph
+mutation and traversal, cycles, paths, components, DOT escaping, term matching,
+unification and occurs checks, rule validation, rewrite strategies, step
+limits, shared versus unshared reduction, root changes, and garbage collection.
+
+The CMake test project now builds and runs the D module and its graph/term
+tests when a D compiler is available. `DSLtk_TEST_D` controls that integration;
+the local ignore rules retain D test sources in version control.
+
+All eight configured test targets passed after this extension. The C++ graph
+and term tests passed with GCC and Clang, and the D tests passed with LDC and
+DMD. AddressSanitizer, UndefinedBehaviorSanitizer, and leak detection passed;
+Graphviz accepted the generated DOT and rendered it to SVG. These checks
+record this implementation milestone; the earlier verification record in
+section 10 describes the preceding language-facility milestone.

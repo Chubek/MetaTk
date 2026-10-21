@@ -1,12 +1,12 @@
 # DSLtk — A Manual
 
-This directory contains the thirty-six-chapter manual for **DSLtk**, the
+This directory contains the thirty-seven-chapter manual for **DSLtk**, the
 Domain-Specific Language construction toolkit for C++20 and D. The two
 implementations are distributed as one C++ header, `DSLtk.hpp`, and one D
 module, `DSLtk.d`. The manual explains the established toolkit, the D port,
 and the shared language facilities added to both implementations.
 
-The manual is organised into twenty parts that progress from foundational
+The manual is organised into twenty-one parts that progress from foundational
 concepts through to the most advanced subsystems. Readers new to the library
 should begin with Chapter 1 and read sequentially; experienced readers may use
 the table of contents below to jump directly to the feature they need.
@@ -17,12 +17,13 @@ the table of contents below to jump directly to the feature they need.
   established C++ toolkit, including the embedded `magic_enum` API.
 - **D foundations:** Chapter 31 maps every established feature family to D,
   with mixins, alias callables, CTFE, native reflection, and build instructions.
-- **Shared extensions:** Chapter 30 is an overview; Chapters 32–36 provide
+- **Shared extensions:** Chapter 30 is an overview; Chapters 32–37 provide
   focused tutorials, API contracts and examples for both languages.
 - **Full development record:** [DSLtk Development Progression](progression.md)
   records the milestones from the C++ toolkit through the D translation,
   equality saturation, user backends, visitors, binary streams, preprocessing,
-  optional Lua, explicit CFGs, packaging and verification.
+  optional Lua, explicit CFGs, directed graphs, terms, DOT rendering,
+  term rewriting, shared graph reduction, packaging and verification.
 
 ## Table of Contents
 
@@ -121,6 +122,10 @@ the table of contents below to jump directly to the feature they need.
 ### Part XX — Context-Free Language Definition
 
 - [Chapter 36 — Explicit Context-Free Grammars and Earley Parsing](ch36-context-free-grammars.md)
+
+### Part XXI — Graphs and Symbolic Reduction
+
+- [Chapter 37 — Graphs, Terms and Reduction](ch37-graphs-terms-and-reduction.md)
 
 ## Building the Manual
 

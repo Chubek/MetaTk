@@ -31,6 +31,8 @@
  *   - StaticRegularExpressions — compile-time byte regexes and binary streams
  *   - Preprocessing — macros, includes, conditionals, optional Lua hooks
  *   - ContextFreeGrammar — explicit CFG productions and Earley parsing
+ *   - Graphs / Terms — directed multigraphs, DOT, first-order terms and unification
+ *   - TermRewriting / GraphReduction — bounded tree and shared-term reduction
  * See manual/ch30-language-facilities.md for the C++ and D APIs.
  *
  * ============================================================
@@ -11399,5 +11401,624 @@ concept HasLiterals
 /// Concept: T is a DSL with Rewrite support.
 template <typename T>
 concept Rewritable = HasFeature<T, Rewrite> && requires { T::rules; };
+
+struct Graphs { template <class Derived> struct Mixin {}; };
+struct Terms { template <class Derived> struct Mixin {}; };
+struct TermRewriting { template <class Derived> struct Mixin {}; };
+struct GraphReduction { template <class Derived> struct Mixin {}; };
+
+using GraphNodeId = std::size_t;
+using GraphEdgeId = std::size_t;
+
+inline std::string dot_quote(std::string_view text)
+{
+  std::string result = "\"";
+  for (unsigned char character : text)
+    switch (character)
+      {
+      case '"': result += "\\\""; break;
+      case '\\': result += "\\\\"; break;
+      case '\n': result += "\\n"; break;
+      case '\r': result += "\\r"; break;
+      case '\t': result += '\t'; break;
+      default:
+        if (character < 32 || character == 127)
+          throw std::invalid_argument("unsupported control character in DOT label");
+        result += static_cast<char>(character);
+      }
+  return result + '"';
+}
+
+template <class NodeValue = std::string, class EdgeValue = std::string>
+class DirectedGraph
+{
+public:
+  struct Edge { GraphNodeId source, target; EdgeValue value; };
+private:
+  struct Node
+  {
+    NodeValue value;
+    std::vector<GraphEdgeId> incoming, outgoing;
+  };
+  std::vector<std::optional<Node>> nodes_;
+  std::vector<std::optional<Edge>> edges_;
+  void require_node(GraphNodeId id) const
+  {
+    if (!contains(id)) throw std::out_of_range("invalid graph node");
+  }
+public:
+  bool contains(GraphNodeId id) const { return id < nodes_.size() && nodes_[id].has_value(); }
+  bool contains_edge(GraphEdgeId id) const { return id < edges_.size() && edges_[id].has_value(); }
+  GraphNodeId add_node(NodeValue value)
+  {
+    nodes_.push_back(Node{std::move(value), {}, {}});
+    return nodes_.size() - 1;
+  }
+  GraphEdgeId add_edge(GraphNodeId source, GraphNodeId target, EdgeValue value = {})
+  {
+    require_node(source); require_node(target);
+    auto id = edges_.size();
+    edges_.push_back(Edge{source, target, std::move(value)});
+    nodes_[source]->outgoing.push_back(id);
+    nodes_[target]->incoming.push_back(id);
+    return id;
+  }
+  const NodeValue& value(GraphNodeId id) const { require_node(id); return nodes_[id]->value; }
+  void set_value(GraphNodeId id, NodeValue value) { require_node(id); nodes_[id]->value = std::move(value); }
+  const Edge& edge(GraphEdgeId id) const
+  {
+    if (!contains_edge(id)) throw std::out_of_range("invalid graph edge");
+    return *edges_[id];
+  }
+  std::vector<GraphNodeId> nodes() const
+  {
+    std::vector<GraphNodeId> result;
+    for (GraphNodeId id = 0; id < nodes_.size(); ++id) if (contains(id)) result.push_back(id);
+    return result;
+  }
+  std::vector<GraphEdgeId> edges() const
+  {
+    std::vector<GraphEdgeId> result;
+    for (GraphEdgeId id = 0; id < edges_.size(); ++id) if (contains_edge(id)) result.push_back(id);
+    return result;
+  }
+  std::size_t node_count() const { return nodes().size(); }
+  std::size_t edge_count() const { return edges().size(); }
+  std::vector<GraphEdgeId> incoming(GraphNodeId id) const { require_node(id); return nodes_[id]->incoming; }
+  std::vector<GraphEdgeId> outgoing(GraphNodeId id) const { require_node(id); return nodes_[id]->outgoing; }
+  std::vector<GraphNodeId> successors(GraphNodeId id) const
+  {
+    std::vector<GraphNodeId> result;
+    for (auto link : outgoing(id)) result.push_back(edge(link).target);
+    return result;
+  }
+  std::vector<GraphNodeId> predecessors(GraphNodeId id) const
+  {
+    std::vector<GraphNodeId> result;
+    for (auto link : incoming(id)) result.push_back(edge(link).source);
+    return result;
+  }
+  void remove_edge(GraphEdgeId id)
+  {
+    auto link = edge(id);
+    std::erase(nodes_[link.source]->outgoing, id);
+    std::erase(nodes_[link.target]->incoming, id);
+    edges_[id].reset();
+  }
+  void remove_node(GraphNodeId id)
+  {
+    require_node(id);
+    for (auto link : outgoing(id)) remove_edge(link);
+    for (auto link : incoming(id)) remove_edge(link);
+    nodes_[id].reset();
+  }
+  void redirect(GraphNodeId from, GraphNodeId to)
+  {
+    require_node(from); require_node(to);
+    if (from == to) return;
+    for (auto link : incoming(from))
+      {
+        edges_[link]->target = to;
+        nodes_[to]->incoming.push_back(link);
+      }
+    nodes_[from]->incoming.clear();
+  }
+  std::vector<GraphNodeId> breadth_first(GraphNodeId root) const
+  {
+    require_node(root);
+    std::vector<GraphNodeId> result{root};
+    std::unordered_set<GraphNodeId> seen{root};
+    for (std::size_t index = 0; index < result.size(); ++index)
+      for (auto child : successors(result[index]))
+        if (seen.insert(child).second) result.push_back(child);
+    return result;
+  }
+  std::vector<GraphNodeId> depth_first(GraphNodeId root, bool postorder = false) const
+  {
+    require_node(root);
+    std::vector<GraphNodeId> result;
+    std::vector<std::pair<GraphNodeId, bool>> pending{{root, false}};
+    std::unordered_set<GraphNodeId> seen;
+    while (!pending.empty())
+      {
+        auto [id, expanded] = pending.back(); pending.pop_back();
+        if (expanded) { result.push_back(id); continue; }
+        if (!seen.insert(id).second) continue;
+        if (postorder) pending.emplace_back(id, true); else result.push_back(id);
+        auto children = successors(id);
+        for (auto child = children.rbegin(); child != children.rend(); ++child)
+          pending.emplace_back(*child, false);
+      }
+    return result;
+  }
+  std::vector<GraphNodeId> topological_sort() const
+  {
+    std::vector<std::size_t> degrees(nodes_.size());
+    std::vector<GraphNodeId> result;
+    auto live = nodes();
+    for (auto id : live)
+      {
+        degrees[id] = nodes_[id]->incoming.size();
+        if (!degrees[id]) result.push_back(id);
+      }
+    for (std::size_t index = 0; index < result.size(); ++index)
+      for (auto child : successors(result[index]))
+        if (!--degrees[child]) result.push_back(child);
+    if (result.size() != live.size()) throw std::invalid_argument("graph contains a cycle");
+    return result;
+  }
+  std::optional<std::vector<GraphNodeId>> shortest_path(GraphNodeId source, GraphNodeId target) const
+  {
+    require_node(source); require_node(target);
+    std::vector<GraphNodeId> pending{source};
+    std::unordered_map<GraphNodeId, GraphNodeId> parents{{source, source}};
+    for (std::size_t index = 0; index < pending.size(); ++index)
+      {
+        auto id = pending[index];
+        if (id == target)
+          {
+            std::vector<GraphNodeId> path{target};
+            while (path.back() != source) path.push_back(parents.at(path.back()));
+            std::reverse(path.begin(), path.end());
+            return path;
+          }
+        for (auto child : successors(id))
+          if (parents.emplace(child, id).second) pending.push_back(child);
+      }
+    return std::nullopt;
+  }
+  std::vector<std::vector<GraphNodeId>> strongly_connected_components() const
+  {
+    std::unordered_set<GraphNodeId> seen;
+    std::vector<GraphNodeId> order;
+    for (auto root : nodes())
+      {
+        if (seen.contains(root)) continue;
+        std::vector<std::pair<GraphNodeId, bool>> pending{{root, false}};
+        while (!pending.empty())
+          {
+            auto [id, expanded] = pending.back(); pending.pop_back();
+            if (expanded) { order.push_back(id); continue; }
+            if (!seen.insert(id).second) continue;
+            pending.emplace_back(id, true);
+            auto children = successors(id);
+            for (auto child = children.rbegin(); child != children.rend(); ++child)
+              pending.emplace_back(*child, false);
+          }
+      }
+    seen.clear();
+    std::vector<std::vector<GraphNodeId>> result;
+    for (auto root = order.rbegin(); root != order.rend(); ++root)
+      {
+        if (!seen.insert(*root).second) continue;
+        std::vector<GraphNodeId> component{*root};
+        for (std::size_t index = 0; index < component.size(); ++index)
+          for (auto parent : predecessors(component[index]))
+            if (seen.insert(parent).second) component.push_back(parent);
+        result.push_back(std::move(component));
+      }
+    return result;
+  }
+  template <class NodeLabel, class EdgeLabel>
+  std::string to_dot(NodeLabel node_label, EdgeLabel edge_label, std::string_view name = "G") const
+  {
+    std::string result = "digraph " + dot_quote(name) + " {\n";
+    for (auto id : nodes())
+      result += "  n" + std::to_string(id) + " [label=" + dot_quote(node_label(value(id))) + "];\n";
+    for (auto id : edges())
+      {
+        const auto& link = edge(id);
+        result += "  n" + std::to_string(link.source) + " -> n" + std::to_string(link.target)
+                  + " [label=" + dot_quote(edge_label(link.value)) + "];\n";
+      }
+    return result + "}\n";
+  }
+  std::string to_dot(std::string_view name = "G") const
+  {
+    auto label = [](const auto& value) { std::ostringstream stream; stream << value; return stream.str(); };
+    return to_dot(label, label, name);
+  }
+};
+
+struct Term
+{
+  std::string symbol;
+  std::vector<Term> arguments;
+  bool is_variable = false;
+  static Term variable(std::string name)
+  {
+    if (name.empty() || name.find_first_of(" \t\r\n()\";\\?") != std::string::npos)
+      throw std::invalid_argument("invalid term variable name");
+    for (unsigned char character : name)
+      if (character <= 32 || character == 127) throw std::invalid_argument("invalid term variable name");
+    return {std::move(name), {}, true};
+  }
+  static Term function(std::string symbol, std::vector<Term> arguments = {})
+  { return {std::move(symbol), std::move(arguments), false}; }
+  bool operator==(const Term&) const = default;
+  void validate() const
+  {
+    if (is_variable)
+      {
+        variable(symbol);
+        if (!arguments.empty()) throw std::invalid_argument("variable cannot have arguments");
+      }
+    for (const auto& child : arguments) child.validate();
+  }
+  std::unordered_set<std::string> variables() const
+  {
+    std::unordered_set<std::string> result;
+    if (is_variable) result.insert(symbol);
+    for (const auto& child : arguments)
+      { auto names = child.variables(); result.insert(names.begin(), names.end()); }
+    return result;
+  }
+  bool ground() const { return variables().empty(); }
+  std::size_t size() const
+  {
+    std::size_t result = 1;
+    for (const auto& child : arguments) result += child.size();
+    return result;
+  }
+  const Term& at(std::span<const std::size_t> position) const
+  {
+    const Term* result = this;
+    for (auto index : position) result = &result->arguments.at(index);
+    return *result;
+  }
+  Term replaced(std::span<const std::size_t> position, const Term& replacement) const
+  {
+    if (position.empty()) return replacement;
+    Term result = *this;
+    result.arguments.at(position.front()) = arguments.at(position.front()).replaced(position.subspan(1), replacement);
+    return result;
+  }
+  SExpr sexpr() const
+  {
+    validate();
+    if (is_variable) return SExpr::atom("?" + symbol);
+    auto head = SExpr::atom(symbol, !symbol.empty() && symbol.front() == '?');
+    if (arguments.empty()) return head;
+    std::vector<SExpr> items{head};
+    for (const auto& child : arguments) items.push_back(child.sexpr());
+    return SExpr::list(std::move(items));
+  }
+  std::string dump() const { return sexpr().dump(); }
+};
+
+inline Term term_from_sexpr(const SExpr& expression)
+{
+  if (expression.is_atom)
+    {
+      if (!expression.quoted && !expression.text.empty() && expression.text.front() == '?')
+        return Term::variable(expression.text.substr(1));
+      return Term::function(expression.text);
+    }
+  if (expression.items.empty() || !expression.items.front().is_atom
+      || (!expression.items.front().quoted && !expression.items.front().text.empty()
+          && expression.items.front().text.front() == '?'))
+    throw std::invalid_argument("term requires a literal function symbol");
+  std::vector<Term> arguments;
+  for (std::size_t index = 1; index < expression.items.size(); ++index)
+    arguments.push_back(term_from_sexpr(expression.items[index]));
+  return Term::function(expression.items.front().text, std::move(arguments));
+}
+inline Term parse_term(std::string_view source) { return term_from_sexpr(parse_sexpr(source)); }
+
+using TermSubstitution = std::unordered_map<std::string, Term>;
+
+inline std::optional<TermSubstitution> match_term(const Term& pattern, const Term& subject)
+{
+  pattern.validate(); subject.validate();
+  TermSubstitution bindings;
+  std::function<bool(const Term&, const Term&)> match = [&](const Term& current, const Term& value) {
+    if (current.is_variable)
+      {
+        auto [entry, inserted] = bindings.emplace(current.symbol, value);
+        return inserted || entry->second == value;
+      }
+    if (value.is_variable || current.symbol != value.symbol || current.arguments.size() != value.arguments.size())
+      return false;
+    for (std::size_t index = 0; index < current.arguments.size(); ++index)
+      if (!match(current.arguments[index], value.arguments[index])) return false;
+    return true;
+  };
+  if (!match(pattern, subject)) return std::nullopt;
+  return bindings;
+}
+
+inline Term substitute(const Term& term, const TermSubstitution& bindings)
+{
+  if (term.is_variable)
+    {
+      auto found = bindings.find(term.symbol);
+      return found == bindings.end() ? term : found->second;
+    }
+  Term result = term;
+  for (auto& child : result.arguments) child = substitute(child, bindings);
+  return result;
+}
+
+inline std::optional<TermSubstitution> unify_terms(Term left, Term right)
+{
+  left.validate(); right.validate();
+  TermSubstitution bindings;
+  std::vector<std::pair<Term, Term>> pending{{std::move(left), std::move(right)}};
+  while (!pending.empty())
+    {
+      auto [first, second] = std::move(pending.back()); pending.pop_back();
+      first = substitute(first, bindings); second = substitute(second, bindings);
+      if (first == second) continue;
+      if (!first.is_variable && second.is_variable) std::swap(first, second);
+      if (first.is_variable)
+        {
+          if (second.variables().contains(first.symbol)) return std::nullopt;
+          TermSubstitution binding{{first.symbol, second}};
+          for (auto& entry : bindings) entry.second = substitute(entry.second, binding);
+          bindings[first.symbol] = second;
+        }
+      else
+        {
+          if (first.symbol != second.symbol || first.arguments.size() != second.arguments.size()) return std::nullopt;
+          for (std::size_t index = 0; index < first.arguments.size(); ++index)
+            pending.emplace_back(first.arguments[index], second.arguments[index]);
+        }
+    }
+  return bindings;
+}
+
+struct TermRule
+{
+  std::string name;
+  Term lhs, rhs;
+  void validate() const
+  {
+    lhs.validate(); rhs.validate();
+    if (lhs.is_variable) throw std::invalid_argument("rewrite left side cannot be a variable");
+    auto available = lhs.variables();
+    for (const auto& variable : rhs.variables())
+      if (!available.contains(variable)) throw std::invalid_argument("unbound rewrite variable");
+  }
+};
+inline TermRule term_rule(std::string_view source)
+{
+  auto parsed = sexpr_rule(source);
+  TermRule result{parsed.name, term_from_sexpr(parsed.lhs), term_from_sexpr(parsed.rhs)};
+  result.validate();
+  return result;
+}
+enum class RewriteStrategy { Outermost, Innermost };
+enum class ReductionStop { NormalForm, StepLimit };
+struct TermRewriteStep
+{
+  Term term;
+  std::size_t rule_index;
+  std::vector<std::size_t> position;
+};
+struct TermReductionResult
+{
+  Term term;
+  std::size_t steps;
+  ReductionStop stop;
+  bool normal_form() const { return stop == ReductionStop::NormalForm; }
+};
+
+class TermRewriteSystem
+{
+  std::vector<TermRule> rules_;
+public:
+  void add_rule(TermRule rule) { rule.validate(); rules_.push_back(std::move(rule)); }
+  void add_rule(std::string_view source) { add_rule(term_rule(source)); }
+  const std::vector<TermRule>& rules() const { return rules_; }
+  std::optional<TermRewriteStep> rewrite_once(const Term& term, RewriteStrategy strategy = RewriteStrategy::Outermost) const
+  {
+    term.validate();
+    std::vector<std::size_t> position;
+    std::optional<TermRewriteStep> result;
+    auto at_root = [&](const Term& current) {
+      for (std::size_t index = 0; index < rules_.size(); ++index)
+        if (auto bindings = match_term(rules_[index].lhs, current))
+          {
+            auto replacement = substitute(rules_[index].rhs, *bindings);
+            result = TermRewriteStep{term.replaced(position, replacement), index, position};
+            return true;
+          }
+      return false;
+    };
+    std::function<bool(const Term&)> visit = [&](const Term& current) {
+      if (strategy == RewriteStrategy::Outermost && at_root(current)) return true;
+      for (std::size_t index = 0; index < current.arguments.size(); ++index)
+        {
+          position.push_back(index);
+          if (visit(current.arguments[index])) return true;
+          position.pop_back();
+        }
+      return strategy == RewriteStrategy::Innermost && at_root(current);
+    };
+    visit(term);
+    return result;
+  }
+  TermReductionResult normalize(Term term, std::size_t max_steps = 1000,
+                                RewriteStrategy strategy = RewriteStrategy::Outermost) const
+  {
+    std::size_t steps = 0;
+    while (auto next = rewrite_once(term, strategy))
+      {
+        if (steps == max_steps) return {std::move(term), steps, ReductionStop::StepLimit};
+        term = std::move(next->term); ++steps;
+      }
+    return {std::move(term), steps, ReductionStop::NormalForm};
+  }
+};
+
+struct TermGraphLabel
+{
+  std::string symbol;
+  bool is_variable = false;
+  bool operator==(const TermGraphLabel&) const = default;
+};
+struct GraphRewriteStep { GraphNodeId root, redex, replacement; std::size_t rule_index; };
+struct GraphReductionResult
+{
+  GraphNodeId root;
+  std::size_t steps;
+  ReductionStop stop;
+  bool normal_form() const { return stop == ReductionStop::NormalForm; }
+};
+
+class TermGraph
+{
+  DirectedGraph<TermGraphLabel, std::size_t> graph_;
+  using Bindings = std::unordered_map<std::string, GraphNodeId>;
+  static std::string node_key(const TermGraphLabel& label, const std::vector<GraphNodeId>& children)
+  {
+    std::string key = (label.is_variable ? "v" : "f") + std::to_string(label.symbol.size()) + ":" + label.symbol;
+    for (auto child : children) key += ":" + std::to_string(child);
+    return key;
+  }
+  bool equal_nodes(GraphNodeId left, GraphNodeId right) const
+  {
+    std::unordered_map<GraphNodeId, std::unordered_set<GraphNodeId>> seen;
+    std::vector<std::pair<GraphNodeId, GraphNodeId>> pending{{left, right}};
+    while (!pending.empty())
+      {
+        auto [first, second] = pending.back(); pending.pop_back();
+        if (first == second || !seen[first].insert(second).second) continue;
+        if (graph_.value(first) != graph_.value(second)) return false;
+        auto first_children = graph_.successors(first), second_children = graph_.successors(second);
+        if (first_children.size() != second_children.size()) return false;
+        for (std::size_t index = 0; index < first_children.size(); ++index)
+          pending.emplace_back(first_children[index], second_children[index]);
+      }
+    return true;
+  }
+  bool match(const Term& pattern, GraphNodeId id, Bindings& bindings) const
+  {
+    if (pattern.is_variable)
+      {
+        auto [entry, inserted] = bindings.emplace(pattern.symbol, id);
+        return inserted || equal_nodes(entry->second, id);
+      }
+    auto label = graph_.value(id);
+    auto children = graph_.successors(id);
+    if (label.is_variable || label.symbol != pattern.symbol || children.size() != pattern.arguments.size()) return false;
+    for (std::size_t index = 0; index < children.size(); ++index)
+      if (!match(pattern.arguments[index], children[index], bindings)) return false;
+    return true;
+  }
+  GraphNodeId instantiate(const Term& term, const Bindings& bindings)
+  {
+    if (term.is_variable) return bindings.at(term.symbol);
+    std::vector<GraphNodeId> children;
+    for (const auto& child : term.arguments) children.push_back(instantiate(child, bindings));
+    return add_node(term.symbol, children);
+  }
+  struct Candidate { GraphNodeId id; std::size_t rule; Bindings bindings; };
+  std::optional<Candidate> find(GraphNodeId root, const TermRewriteSystem& system, RewriteStrategy strategy) const
+  {
+    for (auto id : graph_.depth_first(root, strategy == RewriteStrategy::Innermost))
+      for (std::size_t index = 0; index < system.rules().size(); ++index)
+        {
+          Bindings bindings;
+          if (match(system.rules()[index].lhs, id, bindings)) return Candidate{id, index, std::move(bindings)};
+        }
+    return std::nullopt;
+  }
+  GraphRewriteStep apply(GraphNodeId root, const TermRewriteSystem& system, const Candidate& candidate)
+  {
+    auto replacement = instantiate(system.rules()[candidate.rule].rhs, candidate.bindings);
+    graph_.redirect(candidate.id, replacement);
+    graph_.remove_node(candidate.id);
+    return {root == candidate.id ? replacement : root, candidate.id, replacement, candidate.rule};
+  }
+public:
+  const DirectedGraph<TermGraphLabel, std::size_t>& graph() const { return graph_; }
+  GraphNodeId add_node(std::string symbol, const std::vector<GraphNodeId>& children = {})
+  {
+    for (auto child : children) graph_.value(child);
+    auto id = graph_.add_node({std::move(symbol), false});
+    for (std::size_t index = 0; index < children.size(); ++index) graph_.add_edge(id, children[index], index);
+    return id;
+  }
+  GraphNodeId add(const Term& term, bool share = true)
+  {
+    term.validate();
+    std::unordered_map<std::string, GraphNodeId> interned;
+    if (share)
+      for (auto id : graph_.nodes()) interned.emplace(node_key(graph_.value(id), graph_.successors(id)), id);
+    std::function<GraphNodeId(const Term&)> insert = [&](const Term& current) {
+      std::vector<GraphNodeId> children;
+      for (const auto& child : current.arguments) children.push_back(insert(child));
+      TermGraphLabel label{current.symbol, current.is_variable};
+      auto key = share ? node_key(label, children) : std::string{};
+      if (share)
+        if (auto found = interned.find(key); found != interned.end()) return found->second;
+      auto id = graph_.add_node(label);
+      for (std::size_t index = 0; index < children.size(); ++index) graph_.add_edge(id, children[index], index);
+      if (share) interned.emplace(std::move(key), id);
+      return id;
+    };
+    return insert(term);
+  }
+  GraphNodeId add(std::string_view source, bool share = true) { return add(parse_term(source), share); }
+  Term to_term(GraphNodeId root) const
+  {
+    auto label = graph_.value(root);
+    if (label.is_variable) return Term::variable(label.symbol);
+    std::vector<Term> arguments;
+    for (auto child : graph_.successors(root)) arguments.push_back(to_term(child));
+    return Term::function(label.symbol, std::move(arguments));
+  }
+  std::optional<GraphRewriteStep> rewrite_once(GraphNodeId root, const TermRewriteSystem& system,
+                                               RewriteStrategy strategy = RewriteStrategy::Outermost)
+  {
+    auto candidate = find(root, system, strategy);
+    if (!candidate) return std::nullopt;
+    return apply(root, system, *candidate);
+  }
+  GraphReductionResult reduce(GraphNodeId root, const TermRewriteSystem& system, std::size_t max_steps = 1000,
+                               RewriteStrategy strategy = RewriteStrategy::Outermost)
+  {
+    std::size_t steps = 0;
+    while (auto candidate = find(root, system, strategy))
+      {
+        if (steps == max_steps) return {root, steps, ReductionStop::StepLimit};
+        root = apply(root, system, *candidate).root; ++steps;
+      }
+    return {root, steps, ReductionStop::NormalForm};
+  }
+  void collect_garbage(const std::vector<GraphNodeId>& roots)
+  {
+    std::unordered_set<GraphNodeId> reachable;
+    for (auto root : roots)
+      { auto visited = graph_.depth_first(root); reachable.insert(visited.begin(), visited.end()); }
+    for (auto id : graph_.nodes()) if (!reachable.contains(id)) graph_.remove_node(id);
+  }
+  std::string to_dot(std::string_view name = "TermGraph") const
+  {
+    return graph_.to_dot([](const TermGraphLabel& label) { return label.is_variable ? "?" + label.symbol : label.symbol; },
+                         [](std::size_t index) { return std::to_string(index); }, name);
+  }
+};
 
 } // namespace dsl

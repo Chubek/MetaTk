@@ -48,6 +48,8 @@
  * derived from runtime ASTs or CTFE schemas. StaticRegex and BinaryStream use
  * byte semantics. Preprocessor supports macros/includes/conditionals and an
  * optional Lua bridge. CFG implements explicit productions and Earley parsing.
+ * DirectedGraph provides graph algorithms and DOT output. Term, TermRewriteSystem
+ * and TermGraph provide first-order terms, unification and bounded reduction.
  * See manual/ch30-language-facilities.md for examples and supported syntax.
  *
  * Run the embedded tests: ldc2 -unittest -main DSLtk.d -of=dsltk-test
@@ -82,6 +84,10 @@ struct Visitors {}
 struct StaticRegularExpressions {}
 struct Preprocessing {}
 struct ContextFreeGrammar {}
+struct Graphs {}
+struct Terms {}
+struct TermRewriting {}
+struct GraphReduction {}
 
 /// Compose features in the enclosing aggregate: mixin DSL!(Pipeline, AST).
 mixin template DSL(Features...)
@@ -1687,6 +1693,636 @@ struct EnumSet(E) if (integralEnum!E)
         foreach (key; EnumData!E.values)
             if (members[key]) { auto result = action(key); if (result) return result; }
         return 0;
+    }
+}
+
+alias GraphNodeId = size_t;
+alias GraphEdgeId = size_t;
+
+string dot_quote(string text)
+{
+    string result = "\"";
+    foreach (char character; text)
+        switch (character)
+        {
+            case '"': result ~= "\\\""; break;
+            case '\\': result ~= "\\\\"; break;
+            case '\n': result ~= "\\n"; break;
+            case '\r': result ~= "\\r"; break;
+            case '\t': result ~= '\t'; break;
+            default:
+                if (cast(ubyte) character < 32 || character == 127)
+                    throw new Exception("unsupported control character in DOT label");
+                result ~= character;
+        }
+    return result ~ '"';
+}
+
+class DirectedGraph(NodeValue = string, EdgeValue = string)
+{
+    struct Edge { GraphNodeId source, target; EdgeValue value; }
+    private struct Node
+    {
+        NodeValue value;
+        GraphEdgeId[] incoming, outgoing;
+        bool live;
+    }
+    private Node[] nodes_;
+    private Edge[] edges_;
+    private bool[] live_edges_;
+    private void require_node(GraphNodeId id) const
+    {
+        if (!contains(id)) throw new Exception("invalid graph node");
+    }
+    bool contains(GraphNodeId id) const { return id < nodes_.length && nodes_[id].live; }
+    bool contains_edge(GraphEdgeId id) const { return id < edges_.length && live_edges_[id]; }
+    GraphNodeId add_node(NodeValue value)
+    {
+        nodes_ ~= Node(value, null, null, true);
+        return nodes_.length - 1;
+    }
+    GraphEdgeId add_edge(GraphNodeId source, GraphNodeId target, EdgeValue value = EdgeValue.init)
+    {
+        require_node(source); require_node(target);
+        auto id = edges_.length;
+        edges_ ~= Edge(source, target, value);
+        live_edges_ ~= true;
+        nodes_[source].outgoing ~= id;
+        nodes_[target].incoming ~= id;
+        return id;
+    }
+    auto value(GraphNodeId id) const { require_node(id); return nodes_[id].value; }
+    void set_value(GraphNodeId id, NodeValue value) { require_node(id); nodes_[id].value = value; }
+    auto edge(GraphEdgeId id) const
+    {
+        if (!contains_edge(id)) throw new Exception("invalid graph edge");
+        return edges_[id];
+    }
+    GraphNodeId[] nodes() const
+    {
+        GraphNodeId[] result;
+        foreach (id; 0 .. nodes_.length) if (contains(id)) result ~= id;
+        return result;
+    }
+    GraphEdgeId[] edges() const
+    {
+        GraphEdgeId[] result;
+        foreach (id; 0 .. edges_.length) if (contains_edge(id)) result ~= id;
+        return result;
+    }
+    size_t node_count() const { return nodes().length; }
+    size_t edge_count() const { return edges().length; }
+    GraphEdgeId[] incoming(GraphNodeId id) const { require_node(id); return nodes_[id].incoming.dup; }
+    GraphEdgeId[] outgoing(GraphNodeId id) const { require_node(id); return nodes_[id].outgoing.dup; }
+    GraphNodeId[] successors(GraphNodeId id) const
+    {
+        GraphNodeId[] result;
+        foreach (link; outgoing(id)) result ~= edge(link).target;
+        return result;
+    }
+    GraphNodeId[] predecessors(GraphNodeId id) const
+    {
+        GraphNodeId[] result;
+        foreach (link; incoming(id)) result ~= edge(link).source;
+        return result;
+    }
+    void remove_edge(GraphEdgeId id)
+    {
+        import std.algorithm : remove;
+        auto link = edge(id);
+        nodes_[link.source].outgoing = nodes_[link.source].outgoing.remove!(value => value == id);
+        nodes_[link.target].incoming = nodes_[link.target].incoming.remove!(value => value == id);
+        live_edges_[id] = false;
+        edges_[id] = Edge.init;
+    }
+    void remove_node(GraphNodeId id)
+    {
+        require_node(id);
+        foreach (link; outgoing(id)) remove_edge(link);
+        foreach (link; incoming(id)) remove_edge(link);
+        nodes_[id] = Node.init;
+    }
+    void redirect(GraphNodeId from, GraphNodeId target)
+    {
+        require_node(from); require_node(target);
+        if (from == target) return;
+        foreach (link; incoming(from))
+        {
+            edges_[link].target = target;
+            nodes_[target].incoming ~= link;
+        }
+        nodes_[from].incoming = null;
+    }
+    GraphNodeId[] breadth_first(GraphNodeId root) const
+    {
+        require_node(root);
+        GraphNodeId[] result = [root];
+        bool[GraphNodeId] seen; seen[root] = true;
+        for (size_t index = 0; index < result.length; ++index)
+            foreach (child; successors(result[index]))
+                if (child !in seen) { seen[child] = true; result ~= child; }
+        return result;
+    }
+    GraphNodeId[] depth_first(GraphNodeId root, bool postorder = false) const
+    {
+        require_node(root);
+        GraphNodeId[] result;
+        struct Frame { GraphNodeId id; bool expanded; }
+        Frame[] pending = [Frame(root, false)];
+        bool[GraphNodeId] seen;
+        while (pending.length)
+        {
+            auto frame = pending[$ - 1]; pending.length--;
+            if (frame.expanded) { result ~= frame.id; continue; }
+            if (frame.id in seen) continue;
+            seen[frame.id] = true;
+            if (postorder) pending ~= Frame(frame.id, true); else result ~= frame.id;
+            auto children = successors(frame.id);
+            foreach_reverse (child; children) pending ~= Frame(child, false);
+        }
+        return result;
+    }
+    GraphNodeId[] topological_sort() const
+    {
+        auto degrees = new size_t[nodes_.length];
+        GraphNodeId[] result;
+        auto live = nodes();
+        foreach (id; live)
+        {
+            degrees[id] = nodes_[id].incoming.length;
+            if (!degrees[id]) result ~= id;
+        }
+        for (size_t index = 0; index < result.length; ++index)
+            foreach (child; successors(result[index]))
+                if (!--degrees[child]) result ~= child;
+        if (result.length != live.length) throw new Exception("graph contains a cycle");
+        return result;
+    }
+    Nullable!(GraphNodeId[]) shortest_path(GraphNodeId source, GraphNodeId target) const
+    {
+        import std.algorithm : reverse;
+        require_node(source); require_node(target);
+        GraphNodeId[] pending = [source];
+        GraphNodeId[GraphNodeId] parents; parents[source] = source;
+        for (size_t index = 0; index < pending.length; ++index)
+        {
+            auto id = pending[index];
+            if (id == target)
+            {
+                GraphNodeId[] path = [target];
+                while (path[$ - 1] != source) path ~= parents[path[$ - 1]];
+                reverse(path);
+                return Nullable!(GraphNodeId[])(path);
+            }
+            foreach (child; successors(id))
+                if (child !in parents) { parents[child] = id; pending ~= child; }
+        }
+        return Nullable!(GraphNodeId[]).init;
+    }
+    GraphNodeId[][] strongly_connected_components() const
+    {
+        bool[GraphNodeId] seen;
+        GraphNodeId[] order;
+        struct Frame { GraphNodeId id; bool expanded; }
+        foreach (root; nodes())
+        {
+            if (root in seen) continue;
+            Frame[] pending = [Frame(root, false)];
+            while (pending.length)
+            {
+                auto frame = pending[$ - 1]; pending.length--;
+                if (frame.expanded) { order ~= frame.id; continue; }
+                if (frame.id in seen) continue;
+                seen[frame.id] = true;
+                pending ~= Frame(frame.id, true);
+                auto children = successors(frame.id);
+                foreach_reverse (child; children) pending ~= Frame(child, false);
+            }
+        }
+        seen = null;
+        GraphNodeId[][] result;
+        foreach_reverse (root; order)
+        {
+            if (root in seen) continue;
+            seen[root] = true;
+            GraphNodeId[] component = [root];
+            for (size_t index = 0; index < component.length; ++index)
+                foreach (parent; predecessors(component[index]))
+                    if (parent !in seen) { seen[parent] = true; component ~= parent; }
+            result ~= component;
+        }
+        return result;
+    }
+    string to_dot(NodeLabel, EdgeLabel)(NodeLabel node_label, EdgeLabel edge_label, string name = "G") const
+    {
+        string result = "digraph " ~ dot_quote(name) ~ " {\n";
+        foreach (id; nodes())
+            result ~= "  n" ~ id.to!string ~ " [label=" ~ dot_quote(node_label(value(id))) ~ "];\n";
+        foreach (id; edges())
+        {
+            auto link = edge(id);
+            result ~= "  n" ~ link.source.to!string ~ " -> n" ~ link.target.to!string
+                ~ " [label=" ~ dot_quote(edge_label(link.value)) ~ "];\n";
+        }
+        return result ~ "}\n";
+    }
+    string to_dot(string name = "G") const
+    { return to_dot((const NodeValue value) => value.to!string,
+                    (const EdgeValue value) => value.to!string, name); }
+}
+
+struct Term
+{
+    string symbol;
+    Term[] arguments;
+    bool is_variable;
+    this(this) { arguments = arguments.dup; }
+    static Term variable(string name)
+    {
+        import std.algorithm : canFind;
+        if (!name.length) throw new Exception("invalid term variable name");
+        foreach (char character; name)
+            if (cast(ubyte) character <= 32 || character == 127 || "()\";\\?".canFind(character))
+                throw new Exception("invalid term variable name");
+        return Term(name, null, true);
+    }
+    static Term function_(string symbol, Term[] arguments = null)
+    { return Term(symbol, arguments.dup, false); }
+    Term clone() const
+    {
+        Term[] children;
+        foreach (ref child; arguments) children ~= child.clone();
+        return Term(symbol, children, is_variable);
+    }
+    bool opEquals(const Term other) const
+    { return symbol == other.symbol && is_variable == other.is_variable && arguments == other.arguments; }
+    void validate() const
+    {
+        if (is_variable)
+        {
+            variable(symbol);
+            if (arguments.length) throw new Exception("variable cannot have arguments");
+        }
+        foreach (ref child; arguments) child.validate();
+    }
+    bool[string] variables() const
+    {
+        bool[string] result;
+        if (is_variable) result[symbol] = true;
+        foreach (ref child; arguments) foreach (name, present; child.variables()) result[name] = present;
+        return result;
+    }
+    bool ground() const { return variables().length == 0; }
+    size_t size() const
+    {
+        size_t result = 1;
+        foreach (ref child; arguments) result += child.size();
+        return result;
+    }
+    Term at(const(size_t)[] position) const
+    {
+        if (!position.length) return clone();
+        if (position[0] >= arguments.length) throw new Exception("invalid term position");
+        return arguments[position[0]].at(position[1 .. $]);
+    }
+    Term replaced(const(size_t)[] position, const Term replacement) const
+    {
+        if (!position.length) return replacement.clone();
+        if (position[0] >= arguments.length) throw new Exception("invalid term position");
+        auto result = clone();
+        result.arguments[position[0]] = arguments[position[0]].replaced(position[1 .. $], replacement);
+        return result;
+    }
+    SExpr sexpr() const
+    {
+        validate();
+        if (is_variable) return SExpr.atom("?" ~ symbol);
+        auto head = SExpr.atom(symbol, symbol.length && symbol[0] == '?');
+        if (!arguments.length) return head;
+        SExpr[] items = [head];
+        foreach (ref child; arguments) items ~= child.sexpr();
+        return SExpr.list(items);
+    }
+    string dump() const { return sexpr().dump(); }
+}
+
+Term term_from_sexpr(SExpr expression)
+{
+    if (expression.is_atom)
+    {
+        if (!expression.quoted && expression.text.length && expression.text[0] == '?')
+            return Term.variable(expression.text[1 .. $]);
+        return Term.function_(expression.text);
+    }
+    if (!expression.items.length || !expression.items[0].is_atom
+        || (!expression.items[0].quoted && expression.items[0].text.length && expression.items[0].text[0] == '?'))
+        throw new Exception("term requires a literal function symbol");
+    Term[] arguments;
+    foreach (child; expression.items[1 .. $]) arguments ~= term_from_sexpr(child);
+    return Term.function_(expression.items[0].text, arguments);
+}
+Term parse_term(string source) { return term_from_sexpr(parse_sexpr(source)); }
+alias TermSubstitution = Term[string];
+
+Nullable!TermSubstitution match_term(const Term pattern, const Term subject)
+{
+    pattern.validate(); subject.validate();
+    TermSubstitution bindings;
+    bool match(const Term current, const Term value)
+    {
+        if (current.is_variable)
+        {
+            if (auto found = current.symbol in bindings) return *found == value;
+            bindings[current.symbol] = value.clone();
+            return true;
+        }
+        if (value.is_variable || current.symbol != value.symbol || current.arguments.length != value.arguments.length)
+            return false;
+        foreach (index; 0 .. current.arguments.length)
+            if (!match(current.arguments[index], value.arguments[index])) return false;
+        return true;
+    }
+    if (!match(pattern, subject)) return Nullable!TermSubstitution.init;
+    return Nullable!TermSubstitution(bindings);
+}
+
+Term substitute(const Term term, const TermSubstitution bindings)
+{
+    if (term.is_variable)
+    {
+        if (auto found = term.symbol in bindings) return found.clone();
+        return term.clone();
+    }
+    auto result = term.clone();
+    foreach (ref child; result.arguments) child = substitute(child, bindings);
+    return result;
+}
+
+Nullable!TermSubstitution unify_terms(Term left, Term right)
+{
+    left.validate(); right.validate();
+    TermSubstitution bindings;
+    struct Equation { Term first, second; }
+    Equation[] pending = [Equation(left, right)];
+    while (pending.length)
+    {
+        auto equation = pending[$ - 1]; pending.length--;
+        auto first = substitute(equation.first, bindings), second = substitute(equation.second, bindings);
+        if (first == second) continue;
+        if (!first.is_variable && second.is_variable)
+        { auto temporary = first; first = second; second = temporary; }
+        if (first.is_variable)
+        {
+            if (first.symbol in second.variables()) return Nullable!TermSubstitution.init;
+            TermSubstitution binding; binding[first.symbol] = second;
+            foreach (ref value; bindings) value = substitute(value, binding);
+            bindings[first.symbol] = second;
+        }
+        else
+        {
+            if (first.symbol != second.symbol || first.arguments.length != second.arguments.length)
+                return Nullable!TermSubstitution.init;
+            foreach (index; 0 .. first.arguments.length)
+                pending ~= Equation(first.arguments[index], second.arguments[index]);
+        }
+    }
+    return Nullable!TermSubstitution(bindings);
+}
+
+struct TermRule
+{
+    string name;
+    Term lhs, rhs;
+    void validate() const
+    {
+        lhs.validate(); rhs.validate();
+        if (lhs.is_variable) throw new Exception("rewrite left side cannot be a variable");
+        auto available = lhs.variables();
+        foreach (variable, present; rhs.variables())
+            if (variable !in available) throw new Exception("unbound rewrite variable");
+    }
+}
+TermRule term_rule(string source)
+{
+    auto parsed = sexpr_rule(source);
+    auto result = TermRule(parsed.name, term_from_sexpr(parsed.lhs), term_from_sexpr(parsed.rhs));
+    result.validate();
+    return result;
+}
+enum RewriteStrategy { Outermost, Innermost }
+enum ReductionStop { NormalForm, StepLimit }
+struct TermRewriteStep { Term term; size_t rule_index; size_t[] position; }
+struct TermReductionResult
+{
+    Term term;
+    size_t steps;
+    ReductionStop stop;
+    bool normal_form() const { return stop == ReductionStop.NormalForm; }
+}
+
+class TermRewriteSystem
+{
+    private TermRule[] rules_;
+    void add_rule(TermRule rule) { rule.validate(); rules_ ~= rule; }
+    void add_rule(string source) { add_rule(term_rule(source)); }
+    const(TermRule)[] rules() const { return rules_; }
+    Nullable!TermRewriteStep rewrite_once(const Term term, RewriteStrategy strategy = RewriteStrategy.Outermost) const
+    {
+        term.validate();
+        size_t[] position;
+        Nullable!TermRewriteStep result;
+        bool at_root(const Term current)
+        {
+            foreach (index, ref rule; rules_)
+            {
+                auto bindings = match_term(rule.lhs, current);
+                if (!bindings.isNull)
+                {
+                    auto replacement = substitute(rule.rhs, bindings.get);
+                    result = TermRewriteStep(term.replaced(position, replacement), index, position.dup);
+                    return true;
+                }
+            }
+            return false;
+        }
+        bool visit(const Term current)
+        {
+            if (strategy == RewriteStrategy.Outermost && at_root(current)) return true;
+            foreach (index; 0 .. current.arguments.length)
+            {
+                position ~= index;
+                if (visit(current.arguments[index])) return true;
+                position.length--;
+            }
+            return strategy == RewriteStrategy.Innermost && at_root(current);
+        }
+        visit(term);
+        return result;
+    }
+    TermReductionResult normalize(Term term, size_t max_steps = 1000,
+                                  RewriteStrategy strategy = RewriteStrategy.Outermost) const
+    {
+        size_t steps;
+        for (;;)
+        {
+            auto next = rewrite_once(term, strategy);
+            if (next.isNull) return TermReductionResult(term, steps, ReductionStop.NormalForm);
+            if (steps == max_steps) return TermReductionResult(term, steps, ReductionStop.StepLimit);
+            term = next.get.term; ++steps;
+        }
+    }
+}
+
+struct TermGraphLabel { string symbol; bool is_variable; }
+struct GraphRewriteStep { GraphNodeId root, redex, replacement; size_t rule_index; }
+struct GraphReductionResult
+{
+    GraphNodeId root;
+    size_t steps;
+    ReductionStop stop;
+    bool normal_form() const { return stop == ReductionStop.NormalForm; }
+}
+
+class TermGraph
+{
+    private DirectedGraph!(TermGraphLabel, size_t) graph_;
+    private alias Bindings = GraphNodeId[string];
+    private static string node_key(const TermGraphLabel label, const(GraphNodeId)[] children)
+    {
+        string key = (label.is_variable ? "v" : "f") ~ label.symbol.length.to!string ~ ":" ~ label.symbol;
+        foreach (child; children) key ~= ":" ~ child.to!string;
+        return key;
+    }
+    this() { graph_ = new DirectedGraph!(TermGraphLabel, size_t); }
+    private bool equal_nodes(GraphNodeId left, GraphNodeId right) const
+    {
+        bool[GraphNodeId][GraphNodeId] seen;
+        struct Pair { GraphNodeId first, second; }
+        Pair[] pending = [Pair(left, right)];
+        while (pending.length)
+        {
+            auto pair = pending[$ - 1]; pending.length--;
+            if (pair.first == pair.second) continue;
+            if (auto row = pair.first in seen) if (pair.second in *row) continue;
+            seen[pair.first][pair.second] = true;
+            if (graph_.value(pair.first) != graph_.value(pair.second)) return false;
+            auto first_children = graph_.successors(pair.first), second_children = graph_.successors(pair.second);
+            if (first_children.length != second_children.length) return false;
+            foreach (index; 0 .. first_children.length) pending ~= Pair(first_children[index], second_children[index]);
+        }
+        return true;
+    }
+    private bool match(const Term pattern, GraphNodeId id, ref Bindings bindings) const
+    {
+        if (pattern.is_variable)
+        {
+            if (auto found = pattern.symbol in bindings) return equal_nodes(*found, id);
+            bindings[pattern.symbol] = id;
+            return true;
+        }
+        auto label = graph_.value(id);
+        auto children = graph_.successors(id);
+        if (label.is_variable || label.symbol != pattern.symbol || children.length != pattern.arguments.length) return false;
+        foreach (index; 0 .. children.length)
+            if (!match(pattern.arguments[index], children[index], bindings)) return false;
+        return true;
+    }
+    private GraphNodeId instantiate(const Term term, const Bindings bindings)
+    {
+        if (term.is_variable) return bindings[term.symbol];
+        GraphNodeId[] children;
+        foreach (ref child; term.arguments) children ~= instantiate(child, bindings);
+        return add_node(term.symbol, children);
+    }
+    private struct Candidate { GraphNodeId id; size_t rule; Bindings bindings; }
+    private Nullable!Candidate find(GraphNodeId root, const TermRewriteSystem system, RewriteStrategy strategy) const
+    {
+        foreach (id; graph_.depth_first(root, strategy == RewriteStrategy.Innermost))
+            foreach (index, ref rule; system.rules())
+            {
+                Bindings bindings;
+                if (match(rule.lhs, id, bindings)) return Nullable!Candidate(Candidate(id, index, bindings));
+            }
+        return Nullable!Candidate.init;
+    }
+    private GraphRewriteStep apply(GraphNodeId root, const TermRewriteSystem system, Candidate candidate)
+    {
+        auto replacement = instantiate(system.rules()[candidate.rule].rhs, candidate.bindings);
+        graph_.redirect(candidate.id, replacement);
+        graph_.remove_node(candidate.id);
+        return GraphRewriteStep(root == candidate.id ? replacement : root, candidate.id, replacement, candidate.rule);
+    }
+    auto graph() const { return graph_; }
+    GraphNodeId add_node(string symbol, const(GraphNodeId)[] children = null)
+    {
+        foreach (child; children) graph_.value(child);
+        auto id = graph_.add_node(TermGraphLabel(symbol, false));
+        foreach (index, child; children) graph_.add_edge(id, child, index);
+        return id;
+    }
+    GraphNodeId add(const Term term, bool share = true)
+    {
+        term.validate();
+        GraphNodeId[string] interned;
+        if (share)
+            foreach (id; graph_.nodes())
+            {
+                auto key = node_key(graph_.value(id), graph_.successors(id));
+                if (key !in interned) interned[key] = id;
+            }
+        GraphNodeId insert(const Term current)
+        {
+            GraphNodeId[] children;
+            foreach (ref child; current.arguments) children ~= insert(child);
+            auto label = TermGraphLabel(current.symbol, current.is_variable);
+            auto key = share ? node_key(label, children) : "";
+            if (share)
+                if (auto found = key in interned) return *found;
+            auto id = graph_.add_node(label);
+            foreach (index, child; children) graph_.add_edge(id, child, index);
+            if (share) interned[key] = id;
+            return id;
+        }
+        return insert(term);
+    }
+    GraphNodeId add(string source, bool share = true) { return add(parse_term(source), share); }
+    Term to_term(GraphNodeId root) const
+    {
+        auto label = graph_.value(root);
+        if (label.is_variable) return Term.variable(label.symbol);
+        Term[] arguments;
+        foreach (child; graph_.successors(root)) arguments ~= to_term(child);
+        return Term.function_(label.symbol, arguments);
+    }
+    Nullable!GraphRewriteStep rewrite_once(GraphNodeId root, const TermRewriteSystem system,
+                                           RewriteStrategy strategy = RewriteStrategy.Outermost)
+    {
+        auto candidate = find(root, system, strategy);
+        if (candidate.isNull) return Nullable!GraphRewriteStep.init;
+        return Nullable!GraphRewriteStep(apply(root, system, candidate.get));
+    }
+    GraphReductionResult reduce(GraphNodeId root, const TermRewriteSystem system, size_t max_steps = 1000,
+                                 RewriteStrategy strategy = RewriteStrategy.Outermost)
+    {
+        size_t steps;
+        for (;;)
+        {
+            auto candidate = find(root, system, strategy);
+            if (candidate.isNull) return GraphReductionResult(root, steps, ReductionStop.NormalForm);
+            if (steps == max_steps) return GraphReductionResult(root, steps, ReductionStop.StepLimit);
+            root = apply(root, system, candidate.get).root; ++steps;
+        }
+    }
+    void collect_garbage(const(GraphNodeId)[] roots)
+    {
+        bool[GraphNodeId] reachable;
+        foreach (root; roots) foreach (id; graph_.depth_first(root)) reachable[id] = true;
+        foreach (id; graph_.nodes()) if (id !in reachable) graph_.remove_node(id);
+    }
+    string to_dot(string name = "TermGraph") const
+    {
+        return graph_.to_dot((const TermGraphLabel label) => label.is_variable ? "?" ~ label.symbol : label.symbol,
+                             (size_t index) => index.to!string, name);
     }
 }
 

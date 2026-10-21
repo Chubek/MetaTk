@@ -29,6 +29,33 @@ add_executable(dsltk_language_tests test_language_facilities.cpp)
 target_link_libraries(dsltk_language_tests PRIVATE DSLtk)
 add_test(NAME dsltk_language_facilities COMMAND dsltk_language_tests)
 
+add_executable(dsltk_graph_term_tests test_graph_terms.cpp)
+target_link_libraries(dsltk_graph_term_tests PRIVATE DSLtk)
+add_test(NAME dsltk_graph_terms COMMAND dsltk_graph_term_tests)
+
+option(DSLtk_TEST_D "Test the D module when a D compiler is available" ON)
+if(DSLtk_TEST_D)
+    find_program(DSLtk_TEST_D_COMPILER NAMES ldc2 dmd gdc)
+    if(DSLtk_TEST_D_COMPILER)
+        set(_dsltk_d_test ${CMAKE_CURRENT_BINARY_DIR}/dsltk_d_tests${CMAKE_EXECUTABLE_SUFFIX})
+        if(DSLtk_TEST_D_COMPILER MATCHES "gdc")
+            set(_dsltk_d_test_flags -funittest -fmain -o ${_dsltk_d_test})
+        else()
+            set(_dsltk_d_test_flags -unittest -main -of=${_dsltk_d_test})
+        endif()
+        add_custom_command(
+            OUTPUT ${_dsltk_d_test}
+            COMMAND ${DSLtk_TEST_D_COMPILER} ${_dsltk_d_test_flags}
+                    -I${CMAKE_CURRENT_SOURCE_DIR}/..
+                    ${CMAKE_CURRENT_SOURCE_DIR}/../DSLtk.d
+                    ${CMAKE_CURRENT_SOURCE_DIR}/test_graph_terms.d
+            DEPENDS ../DSLtk.d test_graph_terms.d
+            VERBATIM)
+        add_custom_target(dsltk_d_test_build ALL DEPENDS ${_dsltk_d_test})
+        add_test(NAME dsltk_d_module COMMAND ${_dsltk_d_test})
+    endif()
+endif()
+
 option(DSLtk_TEST_LUA "Test the optional Lua preprocessing bridge" OFF)
 if(DSLtk_TEST_LUA)
     find_package(Lua 5.3 REQUIRED)

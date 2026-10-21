@@ -4,7 +4,8 @@ These facilities are in `DSLtk.hpp` (`dsl::`) and `DSLtk.d` (`import DSLtk`).
 They use only the standard library unless the optional Lua bridge is enabled.
 Their feature tags are `SExpressions`, `EqualitySaturation`, `Serialization`,
 `AbstractIO`, `Visitors`, `StaticRegularExpressions`, `Preprocessing`, and
-`ContextFreeGrammar`. They can also be used directly, without a DSL base/mixin.
+`ContextFreeGrammar`, `Graphs`, `Terms`, `TermRewriting`, and `GraphReduction`.
+They can also be used directly, without a DSL base/mixin.
 
 This chapter is the shared overview. Continue with:
 
@@ -13,7 +14,8 @@ This chapter is the shared overview. Continue with:
 * [Chapter 33: codecs, abstract I/O, static regexes and binary streams](ch33-codecs-io-and-binary-streams.md);
 * [Chapter 34: AST-schema-derived visitors](ch34-ast-derived-visitors.md);
 * [Chapter 35: preprocessing and optional native Lua](ch35-preprocessor-and-lua.md);
-* [Chapter 36: explicit CFGs and Earley parsing](ch36-context-free-grammars.md).
+* [Chapter 36: explicit CFGs and Earley parsing](ch36-context-free-grammars.md);
+* [Chapter 37: directed graphs, terms, rewriting and graph reduction](ch37-graphs-terms-and-reduction.md).
 
 The [development progression record](progression.md) ties the implementation
 milestones, packaging, examples and verification together.
@@ -92,6 +94,30 @@ The result reports `Saturated`, `IterationLimit`, `NodeLimit`, or `MatchLimit`.
 A bounded run retains valid partial results. `extract` selects a minimum-node
 finite expression even when the graph contains cycles. `extract_ast` converts
 that representative back to the runtime AST.
+
+## Graphs, terms and reduction
+
+`DirectedGraph` provides stable node and edge handles, ordered adjacency,
+mutation, traversal, shortest paths, topological sorting, strongly connected
+components, and DOT output. It supports cycles, parallel edges, and isolated
+nodes. Label callbacks adapt arbitrary payloads for DOT rendering.
+
+`Term` represents first-order function applications and variables, with
+S-expression parsing, structural matching, simultaneous substitution, and
+occurs-checked unification. `TermRewriteSystem` applies validated rules in
+insertion order using outermost or innermost traversal. Normalization reports
+whether it reached normal form or exhausted its step budget.
+
+`TermGraph` represents finite acyclic terms with shared subexpressions.
+Reduction redirects every incoming edge of a matched node to its replacement,
+so a shared redex is reduced once for all its occurrences. Callers retain the
+returned root and explicitly collect unreachable nodes. The general graph
+supports cycles; term graph reduction requires acyclic terms. Step budgets
+limit applications, not memory or recursion depth.
+
+See [Chapter 37](ch37-graphs-terms-and-reduction.md) for both language APIs,
+examples, DOT rendering, root-handle rules, and the distinction between tree
+rewriting and shared graph reduction.
 
 ## Abstract serialization and deserialization
 
