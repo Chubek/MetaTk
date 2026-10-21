@@ -129,7 +129,8 @@ add_library(metaarch
   ToJSON.c
   ToXML.c
   ToSExpr.c
-  ArchDB.c)
+  ArchDB.c
+  ArchBFD.c)
 add_library(MetaArch::metaarch ALIAS metaarch)
 target_include_directories(metaarch PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
@@ -147,7 +148,7 @@ endif()
 set_target_properties(metaarch PROPERTIES
   VERSION ${PROJECT_VERSION}
   SOVERSION ${PROJECT_VERSION_MAJOR}
-  PUBLIC_HEADER "ArchDB.h;DSymspec.h;DsymspecIR.h;MetaArchABI.h;MetaArchAPI.hpp")
+  PUBLIC_HEADER "ArchDB.h;ArchBFD.h;DSymspec.h;DsymspecIR.h;MetaArchABI.h;MetaArchAPI.hpp")
 set_target_properties(metaarch PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
 # Header-only C++ API; independent of the optional DSL implementation.
@@ -179,6 +180,9 @@ if(ARCHDB_BUILD_TOOLS)
   add_executable(archdb tools/archdb.c)
   target_compile_definitions(archdb PRIVATE _POSIX_C_SOURCE=200809L)
   target_link_libraries(archdb PRIVATE metaarch)
+  add_executable(archbfd tools/archbfd.c)
+  target_compile_definitions(archbfd PRIVATE _POSIX_C_SOURCE=200809L)
+  target_link_libraries(archbfd PRIVATE metaarch)
   if(ARCHDB_BUILD_DSL)
     add_executable(metaarch_tool tools/metaarch.cpp)
     set_target_properties(metaarch_tool PROPERTIES OUTPUT_NAME metaarch)
@@ -267,8 +271,10 @@ install(TARGETS metaarch
   PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/metaarch)
 if(ARCHDB_BUILD_TOOLS)
   install(TARGETS archdb RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+  install(TARGETS archbfd RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 install(DIRECTORY ArchDB DESTINATION ${CMAKE_INSTALL_DATADIR}/metaarch)
+install(DIRECTORY ArchBFD DESTINATION ${CMAKE_INSTALL_DATADIR}/metaarch)
 install(FILES ArchDBCatalogue.yaml DESTINATION ${CMAKE_INSTALL_DATADIR}/metaarch)
 install(FILES bindings/d/metaarch.di DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/d)
 install(DIRECTORY bindings/go/ DESTINATION ${CMAKE_INSTALL_DATADIR}/metaarch/bindings/go

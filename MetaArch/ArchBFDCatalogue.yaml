@@ -1,0 +1,14 @@
+# ArchBFDCatalogue.yaml — index of object-format descriptions.
+# Regenerate with: archbfd catalogue ArchBFD -o ArchBFDCatalogue.yaml
+schema: 1
+root: ArchBFD
+formats:
+- {name: COFF, file: COFF.bfd.yaml, format: coff, byte_order: little, arch: i386, target_vector: coff-i386}
+- {name: ELF32, file: ELF32.bfd.yaml, format: elf, byte_order: little, arch: i386, target_vector: elf32-i386}
+- {name: ELF64, file: ELF64.bfd.yaml, format: elf, byte_order: little, arch: x86-64, target_vector: elf64-x86-64}
+- {name: MachO, file: MachO.bfd.yaml, format: macho, byte_order: little, arch: i386, target_vector: mach-o}
+- {name: PE, file: PE.bfd.yaml, format: pe, byte_order: little, arch: i386, target_vector: pei-i386}
+- {name: WAT, file: WAT.bfd.yaml, format: wasm, byte_order: little, arch: wasm, target_vector: wasm32}
+- {name: hppa, file: hppa.bfd.yaml, format: elf, byte_order: big, arch: hppa, target_vector: elf32-hppa}
+- {name: irix, file: irix.bfd.yaml, format: ecoff, byte_order: big, arch: mips, target_vector: ecoff-bigmips}
+- {name: m68k, file: m68k.bfd.yaml, format: elf, byte_order: big, arch: m68k, target_vector: elf32-m68k}
