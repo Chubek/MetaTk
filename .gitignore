@@ -250,3 +250,5 @@ markdown
 AGENTS.md
 build/
 build-*/
+
+*.bak
