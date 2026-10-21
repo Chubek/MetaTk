@@ -4,6 +4,42 @@ All notable changes are documented here, following Keep a Changelog.
 
 ## [Unreleased]
 
+### Added — ArchBFD object-format catalogue
+- `ArchBFD.h` / `ArchBFD.c`: a second catalogue next to `ArchDB`, describing the
+  object formats BFD (binutils/bfd) implements — the container layouts, the
+  numeric constants and the relocation ("howto") tables.
+- `ArchBFD/*.bfd.yaml`: documents for ELF64, ELF32, the HP PA-RISC and m68k
+  ELF emulations, COFF, PE, Mach-O, IRIX/ECOFF and WebAssembly, with the
+  binutils files they were derived from recorded in every document.
+- `ArchBFD/schema/MetaBFD.schema.json`: the document schema (draft 2020-12).
+- `ArchBFDCatalogue.yaml`: the catalogue index, regenerated with
+  `archbfd catalogue ArchBFD --root ArchBFD -o ArchBFDCatalogue.yaml`.
+- `tools/extract_bfd.py`: generates the documents from the binutils checkout in
+  `binutils/` (2.22) by parsing the byte layouts in `include/elf/external.h`,
+  `include/coff/*.h` and `include/mach-o/external.h` and the relocation tables
+  in `bfd/elf64-x86-64.c`, `bfd/elf32-i386.c`, `bfd/elf32-m68k.c`,
+  `bfd/elf-hppa.h`, `bfd/coff-i386.c` and `bfd/coff-mips.c`.  The output is
+  deterministic; `--check` fails when the committed documents are out of date.
+- `tools/archbfd.c`: the `archbfd` tool — `validate`, `convert`, `list`,
+  `catalogue`, `info`, `relocs`, `records` and `object`.
+- Object reader: `archbfd_object_open()` reads ELF, COFF and PE objects using
+  the description (record layouts, constant groups and relocation table), and
+  reports the sections, symbols and relocations it found.
+- Container inheritance: an emulation document may inherit the records and
+  constants of its container document (`container: ELF32`); the catalogue
+  resolves the reference.
+- Tests: `tests/test_archbfd.c` (round trips through the four formats, the
+  binutils facts, the diagnostics, the object reader and the catalogue),
+  `tests/check_bfd_schema.py` (schema validation) and `tests/check_bfd_data.py`
+  (cross-check against an object produced by the system compiler), all wired
+  into CTest.
+- `manual/bfd.md`: the object-format guide.
+
+### Fixed — packed field encodings
+- An encoding is read as `(value >> shift) & mask`; the mask describes the
+  width of the extracted part.  The first version masked before shifting, which
+  made the symbol index of an ELF64 relocation always read as zero.
+
 ### Added — Python bindings
 - `bindings/python`: Python 3.9+ nanobind extension over ABI v1, built using a
   configurable local checkout or installed nanobind; static/shared core support.

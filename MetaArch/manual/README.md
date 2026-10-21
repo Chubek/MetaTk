@@ -4,6 +4,8 @@ MetaArch is a C11 architecture-specification library, catalogue and encoding
 toolkit. It validates schema-1 DomSymAsCC specs, converts four document formats,
 and executes declared encoder programs. An optional C++20 layer adds a DSL and
 small assembler. Python uses a compiled nanobind extension over the same core.
+The `ArchBFD` catalogue describes the object formats (ELF, COFF, PE, Mach-O,
+ECOFF, WebAssembly) those specifications are packed into.
 
 This manual describes the **implemented project**, not the larger development
 brief in `AGENTS.md`. Planned features are not presented as working commands.
@@ -16,12 +18,13 @@ Commands below run from the MetaArch repository root unless stated otherwise.
 3. [Specification model and serialization formats](specifications.md)
 4. [Command-line tools](cli.md)
 5. [Encoder language, checked operands and relocations](encoding.md)
-6. [C, C++, D and Go APIs](native-apis.md)
-7. [Python bindings](python.md) — build, examples and API reference
-8. [DSL and assembler](dsl.md)
-9. [Adding architectures and maintaining the database](contributing.md)
-10. [Testing, troubleshooting and current limitations](testing.md)
-11. [Nanobind change verification](verification.md)
+6. [BFD object-format descriptions](bfd.md)
+7. [C, C++, D and Go APIs](native-apis.md)
+8. [Python bindings](python.md) — build, examples and API reference
+9. [DSL and assembler](dsl.md)
+10. [Adding architectures and maintaining the database](contributing.md)
+11. [Testing, troubleshooting and current limitations](testing.md)
+12. [Nanobind change verification](verification.md)
 
 ## Start here
 

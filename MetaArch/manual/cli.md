@@ -44,6 +44,39 @@ replacing the committed catalogue. There is no `--check` implementation. Lookup
 supports catalogue name, architecture and subarchitecture, not general triples
 or a configurable case-insensitive alias database.
 
+## `archbfd` (object-format frontend)
+
+```text
+archbfd validate [--strict] [--lint] [-i FMT] FILE...
+archbfd convert -f FMT [-o OUT] [-i FMT] [--compact] FILE
+archbfd list [CATALOGUE|DIR]
+archbfd catalogue DIR [-o OUT] [-f FMT] [--root ROOT]
+archbfd info [-i FMT] FILE
+archbfd relocs [-i FMT] FILE [NAME]
+archbfd records [-i FMT] FILE [NAME]
+archbfd object [--catalogue FILE] [-f FORMAT] OBJECT
+```
+
+`archbfd` works on the `ArchBFD` catalogue: the object formats that BFD
+implements. `validate` checks a document against the MetaBFD schema rules,
+`convert` rewrites it in any of the four formats, `info`/`relocs`/`records`
+print the description, and `object` reads an object file with the description
+that matches it.
+
+```sh
+build/archbfd validate ArchBFD/*.bfd.yaml
+build/archbfd list ArchBFDCatalogue.yaml
+build/archbfd relocs ArchBFD/ELF64.bfd.yaml R_X86_64_PC32
+build/archbfd records ArchBFD/ELF64.bfd.yaml ehdr
+build/archbfd object build/archdb
+```
+
+`object` picks the description whose magic matches the file and that can read
+it; `-f` forces one. The reader understands ELF, COFF and PE objects today.
+Exit codes are the same as `archdb`: 0 success, 1 invalid input, 2 usage.
+
+See [the object-format guide](bfd.md) for the document format and the API.
+
 ## `metaarch` (optional C++20 frontend)
 
 ```text

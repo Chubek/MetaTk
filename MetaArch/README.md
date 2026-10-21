@@ -3,6 +3,12 @@
 C11 library + `archdb` tool for the DomSymAsCC architecture specifications in
 `ArchDB/*.dsymspec.yaml` (schema: `ArchDB/schema/dsymspec.schema.json`).
 
+The companion `ArchBFD` catalogue describes the **object formats** those
+specifications are packed into — ELF, COFF, PE, Mach-O, ECOFF and
+WebAssembly — with the byte layouts, constants and relocation tables taken
+from `binutils/bfd`. `archbfd` is its command-line front end; see
+[the object-format guide](manual/bfd.md).
+
 See the [project manual](manual/README.md) for build instructions, architecture,
 specifications, CLI, APIs, encoding, maintenance and known limitations.
 
@@ -28,14 +34,19 @@ exposing internal struct layouts.
 | `DsymspecIR.h` | Shared IRs: arena, buffer, diagnostics, the format-neutral **document tree** (`DsymNode`), codec entry points, and the **encoder program IR** (`DsymProgram`) |
 | `DSymspec.h` | Typed, validated model of a spec (`DsymSpec`, `DsymRegister`, `DsymForm`, …), load / write / lookup / encode API |
 | `ArchDB.h` | Catalogue of specs (`ArchDBCatalogue.yaml` or a directory), lazy loading |
+| `ArchBFD.h` | Catalogue of BFD object-format descriptions (`ArchBFDCatalogue.yaml`), the description model and the object reader |
 | `Dsymspec.c` | Infrastructure, descriptor-driven schema binder (tree ⇄ struct), cross-reference resolution, encoder compiler + VM |
 | `ToYAML.c` | YAML codec — **libyaml** event parser/emitter, YAML 1.2 core-schema resolution |
 | `ToJSON.c` | JSON codec — **yyjson** |
 | `ToXML.c` | XML codec — **libxml2** (`xmlTextWriter` + DOM), W3C XPath 3.1 `json-to-xml` vocabulary |
 | `ToSExpr.c` | S-expression codec — built-in reader / pretty printer |
 | `ArchDB.c` | Catalogue implementation |
+| `ArchBFD.c` | Object-format binder, catalogue and the description-driven object reader |
 | `tools/archdb.c` | CLI |
+| `tools/archbfd.c` | Object-format CLI |
+| `tools/extract_bfd.py` | Generates `ArchBFD/*.bfd.yaml` from the binutils checkout |
 | `tests/test_archdb.c` | Round-trip, encoding, diagnostics and catalogue tests |
+| `tests/test_archbfd.c` | Object-format round trips, binutils facts, diagnostics and reader tests |
 
 ### Design
 
@@ -199,4 +210,17 @@ archdb catalogue ArchDB --root ArchDB -o ArchDBCatalogue.yaml
 archdb encode ArchDB/x86.dsymspec.yaml add dst=0 src=1      # 01 c8
 archdb dump-ir ArchDB/riscv64.dsymspec.yaml addi
 archdb info ArchDB/amd64.dsymspec.yaml
+```
+
+The object-format catalogue has its own tool:
+
+```
+archbfd validate [--strict] [--lint] ArchBFD/*.bfd.yaml
+archbfd convert -f json ArchBFD/ELF64.bfd.yaml -o elf64.json
+archbfd list ArchBFDCatalogue.yaml
+archbfd catalogue ArchBFD --root ArchBFD -o ArchBFDCatalogue.yaml
+archbfd info ArchBFD/ELF64.bfd.yaml
+archbfd relocs ArchBFD/ELF64.bfd.yaml R_X86_64_PC32
+archbfd records ArchBFD/ELF64.bfd.yaml ehdr
+archbfd object a.out.o                       # sections, symbols, relocations
 ```

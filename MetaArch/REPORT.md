@@ -1,5 +1,54 @@
 # MetaArch — native and cross-language API checkpoint
 
+## Latest addition: ArchBFD object-format catalogue
+
+Implemented the requested `ArchBFD` subsystem on top of the `binutils/bfd`
+checkout in `binutils/` (binutils 2.22, branch `rel_2.22`).  It is a second
+catalogue next to `ArchDB`: `ArchDB/` describes instructions, `ArchBFD/`
+describes the object formats they are packed into.
+
+- `ArchBFD.h` / `ArchBFD.c`: the description model (`ArchBFDSpec`,
+  `ArchBFDRecord`, `ArchBFDReloc`, `ArchBFDConstantGroup`, …), a binder that
+  validates a document against the MetaBFD rules with located diagnostics, a
+  catalogue (file or directory scan) with lazy loading and container
+  inheritance, a writer for the four document formats, and lookup helpers.
+- `ArchBFD/*.bfd.yaml`: nine documents — ELF64 (x86-64), ELF32 (i386), the
+  HP PA-RISC and m68k ELF emulations, COFF, PE, Mach-O, IRIX/ECOFF and
+  WebAssembly.  Every document records the binutils files it was derived from.
+- `tools/extract_bfd.py` generates the documents from the checkout by parsing
+  the byte layouts (`include/elf/external.h`, `include/coff/*.h`,
+  `include/mach-o/external.h`) and the relocation tables (`bfd/elf64-x86-64.c`,
+  `bfd/elf32-i386.c`, `bfd/elf32-m68k.c`, `bfd/elf-hppa.h`, `bfd/coff-i386.c`,
+  `bfd/coff-mips.c`).  The output is deterministic; `--check` fails when the
+  committed documents drift from the checkout.
+- `tools/archbfd.c`: `validate`, `convert`, `list`, `catalogue`, `info`,
+  `relocs`, `records` and `object`.
+- Object reader: `archbfd_object_open()` reads ELF, COFF and PE objects using
+  the description alone — the record layouts, the constant groups and the
+  relocation table come from the document.
+- `ArchBFD/schema/MetaBFD.schema.json`: the document schema.
+- Tests: `tests/test_archbfd.c` (3463 checks), `tests/check_bfd_schema.py`
+  (schema validation) and `tests/check_bfd_data.py` (cross-check against an
+  object produced by the system compiler), all registered with CTest.
+- `manual/bfd.md`: the object-format guide.
+
+One defect was found and fixed while writing the reader: an encoding was
+applied as `(value & mask) >> shift`, which made the symbol index of an ELF64
+relocation always read as zero.  The convention is now `(value >> shift) &
+mask`, and the mask always describes the width of the extracted part.  The
+generator, the schema and the tests were updated together.
+
+Verification: GCC Release 12/12 CTest (12.5 s) and GCC ASan+UBSan 12/12
+(63.8 s), both with `-Wall -Wextra -Wpedantic -Werror` and no findings.  The
+pre-existing 1307 architecture checks, 292 form-encoding checks and 289
+relocation checks are unchanged.
+
+Known boundaries: the reader supports ELF, COFF and PE; Mach-O, ECOFF and
+WebAssembly are descriptions only.  `WAT.bfd.yaml` is the one document that
+does not come from binutils — the 2.22 checkout has no WebAssembly BFD back
+end, so it follows the WebAssembly core specification, which the file header
+states.
+
 ## Latest addition: nanobind Python bindings and project manual
 
 Implemented the explicit Python/manual request in `bindings/python` and

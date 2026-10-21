@@ -37,15 +37,20 @@ code is executed by MetaArch itself.
 | `Dsymspec.c` | Shared infrastructure, schema descriptors, compiler and VM |
 | `ToYAML.c`, `ToJSON.c`, `ToXML.c`, `ToSExpr.c` | Four tree codecs |
 | `ArchDB.h`, `ArchDB.c` | Catalogue scanning, summaries and lazy spec cache |
+| `ArchBFD.h`, `ArchBFD.c` | Object-format binder, catalogue and description-driven object reader |
 | `MetaArchABI.h`, `MetaArchABI.c` | Versioned opaque ABI for foreign languages |
 | `MetaArchAPI.hpp` | C++17 RAII wrapper, namespace `metaarch::api` |
 | `MetaArch.hpp`, `MetaArch.cpp` | Optional C++20 DSL/assembler, namespace `metaarch` |
 | `tools/archdb.c` | Core command-line frontend |
+| `tools/archbfd.c` | Object-format command-line frontend |
+| `tools/extract_bfd.py` | Generate/check the `ArchBFD` documents from binutils |
 | `tools/metaarch.cpp` | DSL conversion/assembly frontend |
 | `tools/compile_archdb.py` | Generate/check `.march` database |
 | `bindings/{d,go,python}` | Foreign interfaces; Python uses nanobind |
 | `ArchDB/` | 28 hand-authored specs, schemas and generated backend records |
 | `ArchDBCatalogue.yaml` | Committed catalogue and summary metadata |
+| `ArchBFD/` | Object-format descriptions, generated from binutils/bfd |
+| `ArchBFDCatalogue.yaml` | Committed index of the object-format descriptions |
 | `MetaArchDB/` | Generated DSL specs with backend symlinks |
 | `tests/`, `examples/`, `docs/` | Regressions, executable examples and focused guides |
 

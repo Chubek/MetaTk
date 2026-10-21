@@ -1,5 +1,4 @@
 # Baseline (2026-10-19, before any edits)
-
 Environment: Arch Linux, GCC 16.2.1, Clang 22.1.8, CMake 4.4.3, GNU Make
 (ninja is **not installed** on this machine, so the "Unix Makefiles" generator
 is used everywhere the brief says `-G Ninja`; no network access, so yyjson is
@@ -101,3 +100,18 @@ reproducible results are in [manual/verification.md](manual/verification.md).
 - All four builds are warning-clean with `-Wall -Wextra -Wpedantic -Werror`.
 - CMake shared installation and a built/installed platform wheel each pass all
   24 Python tests. Native API/ABI, specs, backends and codecs are unchanged.
+
+## ArchBFD addition (2026-10-22)
+
+The ArchBFD object-format catalogue added five CTest cases to the tree
+(`archbfd_catalogue`, `archbfd_schema_check`, `archbfd_data_check`,
+`archbfd_extractor_check`, `archbfd_cli`).
+
+- GCC Release: 12/12 CTest, 12.5 s. GCC ASan+UBSan (`RelWithDebInfo`,
+  `-fsanitize=address,undefined -fno-omit-frame-pointer` for C *and* C++):
+  12/12, 63.8 s, no findings.
+- New checks: `test_archbfd` reports 3463 checks, 0 failures
+  (9 documents x 4 formats). The pre-existing suites are unchanged
+  (1307 architecture, 292 form-encoding, 289 relocation checks).
+- The extractor check compares the committed `ArchBFD/*.bfd.yaml` with a
+  fresh extraction from the `binutils/` checkout; it fails when they differ.
