@@ -149,6 +149,8 @@ set_target_properties(metaarch PROPERTIES
   VERSION ${PROJECT_VERSION}
   SOVERSION ${PROJECT_VERSION_MAJOR}
   PUBLIC_HEADER "ArchDB.h;ArchBFD.h;DSymspec.h;DsymspecIR.h;MetaArchABI.h;MetaArchAPI.hpp")
+# The header-only C++ API over the object-format catalogue.
+install(FILES ArchBFD.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/metaarch)
 set_target_properties(metaarch PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
 # Header-only C++ API; independent of the optional DSL implementation.
@@ -240,6 +242,19 @@ if(ARCHDB_BUILD_TESTS)
                -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_archbfd_cli.cmake)
     set_tests_properties(archbfd_cli PROPERTIES DEPENDS archbfd_catalogue)
   endif()
+  # The XBind specs are checked when the XBind tool is available.
+  set(ARCHDB_XBIND_CLI "" CACHE FILEPATH "Path to the XBind command-line tool")
+  if(ARCHDB_XBIND_CLI AND EXISTS "${ARCHDB_XBIND_CLI}")
+    add_test(NAME metaarch_xbind_specs
+             COMMAND ${CMAKE_COMMAND}
+               -DXBIND=${ARCHDB_XBIND_CLI}
+               -DCXX=${CMAKE_CXX_COMPILER}
+               -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}
+               -DWORK=${CMAKE_CURRENT_BINARY_DIR}/xbind-test
+               -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_xbind_specs.cmake)
+  else()
+    message(STATUS "XBind spec check skipped: set ARCHDB_XBIND_CLI to the xbind tool")
+  endif()
   add_executable(test_abi tests/test_abi.c)
   target_link_libraries(test_abi PRIVATE metaarch)
   add_test(NAME metaarch_c_abi COMMAND test_abi ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/api.yaml)
@@ -248,6 +263,11 @@ if(ARCHDB_BUILD_TESTS)
     set_target_properties(test_cpp_api PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
     target_link_libraries(test_cpp_api PRIVATE MetaArch::api)
     add_test(NAME metaarch_cpp_api COMMAND test_cpp_api ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/api.yaml)
+    add_executable(test_archbfd_cpp tests/test_archbfd_cpp.cpp)
+    set_target_properties(test_archbfd_cpp PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+    target_link_libraries(test_archbfd_cpp PRIVATE metaarch)
+    add_test(NAME archbfd_cpp_api COMMAND test_archbfd_cpp ${CMAKE_CURRENT_SOURCE_DIR}/ArchBFD
+             ${CMAKE_CURRENT_SOURCE_DIR}/ArchBFDCatalogue.yaml)
   endif()
   if(ARCHDB_TEST_FOREIGN_BINDINGS)
     if(NOT BUILD_SHARED_LIBS)
@@ -264,17 +284,47 @@ if(ARCHDB_BUILD_TESTS)
       add_custom_target(metaarch_d_binding_test ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/test_bindings_d)
       add_test(NAME metaarch_d_api COMMAND ${CMAKE_CURRENT_BINARY_DIR}/test_bindings_d
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/api.yaml)
+      # The object-format interface has its own D test.
+      add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/test_bindings_bfd_d
+        COMMAND ${ARCHDB_D_COMPILER} -I${CMAKE_CURRENT_SOURCE_DIR}/bindings/d
+          ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_bindings_bfd.d -L$<TARGET_FILE:metaarch>
+          -of=${CMAKE_CURRENT_BINARY_DIR}/test_bindings_bfd_d
+          -L-rpath=$<TARGET_FILE_DIR:metaarch>
+        DEPENDS metaarch tests/test_bindings_bfd.d bindings/d/archbfd.di VERBATIM)
+      add_custom_target(metaarch_bfd_d_binding_test ALL
+        DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/test_bindings_bfd_d)
+      add_test(NAME archbfd_d_api COMMAND ${CMAKE_CURRENT_BINARY_DIR}/test_bindings_bfd_d
+        ${CMAKE_CURRENT_SOURCE_DIR}/ArchBFD ${CMAKE_CURRENT_SOURCE_DIR}/ArchBFDCatalogue.yaml
+        ${CMAKE_CURRENT_BINARY_DIR}/archbfd-test.o)
+      set_tests_properties(archbfd_d_api PROPERTIES DEPENDS archbfd_catalogue)
     else()
       message(STATUS "MetaArch D binding test skipped: ldc2/dmd not found")
     endif()
     find_program(ARCHDB_GO_EXECUTABLE go)
     if(ARCHDB_GO_EXECUTABLE)
+      # Some installations inherit a GOROOT that does not hold the toolchain.
+      # Fall back to the root next to the go binary in that case.
+      execute_process(COMMAND ${ARCHDB_GO_EXECUTABLE} env GOROOT
+                      OUTPUT_VARIABLE _go_root OUTPUT_STRIP_TRAILING_WHITESPACE)
+      if(_go_root AND NOT EXISTS "${_go_root}/pkg/tool")
+        get_filename_component(_go_bin "${ARCHDB_GO_EXECUTABLE}" DIRECTORY)
+        get_filename_component(_go_prefix "${_go_bin}" DIRECTORY)
+        if(EXISTS "${_go_prefix}/lib/go/pkg/tool")
+          set(_go_root "${_go_prefix}/lib/go")
+        endif()
+      endif()
+      # -vet=off: some Go installations ship without the vet tool, and the
+      # test assertions do not depend on it.
       add_test(NAME metaarch_go_api COMMAND ${CMAKE_COMMAND} -E env
         "CGO_ENABLED=1" "GOTOOLCHAIN=local" "GOPROXY=off" "GOWORK=off"
         "CGO_CFLAGS=-I${CMAKE_CURRENT_SOURCE_DIR}"
         "CGO_LDFLAGS=-L$<TARGET_FILE_DIR:metaarch> -Wl,-rpath,$<TARGET_FILE_DIR:metaarch>"
-        ${ARCHDB_GO_EXECUTABLE} test -count=1 ./...)
+        "METAARCH_ARCHBFD_OBJECT=${CMAKE_CURRENT_BINARY_DIR}/archbfd-test.o"
+        ${ARCHDB_GO_EXECUTABLE} test -vet=off -count=1 ./...)
       set_tests_properties(metaarch_go_api PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/bindings/go)
+      if(_go_root)
+        set_tests_properties(metaarch_go_api PROPERTIES ENVIRONMENT "GOROOT=${_go_root}")
+      endif()
     else()
       message(STATUS "MetaArch Go binding test skipped: go not found")
     endif()
@@ -310,9 +360,12 @@ install(DIRECTORY ArchDB DESTINATION ${CMAKE_INSTALL_DATADIR}/metaarch)
 install(DIRECTORY ArchBFD DESTINATION ${CMAKE_INSTALL_DATADIR}/metaarch)
 install(FILES ArchDBCatalogue.yaml DESTINATION ${CMAKE_INSTALL_DATADIR}/metaarch)
 install(FILES ArchBFDCatalogue.yaml DESTINATION ${CMAKE_INSTALL_DATADIR}/metaarch)
-install(FILES bindings/d/metaarch.di DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/d)
+install(FILES bindings/d/metaarch.di bindings/d/archbfd.di DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/d)
 install(DIRECTORY bindings/go/ DESTINATION ${CMAKE_INSTALL_DATADIR}/metaarch/bindings/go
   FILES_MATCHING PATTERN "*.go" PATTERN "go.mod" PATTERN "*_test.go" EXCLUDE)
+# The XBind specs travel with the sources they describe.
+install(FILES MetaArch.xbind ArchBFD.xbind MetaBFD.xbind
+  DESTINATION ${CMAKE_INSTALL_DATADIR}/metaarch)
 install(DIRECTORY manual/ DESTINATION ${CMAKE_INSTALL_DOCDIR}/manual)
 if(ARCHDB_BUILD_DSL)
   install(TARGETS metaarch_dsl
