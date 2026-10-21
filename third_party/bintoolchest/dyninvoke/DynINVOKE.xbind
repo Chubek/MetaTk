@@ -1,0 +1,147 @@
+local xbind = require("lxbind")
+
+-- DynINVOKE: Tourchstone foreign-call library (libffi/dyncall analogue).
+-- Header is relative to tourchstone/dyninvoke/ (dyninvoke.h). Layout
+-- queries work for every ABI on any host; execution/closures require host
+-- support (closures currently SysV AMD64 only). ABIs, kinds, and statuses
+-- are int-like enums; type/cif/closure handles are opaque and caller-owned
+-- (cif owns its layout copy). Only the layout/query slice is bound here so
+-- every target can describe it; Lua glue and signature probes are executable.
+-- dinv_call / dinv_call_simple / closure create
+-- (void* fn, void** args out-vectors) wait for buffer/callback IR.
+return xbind.library {
+  name = "dyninvoke",
+  version = "0.1.0",
+  features = { "c-signatures", "explicit-ownership" },
+  headers = { "dyninvoke.h" },
+  stdlib = { "typedef", "sexp", "json" },
+  targets = {
+    xbind.target("D", { module = "dyninvoke" }),
+    xbind.target("Go", { package = "dyninvoke" }),
+    xbind.target("Java", { package = "stone.dyninvoke", class = "DynInvoke" }),
+    xbind.target("Lua", { module = "dyninvoke" }),
+    xbind.target("NodeJS", { addon = "dyninvoke" }),
+    xbind.target("OCaml", { library = "dyninvoke" }),
+    xbind.target("Python", { module = "dyninvoke" }),
+    xbind.target("Ruby", { extension = "dyninvoke" }),
+    xbind.target("Rust", { crate = "dyninvoke_sys" }),
+  },
+  typedefs = {
+    xbind.typedef("dinv_status_t", "int", { range = "status" }),
+    xbind.typedef("dinv_abi_t", "int", { range = "abi" }),
+    xbind.typedef("dinv_kind_t", "int", { range = "kind" }),
+    xbind.typedef("const dinv_type_t *", "opaque", { ownership = "opaque" }),
+    xbind.typedef("const dinv_cif_t *", "opaque", { ownership = "opaque" }),
+    xbind.typedef("dinv_cif_t *", "opaque", { ownership = "opaque" }),
+    xbind.typedef("const char *", "string", { ownership = "borrowed" }),
+  },
+  functions = {
+    xbind.func("dinv_version", {
+      returns = "const char *",
+      params = {},
+    }),
+    xbind.func("dinv_status_string", {
+      returns = "const char *",
+      params = {
+        xbind.param("status", "dinv_status_t"),
+      },
+    }),
+    xbind.func("dinv_last_error", {
+      returns = "const char *",
+      params = {},
+    }),
+    xbind.func("dinv_abi_name", {
+      returns = "const char *",
+      params = {
+        xbind.param("abi", "dinv_abi_t"),
+      },
+    }),
+    xbind.func("dinv_abi_host", {
+      returns = "dinv_abi_t",
+      params = {},
+    }),
+    xbind.func("dinv_abi_can_execute", {
+      returns = "int",
+      params = { xbind.param("abi", "dinv_abi_t") },
+    }),
+    xbind.func("dinv_type_named", {
+      returns = "const dinv_type_t *",
+      ownership = "borrowed",
+      params = { xbind.param("name", "const char *") },
+    }),
+    xbind.func("dinv_cif_destroy", {
+      returns = "void",
+      params = { xbind.param("cif", "dinv_cif_t *", { nullable = true, ownership = "consumed" }) },
+    }),
+    xbind.func("dinv_abi_isa_arch", {
+      returns = "const char *",
+      params = {
+        xbind.param("abi", "dinv_abi_t"),
+      },
+    }),
+    xbind.func("dinv_abi_isa_file", {
+      returns = "const char *",
+      params = {
+        xbind.param("abi", "dinv_abi_t"),
+      },
+    }),
+    xbind.func("dinv_kind_name", {
+      returns = "const char *",
+      params = {
+        xbind.param("kind", "dinv_kind_t"),
+      },
+    }),
+    xbind.func("dinv_type_size", {
+      returns = "size_t",
+      params = {
+        xbind.param("type", "const dinv_type_t *"),
+      },
+    }),
+    xbind.func("dinv_type_align", {
+      returns = "size_t",
+      params = {
+        xbind.param("type", "const dinv_type_t *"),
+      },
+    }),
+    xbind.func("dinv_cif_abi", {
+      returns = "dinv_abi_t",
+      params = {
+        xbind.param("cif", "const dinv_cif_t *"),
+      },
+    }),
+    xbind.func("dinv_cif_nargs", {
+      returns = "size_t",
+      params = {
+        xbind.param("cif", "const dinv_cif_t *"),
+      },
+    }),
+    xbind.func("dinv_cif_gpr_used", {
+      returns = "int",
+      params = {
+        xbind.param("cif", "const dinv_cif_t *"),
+      },
+    }),
+    xbind.func("dinv_cif_fpr_used", {
+      returns = "int",
+      params = {
+        xbind.param("cif", "const dinv_cif_t *"),
+      },
+    }),
+    xbind.func("dinv_cif_stack_bytes", {
+      returns = "size_t",
+      params = {
+        xbind.param("cif", "const dinv_cif_t *"),
+      },
+    }),
+    xbind.func("dinv_cif_uses_hidden_ret", {
+      returns = "int",
+      params = {
+        xbind.param("cif", "const dinv_cif_t *"),
+      },
+    }),
+    xbind.func("dinv_isa_default_dir", {
+      returns = "const char *",
+      params = {},
+    }),
+  },
+}

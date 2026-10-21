@@ -1,0 +1,7 @@
+{
+  "name": "domdbind",
+  "description": "C ABI views and exception containment for D",
+  "license": "MIT",
+  "targetType": "library",
+  "sourcePaths": ["source"]
+}

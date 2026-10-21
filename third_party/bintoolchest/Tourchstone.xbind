@@ -1,0 +1,121 @@
+local xbind = require("lxbind")
+
+-- Tourchstone aggregate: the stable query surface across xbind, dyninvoke,
+-- and dynload. Headers are relative to tourchstone/. Each function below
+-- exists verbatim in its header with the spelled C type; opaque handles
+-- and int-like enums keep the surface representable in every target inventory.
+-- Lua scalar/string/opaque glue and compiler signature probes are executable.
+-- Pointer-return lifecycle helpers live in the component specs. APIs requiring
+-- buffers/out-pointers/callbacks (cif create, library open, spec resolve) are
+-- deliberately not represented as automatically marshalled calls.
+return xbind.library {
+  name = "tourchstone",
+  version = "0.1.0",
+  features = { "c-signatures", "explicit-ownership" },
+  headers = { "xbind/xbind.h", "dyninvoke/dyninvoke.h", "dynload/dynload.h" },
+  stdlib = { "typedef", "sexp", "json" },
+  targets = {
+    xbind.target("D", { module = "tourchstone" }),
+    xbind.target("Go", { package = "tourchstone" }),
+    xbind.target("Java", { package = "stone.tourchstone", class = "Tourchstone" }),
+    xbind.target("Lua", { module = "tourchstone" }),
+    xbind.target("NodeJS", { addon = "tourchstone" }),
+    xbind.target("OCaml", { library = "tourchstone" }),
+    xbind.target("Python", { module = "tourchstone" }),
+    xbind.target("Ruby", { extension = "tourchstone" }),
+    xbind.target("Rust", { crate = "tourchstone_sys" }),
+  },
+  typedefs = {
+    xbind.typedef("xbind_status", "int", { range = "status" }),
+    xbind.typedef("dinv_status_t", "int", { range = "status" }),
+    xbind.typedef("dinv_abi_t", "int", { range = "abi" }),
+    xbind.typedef("dinv_kind_t", "int", { range = "kind" }),
+    xbind.typedef("tdyn_status_t", "int", { range = "status" }),
+    xbind.typedef("tdyn_symbol_binding_t", "int", { range = "binding" }),
+    xbind.typedef("tdyn_symbol_kind_t", "int", { range = "kind" }),
+    xbind.typedef("const dinv_type_t *", "opaque", { ownership = "opaque" }),
+    xbind.typedef("const dinv_cif_t *", "opaque", { ownership = "opaque" }),
+    xbind.typedef("const tdyn_env_t *", "opaque", { ownership = "opaque" }),
+    xbind.typedef("const tdyn_library_t *", "opaque", { ownership = "opaque" }),
+    xbind.typedef("const char *", "string", { ownership = "borrowed" }),
+  },
+  functions = {
+    xbind.func("xbind_version", {
+      returns = "const char *",
+      params = {},
+    }),
+    xbind.func("xbind_status_string", {
+      returns = "const char *",
+      params = {
+        xbind.param("status", "xbind_status"),
+      },
+    }),
+    xbind.func("xbind_target_count", {
+      returns = "size_t",
+      params = {},
+    }),
+    xbind.func("dinv_version", {
+      returns = "const char *",
+      params = {},
+    }),
+    xbind.func("dinv_status_string", {
+      returns = "const char *",
+      params = {
+        xbind.param("status", "dinv_status_t"),
+      },
+    }),
+    xbind.func("dinv_abi_name", {
+      returns = "const char *",
+      params = {
+        xbind.param("abi", "dinv_abi_t"),
+      },
+    }),
+    xbind.func("dinv_abi_host", {
+      returns = "dinv_abi_t",
+      params = {},
+    }),
+    xbind.func("dinv_abi_can_execute", {
+      returns = "int",
+      params = { xbind.param("abi", "dinv_abi_t") },
+    }),
+    xbind.func("dinv_type_named", {
+      returns = "const dinv_type_t *",
+      ownership = "borrowed",
+      params = { xbind.param("name", "const char *") },
+    }),
+    xbind.func("dinv_kind_name", {
+      returns = "const char *",
+      params = {
+        xbind.param("kind", "dinv_kind_t"),
+      },
+    }),
+    xbind.func("dinv_type_size", {
+      returns = "size_t",
+      params = {
+        xbind.param("type", "const dinv_type_t *"),
+      },
+    }),
+    xbind.func("tdyn_version", {
+      returns = "const char *",
+      params = {},
+    }),
+    xbind.func("tdyn_status_string", {
+      returns = "const char *",
+      params = {
+        xbind.param("status", "tdyn_status_t"),
+      },
+    }),
+    xbind.func("tdyn_symbol_binding_name", {
+      returns = "const char *",
+      params = {
+        xbind.param("binding", "tdyn_symbol_binding_t"),
+      },
+    }),
+    xbind.func("tdyn_symbol_kind_name", {
+      returns = "const char *",
+      params = {
+        xbind.param("kind", "tdyn_symbol_kind_t"),
+      },
+    }),
+  },
+}

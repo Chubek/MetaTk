@@ -1,0 +1,13 @@
+include_guard(GLOBAL)
+# Node owns its runtime. The MODULE target intentionally has no libnode link.
+function(domnodebind_add_module target)
+  add_library(${target} MODULE ${ARGN})
+  target_link_libraries(${target} PRIVATE DomNodeBind::DomNodeBind)
+  set_target_properties(${target} PROPERTIES PREFIX "" SUFFIX ".node")
+  if(APPLE)
+    target_link_options(${target} PRIVATE "-undefined" "dynamic_lookup")
+  elseif(WIN32)
+    find_library(DOMBIND_NODE_LIBRARY node REQUIRED)
+    target_link_libraries(${target} PRIVATE "${DOMBIND_NODE_LIBRARY}")
+  endif()
+endfunction()

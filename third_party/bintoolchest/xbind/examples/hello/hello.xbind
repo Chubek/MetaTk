@@ -1,0 +1,50 @@
+local xbind = require("lxbind")
+
+-- hello fixture: compiled and executed through the Lua/DomLuaBind emitter.
+-- Targets every supported backend so the all-target smoke matrix has a
+-- trivial first row. C types are intentionally limited to the default
+-- typedef maps (int/double/string) so no per-target override is needed
+-- beyond the borrowed-string annotation below.
+return xbind.library {
+  name = "hello",
+  version = "0.1.0",
+  features = { "c-signatures", "explicit-ownership" },
+  headers = { "hello.h" },
+  stdlib = { "typedef", "sexp", "json" },
+  targets = {
+    xbind.target("D", { module = "hello" }),
+    xbind.target("Go", { package = "hello" }),
+    xbind.target("Java", { package = "stone.hello", class = "Hello" }),
+    xbind.target("Lua", { module = "hello" }),
+    xbind.target("NodeJS", { addon = "hello" }),
+    xbind.target("OCaml", { library = "hello" }),
+    xbind.target("Python", { module = "hello" }),
+    xbind.target("Ruby", { extension = "hello" }),
+    xbind.target("Rust", { crate = "hello_sys" }),
+  },
+  typedefs = {
+    xbind.typedef("const char *", "string", { ownership = "borrowed" }),
+  },
+  functions = {
+    xbind.func("hello_add", {
+      returns = "int",
+      params = {
+        xbind.param("left", "int"),
+        xbind.param("right", "int"),
+      },
+    }),
+    xbind.func("hello_scale", {
+      returns = "double",
+      params = {
+        xbind.param("value", "double"),
+        xbind.param("factor", "double"),
+      },
+    }),
+    xbind.func("hello_greet", {
+      returns = "const char *",
+      params = {
+        xbind.param("name", "const char *", { nullable = true }),
+      },
+    }),
+  },
+}

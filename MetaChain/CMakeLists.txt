@@ -1,7 +1,0 @@
-cmake_minimum_required(VERSION 3.24)
-project(MetaChain VERSION 0.1.0 LANGUAGES C CXX)
-include(CTest)
-option(METACHAIN_BUILD_METAAS "Build the MetaArch-backed assembler" ON)
-if(METACHAIN_BUILD_METAAS)
-    add_subdirectory(MetaAS)
-endif()

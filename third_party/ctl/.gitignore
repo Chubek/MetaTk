@@ -1,0 +1,9 @@
+debug
+build
+unittest/ctlrender/output
+unittest/exrdpx/output
+.DS_Store
+.vscode
+Testing
+.vs
+CMakeSettings.json

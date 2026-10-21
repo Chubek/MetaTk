@@ -1,0 +1,58 @@
+#ifndef DWARFPP_REGS_HPP_
+#define DWARFPP_REGS_HPP_
+
+#include "expr.hpp"
+
+namespace dwarf
+{
+	namespace lib
+	{
+		// DWARF x86 register numbers pilfered from libunwind/src/x86/unwind_i.h
+		enum dwarf_regs_x86
+		{
+			DWARF_X86_EAX  =  0,
+			DWARF_X86_ECX  =  1,
+			DWARF_X86_EDX  =  2,
+			DWARF_X86_EBX     = 3,
+			DWARF_X86_ESP     = 4,
+			DWARF_X86_EBP     = 5,
+			DWARF_X86_ESI     = 6,
+			DWARF_X86_EDI     = 7,
+			DWARF_X86_EIP     = 8,
+			DWARF_X86_EFLAGS  = 9,
+			DWARF_X86_TRAPNO  = 10,
+			DWARF_X86_ST0     = 11
+		};
+		extern const char *dwarf_regnames_x86[];
+
+		// similar for x86-64
+		enum dwarf_regs_x86_64
+		{
+			DWARF_X86_64_RAX     = 0,
+			DWARF_X86_64_RDX     = 1,
+			DWARF_X86_64_RCX     = 2,
+			DWARF_X86_64_RBX     = 3,
+			DWARF_X86_64_RSI     = 4,
+			DWARF_X86_64_RDI     = 5,
+			DWARF_X86_64_RBP     = 6,
+			DWARF_X86_64_RSP     = 7,
+			DWARF_X86_64_R8      = 8,
+			DWARF_X86_64_R9      = 9,
+			DWARF_X86_64_R10     = 10,
+			DWARF_X86_64_R11     = 11,
+			DWARF_X86_64_R12     = 12,
+			DWARF_X86_64_R13     = 13,
+			DWARF_X86_64_R14     = 14,
+			DWARF_X86_64_R15     = 15,
+			DWARF_X86_64_RIP     = 16
+		};
+		extern const char *dwarf_regnames_x86_64[];
+
+		const char **dwarf_regnames_for_elf_machine(int e_machine);
+		
+		dwarf::encap::loc_expr dwarf_stack_pointer_expr_for_elf_machine(int e_machine,
+			dwarf::lib::Dwarf_Addr lopc, dwarf::lib::Dwarf_Addr hipc);
+	}
+}
+
+#endif

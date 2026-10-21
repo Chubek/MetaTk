@@ -1,0 +1,621 @@
+/* dwarfpp: C++ binding for a useful subset of libdwarf, plus extra goodies.
+ * 
+ * spec.hpp: definitions describing DWARF standards and vendor extensions.
+ *
+ * Copyright (c) 2008--17, Stephen Kell. For licensing information, see the
+ * LICENSE file in the root of the libdwarfpp tree.
+ */
+
+#ifndef DWARFPP_SPEC_HPP_
+#define DWARFPP_SPEC_HPP_
+
+#include "dwarfpp/util.hpp"
+
+#include <map>
+#include <string>
+#include <utility>
+#include <cstdlib>
+#include <iostream>
+#include <cassert>
+#include <algorithm>
+#include <type_traits>
+
+/* Basic idea of this file: 
+ *
+ * - every variant of the standard gets its own namespace 
+     under dwarf::spec::
+ * - each such namespace defines a bunch of maps
+ * - we instantiate a table_def using these maps *and*, optionally, an extended def 
+ * - these maps only record the increment over the extended def
+ * - we build the final abstract_def object 
+     as a singleton of a fresh class (so it can get its own code, inlined etc..)
+     built CRTP-wise as an extension of a predecessor standard
+ * - each such class includes (as static consts) its tables as std::maps
+ 
+ * FIXME: get rid of const methods in abstract_def?
+ * Or will that stop us from passing them by ref?
+ * I don't think the ref-to-temporary case is important, so no. Get rid!
+ */
+
+namespace dwarf
+{
+	namespace spec
+	{
+		using std::string;
+		using dwarf::core::debug;
+		extern "C"
+		{
+			#include "dwarf-onlystd.h"
+		}
+		struct abstract_def
+		{
+			virtual const char *tag_lookup(int tag) const = 0;
+			virtual int tag_for_name(const char *name) const = 0;
+			virtual bool tag_is_type(int tag) const = 0;
+			virtual bool tag_is_type_chain(int tag) const = 0;
+			virtual bool tag_has_named_children(int tag) const = 0;
+			
+			virtual const char *attr_lookup(int attr) const = 0;
+			virtual int attr_for_name(const char *name) const = 0;
+			virtual const int *attr_get_classes(int attr) const = 0;
+			virtual bool attr_describes_location(int attr) const = 0;
+			
+			virtual const char *form_lookup(int form) const = 0;
+			virtual int form_for_name(const char *name) const = 0;
+			virtual const int *form_get_classes(int form) const = 0;
+			
+			virtual const char *encoding_lookup(int encoding) const = 0;
+			virtual int encoding_for_name(const char *name) const = 0;
+			
+			virtual const char *op_lookup(int op) const = 0;
+			virtual int op_for_name(const char *name) const = 0;
+			virtual bool op_reads_register(int op) const = 0;
+			virtual bool op_names_register(int op) const = 0;
+			virtual size_t op_operand_count(int op) const = 0;
+			virtual const int *op_operand_form_list(int op) const = 0;
+			
+			virtual int get_explicit_interp(int attr, int form) const = 0;
+			virtual int get_interp(int attr, int form) const = 0;
+			
+			virtual const char *interp_lookup(int interp) const = 0;
+			
+			friend std::ostream& operator<<(std::ostream& o, const abstract_def& a);
+			virtual std::ostream& print(std::ostream& o) const = 0;
+			
+			virtual ~abstract_def() {}
+		};
+		typedef abstract_def spec;
+		struct string_comparator
+		{
+			bool operator()(const char *arg1, const char *arg2) const 
+			{
+				return string(arg1) < string(arg2);
+			}
+		};
+
+#define DECLARE_MAPS \
+			static const std::map<const char *, int, string_comparator> tag_forward_map; \
+			static const std::map<int, const char *> tag_inverse_map; \
+			static const std::map<const char *, int, string_comparator> form_forward_map; \
+			static const std::map<int, const char *> form_inverse_map; \
+			static const std::map<const char *, int, string_comparator> attr_forward_map; \
+			static const std::map<int, const char *> attr_inverse_map; \
+			static const std::map<const char *, int, string_comparator> encoding_forward_map; \
+			static const std::map<int, const char *> encoding_inverse_map; \
+			static const std::map<const char *, int, string_comparator> op_forward_map; \
+			static const std::map<int, const char *> op_inverse_map; \
+			static const std::map<const char *, int, string_comparator> interp_forward_map; \
+			static const std::map<int, const char *> interp_inverse_map; \
+			static const std::map<int, const int *> op_operand_forms_map; \
+			static const std::map<int, const int *> attr_class_map; \
+			static const std::map<int, const int *> form_class_map; 
+
+#define DECLARE_BOILERPLATE(typename) \
+			static typename inst; \
+			std::ostream& print(std::ostream& o) { \
+				/*return print< typename >(o); */ return o; \
+			}
+
+#define DECLARE_LOCAL_PREDS \
+			bool local_tag_is_type(int tag) const; \
+			bool local_tag_is_type_chain(int tag) const; \
+			bool local_tag_has_named_children(int tag) const; \
+			bool local_attr_describes_location(int attr) const; \
+			bool local_op_reads_register(int op) const; \
+			bool local_op_names_register(int op) const;
+
+				
+		template <class DefWithMaps>
+		std::ostream& print(std::ostream& o);
+
+		/* DWARF defines a set of "classes" which determine how attributes
+		 * may be interpreted, in a fashion not fully determined by their
+		 * FORM (storage). */
+		class interp
+		{
+			interp() {} // non-instantiable -- interp just defines a namespace
+		public:
+			enum cls
+			{
+				EOL = 0,
+				reference,
+				block,
+				loclistptr,
+				string,
+				constant,
+				lineptr,
+				address,
+				flag,
+				macptr,
+				rangelistptr,
+				exprloc, 
+				block_as_dwarf_expr = 0x20, 
+				constant_to_make_location_expr, 
+				FLAGS = 0x7f000000,
+				UNSIGNED = 0x01000000, 
+				SIGNED = 0x02000000
+			};
+		};
+		
+		class empty_def_t : public virtual abstract_def
+		{
+			static const int empty_operand_form_list[];
+			static const int empty_class_list[];
+			
+		public:
+			DECLARE_MAPS
+			DECLARE_BOILERPLATE(empty_def_t)
+			
+			/* Override all the lookups to print a warning 
+			 * if we hit them, because it means a lookup
+			 * has failed. We also don't bother to consult
+			 * our empty maps. */
+			virtual const char *tag_lookup(int tag) const 
+			{ debug() << "Saw unknown tag 0x" << std::hex << tag << std::dec << std::endl;
+				return "(unknown tag)"; }
+			virtual int tag_for_name(const char *name) const
+			{ 
+				debug() << "Saw unknown tag name "<< name << std::endl;
+				return -1;
+			}
+			virtual const char *attr_lookup(int attr) const 
+			{
+				debug() << "Saw unknown attr 0x" << std::hex << attr << std::dec << std::endl;
+				return "(unknown attribute)"; 
+			}
+			virtual int attr_for_name(const char *name) const
+			{ 
+				debug() << "Saw unknown attr name "<< name << std::endl;
+				return -1;
+			}
+			virtual const char *form_lookup(int form) const 
+			{
+				debug() << "Saw unknown form 0x" << std::hex << form << std::dec << std::endl;
+				return "(unknown form)"; 
+			}
+			virtual int form_for_name(const char *name) const
+			{ 
+				debug() << "Saw unknown form name "<< name << std::endl;
+				return -1;
+			}
+			virtual const char *encoding_lookup(int encoding) const 
+			{ 
+				debug() << "Saw unknown encoding 0x" << std::hex << encoding << std::dec << std::endl;
+				return "(unknown encoding)";
+			}
+			virtual int encoding_for_name(const char *name) const
+			{ 
+				debug() << "Saw unknown encoding name "<< name << std::endl;
+				return -1;
+			}
+			virtual const char *op_lookup(int op) const 
+			{ 
+				debug() << "Saw unknown opcode 0x" << std::hex << op << std::dec << std::endl;
+				return "(unknown opcode)"; 
+			}
+			virtual int op_for_name(const char *name) const
+			{ 
+				debug() << "Saw unknown op name "<< name << std::endl;
+				return -1;
+			}
+			virtual const char *interp_lookup(int interp) const 
+			{ return "(unknown class)"; }
+			
+			/* Define our preds trivially. */
+			virtual bool tag_is_type(int tag) const 
+			{ return false; }
+			virtual bool tag_is_type_chain(int tag) const 
+			{ return false; }
+			virtual bool tag_has_named_children(int tag) const 
+			{ return false; }
+			virtual bool attr_describes_location(int attr) const 
+			{ return false; }
+			virtual bool op_reads_register(int op) const { return false; }
+			virtual bool op_names_register(int op) const { return false; }
+
+			/* Define our empty lists. */
+			virtual const int *attr_get_classes(int attr) const 
+			{ return empty_class_list; }
+			virtual size_t op_operand_count(int op) const { return 0; }
+			virtual const int *op_operand_form_list(int op) const 
+			{ return empty_operand_form_list; }
+			virtual const int *form_get_classes(int form) const 
+			{ return empty_class_list; }
+
+			virtual int get_explicit_interp(int attr, int form) const { return interp::EOL; }
+			virtual int get_interp(int attr, int form) const { return interp::EOL; }
+
+			virtual std::ostream& print(std::ostream& o) const 
+			{
+				o << "Tags:\nAttributes:\nForms:\nEncodings:\nOperators:\nInterpretations:\nAttribute classes:\nForm classes:\n";
+				return o;
+			}
+		};
+		extern empty_def_t empty_def;
+		
+		template <typename Extended, typename Extending>
+		struct extension_of : public virtual abstract_def
+		{
+			// try Extending's maps, else delegate to Extended's lookup method
+			/* Our maps use const char * but our methods take const string&,
+			 * so we want to allow convertibility between these. This means that
+			 * K (method signature) and MappedK (map type parameters) 
+			 * are not necessarily the same. */
+			template <typename K, typename V, typename Cmp>
+			V
+			map_union_lookup(
+				const std::map<K, V, Cmp>& m1, 
+				V (Extended::*method)(K) const, 
+				const K& k) const
+			{
+				typename std::map<
+					K,
+					V
+				>::const_iterator found1 = m1.find(k);
+				if (found1 != m1.end())
+				{
+					return found1->second;
+				} else return (Extended::inst.*method)(k);
+			}
+			
+			const char *tag_lookup(int tag) const 
+			{
+				return map_union_lookup(Extending::tag_inverse_map, &Extended::tag_lookup, tag);
+			}
+			int tag_for_name(const char *name) const
+			{
+				return map_union_lookup(Extending::tag_forward_map, &Extended::tag_for_name, name);
+			}
+			const char *attr_lookup(int attr) const 
+			{
+				return map_union_lookup(Extending::attr_inverse_map, &Extended::attr_lookup, attr);
+			}
+			int attr_for_name(const char *name) const
+			{
+				return map_union_lookup(Extending::attr_forward_map, &Extended::attr_for_name, name);
+			}
+			const char *form_lookup(int form) const 
+			{
+				return map_union_lookup(Extending::form_inverse_map, &Extended::form_lookup, form); 
+			}
+			int form_for_name(const char *name) const
+			{
+				return map_union_lookup(Extending::form_forward_map, &Extended::form_for_name, name);
+			}
+			const char *encoding_lookup(int encoding) const 
+			{
+				return map_union_lookup(Extending::encoding_inverse_map, &Extended::encoding_lookup, encoding); 
+			}
+			int encoding_for_name(const char *name) const
+			{
+				return map_union_lookup(Extending::encoding_forward_map, &Extended::encoding_for_name, name);
+			}
+			const char *op_lookup(int op) const 
+			{
+				return map_union_lookup(Extending::op_inverse_map, &Extended::op_lookup, op); 
+			}
+			int op_for_name(const char *name) const
+			{
+				return map_union_lookup(Extending::op_forward_map, &Extended::op_for_name, name);
+			}
+			const char *interp_lookup(int interp) const 
+			{
+				return map_union_lookup(Extending::interp_inverse_map, &Extended::interp_lookup, interp); 
+			}
+			
+			// union Extending's pred with Extended's
+			template <typename Arg>
+			bool 
+			member_pred_union(bool(Extending::* pred1)(Arg) const, bool(Extended::* pred2)(Arg) const, const Arg& arg) const
+			{
+				return (Extending::inst.*pred1)(arg)
+				|| (Extended::inst.*pred2)(arg);
+			}
+			
+			bool tag_is_type(int tag) const 
+			{
+				return member_pred_union(&Extending::local_tag_is_type, &Extended::tag_is_type, tag);
+			}
+			bool tag_is_type_chain(int tag) const 
+			{
+				return member_pred_union(&Extending::local_tag_is_type_chain, &Extended::tag_is_type_chain, tag);
+			}
+			bool tag_has_named_children(int tag) const 
+			{
+				return member_pred_union(&Extending::local_tag_has_named_children, &Extended::tag_has_named_children, tag);
+			}
+			bool attr_describes_location(int attr) const 
+			{
+				return member_pred_union(
+					&Extending::local_attr_describes_location, 
+					&Extended::attr_describes_location, 
+					attr);
+			}
+			bool op_reads_register(int op) const 
+			{ 
+				return member_pred_union(&Extending::local_op_reads_register, &Extended::op_reads_register, op);
+			}
+			bool op_names_register(int op) const 
+			{ 
+				return member_pred_union(&Extending::local_op_names_register, &Extended::op_names_register, op);
+			}
+			
+			// lists
+			const int *attr_get_classes(int attr) const 
+			{
+				return map_union_lookup(Extending::attr_class_map, &Extended::attr_get_classes, attr); 
+			}
+			const int *form_get_classes(int form) const 
+			{
+				return map_union_lookup(Extending::form_class_map, &Extended::form_get_classes, form); 
+			}
+			size_t op_operand_count(int op) const
+			{
+				int count = 0;
+				std::map<int, const int *>::const_iterator found = Extending::inst.op_operand_forms_map.find(op);
+				if (found != Extending::inst.op_operand_forms_map.end())
+				{
+					// linear count-up
+					for (const int *p_form = found->second; *p_form != 0; p_form++) count++;
+					return count;		
+				} else return Extended::inst.op_operand_count(op);
+			}
+			const int *op_operand_form_list(int op) const 
+			{
+				return map_union_lookup(Extending::op_operand_forms_map, &Extended::op_operand_form_list, op); 
+			}
+
+			int get_explicit_interp(int attr, int form) const
+			{
+				return explicit_interp(*const_cast<abstract_def*>(static_cast<const abstract_def*>(this)), attr, attr_get_classes(attr), form, form_get_classes(form));
+			}
+			int get_interp(int attr, int form) const 
+			{
+				return get_explicit_interp(attr, form);
+			}
+
+			std::ostream& print(std::ostream& o) const 
+			{
+				o << "Tags:\nAttributes:\nForms:\nEncodings:\nOperators:\nInterpretations:\nAttribute classes:\nForm classes:\n";
+				return o;
+			}
+		};
+		
+		/* define DWARF4 as an extension of the empty def */
+		class dwarf4_t : public extension_of<empty_def_t, dwarf4_t >//, 
+		{
+		public:
+			/* Q. How do we populate the maps? 
+			 * A. They're static const, so we define them out-of-line. */
+			DECLARE_MAPS
+			DECLARE_BOILERPLATE(dwarf4_t)
+			
+			/* Q. How do we define our preds so that they don't hide
+			      the ones we inherit (that call ours)?
+			 * A. Prefix them with "local". */ 
+			DECLARE_LOCAL_PREDS
+		
+			/* We also need to hack the get_interp logic a little, 
+			 * so declare that too. */
+			int get_interp(int attr, int form) const;
+		};
+		extern dwarf4_t& dwarf4;
+		
+		/* define the 'head' DWARF as an extension of DWARF4. */
+		class dwarf_head_t: public extension_of<dwarf4_t, dwarf_head_t >, 
+			public virtual abstract_def
+		{
+		public:
+			DECLARE_MAPS
+			DECLARE_BOILERPLATE(dwarf_head_t)
+			DECLARE_LOCAL_PREDS
+		};
+		extern dwarf_head_t dwarf_head;
+		
+		namespace gnu
+		{
+			#include "dwarf-ext-GNU.h"
+			
+			class dwarf4_plus_gnu_t : public extension_of<dwarf4_t, dwarf4_plus_gnu_t >, 
+				public virtual abstract_def
+			{
+			public:
+				DECLARE_MAPS
+				DECLARE_BOILERPLATE(dwarf4_plus_gnu_t)
+				DECLARE_LOCAL_PREDS;
+			};
+			extern dwarf4_plus_gnu_t& dwarf4_plus_gnu;
+		}
+
+		// standalone helper
+		int explicit_interp(abstract_def& def, int attr, const int *attr_possible_classes, int form, const int *form_possible_classes);
+	
+		void print_symmetric_map_pair(
+			std::ostream& o,
+			const std::map<const char *, int>& forward_map,
+			const std::map<int, const char *>& inverse_map);
+		
+		template <class DefWithMaps>
+		std::ostream& print(std::ostream& o) 
+		{
+			o << "Tags: " << std::endl;
+			print_symmetric_map_pair(o, DefWithMaps::tag_forward_map, DefWithMaps::tag_inverse_map);
+
+			o << "Attributes: " << std::endl;
+			print_symmetric_map_pair(o, DefWithMaps::attr_forward_map, DefWithMaps::attr_inverse_map);
+		
+			o << "Forms: " << std::endl;
+			print_symmetric_map_pair(o, DefWithMaps::form_forward_map, DefWithMaps::form_inverse_map);
+
+			o << "Encodings: " << std::endl;
+			print_symmetric_map_pair(o, DefWithMaps::encoding_forward_map, DefWithMaps::encoding_inverse_map);
+			
+			o << "Opcodes: " << std::endl;
+			print_symmetric_map_pair(o, DefWithMaps::op_forward_map, DefWithMaps::op_inverse_map);
+			
+			o << "Interpretations: " << std::endl;
+			print_symmetric_map_pair(o, DefWithMaps::interp_forward_map, DefWithMaps::interp_inverse_map);
+						
+			o << "Attribute classes: " << std::endl;
+			for (std::map<int, const int *>::const_iterator i = DefWithMaps::attr_class_tbl.begin();
+				i != DefWithMaps::attr_class_tbl.end();
+				i++)
+			{
+				o << DefWithMaps::attr_lookup(i->first) << ": ";
+				for (const int *p = i->second; *p != interp::EOL; p++)
+				{
+					o << DefWithMaps::interp_lookup(*p && ~interp::FLAGS);
+					if (*(p+1) != interp::EOL) o << ", ";
+				}
+				o << std::endl;
+			}
+			
+			o << "Form classes: " << std::endl;
+			for (std::map<int, const int *>::const_iterator i = DefWithMaps::form_class_tbl.begin();
+				i != DefWithMaps::form_class_tbl.end();
+				i++)
+			{
+				o << DefWithMaps::form_lookup(i->first) << ": ";
+				for (const int *p = i->second; *p != interp::EOL; p++)
+				{
+					o << DefWithMaps::interp_lookup(*p && ~interp::FLAGS);
+					if (*(p+1) != interp::EOL) o << ", ";
+				}
+				o << std::endl;
+			}
+
+			return o;
+		}
+
+		extern abstract_def& DEFAULT_DWARF_SPEC;
+		extern abstract_def& dwarf_current; // HACK
+		extern dwarf4_t& dwarf4;
+	}
+}
+
+/* Expressions. FIXME: make this per-spec. */
+
+/* These macro-defined ops are sufficient only for the computational
+ * fragment of DWARF.
+ *
+ * We define self-similar 0..31 ranges using BOOST_PP_REPEAT.
+ * I think we may want to have a standalone macro for each op...
+ * and/or have special_ops versus compute_ops
+ */
+#include <boost/preprocessor/repetition.hpp>
+#include <boost/preprocessor/control/if.hpp>
+#include <boost/preprocessor/facilities/empty.hpp>
+
+#define expand_breg_(z, n, v_) v_(DW_OP_breg ## n, morestack(1); PUSH(REGS(n) + Operand1); )
+#define expand_lit_(z, n, v_)  v_(DW_OP_lit ## n,  morestack(1); PUSH(n); )
+
+#define dwarf_expr_computed_ops(v_) \
+    v_(DW_OP_addr,    PUSH(Operand1);) \
+    v_(DW_OP_deref,   stk[0] = LOADN(sizeof (void*), stk[0]); ) \
+    v_(DW_OP_const1u, PUSH(Operand1);) \
+    v_(DW_OP_const2u, PUSH(Operand1);) \
+    v_(DW_OP_const4u, PUSH(Operand1);) \
+    v_(DW_OP_const8u, PUSH(Operand1);) \
+    v_(DW_OP_const1s, PUSH((Dwarf_Signed) Operand1);) \
+    v_(DW_OP_const2s, PUSH((Dwarf_Signed) Operand1);) \
+    v_(DW_OP_const4s, PUSH((Dwarf_Signed) Operand1);) \
+    v_(DW_OP_const8s, PUSH((Dwarf_Signed) Operand1);) \
+    v_(DW_OP_constu , PUSH(Operand1);) \
+    v_(DW_OP_consts , PUSH((Dwarf_Signed) Operand1);) \
+    v_(DW_OP_dup,     Dwarf_Unsigned tmp = stk[0]; PUSH(tmp); ) \
+    v_(DW_OP_drop,    POP(dummy); ) \
+    v_(DW_OP_over,    Dwarf_Unsigned tmp = stk[1]; PUSH(tmp); ) \
+    v_(DW_OP_pick,    Dwarf_Unsigned tmp = stk[Operand1]; PUSH(tmp); ) \
+    v_(DW_OP_swap,    Dwarf_Unsigned tmp = stk[0]; stk[0] = stk[1]; stk[1] = tmp; ) \
+    v_(DW_OP_rot,     /* top 3 entries: move one place closer to the top, with wraparound for stk[0] */ \
+                      Dwarf_Unsigned tmp1 = stk[1], tmp2 = stk[2]; stk[2] = stk[0]; stk[1] = tmp2; stk[0] = tmp1; ); \
+    v_(DW_OP_xderef,  POP(addr); stk[0] = LOADN3(sizeof (void*), addr, /* asid */ stk[0]); ) \
+    v_(DW_OP_abs,     Dwarf_Signed tmp = stk[0]; stk[0] = (tmp < 0) ? -tmp : tmp; ) \
+    v_(DW_OP_and,     POP(arg1); stk[0] = arg1 & /*arg2*/ stk[0];) \
+    v_(DW_OP_div,     POP(arg1); stk[0] = (Dwarf_Signed) /*arg2*/ stk[0] / (Dwarf_Signed) arg1;) \
+    v_(DW_OP_minus,   POP(arg1); stk[0] -= arg1; ) \
+    v_(DW_OP_mod,     POP(arg1); stk[0] = (Dwarf_Signed) /*arg2*/ stk[0] % (Dwarf_Signed) arg1;) \
+    v_(DW_OP_mul,     POP(arg1); stk[0] = arg1 * /*arg2*/ stk[0];) \
+    v_(DW_OP_neg,     stk[0] = -stk[0]; ) \
+    v_(DW_OP_not,     stk[0] = ~stk[0]; ) \
+    v_(DW_OP_or,      POP(arg1); stk[0] = arg1 | /*arg2*/ stk[0];) \
+    v_(DW_OP_plus,    POP(arg1); stk[0] = arg1 + /*arg2*/ stk[0];) \
+    v_(DW_OP_plus_uconst, stk[0] += Operand1;) \
+    v_(DW_OP_shl,     POP(arg1); stk[0] = /*arg2*/ stk[0] << arg1;) \
+    v_(DW_OP_shr,     POP(arg1); stk[0] = /*arg2*/ stk[0] >> arg1;) \
+    v_(DW_OP_shra,    POP(arg1); stk[0] = (long int)((unsigned long) /*arg2*/stk[0] >> arg1);) \
+    v_(DW_OP_xor,     POP(arg1); stk[0] = arg1 ^ /*arg2*/ stk[0];) \
+    /* DW_OP_bra goes here */ \
+    v_(DW_OP_eq,      POP(arg1); stk[0] = ((Dwarf_Signed) /*arg2*/ stk[0] == (Dwarf_Signed) arg1) ? 1 : 0;) \
+    v_(DW_OP_ge,      POP(arg1); stk[0] = ((Dwarf_Signed) /*arg2*/ stk[0] >= (Dwarf_Signed) arg1) ? 1 : 0;) \
+    v_(DW_OP_gt,      POP(arg1); stk[0] = ((Dwarf_Signed) /*arg2*/ stk[0] >  (Dwarf_Signed) arg1) ? 1 : 0;) \
+    v_(DW_OP_le,      POP(arg1); stk[0] = ((Dwarf_Signed) /*arg2*/ stk[0] <= (Dwarf_Signed) arg1) ? 1 : 0;) \
+    v_(DW_OP_lt,      POP(arg1); stk[0] = ((Dwarf_Signed) /*arg2*/ stk[0] <  (Dwarf_Signed) arg1) ? 1 : 0;) \
+    v_(DW_OP_ne,      POP(arg1); stk[0] = ((Dwarf_Signed) /*arg2*/ stk[0] != (Dwarf_Signed) arg1) ? 1 : 0;) \
+    /* DW_OP_skip goes here */ \
+    BOOST_PP_REPEAT(32, expand_lit_, v_) \
+    /* DW_OP_reg* go here */ \
+    BOOST_PP_REPEAT(32, expand_breg_, v_) \
+    /* DW_OP_regx and DW_OP_fbreg go here */ \
+    v_(DW_OP_bregx,   morestack(1); PUSH(REGS(Operand1) + Operand2); ) \
+    /* DW_OP_piece goes here */ \
+    v_(DW_OP_deref_size, stk[0] = LOADN(Operand1, stk[0]); ) \
+    v_(DW_OP_xderef_size, POP(addr); stk[0] = LOADN3(Operand1, addr, /* asid */ stk[0]); ) \
+    v_(DW_OP_nop,     ) \
+    /* FIXME: add more opcodes! Either here or below.... */
+
+
+/* "Special ops" are those that require  out-of-band handling -- stuff like:
+ * DW_OP_piece
+ * DW_OP_stack_value
+ * DW_OP_implicit_value
+ * DW_OP_reg*    <-- since semantically this *names* a register, not operate on/with its value
+ */
+/* Also, how do we #ifdef out some possibly-not-defined tokens?
+ * Use BOOST_PP_IF., but it's not that nice unfortunately... we'd like to write:
+ 
+   BOOST_PP_IF( defined(DW_OP_implicit_pointer), v_(DW_OP_implicit_pointer, ~), ) \
+
+ * but sadly "defined" doesn't behave like an ordinary macro.
+ */
+#ifdef DW_OP_implicit_pointer
+#define HAVE_DW_OP_implicit_pointer 1
+#else
+#define HAVE_DW_OP_implicit_pointer 0
+#endif
+
+#define expand_reg_(z, n, v_)  v_(DW_OP_reg ## n, ~ )
+#define dwarf_expr_special_ops(v_) \
+    v_(DW_OP_bra, ~) \
+    v_(DW_OP_skip, ~) \
+    v_(DW_OP_fbreg, ~) \
+    v_(DW_OP_call_frame_cfa, ~) \
+    v_(DW_OP_piece, ~) \
+    BOOST_PP_REPEAT(32, expand_reg_, v_) \
+    v_(DW_OP_regx, ~) \
+    v_(DW_OP_stack_value, ~) \
+    v_(DW_OP_implicit_value, ~) \
+    v_(DW_OP_GNU_implicit_pointer, ~) \
+    BOOST_PP_IF( HAVE_DW_OP_implicit_pointer, v_(DW_OP_implicit_pointer, ~), ) \
+
+#endif

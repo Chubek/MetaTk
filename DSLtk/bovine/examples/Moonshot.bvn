@@ -1,0 +1,13 @@
+langspec "Moonshot";
+version "0.1.0";
+
+Metadata
+{
+   name = "Moonshot"
+   authors = 
+   {
+	"Chubak Bidpaa <chubakbidpa@riseup.net>"
+   }
+   licencese = "MIT"
+   compiled
+}

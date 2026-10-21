@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 3.20)
+project(DomBind VERSION 1.0.0 LANGUAGES C CXX)
+# Opt in to runtimes so a missing JVM does not block unrelated libraries.
+foreach(language d go java lua node ocaml ruby rust)
+  string(TOUPPER "${language}" upper)
+  option(DOMBIND_${upper} "Build dom${language}bind" OFF)
+  if(DOMBIND_${upper})
+    add_subdirectory(dom${language}bind)
+  endif()
+endforeach()

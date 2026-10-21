@@ -1,0 +1,201 @@
+local xbind = require("lxbind")
+
+-- DynLOAD: Tourchstone native loader + qBFD-backed object inspection.
+-- Header is relative to tourchstone/dynload/ (dynload.h). Native loading
+-- uses the host loader; metadata comes from Yellowstone qBFD readers.
+-- Borrowed strings stay valid until close/destroy. Symbol/section/
+-- relocation index accessors (which need record structs) are deferred
+-- until XBind IR gains records; everything below uses only opaque
+-- env/library handles, strings, ints, size_t, and uint64_t addresses so
+-- all nine target inventories represent this surface; Lua emits working glue.
+return xbind.library {
+  name = "dynload",
+  version = "0.1.0",
+  features = { "c-signatures", "explicit-ownership" },
+  headers = { "dynload.h" },
+  stdlib = { "typedef", "sexp", "json" },
+  targets = {
+    xbind.target("D", { module = "dynload" }),
+    xbind.target("Go", { package = "dynload" }),
+    xbind.target("Java", { package = "stone.dynload", class = "DynLoad" }),
+    xbind.target("Lua", { module = "dynload" }),
+    xbind.target("NodeJS", { addon = "dynload" }),
+    xbind.target("OCaml", { library = "dynload" }),
+    xbind.target("Python", { module = "dynload" }),
+    xbind.target("Ruby", { extension = "dynload" }),
+    xbind.target("Rust", { crate = "dynload_sys" }),
+  },
+  typedefs = {
+    xbind.typedef("tdyn_status_t", "int", { range = "status" }),
+    xbind.typedef("tdyn_symbol_binding_t", "int", { range = "binding" }),
+    xbind.typedef("tdyn_symbol_kind_t", "int", { range = "kind" }),
+    xbind.typedef("tdyn_env_t *", "opaque", { ownership = "opaque" }),
+    xbind.typedef("const tdyn_env_t *", "opaque", { ownership = "opaque" }),
+    xbind.typedef("const tdyn_library_t *", "opaque", { ownership = "opaque" }),
+    xbind.typedef("tdyn_library_t *", "opaque", { ownership = "opaque" }),
+    xbind.typedef("tdyn_symbol_table_t", "int", { range = "symbol_table" }),
+    xbind.typedef("uint32_t", "int", { range = "uint32" }),
+    xbind.typedef("uint64_t", "int", { range = "uint64" }),
+    xbind.typedef("const char *", "string", { ownership = "borrowed" }),
+  },
+  functions = {
+    xbind.func("tdyn_env_new", {
+      returns = "tdyn_env_t *", ownership = "owned",
+      params = {},
+    }),
+    xbind.func("tdyn_env_destroy", {
+      returns = "void",
+      params = { xbind.param("env", "tdyn_env_t *", { nullable = true, ownership = "consumed" }) },
+    }),
+    xbind.func("tdyn_env_add_search_path", {
+      returns = "tdyn_status_t",
+      params = { xbind.param("env", "tdyn_env_t *"), xbind.param("path", "const char *") },
+    }),
+    xbind.func("tdyn_env_add_default_search_paths", {
+      returns = "tdyn_status_t",
+      params = { xbind.param("env", "tdyn_env_t *") },
+    }),
+    xbind.func("tdyn_env_library_count", {
+      returns = "size_t",
+      params = { xbind.param("env", "const tdyn_env_t *", { nullable = true }) },
+    }),
+    xbind.func("tdyn_env_library", {
+      returns = "tdyn_library_t *", ownership = "borrowed",
+      params = { xbind.param("env", "tdyn_env_t *"), xbind.param("index", "size_t") },
+    }),
+    xbind.func("tdyn_library_load", {
+      returns = "tdyn_library_t *", ownership = "owned",
+      params = { xbind.param("path", "const char *"), xbind.param("flags", "uint32_t") },
+    }),
+    xbind.func("tdyn_library_close", {
+      returns = "void",
+      params = { xbind.param("library", "tdyn_library_t *", { nullable = true, ownership = "consumed" }) },
+    }),
+    xbind.func("tdyn_library_inspection_error", {
+      returns = "const char *",
+      params = { xbind.param("library", "const tdyn_library_t *") },
+    }),
+    xbind.func("tdyn_library_symbol_count", {
+      returns = "size_t",
+      params = { xbind.param("library", "const tdyn_library_t *"), xbind.param("table", "tdyn_symbol_table_t") },
+    }),
+    xbind.func("tdyn_version", {
+      returns = "const char *",
+      params = {},
+    }),
+    xbind.func("tdyn_status_string", {
+      returns = "const char *",
+      params = {
+        xbind.param("status", "tdyn_status_t"),
+      },
+    }),
+    xbind.func("tdyn_last_error", {
+      returns = "const char *",
+      params = {},
+    }),
+    xbind.func("tdyn_symbol_binding_name", {
+      returns = "const char *",
+      params = {
+        xbind.param("binding", "tdyn_symbol_binding_t"),
+      },
+    }),
+    xbind.func("tdyn_symbol_kind_name", {
+      returns = "const char *",
+      params = {
+        xbind.param("kind", "tdyn_symbol_kind_t"),
+      },
+    }),
+    xbind.func("tdyn_env_search_path_count", {
+      returns = "size_t",
+      params = {
+        xbind.param("env", "const tdyn_env_t *", { nullable = true }),
+      },
+    }),
+    xbind.func("tdyn_env_search_path", {
+      returns = "const char *",
+      params = {
+        xbind.param("env", "const tdyn_env_t *"),
+        xbind.param("index", "size_t"),
+      },
+    }),
+    xbind.func("tdyn_library_path", {
+      returns = "const char *",
+      params = {
+        xbind.param("library", "const tdyn_library_t *", { nullable = true }),
+      },
+    }),
+    xbind.func("tdyn_library_is_native_loaded", {
+      returns = "int",
+      params = {
+        xbind.param("library", "const tdyn_library_t *"),
+      },
+    }),
+    xbind.func("tdyn_library_is_inspected", {
+      returns = "int",
+      params = {
+        xbind.param("library", "const tdyn_library_t *"),
+      },
+    }),
+    xbind.func("tdyn_library_format_name", {
+      returns = "const char *",
+      params = {
+        xbind.param("library", "const tdyn_library_t *"),
+      },
+    }),
+    xbind.func("tdyn_library_arch_name", {
+      returns = "const char *",
+      params = {
+        xbind.param("library", "const tdyn_library_t *"),
+      },
+    }),
+    xbind.func("tdyn_library_endian_name", {
+      returns = "const char *",
+      params = {
+        xbind.param("library", "const tdyn_library_t *"),
+      },
+    }),
+    xbind.func("tdyn_library_file_type_name", {
+      returns = "const char *",
+      params = {
+        xbind.param("library", "const tdyn_library_t *"),
+      },
+    }),
+    xbind.func("tdyn_library_entry_point", {
+      returns = "uint64_t",
+      params = {
+        xbind.param("library", "const tdyn_library_t *"),
+      },
+    }),
+    xbind.func("tdyn_library_image_base", {
+      returns = "uint64_t",
+      params = {
+        xbind.param("library", "const tdyn_library_t *"),
+      },
+    }),
+    xbind.func("tdyn_library_needed_count", {
+      returns = "size_t",
+      params = {
+        xbind.param("library", "const tdyn_library_t *"),
+      },
+    }),
+    xbind.func("tdyn_library_needed", {
+      returns = "const char *",
+      params = {
+        xbind.param("library", "const tdyn_library_t *"),
+        xbind.param("index", "size_t"),
+      },
+    }),
+    xbind.func("tdyn_library_section_count", {
+      returns = "size_t",
+      params = {
+        xbind.param("library", "const tdyn_library_t *"),
+      },
+    }),
+    xbind.func("tdyn_library_relocation_count", {
+      returns = "size_t",
+      params = {
+        xbind.param("library", "const tdyn_library_t *"),
+      },
+    }),
+  },
+}

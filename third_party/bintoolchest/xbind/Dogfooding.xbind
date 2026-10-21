@@ -1,0 +1,57 @@
+local xbind = require("lxbind")
+
+-- Dogfooding: XBind binding itself (xbind.h core).
+-- Headers are relative to tourchstone/xbind/. Only the stable,
+-- callback-free query surface is bound: version, status strings, and the
+-- target inventory. xbind_resolve_spec (out-buffer) and xbind_check_layout
+-- (diagnostic callback) wait for buffer/callback IR. This spec is the
+-- self-host check: if XBind cannot describe and regenerate its own queries
+-- through the Lua emitter, the self-hosting slice is incomplete. Other targets
+-- remain inventory-only, not implemented emitters.
+return xbind.library {
+  name = "dogfooding",
+  version = "0.1.0",
+  features = { "c-signatures", "explicit-ownership" },
+  headers = { "xbind.h" },
+  stdlib = { "typedef", "sexp", "json" },
+  targets = {
+    xbind.target("D", { module = "dogfooding" }),
+    xbind.target("Go", { package = "dogfooding" }),
+    xbind.target("Java", { package = "stone.dogfooding", class = "Dogfooding" }),
+    xbind.target("Lua", { module = "dogfooding" }),
+    xbind.target("NodeJS", { addon = "dogfooding" }),
+    xbind.target("OCaml", { library = "dogfooding" }),
+    xbind.target("Python", { module = "dogfooding" }),
+    xbind.target("Ruby", { extension = "dogfooding" }),
+    xbind.target("Rust", { crate = "dogfooding_sys" }),
+  },
+  typedefs = {
+    xbind.typedef("xbind_status", "int", { range = "status" }),
+    xbind.typedef("const char *", "string", { ownership = "borrowed" }),
+    xbind.typedef("const xbind_target_info *", "opaque", { ownership = "borrowed" }),
+  },
+  functions = {
+    xbind.func("xbind_target_at", {
+      returns = "const xbind_target_info *", ownership = "borrowed",
+      params = { xbind.param("index", "size_t") },
+    }),
+    xbind.func("xbind_find_target", {
+      returns = "const xbind_target_info *", ownership = "borrowed",
+      params = { xbind.param("name", "const char *") },
+    }),
+    xbind.func("xbind_version", {
+      returns = "const char *",
+      params = {},
+    }),
+    xbind.func("xbind_status_string", {
+      returns = "const char *",
+      params = {
+        xbind.param("status", "xbind_status"),
+      },
+    }),
+    xbind.func("xbind_target_count", {
+      returns = "size_t",
+      params = {},
+    }),
+  },
+}

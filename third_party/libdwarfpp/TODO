@@ -1,0 +1,11 @@
+Things to do:
+
+more tests; lots more tests
+Doxygen
+support more opcodes in expression evaluator
+pretty-print more stuff in dwarfppdump
+define multiple DWARF standards properly
+plumb in the multi-standard stuff where currently stubbed out
+line number program
+support DWARF output
+switch Dwarf_Off to "double" (really) to allow read-edit-write usage

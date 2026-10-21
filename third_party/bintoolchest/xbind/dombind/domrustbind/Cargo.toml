@@ -1,0 +1,9 @@
+[package]
+name = "domrustbind"
+version = "1.0.0"
+edition = "2021"
+description = "C ABI byte views and panic-contained callbacks for DomBind"
+license = "MIT"
+
+[lib]
+path = "src/lib.rs"
