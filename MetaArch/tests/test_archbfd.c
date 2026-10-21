@@ -345,6 +345,7 @@ static void diagnostics(void) {
     expect_error("schema: 1\nname: x\nformat: elfx\n", "unknown object format", 0);
     expect_error("schema: 1\nname: x\nbyte_order: sideways\n", "unknown byte order", 0);
     expect_error("schema: 1\nname: x\nmagic: \"zz\"\n", "hexadecimal", 0);
+    expect_error("schema: 1\nname: x\nmagic: \"abc\"\n", "even number", 0);
     expect_error("schema: 1\nname: x\nrecords:\n  - {name: r, size: 2, fields: "
                  "[{name: f, offset: 0, size: 4}]}\n",
                  "but the record is 2 bytes", 0);
@@ -689,6 +690,7 @@ static void coff_reader(const char *dir) {
         const ArchBFDObjectSection *sec = archbfd_object_section(obj, 0);
         CHECK(sec && !strcmp(sec->name, ".text"), "section 0 is .text");
         CHECK(sec && sec->size == 10, "section 0 is 10 bytes");
+        CHECK(sec && sec->rel_count == 1, "section 0 has one relocation");
     }
     CHECK(archbfd_object_symbol_count(obj) == 2, "%zu symbols",
           archbfd_object_symbol_count(obj));

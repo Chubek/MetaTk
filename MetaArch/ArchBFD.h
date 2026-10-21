@@ -281,6 +281,8 @@ typedef struct ArchBFDObjectSection {
     int64_t link;   /* index of the related section */
     int64_t info;   /* extra information (the target section of a relocation) */
     int64_t entsize;
+    int64_t rel_offset; /* file offset of the section's relocations (COFF) */
+    int64_t rel_count;  /* number of relocations (COFF) */
     size_t index;
 } ArchBFDObjectSection;
 
@@ -328,6 +330,8 @@ const ArchBFDObjectReloc *archbfd_object_reloc(const ArchBFDObject *obj, size_t 
 const char *archbfd_object_kind(const ArchBFDObject *obj);
 /* The machine type the object declares (ELF e_machine, COFF machine). */
 int64_t archbfd_object_machine(const ArchBFDObject *obj);
+/* The object type the object declares (ELF e_type, 1 = ET_REL). */
+int64_t archbfd_object_type(const ArchBFDObject *obj);
 
 /* Spelling of the enumerations. */
 const char *archbfd_format_name(ArchBFDFormat f);

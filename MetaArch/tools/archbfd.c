@@ -360,8 +360,8 @@ static int cmd_object(int argc, char **argv) {
         archbfd_close(db);
         return finish(&d, 1);
     }
-    printf("%s: %s, machine %" PRId64 "\n", file, archbfd_object_kind(obj),
-           archbfd_object_machine(obj));
+    printf("%s: %s, machine %" PRId64 ", type %" PRId64 "\n", file,
+           archbfd_object_kind(obj), archbfd_object_machine(obj), archbfd_object_type(obj));
     printf("sections (%zu):\n", archbfd_object_section_count(obj));
     for (size_t i = 0; i < archbfd_object_section_count(obj); i++) {
         const ArchBFDObjectSection *s = archbfd_object_section(obj, i);

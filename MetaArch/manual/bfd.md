@@ -121,6 +121,10 @@ the *shape* of the formats (where the symbol table lives, how a relocation
 entry is split) is in the code.  ELF, COFF and PE objects can be read today;
 Mach-O, ECOFF and WebAssembly are descriptions only.
 
+The reader reports the sections, the symbols and the relocations of an object.
+It does not read the program headers, the dynamic information or the section
+contents.
+
 A document may inherit the container of another one (`container: ELF32`), so
 the HP PA-RISC and m68k documents only carry their own relocations.  The
 catalogue resolves the reference when it loads a document.

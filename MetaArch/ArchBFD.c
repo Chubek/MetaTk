@@ -231,6 +231,10 @@ static bool bind_magic(Binder *b, const DsymNode *n, const char **out, size_t *o
         berr(b, n, "'magic' must not be empty");
         return false;
     }
+    if (hn % 2) {
+        berr(b, n, "'magic' must have an even number of hexadecimal digits");
+        return false;
+    }
     *out = dsym_arena_strndup(b->arena, hex, hn);
     *out_len = (hn + 1) / 2;
     return true;
@@ -1561,6 +1565,7 @@ struct ArchBFDObject {
     bool owns_data;
     char kind[16];
     int64_t machine;
+    int64_t type;
     ArchBFDObjectSection *sections;
     size_t section_count;
     ArchBFDObjectSymbol *symbols;
@@ -1752,6 +1757,7 @@ static bool read_elf(ArchBFDObject *obj, DsymDiags *diags) {
         return false;
     }
     obj->machine = (int64_t)emachine;
+    obj->type = (int64_t)etype;
     if (shnum == 0 || shoff == 0) {
         dsym_diag_add(diags, DSYM_ERROR, spec->source_path, 0, 0, NULL,
                       "the object has no section header table");
@@ -1910,7 +1916,8 @@ static bool read_elf(ArchBFDObject *obj, DsymDiags *diags) {
                 rel->symbol_name = obj->symbols[rel->symbol].name;
         }
     }
-    snprintf(obj->kind, sizeof obj->kind, "elf%lld", (unsigned long long)(shentsize == 40 ? 32 : 64));
+    snprintf(obj->kind, sizeof obj->kind, "elf%lld",
+             (unsigned long long)(len >= 5 && data[4] == 2 ? 64 : 32));
     return true;
 }
 
@@ -2001,9 +2008,9 @@ static bool read_coff(ArchBFDObject *obj, DsymDiags *diags, bool pe) {
         if (read_field(p, (size_t)scnhdr->size, scnhdr, "s_scnptr", little, &v))
             sec->offset = (int64_t)v;
         if (read_field(p, (size_t)scnhdr->size, scnhdr, "s_relptr", little, &v))
-            sec->link = (int64_t)v;
+            sec->rel_offset = (int64_t)v;
         if (read_field(p, (size_t)scnhdr->size, scnhdr, "s_nreloc", little, &v))
-            sec->info = (int64_t)v;
+            sec->rel_count = (int64_t)v;
         if (read_field(p, (size_t)scnhdr->size, scnhdr, "s_flags", little, &v))
             sec->flags = v;
     }
@@ -2051,14 +2058,14 @@ static bool read_coff(ArchBFDObject *obj, DsymDiags *diags, bool pe) {
     if (relrec) {
         size_t total = 0;
         for (size_t i = 0; i < obj->section_count; i++)
-            if (obj->sections[i].link > 0) total += (size_t)obj->sections[i].info;
+            if (obj->sections[i].rel_offset > 0) total += (size_t)obj->sections[i].rel_count;
         obj->relocs = dsym_arena_calloc(obj->arena, total ? total : 1, sizeof *obj->relocs);
         if (!obj->relocs) return false;
         for (size_t i = 0; i < obj->section_count; i++) {
             const ArchBFDObjectSection *sec = &obj->sections[i];
-            if (sec->link <= 0 || sec->info <= 0) continue;
-            for (int64_t k = 0; k < sec->info; k++) {
-                size_t off = (size_t)sec->link + (size_t)k * (size_t)relrec->size;
+            if (sec->rel_offset <= 0 || sec->rel_count <= 0) continue;
+            for (int64_t k = 0; k < sec->rel_count; k++) {
+                size_t off = (size_t)sec->rel_offset + (size_t)k * (size_t)relrec->size;
                 if (off + (size_t)relrec->size > len) break;
                 const uint8_t *p = data + off;
                 ArchBFDObjectReloc *rel = &obj->relocs[obj->reloc_count++];
@@ -2176,4 +2183,8 @@ const char *archbfd_object_kind(const ArchBFDObject *obj) {
 
 int64_t archbfd_object_machine(const ArchBFDObject *obj) {
     return obj ? obj->machine : 0;
+}
+
+int64_t archbfd_object_type(const ArchBFDObject *obj) {
+    return obj ? obj->type : 0;
 }
