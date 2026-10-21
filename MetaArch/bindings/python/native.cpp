@@ -1,5 +1,6 @@
 // Python owns copies of every view/result. No borrowed C pointer escapes.
 #include "MetaArchAPI.hpp"
+#include "archbfd_native.hpp"
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/vector.h>
@@ -127,4 +128,7 @@ NB_MODULE(_native, m) {
             for (auto value : values) operands.push_back(operand_value(value));
             return s.encode_form(form, operands, target);
         }, "form"_a, "values"_a, "target"_a = 0);
+
+    // The object-format catalogue registers its own classes.
+    archbfd_register(m);
 }

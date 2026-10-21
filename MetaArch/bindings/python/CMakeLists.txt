@@ -30,7 +30,7 @@ else()
 endif()
 
 set_target_properties(metaarch PROPERTIES POSITION_INDEPENDENT_CODE ON)
-nanobind_add_module(_native NB_STATIC native.cpp)
+nanobind_add_module(_native NB_STATIC native.cpp archbfd_native.cpp)
 target_link_libraries(_native PRIVATE MetaArch::api)
 target_compile_features(_native PRIVATE cxx_std_17)
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -43,6 +43,11 @@ set_target_properties(_native PROPERTIES
 file(MAKE_DIRECTORY "${_python_package_dir}")
 foreach(_file __init__.py __init__.pyi py.typed)
   configure_file("metaarch/${_file}" "${_python_package_dir}/${_file}" COPYONLY)
+endforeach()
+# The object-format subpackage.
+file(MAKE_DIRECTORY "${_python_package_dir}/archbfd")
+foreach(_file __init__.py __init__.pyi)
+  configure_file("metaarch/archbfd/${_file}" "${_python_package_dir}/archbfd/${_file}" COPYONLY)
 endforeach()
 
 if(SKBUILD)
@@ -62,10 +67,14 @@ endif()
 install(TARGETS _native LIBRARY DESTINATION "${_python_install_dir}" COMPONENT python)
 install(FILES metaarch/__init__.py metaarch/__init__.pyi metaarch/py.typed
   DESTINATION "${_python_install_dir}" COMPONENT python)
+install(FILES metaarch/archbfd/__init__.py metaarch/archbfd/__init__.pyi
+  DESTINATION "${_python_install_dir}/archbfd" COMPONENT python)
 
 if(ARCHDB_BUILD_TESTS AND ARCHDB_TEST_PYTHON_BINDINGS)
   add_test(NAME metaarch_python_api COMMAND "${CMAKE_COMMAND}" -E env
     "PYTHONPATH=${CMAKE_CURRENT_BINARY_DIR}" "PYTHONDONTWRITEBYTECODE=1"
     "METAARCH_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
+    "METAARCH_ARCHBFD_OBJECT=${CMAKE_BINARY_DIR}/archbfd-test.o"
     "${Python_EXECUTABLE}" -m unittest discover -s "${CMAKE_CURRENT_SOURCE_DIR}/tests" -v)
+  set_tests_properties(metaarch_python_api PROPERTIES DEPENDS archbfd_catalogue)
 endif()
