@@ -98,6 +98,8 @@ coverage.xml
 
 # Dependency files
 *.d
+# The D sources of the project are not DTrace scripts.
+!MetaArch/tests/test_bindings*.d
 
 # Compilation databases
 compile_commands.json
