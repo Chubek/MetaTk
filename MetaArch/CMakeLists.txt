@@ -309,6 +309,7 @@ endif()
 install(DIRECTORY ArchDB DESTINATION ${CMAKE_INSTALL_DATADIR}/metaarch)
 install(DIRECTORY ArchBFD DESTINATION ${CMAKE_INSTALL_DATADIR}/metaarch)
 install(FILES ArchDBCatalogue.yaml DESTINATION ${CMAKE_INSTALL_DATADIR}/metaarch)
+install(FILES ArchBFDCatalogue.yaml DESTINATION ${CMAKE_INSTALL_DATADIR}/metaarch)
 install(FILES bindings/d/metaarch.di DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/d)
 install(DIRECTORY bindings/go/ DESTINATION ${CMAKE_INSTALL_DATADIR}/metaarch/bindings/go
   FILES_MATCHING PATTERN "*.go" PATTERN "go.mod" PATTERN "*_test.go" EXCLUDE)
