@@ -115,3 +115,18 @@ The ArchBFD object-format catalogue added five CTest cases to the tree
   (1307 architecture, 292 form-encoding, 289 relocation checks).
 - The extractor check compares the committed `ArchBFD/*.bfd.yaml` with a
   fresh extraction from the `binutils/` checkout; it fails when they differ.
+
+## ArchBFD C++, XBind and binding surfaces (2026-10-22)
+
+The C++ API, the XBind specs and the D, Go and Python surfaces of the
+object-format catalogue added five more CTest cases (`archbfd_cpp_api`,
+`archbfd_d_api`, `metaarch_xbind_specs`, and the extended Go and Python
+suites).
+
+- GCC Release, static: 13/13 CTest, 12.8 s. GCC shared with the foreign and
+  Python bindings enabled: 14/14 CTest, 14.5 s. GCC ASan/UBSan: 13/13,
+  64.5 s, no findings. Clang Release: 13/13, 12.7 s.
+- New checks: `test_archbfd_cpp` reports 41 C++ API checks, 0 failures.
+- The Go test needs a GOROOT that holds the toolchain; the CTest now
+  computes one and passes `-vet=off`, which repairs the pre-existing Go
+  test in environments with a stale inherited GOROOT.
