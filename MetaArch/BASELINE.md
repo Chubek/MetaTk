@@ -49,3 +49,55 @@ No sanitizer findings at baseline.
   (library) **without** `-Werror`; adding `-Werror` is part of this work.
 * Performance numbers for `tools/bench.c` are recorded in the same file family
   once the benchmark exists (Phase F).
+
+## Python bindings baseline (2026-10-21)
+
+Before adding `bindings/python`, separate shared-library trees were built in
+`/tmp/opencode/metaarch-python-{release,asan}` with GCC 16.2.1, the local yyjson
+checkout above, `ARCHDB_BUILD_DSL=OFF`, and
+`-Wall -Wextra -Wpedantic -Werror`. Ninja is still unavailable; Unix Makefiles
+was used. No build warnings.
+
+- Release: 5/5 CTest cases passed in 14.32 s (C++17 ABI test enabled).
+  The unchanged native round-trip suite reports 1307 checks, 0 failures.
+- ASan+UBSan (`RelWithDebInfo`, `-fsanitize=address,undefined
+  -fno-omit-frame-pointer`): 4/4 cases passed in 65.60 s, no findings.
+- Current `archdb validate --lint ArchDB/*.dsymspec.yaml` output is preserved
+  in `docs/python-bindings-baseline-lint.txt` (exit 0; existing warnings/notes).
+  No native code or architecture data changes are needed for these bindings.
+
+Verification after adding the bindings:
+
+- GCC Release: 6/6 CTest cases, 13.99 s, including 22 Python tests.
+- Clang 22.1.8 Release: 5/5 CTest cases, 12.79 s (C++ test disabled),
+  including the same 22 Python tests. Both Release builds are warning-free
+  under the flags above.
+- Clang ASan+UBSan: 4/4 native CTest cases, 56.77 s, no findings.
+- The 22 Python tests also passed against each GCC/Clang sanitizer library
+  with the corresponding ASan runtime preloaded. Leak detection was disabled
+  only for the Python process (`ASAN_OPTIONS=detect_leaks=0`), not native CTest.
+- A pure-Python wheel was built offline, installed into an isolated target
+  directory, and all 22 tests passed against the CMake-installed shared library.
+
+Reproduce the build using the flags above, adding
+`-DARCHDB_TEST_PYTHON_BINDINGS=ON -DBUILD_SHARED_LIBS=ON` for Release testing;
+see `bindings/python/README.md` for standalone test/install commands. For Linux
+sanitizer testing with GCC, run the standalone Python command with
+`LD_PRELOAD="$(gcc -print-file-name=libasan.so)" ASAN_OPTIONS=detect_leaks=0`;
+use `clang -print-file-name=libclang_rt.asan-x86_64.so` for Clang on x86-64.
+
+## Nanobind implementation (2026-10-21)
+
+The prior Python notes above describe the earlier ctypes design; its package
+directory was empty when the nanobind task began. Current implementation and
+reproducible results are in [manual/verification.md](manual/verification.md).
+
+- Before edits: default Release 7/7 CTest, 11.90 s; existing GCC sanitizer tree
+  4/4, 62.79 s. Existing lint snapshot is unchanged byte-for-byte.
+- After: GCC static Release 6/6, 13.79 s; Clang shared Release 6/6, 12.93 s.
+  Both include 24 Python unittest cases; all existing native tests are intact.
+- GCC ASan/UBSan native 5/5, 66.36 s; Clang 5/5, 56.91 s. Python tests also
+  pass against both instrumented extensions with matching runtime preloaded.
+- All four builds are warning-clean with `-Wall -Wextra -Wpedantic -Werror`.
+- CMake shared installation and a built/installed platform wheel each pass all
+  24 Python tests. Native API/ABI, specs, backends and codecs are unchanged.

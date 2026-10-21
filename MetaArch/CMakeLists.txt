@@ -18,6 +18,12 @@ option(ARCHDB_BUILD_TESTS "Build the test suite" ON)
 option(ARCHDB_BUILD_DSL "Build the C++20 API, architecture DSL and assembler" ON)
 option(ARCHDB_TEST_CPP_API "Test the standalone C++17 API" ${ARCHDB_BUILD_DSL})
 option(ARCHDB_TEST_FOREIGN_BINDINGS "Test D and Go bindings (requires a shared build)" OFF)
+option(ARCHDB_BUILD_PYTHON "Build the nanobind Python extension" OFF)
+option(ARCHDB_TEST_PYTHON_BINDINGS "Test the nanobind Python extension" ${ARCHDB_TEST_FOREIGN_BINDINGS})
+set(ARCHDB_NANOBIND_DIR "" CACHE PATH "Local nanobind checkout (optional)")
+if(ARCHDB_TEST_PYTHON_BINDINGS)
+  set(ARCHDB_BUILD_PYTHON ON)
+endif()
 set(ARCHDB_DSLTK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../DSLtk" CACHE PATH
     "Directory containing DSLtk.hpp")
 
@@ -252,6 +258,9 @@ endif()
 
 # ---- install ---------------------------------------------------------------
 include(GNUInstallDirs)
+if(ARCHDB_BUILD_PYTHON)
+  add_subdirectory(bindings/python)
+endif()
 install(TARGETS metaarch
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -264,6 +273,7 @@ install(FILES ArchDBCatalogue.yaml DESTINATION ${CMAKE_INSTALL_DATADIR}/metaarch
 install(FILES bindings/d/metaarch.di DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/d)
 install(DIRECTORY bindings/go/ DESTINATION ${CMAKE_INSTALL_DATADIR}/metaarch/bindings/go
   FILES_MATCHING PATTERN "*.go" PATTERN "go.mod" PATTERN "*_test.go" EXCLUDE)
+install(DIRECTORY manual/ DESTINATION ${CMAKE_INSTALL_DOCDIR}/manual)
 if(ARCHDB_BUILD_DSL)
   install(TARGETS metaarch_dsl
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}

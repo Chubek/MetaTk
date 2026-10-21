@@ -1,9 +1,9 @@
 # Native and language APIs
 
 MetaArch now provides a version-1 **opaque C ABI** plus a standalone C++17 API,
-a D interface module, and a Go/cgo package. They all use the same C implementation
+a D interface module, a Go/cgo package, and Python nanobind bindings. They all use the same C implementation
 for loading, validation, metadata, encoding, relocation layout and serialization.
-No D or Go compiler/runtime is needed to build or use the C library.
+No D, Go or Python compiler/runtime is needed to build or use the C library.
 
 | Interface | Entry point | Dependency |
 |---|---|---|
@@ -11,6 +11,7 @@ No D or Go compiler/runtime is needed to build or use the C library.
 | Standalone C++ | `MetaArchAPI.hpp`, `metaarch::api::Spec` | C++17, header-only wrapper over the C ABI |
 | D | `bindings/d/metaarch.di`, module `metaarch` | D compiler; links to the C library |
 | Go | `bindings/go`, module/package `metaarch` | Go 1.20+, cgo and C compiler; links to the C library |
+| Python | `bindings/python`, package `metaarch` | Python 3.9+ extension; C++17/nanobind at build time; static or shared core |
 | Existing native model | `DSymspec.h`, `ArchDB.h` | C11, exposes native model layout |
 | Existing architecture DSL/assembler | `MetaArch.hpp`, `metaarch::Spec` | Optional C++20/DSLtk implementation |
 
@@ -36,7 +37,7 @@ lookup, all four writers, named encoding, checked form encoding and relocations.
   also expire on `metaarch_diagnostics_clear`. Copy before freeing the owner.
 - A result owns its bytes **and relocation names**, and survives freeing its
   spec. Parse/encode functions never retain caller arrays, strings or buffers.
-- C++ and Go copy metadata, diagnostics, encoded bytes and relocation records
+- C++, Go and Python copy metadata, diagnostics, encoded bytes and relocation records
   into language-owned values. These remain usable after the spec is closed.
 - Handles/results return NULL on failure. Supply a diagnostics handle to inspect
   errors; messages include core validation/encoding errors and parser positions
@@ -47,11 +48,13 @@ lookup, all four writers, named encoding, checked form encoding and relocations.
   or load its backend during reads. Give concurrent calls separate diagnostics.
   Go methods use an RWMutex, so `Close` and `LoadBackend` exclude ongoing reads.
   Do not copy a Go `Spec` value. Explicit Close is required; there is no finalizer.
+  Python retains the GIL across spec methods, including close/backend loading.
+  Prefer its context manager; native destruction is only a cleanup safety net.
 - Named encode is low-level: all parameters must be bound and names must be
   unique (at most 64 bindings). Form encode enforces the documented positional
   mapping, scalar bounds and register class/width. See [README](../README.md).
   New APIs validate targets rather than silently selecting a fallback target.
-- Paths/names are NUL-terminated in C/D. C++/Go reject embedded NULs in those
+- Paths/names are NUL-terminated in C/D. C++/Go/Python reject embedded NULs in those
   arguments. Parse buffers are length-delimited in every language.
 - The original `Dsym*` layout-exposing API is unchanged by this addition. The
   preceding Phase B native struct ABI change does not propagate to `Ma*` handles.
@@ -75,7 +78,7 @@ tests an actual C++17 translation unit independently of the C++20 DSL. The
 header and `MetaArch::api` INTERFACE target are always available to CMake
 `add_subdirectory` consumers. Disable both C++ test/DSL options for a C-only build.
 
-Foreign tests are opt-in, require a shared build and discover `ldc2`/`dmd` and
+Go/D tests are opt-in, require a shared build and discover `ldc2`/`dmd` and
 `go`. Missing language compilers produce explicit skip messages at configure
 time. Test execution is offline (`GOPROXY=off`, `GOTOOLCHAIN=local`). A valid
 Go installation and GOROOT, if set, are required. Do not enable the Go/D test
@@ -84,7 +87,37 @@ for sanitizer integration; C/C++ ABI tests already run in sanitizer builds.
 
 Headers are installed under `include/metaarch/`, D's interface under
 `include/d/`, and Go module sources under `share/metaarch/bindings/go/`.
+When enabled, Python's extension/package install under `lib/pythonX.Y/site-packages/metaarch`
+(configurable with `ARCHDB_PYTHON_INSTALL_DIR`).
 This does not claim to implement the outstanding full CMake package/CI work.
+
+## Python example
+
+```sh
+cmake -S . -B build-python -DARCHDB_BUILD_DSL=OFF \
+  -DARCHDB_TEST_PYTHON_BINDINGS=ON \
+  -DARCHDB_NANOBIND_DIR=/mnt/nvme/metatk/third_party/nanobind
+cmake --build build-python -j
+export PYTHONPATH="$PWD/build-python/bindings/python"
+```
+
+```python
+import metaarch as ma
+
+with ma.load("ArchDB/riscv64.dsymspec.yaml") as spec:
+    result = spec.encode("addi", {"rd": 10, "rs1": 10, "imm": -1})
+    print(result.data.hex(" "))  # 13 05 f5 ff
+```
+
+Python uses a compiled nanobind extension, with no ctypes/library-discovery layer
+or `ma.Library`. No third-party Python runtime module is required. Native failures
+raise `ma.Error` with copied structured `diagnostics`. `encode_form` checks
+visible positional operands and form constraints; `encode` is low-level.
+See the [Python guide](../bindings/python/README.md) for all methods, ownership,
+build/install and errors. `ARCHDB_TEST_PYTHON_BINDINGS=ON` builds the extension and
+enables its unittest suite independently; it defaults to `ARCHDB_TEST_FOREIGN_BINDINGS`.
+`ARCHDB_BUILD_PYTHON=ON` builds without opting into tests. Python 3.9+ interpreter
+and development headers are required when enabled. See also the [manual](../manual/README.md).
 
 ## C example
 

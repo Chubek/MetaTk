@@ -1,5 +1,37 @@
 # MetaArch — native and cross-language API checkpoint
 
+## Latest addition: nanobind Python bindings and project manual
+
+Implemented the explicit Python/manual request in `bindings/python` and
+`manual` (directory spelling confirmed with the user). No native API/ABI,
+schema, spec-data or generated-backend changes were made in this increment.
+
+- Python 3.9+ compiled extension uses nanobind from a configurable checkout or
+  installed package; verification used `/mnt/nvme/metatk/third_party/nanobind`
+  because `/mnt/nvme/third_party/nanobind` was absent.
+- Exposes ABI-v1 load/parse, metadata, lookup, backend loading, four writers,
+  named and checked-form encoding, copied results/relocations and diagnostics.
+- Context ownership/native cleanup, structured exceptions, strict int64/NUL
+  checks, read-only copied metadata and GIL-serialized calls; type stubs included.
+- Optional CMake build/test/install and platform wheel support. No separate
+  shared core is needed when statically linked. No ctypes/Library/Native API.
+- Project manual covers architecture, dependencies, builds, specs/formats,
+  CLI, encoder/relocation semantics, native/foreign APIs, Python, DSL, maintenance,
+  testing and current limitations; [start here](manual/README.md).
+
+Verification: GCC/Clang Release each pass 6/6 configured CTest cases, including
+24 Python tests. Both ASan/UBSan builds pass 5/5 native cases and all 24 Python
+tests separately without findings. CMake-installed shared package and installed
+platform wheel each pass all Python tests. All four builds are warning-clean
+with `-Wall -Wextra -Wpedantic -Werror`. The default DSL-enabled build also
+remains green (7/7). Native round trips retain 1307 checks over 28 specs/four
+formats; lint output is byte-identical before/after.
+
+Exact commands, timings, packaging details and unverified boundaries are in
+[manual/verification.md](manual/verification.md). The larger A–G hardening
+roadmap and prior encoder audit remain unchanged; no additional ISA data fix is
+claimed by this request. Existing unrelated working-tree changes were preserved.
+
 ## Latest addition: C ABI, C++17, D and Go APIs
 
 Implemented the subsequent explicit request for language APIs, without claiming

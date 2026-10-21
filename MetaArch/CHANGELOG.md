@@ -4,6 +4,18 @@ All notable changes are documented here, following Keep a Changelog.
 
 ## [Unreleased]
 
+### Added — Python bindings
+- `bindings/python`: Python 3.9+ nanobind extension over ABI v1, built using a
+  configurable local checkout or installed nanobind; static/shared core support.
+- Spec load/parse, metadata, named/checked encoding, copied relocations,
+  positioned diagnostics, backend loading and all four serialization formats.
+- Context-managed ownership, native destructor fallback, GIL-serialized calls,
+  and checked integer/path/name conversion without silent truncation.
+- 24 unittest cases, optional build/test CMake integration, installed extension,
+  PEP 561 type information and full Python usage/API guide. No native ABI changes.
+- `manual/`: project-wide guide covering builds, data flow, schema/formats, CLI,
+  encoder semantics, native/foreign APIs, DSL, contribution workflow and limitations.
+
 ### Added — opaque C ABI and language bindings
 - `MetaArchABI.h` / `MetaArchABI.c`: version-1 owning handles, structured
   diagnostics, metadata views, load/parse/write and named/form encoding.

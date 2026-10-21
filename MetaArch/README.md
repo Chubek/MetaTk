@@ -3,6 +3,9 @@
 C11 library + `archdb` tool for the DomSymAsCC architecture specifications in
 `ArchDB/*.dsymspec.yaml` (schema: `ArchDB/schema/dsymspec.schema.json`).
 
+See the [project manual](manual/README.md) for build instructions, architecture,
+specifications, CLI, APIs, encoding, maintenance and known limitations.
+
 An optional **C++20 API, DSLtk-based architecture DSL and spec-driven assembler**
 are available through `MetaArch.hpp`, `MetaArch::dsl` and the `metaarch` tool.
 See [the DSL/API guide](docs/DSL.md) and [runnable example](examples/toy.march).
@@ -13,8 +16,10 @@ The C library and `archdb` remain available without C++ (`ARCHDB_BUILD_DSL=OFF`)
 For cross-language use, see [the bindings guide](docs/BINDINGS.md):
 `MetaArchABI.h` provides opaque C ABI v1 handles, `MetaArchAPI.hpp` provides an
 independent C++17 RAII API, `bindings/d/metaarch.di` provides D declarations,
-and `bindings/go` provides a Go/cgo package. These coexist with the native C
-model API and existing C++20 DSL API without exposing internal struct layouts.
+`bindings/go` provides a Go/cgo package, and `bindings/python` provides
+[Python 3.9+ bindings](bindings/python/README.md) implemented with `nanobind`.
+These coexist with the native C model API and existing C++20 DSL API without
+exposing internal struct layouts.
 
 ## Layout
 
