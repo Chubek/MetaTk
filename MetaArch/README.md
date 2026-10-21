@@ -6,7 +6,8 @@ C11 library + `archdb` tool for the DomSymAsCC architecture specifications in
 The companion `ArchBFD` catalogue describes the **object formats** those
 specifications are packed into — ELF, COFF, PE, Mach-O, ECOFF and
 WebAssembly — with the byte layouts, constants and relocation tables taken
-from `binutils/bfd`. `archbfd` is its command-line front end; see
+from `binutils/bfd` (the generator needs a binutils checkout; the committed
+documents do not). `archbfd` is its command-line front end; see
 [the object-format guide](manual/bfd.md).
 
 See the [project manual](manual/README.md) for build instructions, architecture,

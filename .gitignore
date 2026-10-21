@@ -251,4 +251,8 @@ AGENTS.md
 build/
 build-*/
 
+# The binutils checkout the ArchBFD extractor reads is an external input
+# (binutils 2.22); it is not part of the repository.
+MetaArch/binutils/
+
 *.bak

@@ -59,8 +59,8 @@ mask always describes the width of the extracted part.
 
 ## Where the data comes from
 
-The documents are **generated** from the binutils checkout in `binutils/`
-(binutils 2.22) by `tools/extract_bfd.py`, which parses the byte layouts in
+The documents are **generated** from a binutils checkout (2.22 was used here)
+by `tools/extract_bfd.py`, which parses the byte layouts in
 `include/elf/external.h`, `include/coff/*.h` and `include/mach-o/external.h`,
 and the relocation tables in `bfd/elf64-x86-64.c`, `bfd/elf32-i386.c`,
 `bfd/elf32-m68k.c`, `bfd/elf-hppa.h`, `bfd/coff-i386.c` and `bfd/coff-mips.c`.
@@ -68,11 +68,14 @@ and the relocation tables in `bfd/elf64-x86-64.c`, `bfd/elf32-i386.c`,
 ```sh
 python3 tools/extract_bfd.py                 # regenerate ArchBFD/*.bfd.yaml
 python3 tools/extract_bfd.py --check         # fail when they are out of date
+python3 tools/extract_bfd.py --binutils /path/to/binutils --out ArchBFD
 ```
 
-The generator is deterministic, and the CTest case `archbfd_extractor_check`
-keeps the committed documents in sync with the checkout.  Two independent
-checks confirm the *meaning* of the numbers:
+The checkout is an external input and is not part of the repository; the
+committed documents work without it.  The generator is deterministic, and the
+CTest case `archbfd_extractor_check` keeps the committed documents in sync
+with the checkout when one is present.  Two independent checks confirm the
+*meaning* of the numbers:
 
 - `tests/check_bfd_schema.py` validates every document against
   `ArchBFD/schema/MetaBFD.schema.json` (needs PyYAML and jsonschema).

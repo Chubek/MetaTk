@@ -14,8 +14,9 @@ All notable changes are documented here, following Keep a Changelog.
 - `ArchBFD/schema/MetaBFD.schema.json`: the document schema (draft 2020-12).
 - `ArchBFDCatalogue.yaml`: the catalogue index, regenerated with
   `archbfd catalogue ArchBFD --root ArchBFD -o ArchBFDCatalogue.yaml`.
-- `tools/extract_bfd.py`: generates the documents from the binutils checkout in
-  `binutils/` (2.22) by parsing the byte layouts in `include/elf/external.h`,
+- `tools/extract_bfd.py`: generates the documents from a binutils checkout
+  (2.22 was used; `--binutils` selects it) by parsing the byte layouts in
+  `include/elf/external.h`,
   `include/coff/*.h` and `include/mach-o/external.h` and the relocation tables
   in `bfd/elf64-x86-64.c`, `bfd/elf32-i386.c`, `bfd/elf32-m68k.c`,
   `bfd/elf-hppa.h`, `bfd/coff-i386.c` and `bfd/coff-mips.c`.  The output is
