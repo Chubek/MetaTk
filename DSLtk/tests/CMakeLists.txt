@@ -29,6 +29,18 @@ add_executable(dsltk_language_tests test_language_facilities.cpp)
 target_link_libraries(dsltk_language_tests PRIVATE DSLtk)
 add_test(NAME dsltk_language_facilities COMMAND dsltk_language_tests)
 
+add_executable(dsltk_predicate_tests test_predicate.cpp)
+target_link_libraries(dsltk_predicate_tests PRIVATE DSLtk)
+add_test(NAME dsltk_predicate COMMAND dsltk_predicate_tests)
+
+add_executable(dsltk_template_tests test_template_facilities.cpp)
+target_link_libraries(dsltk_template_tests PRIVATE DSLtk)
+add_test(NAME dsltk_template_facilities COMMAND dsltk_template_tests)
+
+add_executable(dsltk_task_pipeline_example ../examples/21-task-pipeline.cpp)
+target_link_libraries(dsltk_task_pipeline_example PRIVATE DSLtk)
+add_test(NAME dsltk_task_pipeline COMMAND dsltk_task_pipeline_example)
+
 add_executable(dsltk_graph_term_tests test_graph_terms.cpp)
 target_link_libraries(dsltk_graph_term_tests PRIVATE DSLtk)
 add_test(NAME dsltk_graph_terms COMMAND dsltk_graph_term_tests)

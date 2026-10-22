@@ -6014,7 +6014,7 @@ template <typename F> struct Predicate
   constexpr auto
   operator& (Predicate<G> other) const
   {
-    return Predicate{ [a = fn, b = other.fn] (auto &&v)
+    return dsl::Predicate{ [a = fn, b = other.fn] (auto &&v)
                         { return a (v) && b (v); } };
   }
 
@@ -6023,7 +6023,7 @@ template <typename F> struct Predicate
   constexpr auto
   operator| (Predicate<G> other) const
   {
-    return Predicate{ [a = fn, b = other.fn] (auto &&v)
+    return dsl::Predicate{ [a = fn, b = other.fn] (auto &&v)
                         { return a (v) || b (v); } };
   }
 
@@ -6031,7 +6031,7 @@ template <typename F> struct Predicate
   constexpr auto
   operator!() const
   {
-    return Predicate{ [a = fn] (auto &&v) { return !a (v); } };
+    return dsl::Predicate{ [a = fn] (auto &&v) { return !a (v); } };
   }
 };
 
@@ -6308,11 +6308,23 @@ template <auto Key, typename F> struct WhenClause
   using handler_type_or_void = F;
   explicit constexpr WhenClause (F f) : handler (std::move (f)) {}
 
-  template <typename K, typename... Args>
+  template <typename K, typename R, typename... Args>
   constexpr bool
-  try_invoke (K key, std::optional<std::invoke_result_t<F, K, Args...>> &out,
+  try_invoke (K key, std::optional<R> &out,
               Args &&...args) const
   {
+    auto invoke = [&]
+      {
+        if constexpr (std::is_void_v<
+                          std::invoke_result_t<const F &, K &, Args...>>)
+          {
+            std::invoke (handler, key, std::forward<Args> (args)...);
+            out.emplace ();
+          }
+        else
+          out.emplace (
+              std::invoke (handler, key, std::forward<Args> (args)...));
+      };
     using KeyT = std::remove_cvref_t<decltype (Key)>;
     if constexpr (requires { KeyT::matches (std::string_view{}); })
       {
@@ -6320,7 +6332,7 @@ template <auto Key, typename F> struct WhenClause
           {
             if (KeyT::matches (std::string_view (key)))
               {
-                out = handler (key, std::forward<Args> (args)...);
+                invoke ();
                 return true;
               }
           }
@@ -6329,7 +6341,7 @@ template <auto Key, typename F> struct WhenClause
       {
         if (key == Key)
           {
-            out = handler (key, std::forward<Args> (args)...);
+            invoke ();
             return true;
           }
       }
@@ -6353,6 +6365,15 @@ when (F &&f)
   return WhenClause<Key, std::decay_t<F>>{ std::forward<F> (f) };
 }
 
+/// Type-based pattern syntax: when<pattern<"...">>(handler).
+template <typename Pattern, typename F>
+  requires requires { Pattern::matches (std::string_view{}); }
+constexpr auto
+when (F &&f)
+{
+  return when<Pattern{}> (std::forward<F> (f));
+}
+
 // --- otherwise clause ---
 
 /**
@@ -6369,9 +6390,9 @@ template <typename F> struct OtherwiseClause
   using handler_type_or_void = F;
   explicit constexpr OtherwiseClause (F f) : handler (std::move (f)) {}
 
-  template <typename K, typename... Args>
+  template <typename K, typename R, typename... Args>
   constexpr bool
-  try_invoke (K, std::optional<std::invoke_result_t<F, K, Args...>> &,
+  try_invoke (K, std::optional<R> &,
               Args &&...) const
   {
     return false;
@@ -6394,6 +6415,7 @@ otherwise (F &&f)
  * @brief Dispatch table built from when<>/otherwise clauses.
  *
  * Created by dsl::match(). Call operator()(key, args...) to dispatch.
+ * Handlers may all return void, or values with a common result type.
  *
  * @tparam Clauses  Tuple of WhenClause and OtherwiseClause types.
  *
@@ -6403,8 +6425,8 @@ otherwise (F &&f)
  *       dsl::when<2>([](auto){ return "two"; }),
  *       dsl::otherwise([](auto){ return "other"; })
  *   );
- *   table(1, 0);  // "one"
- *   table(99, 0); // "other"
+ *   table(1);  // "one"
+ *   table(99); // "other"
  */
 template <typename... Clauses> struct MatchTable
 {
@@ -6418,9 +6440,11 @@ template <typename... Clauses> struct MatchTable
   operator() (Key key, Args &&...args) const
   {
     using RetT = std::common_type_t<std::invoke_result_t<
-        typename Clauses::handler_type_or_void, Key, Args...>...>;
+        const typename Clauses::handler_type_or_void &, Key &, Args...>...>;
     // Try each when<> clause in order
-    std::optional<RetT> result;
+    using StoredT
+        = std::conditional_t<std::is_void_v<RetT>, std::monostate, RetT>;
+    std::optional<StoredT> result;
     bool has_otherwise = false;
     bool matched = std::apply (
         [&] (const auto &...c)
@@ -6446,8 +6470,19 @@ template <typename... Clauses> struct MatchTable
                            {
                              has_otherwise = true;
                              if (!result)
-                               result = c.handler (
-                                   key, std::forward<Args> (args)...);
+                               {
+                                 if constexpr (std::is_void_v<RetT>)
+                                   {
+                                     std::invoke (
+                                         c.handler, key,
+                                         std::forward<Args> (args)...);
+                                     result.emplace ();
+                                   }
+                                 else
+                                   result.emplace (std::invoke (
+                                       c.handler, key,
+                                       std::forward<Args> (args)...));
+                               }
                            }
                        }()),
                  ...);
@@ -6457,7 +6492,8 @@ template <typename... Clauses> struct MatchTable
     if (!result && !has_otherwise)
       throw std::runtime_error (
           "dsl::match: no clause matched and no otherwise");
-    return *result;
+    if constexpr (!std::is_void_v<RetT>)
+      return std::move (*result);
   }
 };
 
@@ -6472,8 +6508,8 @@ template <typename... Cs> MatchTable (Cs...) -> MatchTable<Cs...>;
  *       dsl::when<0>([](auto){ return "zero"; }),
  *       dsl::otherwise([](auto){ return "nonzero"; })
  *   );
- *   t(0, 0);  // "zero"
- *   t(5, 0);  // "nonzero"
+ *   t(0);  // "zero"
+ *   t(5);  // "nonzero"
  */
 template <typename... Clauses>
 constexpr auto
@@ -7128,6 +7164,48 @@ operator/ (const BinExpr<Op1, L1, R1> &lhs, const R &rhs)
   return BinExpr<std::divides<>, BinExpr<Op1, L1, R1>, R>{ lhs, rhs };
 }
 
+template <typename Op, typename L, typename R>
+constexpr auto
+operator- (const BinExpr<Op, L, R> &expr)
+{
+  return UnaryExpr<std::negate<>, BinExpr<Op, L, R>>{ expr };
+}
+
+template <typename Op, typename E>
+constexpr auto
+operator- (const UnaryExpr<Op, E> &expr)
+{
+  return UnaryExpr<std::negate<>, UnaryExpr<Op, E>>{ expr };
+}
+
+template <typename Op, typename E, typename R>
+constexpr auto
+operator+ (const UnaryExpr<Op, E> &lhs, const R &rhs)
+{
+  return BinExpr<std::plus<>, UnaryExpr<Op, E>, R>{ lhs, rhs };
+}
+
+template <typename Op, typename E, typename R>
+constexpr auto
+operator- (const UnaryExpr<Op, E> &lhs, const R &rhs)
+{
+  return BinExpr<std::minus<>, UnaryExpr<Op, E>, R>{ lhs, rhs };
+}
+
+template <typename Op, typename E, typename R>
+constexpr auto
+operator* (const UnaryExpr<Op, E> &lhs, const R &rhs)
+{
+  return BinExpr<std::multiplies<>, UnaryExpr<Op, E>, R>{ lhs, rhs };
+}
+
+template <typename Op, typename E, typename R>
+constexpr auto
+operator/ (const UnaryExpr<Op, E> &lhs, const R &rhs)
+{
+  return BinExpr<std::divides<>, UnaryExpr<Op, E>, R>{ lhs, rhs };
+}
+
 // ============================================================
 //  CustomLiterals: literal suffix registration
 // ============================================================
@@ -7470,19 +7548,21 @@ public:
     return value_;
   }
   /// Applies function to contained value, if present.
-  /// Applies function returning Maybe-like type, if value is present.
+  /// Reference results are copied into the returned Maybe.
   template <typename Fn>
   auto
-  map (Fn &&fn) const -> Maybe<decltype (fn (std::declval<T> ()))>
+  map (Fn &&fn) const
+      -> Maybe<std::decay_t<decltype (fn (std::declval<const T &> ()))>>
   {
-    using U = decltype (fn (*value_));
+    using U = std::decay_t<decltype (fn (*value_))>;
     if (!value_)
       return Maybe<U>{};
     return Maybe<U>{ fn (*value_) };
   }
+  /// Applies function returning Maybe-like type, if value is present.
   template <typename Fn>
   auto
-  flat_map (Fn &&fn) const -> decltype (fn (std::declval<T> ()))
+  flat_map (Fn &&fn) const -> decltype (fn (std::declval<const T &> ()))
   {
     using R = decltype (fn (*value_));
     if (!value_)
@@ -7510,7 +7590,7 @@ private:
 };
 template <typename Opt, typename Fn>
 auto
-map (const Opt &opt, Fn &&fn) -> std::optional<decltype (fn (*opt))>
+map (const Opt &opt, Fn &&fn) -> std::optional<std::decay_t<decltype (fn (*opt))>>
 {
   if (!opt)
     return std::nullopt;
@@ -7555,13 +7635,13 @@ public:
   bool
   is_ok () const
   {
-    return std::holds_alternative<T> (data_);
+    return data_.index () == 0;
   }
   /// True when error branch is active.
   bool
   is_err () const
   {
-    return std::holds_alternative<E> (data_);
+    return data_.index () == 1;
   }
   /// Returns value or throws if Err.
   T
@@ -7569,33 +7649,34 @@ public:
   {
     if (!is_ok ())
       throw std::runtime_error ("dsl::Result::unwrap called on Err");
-    return std::get<T> (data_);
+    return std::get<0> (data_);
   }
   /// Returns value or fallback when Err.
   T
   unwrap_or (T fallback) const
   {
-    return is_ok () ? std::get<T> (data_) : std::move (fallback);
+    return is_ok () ? std::get<0> (data_) : std::move (fallback);
   }
   /// Maps Ok value with function.
   template <typename Fn>
   auto
-  map (Fn &&fn) const -> Result<decltype (fn (std::declval<T> ())), E>
+  map (Fn &&fn) const
+      -> Result<std::decay_t<decltype (fn (std::declval<const T &> ()))>, E>
   {
-    using U = decltype (fn (std::declval<T> ()));
+    using U = std::decay_t<decltype (fn (std::declval<const T &> ()))>;
     if (is_ok ())
-      return Result<U, E>{ fn (std::get<T> (data_)) };
-    return Result<U, E>::from_err (std::get<E> (data_));
+      return Result<U, E>{ fn (std::get<0> (data_)) };
+    return Result<U, E>::from_err (std::get<1> (data_));
   }
   /// Chains operation producing another Result.
   template <typename Fn>
   auto
-  and_then (Fn &&fn) const -> decltype (fn (std::declval<T> ()))
+  and_then (Fn &&fn) const -> decltype (fn (std::declval<const T &> ()))
   {
-    using R = decltype (fn (std::declval<T> ()));
+    using R = decltype (fn (std::declval<const T &> ()));
     if (is_ok ())
-      return fn (std::get<T> (data_));
-    return R::from_err (std::get<E> (data_));
+      return fn (std::get<0> (data_));
+    return R::from_err (std::get<1> (data_));
   }
   /**
    * @brief Transforms the error payload while keeping success values
@@ -7607,12 +7688,13 @@ public:
    */
   template <typename Fn>
   auto
-  map_err (Fn &&fn) const -> Result<T, decltype (fn (std::declval<E> ()))>
+  map_err (Fn &&fn) const
+      -> Result<T, std::decay_t<decltype (fn (std::declval<const E &> ()))>>
   {
-    using E2 = decltype (fn (std::declval<E> ()));
+    using E2 = std::decay_t<decltype (fn (std::declval<const E &> ()))>;
     if (is_ok ())
-      return Result<T, E2>::from_ok (std::get<T> (data_));
-    return Result<T, E2>::from_err (fn (std::get<E> (data_)));
+      return Result<T, E2>::from_ok (std::get<0> (data_));
+    return Result<T, E2>::from_err (fn (std::get<1> (data_)));
   }
   /// Factory for Ok value.
   static Result
@@ -7826,7 +7908,11 @@ operator* (const Parser<T> &p)
                   in.pos = save;
                   break;
                 }
-              out.push_back (*r);
+              if (in.pos == save)
+                return fail_expected<std::vector<T>> (
+                    in, "<repetition must consume input>",
+                    ParseFailureKind::Committed);
+              out.push_back (std::move (*r));
             }
           return out;
         });
@@ -7854,7 +7940,7 @@ operator& (const Parser<A> &a, const Parser<B> &b)
               return ExpectedResult<std::pair<A, B>>::failure (
                   rb.error.pos, kind, rb.error.expected);
             }
-          return std::make_pair (*ra, *rb);
+          return std::make_pair (std::move (*ra), std::move (*rb));
         });
 }
 template <typename T>
@@ -7894,7 +7980,7 @@ optional (const Parser<T> &p)
               in.pos = save;
               return std::optional<T>{};
             }
-          return std::optional<T>{ *r };
+          return std::optional<T>{ std::move (*r) };
         });
 }
 
@@ -7961,7 +8047,7 @@ ch (char c)
   return labeled (parser (
                       [c] (ParsecInput &in) -> ExpectedResult<char>
                         {
-                          if (in.peek () == c)
+                          if (!in.eof () && in.peek () == c)
                             return in.consume ();
                           return fail_expected<char> (in, std::string (1, c));
                         }),
@@ -8054,7 +8140,7 @@ void
 upon (TaskState &state, EventFn &&event, Task task)
 {
   if (event ())
-    state.results[task.name] = task.run (state);
+    state.results.insert_or_assign (task.name, task.run (state));
 }
 
 /**
@@ -11500,7 +11586,7 @@ public:
   }
   void remove_edge(GraphEdgeId id)
   {
-    auto link = edge(id);
+    const auto& link = edge(id);
     std::erase(nodes_[link.source]->outgoing, id);
     std::erase(nodes_[link.target]->incoming, id);
     edges_[id].reset();

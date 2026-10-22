@@ -12,7 +12,7 @@ main ()
       "read",
       [] (dsl::TaskState &state)
       {
-        state.results["source"] = Result::from_ok ("18");
+        state.results.insert_or_assign ("source", Result::from_ok ("18"));
         return Result::from_ok ("read");
       }};
 
@@ -69,7 +69,7 @@ main ()
 
   std::cout << "normalize="
             << (state.results.count ("normalize")
-                   ? state.results["normalize"].unwrap_or (std::string ("skipped"))
+                   ? state.results.at ("normalize").unwrap_or (std::string ("skipped"))
                    : std::string ("skipped"))
             << "\n";
 }
