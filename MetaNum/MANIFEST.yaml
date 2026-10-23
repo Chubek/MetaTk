@@ -1,0 +1,1134 @@
+# NumericOperations.yaml
+# Manifest of numeric operations offered by:
+#   - ISL (Integer Set Library)
+#   - GSL (GNU Scientific Library)
+#   - PPL (Parma Polyhedra Library)
+#
+# Function names are given for the C API where applicable. Names are based on
+# the libraries' documented APIs and may differ slightly across versions; check
+# the installed headers before relying on an exact symbol.
+
+manifest:
+  name: NumericOperations
+  version: 1
+  libraries:
+    - id: isl
+      full_name: Integer Set Library
+      domain: Presburger arithmetic over integer sets, maps, and polyhedral objects
+      language: C
+      homepage: https://libisl.sourceforge.io/
+    - id: gsl
+      full_name: GNU Scientific Library
+      domain: General-purpose numerical computing
+      language: C
+      homepage: https://www.gnu.org/software/gsl/
+    - id: ppl
+      full_name: Parma Polyhedra Library
+      domain: Convex polyhedra, grids, and linear constraint systems over rationals and integers
+      language: C++ (with C and OCaml/Prolog bindings)
+      homepage: https://www.bugseng.com/ppl
+
+  categories:
+
+    # ============================================================
+    # ISL
+    # ============================================================
+    - id: isl.basic_objects
+      library: isl
+      description: Creation, inspection, and memory management of integer sets and maps.
+      operations:
+        - name: create_context
+          symbol: isl_ctx_alloc
+          description: Allocate an ISL context used by all objects.
+        - name: set_read_from_str
+          symbol: isl_set_read_from_str
+          description: Parse a set from its textual representation.
+        - name: map_read_from_str
+          symbol: isl_map_read_from_str
+          description: Parse a map from its textual representation.
+        - name: union_set_read_from_str
+          symbol: isl_union_set_read_from_str
+          description: Parse a union set.
+        - name: union_map_read_from_str
+          symbol: isl_union_map_read_from_str
+          description: Parse a union map.
+        - name: set_to_str
+          symbol: isl_set_to_str
+          description: Print a set in ISL notation.
+        - name: dim
+          symbol: isl_set_dim / isl_map_dim
+          description: Query the number of dimensions of a set or map.
+        - name: is_empty
+          symbol: isl_set_is_empty / isl_map_is_empty
+          description: Test whether a set or map has no integer points.
+        - name: is_universe
+          symbol: isl_set_is_universe
+          description: Test whether a set contains every integer point.
+        - name: is_equal
+          symbol: isl_set_is_equal / isl_map_is_equal
+          description: Test equality of two sets or maps.
+        - name: is_subset
+          symbol: isl_set_is_subset / isl_map_is_subset
+          description: Test whether one set or map is contained in another.
+        - name: is_disjoint
+          symbol: isl_set_is_disjoint
+          description: Test whether two sets have an empty intersection.
+        - name: is_single_valued
+          symbol: isl_map_is_single_valued
+          description: Test whether a map is a function.
+        - name: is_injective
+          symbol: isl_map_is_injective
+          description: Test whether a map is one-to-one.
+        - name: is_bijective
+          symbol: isl_map_is_bijective
+          description: Test whether a map is a bijection.
+        - name: copy_free
+          symbol: isl_set_copy / isl_set_free
+          description: Reference counting and deallocation.
+
+    - id: isl.set_algebra
+      library: isl
+      description: Boolean and structural operations on sets and maps.
+      operations:
+        - name: union
+          symbol: isl_set_union / isl_map_union
+          description: Set or map union.
+        - name: intersect
+          symbol: isl_set_intersect / isl_map_intersect
+          description: Set or map intersection.
+        - name: subtract
+          symbol: isl_set_subtract / isl_map_subtract
+          description: Set or map difference.
+        - name: complement
+          symbol: isl_set_complement
+          description: Complement of a set.
+        - name: product
+          symbol: isl_set_product / isl_map_product
+          description: Cartesian product.
+        - name: flat_product
+          symbol: isl_map_flat_product
+          description: Product that flattens the range dimensions.
+        - name: reverse
+          symbol: isl_map_reverse
+          description: Swap domain and range of a map.
+        - name: domain
+          symbol: isl_map_domain
+          description: Project a map onto its domain.
+        - name: range
+          symbol: isl_map_range
+          description: Project a map onto its range.
+        - name: domain_map
+          symbol: isl_map_domain_map
+          description: Map each domain element to itself paired with its image.
+        - name: range_map
+          symbol: isl_map_range_map
+          description: Map each range element to itself paired with its preimage.
+        - name: deltas
+          symbol: isl_map_deltas
+          description: Set of differences between range and domain elements.
+        - name: identity
+          symbol: isl_map_identity
+          description: Identity map on a set.
+        - name: lex_lt / lex_le / lex_gt / lex_ge
+          symbol: isl_map_lex_lt, isl_map_lex_le, isl_map_lex_gt, isl_map_lex_ge
+          description: Lexicographic comparison maps.
+        - name: universe
+          symbol: isl_set_universe / isl_map_universe
+          description: Universe set or map of a given space.
+        - name: empty
+          symbol: isl_set_empty / isl_map_empty
+          description: Empty set or map of a given space.
+
+    - id: isl.composition_and_application
+      library: isl
+      description: Composition, application, and preimage of maps.
+      operations:
+        - name: apply
+          symbol: isl_set_apply / isl_union_set_apply
+          description: Image of a set under a map.
+        - name: apply_domain
+          symbol: isl_map_apply_domain
+          description: Compose a map with the domain of another.
+        - name: apply_range
+          symbol: isl_map_apply_range
+          description: Compose a map with the range of another.
+        - name: preimage_domain
+          symbol: isl_map_preimage_domain_multi_aff
+          description: Pull back a map through an affine function on its domain.
+        - name: preimage_range
+          symbol: isl_map_preimage_range_multi_aff
+          description: Pull back a map through an affine function on its range.
+        - name: fixed_power
+          symbol: isl_map_fixed_power
+          description: Compute the n-th power of a map for symbolic or fixed n.
+        - name: transitive_closure
+          symbol: isl_map_transitive_closure
+          description: Transitive closure of a map, computed exactly when possible.
+        - name: reaching_path_lengths
+          symbol: isl_map_reaching_path_lengths
+          description: Lengths of paths in a relation.
+        - name: lexmin_of_relation
+          symbol: isl_map_lexmin
+          description: Lexicographically smallest elements of a map.
+        - name: lexmax_of_relation
+          symbol: isl_map_lexmax
+          description: Lexicographically largest elements of a map.
+
+    - id: isl.optimization_and_lattice
+      library: isl
+      description: Optimization over parametric integer sets and lattice queries.
+      operations:
+        - name: lexmin
+          symbol: isl_set_lexmin / isl_map_lexmin
+          description: Lexicographically minimal point(s) as a piecewise quasi-affine function of parameters.
+        - name: lexmax
+          symbol: isl_set_lexmax / isl_map_lexmax
+          description: Lexicographically maximal point(s) as a piecewise quasi-affine function.
+        - name: min_val
+          symbol: isl_set_min_val
+          description: Minimum value of an affine expression over a set.
+        - name: max_val
+          symbol: isl_set_max_val
+          description: Maximum value of an affine expression over a set.
+        - name: dim_min / dim_max
+          symbol: isl_set_dim_min, isl_set_dim_max
+          description: Minimum or maximum of a dimension, as a piecewise quasi-affine function.
+        - name: sample_point
+          symbol: isl_set_sample_point
+          description: Return an integer point in a set.
+        - name: card
+          symbol: isl_set_card / isl_map_card
+          description: Number of integer points as a piecewise quasi-polynomial.
+        - name: count_points
+          symbol: isl_set_count_val
+          description: Count points for a concrete parameter value.
+        - name: ehrhart
+          symbol: isl_set_card (parametric)
+          description: Parametric counting via Ehrhart-style quasi-polynomials.
+        - name: enumerate
+          symbol: isl_set_foreach_point
+          description: Iterate over all integer points.
+        - name: lattice_points
+          symbol: isl_basic_set_lattice_points
+          description: Enumerate points of a bounded set.
+        - name: affine_hull
+          symbol: isl_set_affine_hull
+          description: Smallest affine subspace containing a set.
+        - name: convex_hull
+          symbol: isl_set_convex_hull
+          description: Convex hull of an integer set.
+        - name: simple_hull
+          symbol: isl_set_simple_hull
+          description: Approximate convex hull using constraints from the input.
+        - name: coalesce
+          symbol: isl_set_coalesce / isl_map_coalesce
+          description: Merge pieces of a union into fewer convex pieces.
+        - name: remove_redundancies
+          symbol: isl_set_remove_redundancies
+          description: Remove redundant constraints.
+        - name: gist
+          symbol: isl_set_gist / isl_map_gist
+          description: Simplify a set given a context set.
+        - name: project_out
+          symbol: isl_set_project_out / isl_map_project_out
+          description: Existential projection (Fourier-Motzkin or equivalent).
+        - name: eliminate_dims
+          symbol: isl_set_eliminate
+          description: Eliminate a range of dimensions.
+        - name: align_params
+          symbol: isl_set_align_params
+          description: Align parameter spaces of two objects.
+        - name: lift
+          symbol: isl_set_lift
+          description: Lift a set to introduce existential variables.
+
+    - id: isl.affine_and_piecewise
+      library: isl
+      description: Affine, piecewise-affine, and quasi-affine expressions.
+      operations:
+        - name: aff_construction
+          symbol: isl_aff_*, isl_multi_aff_*, isl_pw_aff_*
+          description: Build affine, multi-affine, and piecewise affine expressions.
+        - name: aff_add
+          symbol: isl_aff_add / isl_pw_aff_add
+          description: Sum of affine expressions.
+        - name: aff_sub
+          symbol: isl_aff_sub
+          description: Difference of affine expressions.
+        - name: aff_scale
+          symbol: isl_aff_scale_val
+          description: Scale an affine expression by a rational constant.
+        - name: aff_floor
+          symbol: isl_aff_floor
+          description: Floor of a quasi-affine expression (integer division).
+        - name: aff_mod
+          symbol: isl_pw_aff_mod
+          description: Modulo operation on piecewise affine expressions.
+        - name: pw_aff_max
+          symbol: isl_pw_aff_max
+          description: Pointwise maximum.
+        - name: pw_aff_min
+          symbol: isl_pw_aff_min
+          description: Pointwise minimum.
+        - name: pw_aff_eval
+          symbol: isl_pw_aff_eval
+          description: Evaluate at a point.
+        - name: pw_aff_sign
+          symbol: isl_pw_aff_sign_set
+          description: Set where a piecewise affine expression is nonnegative or nonpositive.
+
+    - id: isl.polynomials
+      library: isl
+      description: Piecewise quasi-polynomials for counting and summation.
+      operations:
+        - name: qpolynomial_add
+          symbol: isl_qpolynomial_add
+          description: Sum of quasi-polynomials.
+        - name: qpolynomial_mul
+          symbol: isl_qpolynomial_mul
+          description: Product of quasi-polynomials.
+        - name: qpolynomial_pow
+          symbol: isl_qpolynomial_pow
+          description: Power of a quasi-polynomial.
+        - name: pw_qpolynomial_sum
+          symbol: isl_pw_qpolynomial_sum
+          description: Sum over a domain (summation of a polynomial over integer points).
+        - name: pw_qpolynomial_fold
+          symbol: isl_pw_qpolynomial_fold
+          description: Fold (max, min, sum) of piecewise quasi-polynomials.
+        - name: pw_qpolynomial_bound
+          symbol: isl_pw_qpolynomial_bound
+          description: Upper or lower bounds of quasi-polynomials.
+        - name: pw_qpolynomial_eval
+          symbol: isl_pw_qpolynomial_eval
+          description: Evaluate at a point.
+
+    - id: isl.scheduling_and_dependence
+      library: isl
+      description: Dependence analysis, scheduling, and code-generation support.
+      operations:
+        - name: flow_dependence
+          symbol: isl_union_access_info_compute_flow
+          description: Exact read-after-write dependences via access analysis.
+        - name: dependence_analysis
+          symbol: isl_union_access_info_compute_dependences
+          description: Compute flow, anti, and output dependences.
+        - name: schedule_compute
+          symbol: isl_schedule_constraints_compute_schedule
+          description: Compute a schedule satisfying dependence constraints (Feautrier / Pluto-style).
+        - name: schedule_map
+          symbol: isl_schedule_get_map
+          description: Retrieve the schedule as a union map.
+        - name: schedule_tree_band
+          symbol: isl_schedule_node_band_*
+          description: Manipulate tiling and fusion bands in schedule trees.
+        - name: ast_build
+          symbol: isl_ast_build_from_context
+          description: Build loop-nest ASTs from schedules.
+        - name: ast_generate
+          symbol: isl_ast_build_ast_from_schedule
+          description: Generate abstract syntax tree for code generation.
+
+    - id: isl.printing_and_io
+      library: isl
+      description: Serialization of objects.
+      operations:
+        - name: print_isl_format
+          symbol: isl_printer_*
+          description: ISL, C, Omega, and LaTeX-style output.
+        - name: read_from_file
+          symbol: isl_*_read_from_file
+          description: Read objects from a file.
+
+    # ============================================================
+    # GSL
+    # ============================================================
+    - id: gsl.elementary_and_special_functions
+      library: gsl
+      description: Special mathematical functions.
+      operations:
+        - name: gamma
+          symbol: gsl_sf_gamma, gsl_sf_lngamma, gsl_sf_gammainv, gsl_sf_gamma_inc, gsl_sf_gamma_inc_P, gsl_sf_gamma_inc_Q
+          description: Gamma function, log-gamma, incomplete gamma.
+        - name: beta
+          symbol: gsl_sf_beta, gsl_sf_lnbeta, gsl_sf_beta_inc
+          description: Beta function and incomplete beta.
+        - name: psi
+          symbol: gsl_sf_psi, gsl_sf_psi_1, gsl_sf_psi_n
+          description: Digamma and polygamma functions.
+        - name: bessel_j
+          symbol: gsl_sf_bessel_J0, gsl_sf_bessel_J1, gsl_sf_bessel_Jn
+          description: Bessel functions of the first kind.
+        - name: bessel_y
+          symbol: gsl_sf_bessel_Y0, gsl_sf_bessel_Y1, gsl_sf_bessel_Yn
+          description: Bessel functions of the second kind.
+        - name: bessel_i
+          symbol: gsl_sf_bessel_I0, gsl_sf_bessel_I1, gsl_sf_bessel_In
+          description: Modified Bessel functions of the first kind.
+        - name: bessel_k
+          symbol: gsl_sf_bessel_K0, gsl_sf_bessel_K1, gsl_sf_bessel_Kn
+          description: Modified Bessel functions of the second kind.
+        - name: spherical_bessel
+          symbol: gsl_sf_bessel_jl, gsl_sf_bessel_yl
+          description: Spherical Bessel functions.
+        - name: airy
+          symbol: gsl_sf_airy_Ai, gsl_sf_airy_Bi
+          description: Airy functions.
+        - name: erf
+          symbol: gsl_sf_erf, gsl_sf_erfc, gsl_sf_log_erfc, gsl_sf_erf_Z, gsl_sf_erf_Q
+          description: Error function and complement.
+        - name: fresnel
+          symbol: gsl_sf_fresnel_s, gsl_sf_fresnel_c
+          description: Fresnel integrals.
+        - name: exponential_integral
+          symbol: gsl_sf_expint_E1, gsl_sf_expint_E2, gsl_sf_expint_Ei, gsl_sf_Shi, gsl_sf_Chi
+          description: Exponential and hyperbolic integrals.
+        - name: elliptic_integral
+          symbol: gsl_sf_ellint_Kcomp, gsl_sf_ellint_Ecomp, gsl_sf_ellint_F, gsl_sf_ellint_E, gsl_sf_ellint_P, gsl_sf_ellint_D, gsl_sf_ellint_RC, gsl_sf_ellint_RD, gsl_sf_ellint_RF, gsl_sf_ellint_RJ
+          description: Complete and incomplete elliptic integrals.
+        - name: hypergeometric
+          symbol: gsl_sf_hyperg_0F1, gsl_sf_hyperg_1F1, gsl_sf_hyperg_2F0, gsl_sf_hyperg_U
+          description: Confluent hypergeometric and related functions.
+        - name: laguerre
+          symbol: gsl_sf_laguerre_n, gsl_sf_laguerre_1, gsl_sf_laguerre_2, gsl_sf_laguerre_3
+          description: Generalized Laguerre polynomials.
+        - name: gegenbauer
+          symbol: gsl_sf_gegenpoly_n
+          description: Gegenbauer polynomials.
+        - name: legendre
+          symbol: gsl_sf_legendre_Pl, gsl_sf_legendre_Plm, gsl_sf_legendre_sphPlm, gsl_sf_legendre_Ql
+          description: Legendre polynomials and associated functions.
+        - name: conical
+          symbol: gsl_sf_conicalP_half, gsl_sf_conicalP_mhalf
+          description: Conical functions.
+        - name: zeta
+          symbol: gsl_sf_zeta, gsl_sf_zeta_int, gsl_sf_eta, gsl_sf_lambert_W0, gsl_sf_lambert_Wm1
+          description: Riemann zeta, Dirichlet eta, and Lambert W.
+        - name: coulomb
+          symbol: gsl_sf_coulomb_wave_F_array
+          description: Coulomb wave functions.
+        - name: transport
+          symbol: gsl_sf_transport_2, gsl_sf_transport_3
+          description: Transport functions.
+        - name: sinc_and_trig
+          symbol: gsl_sf_sinc, gsl_sf_lnsinh, gsl_sf_lncosh, gsl_sf_hypot
+          description: Sinc, log of sinh and cosh, robust hypot.
+        - name: combinatorics
+          symbol: gsl_sf_fact, gsl_sf_doublefact, gsl_sf_lnfact, gsl_sf_choose, gsl_sf_lnchoose, gsl_sf_poch, gsl_sf_lnpoch, gsl_sf_pochrel
+          description: Factorials, binomial coefficients, Pochhammer symbols.
+
+    - id: gsl.complex_numbers
+      library: gsl
+      description: Complex arithmetic and utilities.
+      operations:
+        - name: complex_arithmetic
+          symbol: gsl_complex_add, gsl_complex_sub, gsl_complex_mul, gsl_complex_div
+          description: Basic complex arithmetic.
+        - name: complex_functions
+          symbol: gsl_complex_exp, gsl_complex_log, gsl_complex_sqrt, gsl_complex_pow, gsl_complex_sin, gsl_complex_cos, gsl_complex_tan
+          description: Elementary complex functions.
+        - name: complex_inverse_trig
+          symbol: gsl_complex_arcsin, gsl_complex_arccos, gsl_complex_arctan
+          description: Inverse trigonometric functions.
+        - name: complex_hyperbolic
+          symbol: gsl_complex_sinh, gsl_complex_cosh, gsl_complex_tanh
+          description: Hyperbolic functions.
+        - name: complex_properties
+          symbol: gsl_complex_abs, gsl_complex_abs2, gsl_complex_arg, gsl_complex_conjugate, gsl_complex_inverse, gsl_complex_negative
+          description: Modulus, argument, conjugate, inverse, negation.
+
+    - id: gsl.polynomials_and_roots
+      library: gsl
+      description: Polynomial evaluation and root finding.
+      operations:
+        - name: poly_eval
+          symbol: gsl_poly_eval, gsl_poly_eval_derivs
+          description: Evaluate polynomial and derivatives.
+        - name: poly_complex_eval
+          symbol: gsl_poly_complex_eval
+          description: Evaluate polynomial at a complex point.
+        - name: poly_solve
+          symbol: gsl_poly_solve_quadratic, gsl_poly_solve_cubic, gsl_poly_complex_solve
+          description: Closed-form and general polynomial roots.
+        - name: poly_dd
+          symbol: gsl_poly_dd_init, gsl_poly_dd_eval, gsl_poly_dd_taylor
+          description: Divided differences and Taylor coefficients.
+        - name: poly_pqr
+          symbol: gsl_poly_complex_workspace_alloc
+          description: Workspace for companion-matrix root finding.
+
+    - id: gsl.linear_algebra_basic
+      library: gsl
+      description: Vector and matrix primitives, BLAS.
+      operations:
+        - name: vector_ops
+          symbol: gsl_vector_add, gsl_vector_sub, gsl_vector_mul, gsl_vector_div, gsl_vector_scale, gsl_vector_add_constant, gsl_vector_max, gsl_vector_min, gsl_vector_minmax
+          description: Element-wise vector operations and extremes.
+        - name: matrix_ops
+          symbol: gsl_matrix_add, gsl_matrix_sub, gsl_matrix_mul_elements, gsl_matrix_div_elements, gsl_matrix_scale, gsl_matrix_transpose
+          description: Element-wise matrix operations and transpose.
+        - name: blas_level1
+          symbol: gsl_blas_sdsdot, gsl_blas_dsdot, gsl_blas_sasum, gsl_blas_dasum, gsl_blas_dnrm2, gsl_blas_ddot, gsl_blas_daxpy, gsl_blas_dscal, gsl_blas_drot, gsl_blas_idamax
+          description: BLAS level 1 (vector-vector) operations.
+        - name: blas_level2
+          symbol: gsl_blas_dgemv, gsl_blas_dtrmv, gsl_blas_dtrsv, gsl_blas_dsymv, gsl_blas_dger, gsl_blas_dsyr, gsl_blas_dsyr2
+          description: BLAS level 2 (matrix-vector) operations.
+        - name: blas_level3
+          symbol: gsl_blas_dgemm, gsl_blas_dsymm, gsl_blas_dtrmm, gsl_blas_dtrsm, gsl_blas_dsyrk, gsl_blas_dsyr2k
+          description: BLAS level 3 (matrix-matrix) operations.
+        - name: complex_blas
+          symbol: gsl_blas_zdotu, gsl_blas_zgemm, gsl_blas_zhemm
+          description: Complex BLAS routines.
+
+    - id: gsl.linear_algebra_decompositions
+      library: gsl
+      description: Factorizations and linear system solvers.
+      operations:
+        - name: lu
+          symbol: gsl_linalg_LU_decomp, gsl_linalg_LU_solve, gsl_linalg_LU_invert, gsl_linalg_LU_det, gsl_linalg_LU_lndet, gsl_linalg_LU_refine
+          description: LU decomposition, solve, invert, determinant.
+        - name: cholesky
+          symbol: gsl_linalg_cholesky_decomp, gsl_linalg_cholesky_solve, gsl_linalg_cholesky_invert, gsl_linalg_cholesky_det
+          description: Cholesky decomposition and related.
+        - name: ldlt
+          symbol: gsl_linalg_ldlt_decomp
+          description: LDL^T decomposition (for symmetric indefinite).
+        - name: qr
+          symbol: gsl_linalg_QR_decomp, gsl_linalg_QR_solve, gsl_linalg_QR_lssolve, gsl_linalg_QR_Q_solve, gsl_linalg_QR_unpack
+          description: QR decomposition and least squares.
+        - name: qrpt
+          symbol: gsl_linalg_QRPT_decomp
+          description: QR with column pivoting.
+        - name: lq
+          symbol: gsl_linalg_LQ_decomp
+          description: LQ decomposition.
+        - name: svd
+          symbol: gsl_linalg_SV_decomp, gsl_linalg_SV_decomp_jacobi, gsl_linalg_SV_solve
+          description: Singular value decomposition and pseudo-inverse solves.
+        - name: bidiagonal
+          symbol: gsl_linalg_bidiag_decomp, gsl_linalg_bidiag_unpack
+          description: Bidiagonalization.
+        - name: hessenberg
+          symbol: gsl_linalg_hessenberg_decomp, gsl_linalg_hessenberg_unpack, gsl_linalg_hessenberg_set_zero
+          description: Hessenberg reduction.
+        - name: tridiagonal
+          symbol: gsl_linalg_solve_tridiag, gsl_linalg_solve_symm_tridiag, gsl_linalg_solve_cyc_tridiag
+          description: Tridiagonal and cyclic tridiagonal solvers.
+        - name: householder
+          symbol: gsl_linalg_householder_transform, gsl_linalg_householder_hm
+          description: Householder reflections.
+        - name: balance
+          symbol: gsl_linalg_balance_matrix
+          description: Balancing matrices before eigenvalue computation.
+        - name: condition_number
+          symbol: gsl_linalg_cond, gsl_linalg_rcond
+          description: Condition number estimation.
+        - name: complex_linalg
+          symbol: gsl_linalg_complex_LU_decomp, gsl_linalg_complex_cholesky_decomp, gsl_linalg_complex_QR_decomp
+          description: Complex versions of the decompositions.
+
+    - id: gsl.eigensystems
+      library: gsl
+      description: Eigenvalue and eigenvector computations.
+      operations:
+        - name: symm_eigen
+          symbol: gsl_eigen_symm, gsl_eigen_symmv
+          description: Eigenvalues (and vectors) of real symmetric matrices.
+        - name: herm_eigen
+          symbol: gsl_eigen_herm, gsl_eigen_hermv
+          description: Eigenvalues (and vectors) of complex Hermitian matrices.
+        - name: nonsymm_eigen
+          symbol: gsl_eigen_nonsymm, gsl_eigen_nonsymmv
+          description: Eigenvalues (and vectors) of general real matrices.
+        - name: gen_symm_eigen
+          symbol: gsl_eigen_gensymm, gsl_eigen_gensymmv
+          description: Generalized symmetric eigenproblem.
+        - name: gen_nonsymm_eigen
+          symbol: gsl_eigen_gen, gsl_eigen_genv
+          description: Generalized nonsymmetric eigenproblem.
+        - name: symm_jacobi
+          symbol: gsl_eigen_jacobi
+          description: Jacobi eigenvalue method.
+        - name: symm_tridiag
+          symbol: gsl_eigen_symmv_sort
+          description: Sorting of eigenvalues and eigenvectors.
+
+    - id: gsl.fft
+      library: gsl
+      description: Fast Fourier transforms.
+      operations:
+        - name: complex_fft
+          symbol: gsl_fft_complex_radix2_forward, gsl_fft_complex_radix2_backward, gsl_fft_complex_forward, gsl_fft_complex_backward, gsl_fft_complex_inverse
+          description: Complex FFT (radix-2 and mixed radix).
+        - name: real_fft
+          symbol: gsl_fft_real_radix2_transform, gsl_fft_real_transform, gsl_fft_halfcomplex_inverse
+          description: Real-valued FFT.
+        - name: wavetable
+          symbol: gsl_fft_complex_wavetable_alloc, gsl_fft_real_wavetable_alloc
+          description: Precomputed trigonometric tables.
+
+    - id: gsl.wavelets
+      library: gsl
+      description: Discrete wavelet transforms.
+      operations:
+        - name: wavelet_transform
+          symbol: gsl_wavelet_transform, gsl_wavelet_transform_forward, gsl_wavelet_transform_inverse
+          description: Forward and inverse DWT.
+        - name: wavelet_2d
+          symbol: gsl_wavelet2d_transform, gsl_wavelet2d_nstransform
+          description: 2D wavelet transforms.
+        - name: wavelet_families
+          symbol: gsl_wavelet_daubechies, gsl_wavelet_haar, gsl_wavelet_bspline
+          description: Daubechies, Haar, and B-spline wavelet families.
+
+    - id: gsl.numerical_integration
+      library: gsl
+      description: Quadrature and adaptive integration.
+      operations:
+        - name: qng
+          symbol: gsl_integration_qng
+          description: Non-adaptive Gauss-Kronrod integration.
+        - name: qag
+          symbol: gsl_integration_qag, gsl_integration_qags, gsl_integration_qagp, gsl_integration_qagi, gsl_integration_qagiu, gsl_integration_qagil
+          description: Adaptive integration over finite and infinite ranges.
+        - name: qawc
+          symbol: gsl_integration_qawc
+          description: Cauchy principal value integrals.
+        - name: qaws
+          symbol: gsl_integration_qaws
+          description: Integrals with algebraic-logarithmic endpoint singularities.
+        - name: qawo
+          symbol: gsl_integration_qawo
+          description: Oscillatory integrals (Fourier type).
+        - name: qawf
+          symbol: gsl_integration_qawf
+          description: Fourier integrals over infinite ranges.
+        - name: cquad
+          symbol: gsl_integration_cquad
+          description: Clenshaw-Curtis quadrature.
+        - name: romberg
+          symbol: gsl_integration_romberg
+          description: Romberg integration.
+        - name: fixed_gauss
+          symbol: gsl_integration_fixed_alloc, gsl_integration_fixed
+          description: Fixed-point Gauss-type rules (Legendre, Chebyshev, Laguerre, Hermite, Jacobi).
+
+    - id: gsl.differentiation
+      library: gsl
+      description: Numerical differentiation.
+      operations:
+        - name: deriv_central
+          symbol: gsl_deriv_central
+          description: Central difference derivative.
+        - name: deriv_forward
+          symbol: gsl_deriv_forward
+          description: Forward difference derivative.
+        - name: deriv_backward
+          symbol: gsl_deriv_backward
+          description: Backward difference derivative.
+
+    - id: gsl.root_finding
+      library: gsl
+      description: One-dimensional and multidimensional root solvers.
+      operations:
+        - name: bracketing_1d
+          symbol: gsl_root_fsolver_bisection, gsl_root_fsolver_brent, gsl_root_fsolver_falsepos
+          description: Bracketing solvers for 1D functions.
+        - name: derivative_1d
+          symbol: gsl_root_fdfsolver_newton, gsl_root_fdfsolver_secant, gsl_root_fdfsolver_steffenson
+          description: Derivative-based 1D solvers.
+        - name: multiroot_hybrid
+          symbol: gsl_multiroot_fsolver_hybrid, gsl_multiroot_fsolver_hybrids, gsl_multiroot_fsolver_dnewton
+          description: Multidimensional root finding (Powell hybrid and Newton variants).
+        - name: multiroot_broyden
+          symbol: gsl_multiroot_fsolver_broyden
+          description: Broyden's method.
+        - name: multiroot_fdf
+          symbol: gsl_multiroot_fdfsolver_gnewton
+          description: Gauss-Newton and Newton derivative-based solvers.
+
+    - id: gsl.minimization
+      library: gsl
+      description: Function minimization.
+      operations:
+        - name: min_1d
+          symbol: gsl_min_fminimizer_goldensection, gsl_min_fminimizer_brent, gsl_min_fminimizer_quad_golden
+          description: One-dimensional minimizers.
+        - name: min_multidim_no_deriv
+          symbol: gsl_multimin_fminimizer_nmsimplex, gsl_multimin_fminimizer_nmsimplex2, gsl_multimin_fminimizer_nmsimplex2rand
+          description: Nelder-Mead simplex methods.
+        - name: min_multidim_deriv
+          symbol: gsl_multimin_fdfminimizer_conjugate_fr, gsl_multimin_fdfminimizer_conjugate_pr, gsl_multimin_fdfminimizer_vector_bfgs, gsl_multimin_fdfminimizer_vector_bfgs2, gsl_multimin_fdfminimizer_steepest_descent
+          description: Gradient-based minimizers (conjugate gradient, BFGS, steepest descent).
+        - name: nonlinear_least_squares
+          symbol: gsl_multifit_fdfsolver_lmsder, gsl_multifit_fdfsolver_lmder, gsl_multifit_fdfsolver_lmsder
+          description: Levenberg-Marquardt for nonlinear least squares.
+
+    - id: gsl.ordinary_differential_equations
+      library: gsl
+      description: ODE integrators.
+      operations:
+        - name: odeiv2_step
+          symbol: gsl_odeiv2_step_rk2, gsl_odeiv2_step_rk4, gsl_odeiv2_step_rkf45, gsl_odeiv2_step_rkck, gsl_odeiv2_step_rk8pd, gsl_odeiv2_step_rk1imp, gsl_odeiv2_step_rk2imp, gsl_odeiv2_step_rk4imp, gsl_odeiv2_step_bsimp, gsl_odeiv2_step_gear1, gsl_odeiv2_step_gear2, gsl_odeiv2_step_msadams, gsl_odeiv2_step_msbdf
+          description: Explicit, implicit, and stiff step functions.
+        - name: odeiv2_control
+          symbol: gsl_odeiv2_control_y_new, gsl_odeiv2_control_yp_new, gsl_odeiv2_control_standard_new
+          description: Adaptive step-size control.
+        - name: odeiv2_evolve
+          symbol: gsl_odeiv2_evolve_apply
+          description: Evolve the ODE system.
+
+    - id: gsl.interpolation_and_splines
+      library: gsl
+      description: Interpolation of 1D data sets.
+      operations:
+        - name: interp_1d
+          symbol: gsl_interp_alloc, gsl_interp_eval, gsl_interp_eval_deriv, gsl_interp_eval_deriv2, gsl_interp_eval_integ
+          description: Linear, polynomial, cubic spline, Akima, Steffen interpolation.
+        - name: spline_types
+          symbol: gsl_interp_linear, gsl_interp_polynomial, gsl_interp_cspline, gsl_interp_cspline_periodic, gsl_interp_akima, gsl_interp_steffen
+          description: Available interpolation types.
+        - name: interp_2d
+          symbol: gsl_interp2d_alloc, gsl_interp2d_eval
+          description: Two-dimensional interpolation on grids.
+        - name: spline_derivatives
+          symbol: gsl_spline_eval_deriv, gsl_spline_eval_integ
+          description: Derivatives and integrals of splines.
+
+    - id: gsl.series_acceleration
+      library: gsl
+      description: Convergence acceleration.
+      operations:
+        - name: series_accel
+          symbol: gsl_sum_levin_u_alloc, gsl_sum_levin_u_accel, gsl_sum_levin_utrunc_alloc, gsl_sum_levin_utrunc_accel
+          description: Levin u-transform for series acceleration.
+        - name: sum_epsilon
+          symbol: gsl_sum_levin_u_accel
+          description: Convergence acceleration via epsilon algorithm.
+
+    - id: gsl.statistics
+      library: gsl
+      description: Descriptive and robust statistics.
+      operations:
+        - name: moments
+          symbol: gsl_stats_mean, gsl_stats_variance, gsl_stats_sd, gsl_stats_variance_with_fixed_mean, gsl_stats_sd_with_fixed_mean, gsl_stats_tss, gsl_stats_tss_m
+          description: Mean, variance, standard deviation.
+        - name: higher_moments
+          symbol: gsl_stats_skew, gsl_stats_kurtosis, gsl_stats_skew_m_sd, gsl_stats_kurtosis_m_sd, gsl_stats_absdev, gsl_stats_absdev_m
+          description: Skewness, kurtosis, mean absolute deviation.
+        - name: order_stats
+          symbol: gsl_stats_median_from_sorted_data, gsl_stats_quantile_from_sorted_data, gsl_stats_max, gsl_stats_min, gsl_stats_minmax
+          description: Median, quantiles, extremes.
+        - name: robust_stats
+          symbol: gsl_stats_median, gsl_stats_mad0, gsl_stats_mad
+          description: Median absolute deviation.
+        - name: weighted_stats
+          symbol: gsl_stats_wmean, gsl_stats_wvariance, gsl_stats_wsd, gsl_stats_wvariance_with_fixed_mean
+          description: Weighted statistics.
+        - name: covariance_correlation
+          symbol: gsl_stats_covariance, gsl_stats_correlation, gsl_stats_spearman, gsl_stats_pvariance, gsl_stats_ttest
+          description: Covariance, correlation, Spearman, t-test.
+        - name: ranking
+          symbol: gsl_sort_ranking
+          description: Rank computation.
+
+    - id: gsl.random_and_distributions
+      library: gsl
+      description: Random number generators and probability distributions.
+      operations:
+        - name: rng_generators
+          symbol: gsl_rng_mt19937, gsl_rng_ranlxs0, gsl_rng_ranlxd1, gsl_rng_taus, gsl_rng_gfsr4, gsl_rng_ranf, gsl_rng_random_bsd
+          description: Available pseudo-random generator algorithms.
+        - name: rng_quasirandom
+          symbol: gsl_qrng_sobol, gsl_qrng_halton, gsl_qrng_reversehalton, gsl_qrng_niederreiter_2
+          description: Quasi-random sequence generators.
+        - name: gaussian
+          symbol: gsl_ran_gaussian, gsl_ran_gaussian_pdf, gsl_ran_gaussian_ziggurat, gsl_ran_ugaussian
+          description: Gaussian distribution.
+        - name: continuous_dists
+          symbol: gsl_ran_exponential, gsl_ran_gamma, gsl_ran_beta, gsl_ran_chisq, gsl_ran_cauchy, gsl_ran_laplace, gsl_ran_lognormal, gsl_ran_weibull, gsl_ran_logistic, gsl_ran_pareto, gsl_ran_rayleigh, gsl_ran_t, gsl_ran_F, gsl_ran_flat
+          description: Common continuous distributions.
+        - name: discrete_dists
+          symbol: gsl_ran_binomial, gsl_ran_poisson, gsl_ran_geometric, gsl_ran_negative_binomial, gsl_ran_pascal, gsl_ran_hypergeometric, gsl_ran_logarithmic
+          description: Common discrete distributions.
+        - name: multivariate_dists
+          symbol: gsl_ran_dirichlet, gsl_ran_multinomial, gsl_ran_multivariate_gaussian
+          description: Multivariate distributions.
+        - name: shuffling_sampling
+          symbol: gsl_ran_shuffle, gsl_ran_choose, gsl_ran_sample, gsl_ran_discrete_preproc
+          description: Shuffling and sampling.
+        - name: cdf_pdf_functions
+          symbol: gsl_cdf_gaussian_P, gsl_cdf_gaussian_Q, gsl_cdf_chisq_P, gsl_cdf_fdist_P, gsl_cdf_tdist_P, gsl_cdf_binomial_P, gsl_cdf_poisson_P
+          description: Cumulative distribution and quantile functions.
+
+    - id: gsl.histograms
+      library: gsl
+      description: Binned data and histograms.
+      operations:
+        - name: histogram_1d
+          symbol: gsl_histogram_alloc, gsl_histogram_set_ranges_uniform, gsl_histogram_increment, gsl_histogram_accumulate, gsl_histogram_find, gsl_histogram_get, gsl_histogram_sum
+          description: One-dimensional histograms.
+        - name: histogram_2d
+          symbol: gsl_histogram2d_alloc, gsl_histogram2d_increment, gsl_histogram2d_find
+          description: Two-dimensional histograms.
+        - name: histogram_ops
+          symbol: gsl_histogram_add, gsl_histogram_sub, gsl_histogram_mul, gsl_histogram_div, gsl_histogram_scale
+          description: Arithmetic on histograms.
+        - name: histogram_pdf
+          symbol: gsl_histogram_pdf_alloc, gsl_histogram_pdf_sample
+          description: Sampling from histogram distributions.
+
+    - id: gsl.sorting_and_permutations
+      library: gsl
+      description: Sorting and permutation utilities.
+      operations:
+        - name: sort
+          symbol: gsl_sort, gsl_sort2, gsl_sort_vector, gsl_sort_vector2, gsl_sort_index
+          description: In-place sorting and index sorting.
+        - name: sort_selection
+          symbol: gsl_sort_smallest, gsl_sort_largest, gsl_sort_vector_smallest, gsl_sort_vector_largest
+          description: Partial sorting for k-smallest and k-largest.
+        - name: permutation
+          symbol: gsl_permutation_alloc, gsl_permutation_next, gsl_permutation_prev, gsl_permutation_mul, gsl_permutation_inverse, gsl_permutation_swap
+          description: Permutation operations.
+        - name: combination
+          symbol: gsl_combination_alloc, gsl_combination_next, gsl_combination_prev
+          description: Combination enumeration.
+
+    - id: gsl.ode_and_sum_utilities
+      library: gsl
+      description: Miscellaneous numeric helpers.
+      operations:
+        - name: min_max_helpers
+          symbol: gsl_fcmp
+          description: Floating-point comparison within tolerance.
+        - name: ieee_utils
+          symbol: gsl_ieee_env_setup, gsl_isnan, gsl_isinf, gsl_finite
+          description: IEEE floating-point handling.
+        - name: machine_constants
+          symbol: GSL_DBL_EPSILON, GSL_DBL_MAX, GSL_DBL_MIN
+          description: Machine constants.
+        - name: unit_conversion
+          symbol: GSL_CONST_*
+          description: Physical constants and unit conversions.
+
+    - id: gsl.monte_carlo
+      library: gsl
+      description: Monte Carlo integration.
+      operations:
+        - name: vegas
+          symbol: gsl_monte_vegas_integrate
+          description: VEGAS adaptive importance sampling.
+        - name: miser
+          symbol: gsl_monte_miser_integrate
+          description: MISER recursive stratified sampling.
+        - name: plain
+          symbol: gsl_monte_plain_integrate
+          description: Plain Monte Carlo integration.
+
+    - id: gsl.vector_and_matrix_views
+      library: gsl
+      description: Views and tensor-like utilities.
+      operations:
+        - name: views
+          symbol: gsl_vector_subvector, gsl_matrix_submatrix, gsl_matrix_row, gsl_matrix_column, gsl_matrix_diagonal
+          description: Non-owning sub-views of vectors and matrices.
+
+    - id: gsl.sparse_and_structured
+      library: gsl
+      description: Sparse matrix support.
+      operations:
+        - name: sparse_storage
+          symbol: gsl_spmatrix_alloc, gsl_spmatrix_set, gsl_spmatrix_get, gsl_spmatrix_compress
+          description: Sparse matrix construction and storage formats.
+        - name: sparse_ops
+          symbol: gsl_spblas_dgemv, gsl_spblas_dgemm
+          description: Sparse BLAS operations.
+        - name: sparse_solve
+          symbol: gsl_splinalg_itersolve_alloc, gsl_splinalg_itersolve_iterate
+          description: Iterative sparse linear solvers.
+
+    - id: gsl.multilinear_fitting
+      library: gsl
+      description: Least-squares and fitting.
+      operations:
+        - name: linear_least_squares
+          symbol: gsl_fit_linear, gsl_fit_wlinear, gsl_fit_mul, gsl_fit_linear_est
+          description: Linear regression and fitting.
+        - name: multifit
+          symbol: gsl_multifit_linear, gsl_multifit_wlinear, gsl_multifit_linear_svd
+          description: Multi-parameter linear least squares.
+        - name: robust_fit
+          symbol: gsl_multifit_robust
+          description: Robust least squares.
+
+    # ============================================================
+    # PPL
+    # ============================================================
+    - id: ppl.space_dimensions_and_expressions
+      library: ppl
+      description: Linear expressions, constraints, and generators.
+      operations:
+        - name: linear_expression
+          symbol: Linear_Expression
+          description: Build affine expressions over variables.
+        - name: constraint
+          symbol: Constraint (e.g. ==, >=, >, <=, <)
+          description: Linear equalities and inequalities.
+        - name: generator
+          symbol: Generator (point, closure_point, ray, line)
+          description: Generators describing a polyhedron's vertices, rays, and lines.
+        - name: congruence
+          symbol: Congruence
+          description: Linear congruences for grids.
+        - name: grid_generator
+          symbol: Grid_Generator
+          description: Generators for grids.
+        - name: linear_form
+          symbol: Linear_Expression arithmetic
+          description: Addition, subtraction, and scalar multiplication of expressions.
+
+    - id: ppl.polyhedra_constructors
+      library: ppl
+      description: Constructing polyhedra and grids.
+      operations:
+        - name: from_constraints
+          symbol: C_Polyhedron(Constraint_System)
+          description: Build a polyhedron from linear constraints (H-representation).
+        - name: from_generators
+          symbol: C_Polyhedron(Generator_System)
+          description: Build a polyhedron from generators (V-representation).
+        - name: empty_universe
+          symbol: C_Polyhedron(dim, EMPTY | UNIVERSE)
+          description: Empty or universe polyhedron of a given dimension.
+        - name: nnc_polyhedron
+          symbol: NNC_Polyhedron
+          description: Polyhedra with non-closed (strict) constraints.
+        - name: closed_polyhedron
+          symbol: C_Polyhedron
+          description: Closed polyhedra.
+        - name: grid
+          symbol: Grid
+          description: Grids (lattice-like sets) represented by congruences or generators.
+        - name: box_and_octagon
+          symbol: Box, BD_Shape, Octagonal_Shape
+          description: Interval, difference-bound, and octagonal abstract domains.
+
+    - id: ppl.polyhedra_queries
+      library: ppl
+      description: Predicates and properties on polyhedra.
+      operations:
+        - name: is_empty
+          symbol: is_empty()
+          description: Test whether a polyhedron is empty.
+        - name: is_universe
+          symbol: is_universe()
+          description: Test whether a polyhedron is the whole space.
+        - name: is_bounded
+          symbol: is_bounded()
+          description: Test boundedness.
+        - name: is_discrete
+          symbol: is_discrete()
+          description: Test whether a polyhedron has finitely many points.
+        - name: contains
+          symbol: contains(const Polyhedron&)
+          description: Test inclusion.
+        - name: strictly_contains
+          symbol: strictly_contains()
+          description: Strict inclusion test.
+        - name: relation_with
+          symbol: relation_with(Constraint) / relation_with(Generator)
+          description: Geometric relation between a polyhedron and a constraint or generator.
+        - name: constrains
+          symbol: constrains(Variable)
+          description: Test whether a variable is constrained.
+        - name: bounds_from_above
+          symbol: bounds_from_above(Linear_Expression)
+          description: Test whether an expression is bounded from above.
+        - name: bounds_from_below
+          symbol: bounds_from_below(Linear_Expression)
+          description: Test whether an expression is bounded from below.
+        - name: maximize
+          symbol: maximize(Linear_Expression, num, den, closed)
+          description: Maximize a linear objective over the polyhedron.
+        - name: minimize
+          symbol: minimize(Linear_Expression, num, den, closed)
+          description: Minimize a linear objective over the polyhedron.
+        - name: frequency
+          symbol: frequency(Linear_Expression, value)
+          description: Frequency of a value of an expression over lattice points.
+        - name: bounded_check
+          symbol: is_bounded / bounded_hull
+          description: Bounded check utilities.
+
+    - id: ppl.polyhedra_set_operations
+      library: ppl
+      description: Boolean and geometric operations on polyhedra.
+      operations:
+        - name: intersection
+          symbol: intersection_assign()
+          description: Intersection of two polyhedra.
+        - name: convex_hull
+          symbol: poly_hull_assign()
+          description: Convex polyhedral hull of two polyhedra.
+        - name: bounded_hull
+          symbol: bHull_assign / bounded_hull
+          description: Bounded convex hull approximation.
+        - name: poly_difference
+          symbol: poly_difference_assign()
+          description: Convex-polyhedral over-approximation of set difference.
+        - name: pairwise_merge
+          symbol: pairwise_merge / pairwise_merge_assign
+          description: Merging of disjunctive polyhedra in a collection.
+        - name: cc_hull
+          symbol: concatenation / convex_hull of Pointset_Powerset
+          description: Pointset powerset operations (union, difference, hull).
+        - name: powerset_upper_approx
+          symbol: upper_bound_assign (Pointset_Powerset)
+          description: Upper approximation for powerset domains.
+        - name: time_elapse
+          symbol: time_elapse_assign()
+          description: Time-elapse operator for hybrid-system reachability.
+        - name: topological_closure
+          symbol: topological_closure_assign()
+          description: Closure of an NNC polyhedron.
+        - name: affine_image
+          symbol: affine_image(Variable, Linear_Expression, denominator)
+          description: Image of a polyhedron under an invertible or non-invertible affine map.
+        - name: affine_preimage
+          symbol: affine_preimage(Variable, Linear_Expression, denominator)
+          description: Preimage under an affine map.
+        - name: generalized_affine_image
+          symbol: generalized_affine_image(...)
+          description: Affine transformation with relation (equality or inequality).
+        - name: generalized_affine_preimage
+          symbol: generalized_affine_preimage(...)
+          description: Preimage with relation.
+        - name: bounded_affine_image
+          symbol: bounded_affine_image
+          description: Affine image with bounds on expressions.
+        - name: unconstrain
+          symbol: unconstrain(Variable)
+          description: Existential quantification (projection) away from a variable.
+        - name: remove_higher_space_dimensions
+          symbol: remove_higher_space_dimensions(dim)
+          description: Dimension reduction.
+        - name: add_space_dimensions
+          symbol: add_space_dimensions_and_embed(n)
+          description: Embedding into a higher-dimensional space.
+        - name: concatenate
+          symbol: concatenate_assign()
+          description: Cartesian product of polyhedra.
+        - name: swap_dimensions
+          symbol: swap_space_dimensions
+          description: Renaming dimensions.
+        - name: map_space_dimensions
+          symbol: map_space_dimensions
+          description: General dimension remapping.
+        - name: minimized_form
+          symbol: minimized_constraints / minimized_generators
+          description: Minimal constraint or generator representation.
+        - name: bounding_box
+          symbol: bounds / get_bounding_box
+          description: Interval bounding box of a polyhedron.
+        - name: affine_dimension
+          symbol: affine_dimension()
+          description: Dimension of the affine hull.
+        - name: space_dimension
+          symbol: space_dimension()
+          description: Dimension of the ambient space.
+        - name: widen
+          symbol: H79_widening_assign, BHRZ03_widening_assign, BHZ09_widening_assign, limited_H79_extrapolation_assign, bounded_H79_extrapolation_assign
+          description: Widening operators for fixpoint computations.
+        - name: extrapolation
+          symbol: limited_extrapolation_assign, bounded_extrapolation_assign
+          description: Extrapolation operators for convergence acceleration.
+        - name: narrow
+          symbol: H79_narrowing_assign
+          description: Narrowing operator.
+        - name: upper_bound
+          symbol: upper_bound_assign
+          description: Least upper bound of two polyhedra.
+
+    - id: ppl.grid_operations
+      library: ppl
+      description: Operations on grids (lattice-based sets).
+      operations:
+        - name: grid_intersection
+          symbol: Grid::intersection_assign
+          description: Intersection of grids.
+        - name: grid_convex_hull
+          symbol: Grid::poly_hull_assign
+          description: Convex hull of grids.
+        - name: grid_difference
+          symbol: Grid::difference_assign
+          description: Set difference of grids.
+        - name: grid_affine_image
+          symbol: Grid::affine_image
+          description: Affine image of a grid.
+        - name: grid_widening
+          symbol: Grid::limited_extrapolation_assign
+          description: Grid widening.
+        - name: grid_from_polyhedron
+          symbol: Grid(Polyhedron)
+          description: Approximate a polyhedron by a grid.
+
+    - id: ppl.optimization
+      library: ppl
+      description: Linear and mixed-integer programming.
+      operations:
+        - name: lp_problem
+          symbol: LP_Problem
+          description: Linear programming problem definition and solution.
+        - name: mip_problem
+          symbol: MIP_Problem
+          description: Mixed-integer programming problem.
+        - name: lp_solve
+          symbol: LP_Problem::solve / MIP_Problem::solve
+          description: Solve for optimal value and point.
+        - name: lp_objective
+          symbol: set_objective_function
+          description: Set the linear objective.
+        - name: lp_constraints
+          symbol: add_constraint / add_constraints
+          description: Add constraints to an LP or MIP.
+        - name: lp_integer_vars
+          symbol: set_integer_space_dimensions
+          description: Declare integer variables for MIP.
+
+    - id: ppl.coefficients_and_arithmetic
+      library: ppl
+      description: Coefficient types and arbitrary precision arithmetic.
+      operations:
+        - name: coefficient_types
+          symbol: Coefficient, mpz_class, mpq_class
+          description: Integer and rational coefficient types.
+        - name: numerator_denominator
+          symbol: numer_denom
+          description: Extract numerator and denominator.
+        - name: gcd_lcm
+          symbol: gcd, lcm
+          description: Greatest common divisor and least common multiple.
+        - name: integer_division
+          symbol: exact_div, div_mod, div_exact
+          description: Exact and quotient-remainder integer division.
+        - name: rounding
+          symbol: rounding modes (ROUND_IGNORE, ROUND_DOWN, ROUND_UP, ROUND_NEAREST)
+          description: Rounding modes for floating-point and rational results.
+        - name: modular_arithmetic
+          symbol: mod_gcd, mod_inverse
+          description: Modular operations.
+        - name: floor_ceil
+          symbol: floor_log2, ceil_log2
+          description: Floor and ceiling logarithms.
+
+    - id: ppl.bit_and_numeric_utilities
+      library: ppl
+      description: Auxiliary numeric utilities.
+      operations:
+        - name: exact_compare
+          symbol: cmp
+          description: Exact comparison of coefficients.
+        - name: stride_check
+          symbol: stride
+          description: Stride of a dimension in a grid.
