@@ -1,4 +1,27 @@
 # Baseline (2026-10-19, before any edits)
+
+## MetaArchIR baseline (2026-10-24)
+
+Before editing MetaArchIR, the existing default suite passed **12/12** CTest
+cases: GCC Release **11.94 s**, GCC Debug ASan+UBSan **82.33 s**. Both builds used
+`-Wall -Wextra -Wpedantic -Werror` for C and C++; no compiler warnings or sanitizer
+findings. Ninja is still unavailable, so Unix Makefiles was used. yyjson was
+obtained by the existing FetchContent fallback; its old CMake minimum emits a
+dependency-only deprecation warning during configuration.
+
+Build trees: `/tmp/opencode/mair-build` and `/tmp/opencode/mair-asan`.
+The unchanged database's lint output is saved in
+`/tmp/opencode/mair-baseline-lint.txt` (311 lines). No architecture specification
+or generated backend data was edited in the MetaArchIR task. See the latest
+section of REPORT.md for the new APIs and verification commands.
+
+After implementation: **25/25** CTest cases passed with each of GCC/Clang Release
+and GCC/Clang Debug ASan+UBSan; respectively **12.17 / 14.00 / 81.58 / 92.79 s**.
+MetaArchIR contributes 114 unit checks plus CLI integration and eleven example
+tests. REPORT.md records one intermittent existing JSON round-trip crash observed
+during concurrent verification, its backtrace, and the subsequent passing runs.
+
+---
 Environment: Arch Linux, GCC 16.2.1, Clang 22.1.8, CMake 4.4.3, GNU Make
 (ninja is **not installed** on this machine, so the "Unix Makefiles" generator
 is used everywhere the brief says `-G Ninja`; no network access, so yyjson is

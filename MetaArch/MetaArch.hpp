@@ -42,6 +42,8 @@ struct Relocation {
     int32_t index;
     std::string name, parameter;
     int64_t value;
+    size_t bit_offset = 0, bit_width = 0;
+    DsymEndian endian = DSYM_ENDIAN_TARGET; // Actual emitted field order after encoding.
 };
 struct Encoded {
     std::vector<uint8_t> bytes;

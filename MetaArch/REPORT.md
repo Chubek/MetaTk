@@ -1,5 +1,136 @@
 # MetaArch — native and cross-language API checkpoint
 
+## Latest addition: MetaArchIR portable assembly (2026-10-24)
+
+### Follow-up hardening (2026-10-24)
+
+- `metaarch::Spec::encode` now validates encoder lookup before descriptor access,
+  checks relocation parameter indices, and handles zero-byte encodings safely.
+- `metaarch::Spec::assemble` and `mair::assemble` reject relocation offset
+  arithmetic that would wrap `size_t`.
+- Focused GCC C++20 syntax checks pass with `-Wall -Wextra -Wpedantic -Werror`
+  for `MetaArch.cpp` and the `marchir` CLI. Full CMake/CTest remains blocked in
+  this container because Ninja is unavailable and dependency fetching cannot
+  resolve GitHub.
+
+### API additions and compatibility changes
+
+- `MetaArchIR/MetaArchIR.hpp` now depends on DSLtk and the MetaArch DSL library;
+  consumers link the new `MetaArch::ir` CMake target. The old standalone
+  regex-based implementation's single-file compile command no longer applies.
+- `mair::Target` is an owning/shared immutable database handle with accessors
+  `name`, `index`, `spec`, `description`, `supports`, `forms`, `parameters`, and
+  `register_info`. Its old publicly mutable name/database/mnemonic fields were
+  removed to prevent constructing apparently valid targets without a loaded spec.
+- Added `Location`, `Limits`, typed `Operand`/`Binding`, `SymbolRef`, `reg`, `imm`,
+  `symbol`, `Program::encode/form/at/size/empty/clear`, target enumeration,
+  `Section`, `Symbol`, `Relocation`, `Image`, `assemble`, and bounded `read_file`.
+  Existing builder methods, `parse`, `render`, `target` and `compile_file` remain.
+- **Upstream C++ API addition:** `metaarch::Relocation` now retains `bit_offset`,
+  `bit_width` and actual `endian` from the C encoding API. This changes the C++
+  record layout (rebuild C++ consumers); the C ABI is unchanged. This was necessary
+  to preserve mixed-endian relocation fields in portable assembly images.
+- `parse` and emission accept source/limit options. Strings now decode escapes;
+  numeric directives normalize to decimal and fixed byte widths. Trailing `//`
+  comments and whole-line `#` comments avoid swallowing ARM `#` immediates.
+
+### Implementation
+
+The textual frontend uses DSLtk parser combinators and owns its parsed source
+data. It reports source file/line/column, checks delimiters/escapes/overflow,
+rejects duplicate labels and parameters, and enforces resource limits.
+
+Targets load through `metaarch::Spec::load_dsl`; form and encoder execution go
+through the existing public encoding APIs. Named bindings are explicit rather
+than inferred from VM parameter occurrence order. There is no high-level IR,
+optimization pipeline, analysis pass or register allocation.
+
+`render` supports native assembler text and exact-byte encoded statements.
+`assemble` builds section-relative layout, symbols, padding, target-endian data,
+and complete relocation field metadata. Symbol/addend references survive in the
+image. Flat bytes reject unresolved relocations and multiple sections.
+
+`marchir` has a C entry point backed by the C++ implementation, option manifest,
+help/version, target/encoder/form/register discovery, stdin/stdout, validation-only
+mode, input/output limits and documented exit codes. It writes assembly, binary,
+hex or versioned JSON section images, checks output streams, and refuses to
+overwrite the input. Validation errors leave existing output files untouched.
+
+Added six working API examples (including the previously empty Compute/GCD),
+five textual examples, native execution checks and LLVM encoding cross-checks.
+All eleven API examples are built and run in CTest. The README documents grammar,
+API ownership/thread safety, relocation behavior and CLI usage.
+
+### Verification
+
+The original baseline was 12/12 CTest cases; the extended suite contains 25.
+The MetaArchIR unit executable passes **114 checks**, covering every one of the
+28 database architectures.
+Additional CLI tests independently compare AArch64 and RISC-V bytes with
+`llvm-mc`/`llvm-objcopy`, execute generated amd64 Compute/GCD code, check JSON
+relocations, source diagnostics, budgets and error exit codes.
+
+Final complete runs, all built with `-Wall -Wextra -Wpedantic -Werror`:
+
+| Configuration | CTest | Elapsed |
+| --- | --- | --- |
+| GCC 16 Release | 25/25 passed | 12.17 s |
+| Clang 22 Release | 25/25 passed | 14.00 s |
+| GCC Debug ASan+UBSan | 25/25 passed | 81.58 s |
+| Clang Debug ASan+UBSan | 25/25 passed | 92.79 s |
+
+No compiler warnings or sanitizer findings in these runs. Configuration emits
+the existing yyjson CMake-minimum deprecation warning. The LLVM cross-checks ran
+(not skipped). Baseline and final timings are observations, not performance
+comparisons: some verification trees ran concurrently.
+
+**Unresolved observation:** during one concurrent multi-build verification,
+the unchanged GCC C `archdb_roundtrip` executable segfaulted once. The recorded
+core (PID 673214) shows `to_yy -> to_yy -> ... -> dsym_json_write ->
+dsym_spec_write -> roundtrip_dir`; `to_yy` received an invalid node pointer.
+This executable does not link MetaArchIR or the changed C++ wrapper. An isolated
+round-trip rerun passed (12.10 s), followed by the full passing GCC run above;
+both sanitizer suites also passed. Root cause was not established, and no
+speculative codec patch or test weakening was made. This observation remains
+separate from the verified MetaArchIR changes.
+
+Reproduce (Unix Makefiles is used because Ninja is unavailable):
+
+```sh
+cmake -S . -B /tmp/opencode/mair-build -G 'Unix Makefiles' \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_FLAGS='-Wall -Wextra -Wpedantic -Werror' \
+  -DCMAKE_CXX_FLAGS='-Wall -Wextra -Wpedantic -Werror'
+cmake --build /tmp/opencode/mair-build --parallel 3
+ctest --test-dir /tmp/opencode/mair-build --output-on-failure -j4
+```
+
+For Clang use a separate tree and `-DCMAKE_C_COMPILER=clang
+-DCMAKE_CXX_COMPILER=clang++`. For ASan/UBSan use Debug and append
+`-fsanitize=address,undefined -fno-omit-frame-pointer` to **both** flag variables.
+The four verification trees are `mair-build`, `mair-clang`, `mair-asan`, and
+`mair-clang-asan`, under `/tmp/opencode`. They share the yyjson source checkout
+via `-DFETCHCONTENT_SOURCE_DIR_YYJSON=/tmp/opencode/mair-build/_deps/yyjson-src`.
+
+Installation was exercised with `cmake --install /tmp/opencode/mair-build
+--prefix /tmp/opencode/mair-install`; the installed CLI and installed MetaArchDB
+produced `1305f5ff67800000` for the RISC-V decrement example.
+
+### Explicit boundaries
+
+Native assembler operands are emitted in the caller's target dialect and only
+mnemonic-checked; use checked forms for operand constraints. Low-level encoders
+retain their existing VM semantics and database coverage. Hidden/custom form
+constraints and unsupported operand kinds still report the underlying API errors.
+Symbolic inputs use encoder statements, not checked forms. Relocation expressions
+are retained for a linker, not evaluated; no object-file writer or branch
+relaxation is introduced. These behaviors are documented and tested, not guessed.
+
+No ISA data was changed. The earlier multi-phase data/schema/codec/fuzzing work
+described below remains a separate checkpoint; this task concerns MetaArchIR.
+
+---
+
 ## Latest addition: ArchBFD C++ API, XBind specs and language bindings
 
 Extended the ArchBFD subsystem with the surfaces the other parts of the

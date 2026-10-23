@@ -173,6 +173,10 @@ if(ARCHDB_BUILD_DSL)
   target_compile_features(metaarch_dsl PUBLIC cxx_std_20)
   target_include_directories(metaarch_dsl PRIVATE "${ARCHDB_DSLTK_DIR}")
   target_link_libraries(metaarch_dsl PUBLIC metaarch)
+  add_library(metaarch_ir INTERFACE)
+  add_library(MetaArch::ir ALIAS metaarch_ir)
+  target_link_libraries(metaarch_ir INTERFACE metaarch_dsl)
+  target_include_directories(metaarch_ir INTERFACE "${ARCHDB_DSLTK_DIR}")
   if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(metaarch_dsl PRIVATE -Wall -Wextra -Wpedantic)
   endif()
@@ -189,6 +193,8 @@ if(ARCHDB_BUILD_TOOLS)
     add_executable(metaarch_tool tools/metaarch.cpp)
     set_target_properties(metaarch_tool PROPERTIES OUTPUT_NAME metaarch)
     target_link_libraries(metaarch_tool PRIVATE metaarch_dsl)
+    add_executable(marchir MetaArchIR/cli/marchir.c MetaArchIR/cli/marchir.cpp)
+    target_link_libraries(marchir PRIVATE MetaArch::ir)
   endif()
 endif()
 
@@ -331,9 +337,30 @@ if(ARCHDB_BUILD_TESTS)
   endif()
   if(ARCHDB_BUILD_DSL)
     add_executable(test_metaarch_dsl tests/test_dsl.cpp)
+    add_executable(test_metaarch_ir MetaArchIR/tests/test_ir.cpp)
+    target_link_libraries(test_metaarch_ir PRIVATE MetaArch::ir)
+    add_test(NAME metaarch_ir COMMAND test_metaarch_ir ${CMAKE_CURRENT_SOURCE_DIR})
+    file(GLOB _mair_examples CONFIGURE_DEPENDS MetaArchIR/examples/api/*.cpp)
+    foreach(_example IN LISTS _mair_examples)
+      get_filename_component(_name "${_example}" NAME_WE)
+      add_executable(mair_example_${_name} "${_example}")
+      target_link_libraries(mair_example_${_name} PRIVATE MetaArch::ir)
+      add_test(NAME mair_example_${_name} COMMAND mair_example_${_name})
+      set_tests_properties(mair_example_${_name} PROPERTIES
+        ENVIRONMENT "METAARCHDB=${CMAKE_CURRENT_SOURCE_DIR}/MetaArchDB")
+    endforeach()
     target_link_libraries(test_metaarch_dsl PRIVATE metaarch_dsl)
     add_test(NAME metaarch_dsl COMMAND test_metaarch_dsl ${CMAKE_CURRENT_SOURCE_DIR})
     if(ARCHDB_BUILD_TOOLS)
+      add_test(NAME metaarch_ir_cli COMMAND ${CMAKE_COMMAND}
+        -DTOOL=$<TARGET_FILE:marchir>
+        -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}
+        -DWORK=${CMAKE_CURRENT_BINARY_DIR}/mair-cli-test
+        -DCC=${CMAKE_C_COMPILER}
+        -DHOST_AMD64=$<AND:$<STREQUAL:${CMAKE_HOST_SYSTEM_PROCESSOR},x86_64>,$<STREQUAL:${CMAKE_HOST_SYSTEM_NAME},Linux>,$<NOT:$<BOOL:${CMAKE_CROSSCOMPILING}>>>
+        -DEXAMPLE_GCD=$<TARGET_FILE:mair_example_GCD>
+        -DEXAMPLE_Compute=$<TARGET_FILE:mair_example_Compute>
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/MetaArchIR/tests/test_cli.cmake)
       add_test(NAME metaarch_cli COMMAND ${CMAKE_COMMAND}
         -DTOOL=$<TARGET_FILE:metaarch_tool>
         -DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}
@@ -372,7 +399,10 @@ if(ARCHDB_BUILD_DSL)
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
   install(FILES MetaArch.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/metaarch)
+  install(FILES MetaArchIR/MetaArchIR.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/metaarch/MetaArchIR)
+  install(DIRECTORY MetaArchDB DESTINATION ${CMAKE_INSTALL_DATADIR}/metaarch)
   if(ARCHDB_BUILD_TOOLS)
     install(TARGETS metaarch_tool RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    install(TARGETS marchir RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
   endif()
 endif()

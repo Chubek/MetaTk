@@ -1,4 +1,5 @@
 #include "MetaArch.hpp"
+#include <limits>
 #include "DSLtk.hpp"
 
 #include <charconv>
@@ -381,16 +382,24 @@ Result<Encoded> Spec::encode(const std::string &encoder, std::span<const Binding
             values.push_back(reg->enc);
         }
     }
+    const auto encoder_index = dsym_spec_find_encoder(spec_.get(), encoder.c_str());
+    if (encoder_index < 0) return failure("unknown encoder: " + encoder);
     DsymEncoded result{};
     if (!dsym_encode_named(spec_.get(), encoder.c_str(), target, names.data(), values.data(),
                            names.size(), false, &result)) return failure(result.error);
     Encoded out;
-    out.bytes.assign(result.bytes, result.bytes + result.size);
-    auto *program = spec_->encoders[dsym_spec_find_encoder(spec_.get(), encoder.c_str())].program;
+    // A zero-length encoding is valid. Avoid pointer arithmetic on a null
+    // buffer, which is undefined even when the resulting range is empty.
+    if (result.size != 0) out.bytes.assign(result.bytes, result.bytes + result.size);
+    auto *program = spec_->encoders[encoder_index].program;
+    if (!program) return failure("encoder has no compiled program: " + encoder);
     for (size_t i = 0; i < result.reloc_count; ++i) {
         const auto &r = result.relocs[i];
+        if (size_t(r.sym_param) >= program->param_count)
+            return failure("encoder returned an invalid relocation parameter");
         out.relocations.push_back({r.offset, r.size, r.reloc_index, r.reloc_name,
-                                   program->params[r.sym_param], r.sym_value});
+                                   program->params[r.sym_param], r.sym_value,
+                                   r.bit_offset, r.bit_width, r.endian});
     }
     return out;
 }
@@ -456,7 +465,12 @@ Result<Encoded> Spec::assemble(std::string_view source, const std::string &path,
             auto &v = *encoded.get();
             if (out.bytes.size() > options.max_output_bytes || v.bytes.size() > options.max_output_bytes - out.bytes.size())
                 return failure("assembly output byte limit exceeded", path, line, insn.offset + 1);
-            for (auto &r : v.relocations) { r.offset += out.bytes.size(); out.relocations.push_back(std::move(r)); }
+            for (auto &r : v.relocations) {
+                if (r.offset > std::numeric_limits<size_t>::max() - out.bytes.size())
+                    return failure("relocation offset overflow", path, line, insn.offset + 1);
+                r.offset += out.bytes.size();
+                out.relocations.push_back(std::move(r));
+            }
             out.bytes.insert(out.bytes.end(), v.bytes.begin(), v.bytes.end());
         }
         if (end == std::string_view::npos) break;

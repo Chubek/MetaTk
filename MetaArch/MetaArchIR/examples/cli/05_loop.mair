@@ -1,0 +1,11 @@
+section .text
+global count_down
+count_down:
+    mov %edi, %eax
+again:
+    test %eax, %eax
+    jz finished
+    dec %eax
+    jmp again
+finished:
+    ret

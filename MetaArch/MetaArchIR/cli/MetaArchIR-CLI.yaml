@@ -1,0 +1,26 @@
+name: marchir
+version: 1
+description: Portable assembly using MetaArchDB and DSLtk
+implementation: marchir.cpp
+entrypoint: marchir.c
+input: .mair text or stdin (-)
+outputs:
+  asm: GAS-style assembly text
+  bin: Single-section bytes, no unresolved relocations
+  hex: Single-section hexadecimal bytes followed by newline
+  json: Version-1 section image with symbols and relocation records
+options:
+  target: {short: T, argument: NAME, required_for_compilation: true}
+  db: {argument: DIRECTORY, environment: METAARCHDB}
+  target-index: {argument: N, default: 0}
+  output: {short: o, argument: FILE}
+  emit: {argument: FORMAT, default: asm, choices: [asm, bin, hex, json]}
+  check: {description: Validate without writing output}
+  max-bytes: {argument: N, default: 16777216}
+  list-targets: {description: List available architectures}
+  list-encoders: {description: List encoders and named parameters}
+  list-forms: {description: List form index, mnemonic, encoder, operand count}
+  list-registers: {description: List register name, width, encoding}
+  help: {short: h}
+  version: {}
+exit_codes: {0: success, 1: invalid_source_or_target, 2: usage, 3: io_error}

@@ -4,6 +4,32 @@ All notable changes are documented here, following Keep a Changelog.
 
 ## [Unreleased]
 
+### Fixed — MetaArchIR encoding safety
+- Validate the selected encoder before indexing its descriptor, reject malformed
+  relocation parameter indices, and guard relocation offset accumulation against
+  `size_t` overflow. Zero-byte encodings are handled without undefined pointer
+  arithmetic.
+
+### Added — MetaArchIR portable assembly
+- DSLtk-based `.mair` parser with owned statements, source diagnostics, checked
+  escapes/integers/delimiters, duplicate rejection and configurable limits.
+- Immutable MetaArchDB target handles using the public MetaArch APIs; explicit
+  named encoder bindings and form-checked physical-register/immediate operands.
+- Section images, symbol layout, relocation symbol/addend/bit-field metadata,
+  target-endian data, safe flat-byte output and GAS text emission.
+- `marchir` CLI, CMake `MetaArch::ir`, eleven executable API examples, multi-target
+  textual examples and CTest coverage with independent LLVM encoding comparisons.
+
+### Changed — MetaArchIR API hardening
+- Replaced regex-based database scanning with validated specification loading.
+  Consumers now link the MetaArch DSL library and provide DSLtk headers.
+- Encapsulated Target state; decoded string escapes; normalized numeric data and
+  fixed-width assembler directives; reserved trailing `//` comments so native ARM
+  immediate markers survive parsing.
+- Preserved actual relocation bit offset, width and field byte order in
+  `metaarch::Relocation` rather than losing C API information. C++ consumers must
+  rebuild for the extended record layout; the C ABI is unchanged.
+
 ### Added — ArchBFD C++, XBind specs and language bindings
 - `ArchBFD.hpp`: standalone C++17 RAII API over the object-format catalogue
   (`archbfd::api`): `Catalogue`, `Spec`, `SpecView` and `Object`, with copied

@@ -1,0 +1,5 @@
+// Works with -T amd64, -T aarch64 and -T riscv64; --emit hex shows each encoding.
+section .text
+global return_to_caller
+return_to_caller:
+encode ret
