@@ -1,3 +1,6 @@
 !DSLtk.d
+!MetaML.d
+!repl/*.d
+!metalib/d/*.d
 !examples/*.d
 !tests/*.d

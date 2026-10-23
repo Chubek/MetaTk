@@ -1,5 +1,9 @@
 @PACKAGE_INIT@
 
+if(@METAML_BUILD_C_API@)
+    include(CMakeFindDependencyMacro)
+    find_dependency(Threads)
+endif()
 include("${CMAKE_CURRENT_LIST_DIR}/DSLtkTargets.cmake")
 
 set(DSLtk_INCLUDE_DIR "${PACKAGE_PREFIX_DIR}/@CMAKE_INSTALL_INCLUDEDIR@")

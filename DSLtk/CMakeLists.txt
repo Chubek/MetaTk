@@ -1,4 +1,7 @@
+cmake_minimum_required(VERSION 3.24)
 project(DSLtk VERSION 1.0 LANGUAGES CXX)
+include(GNUInstallDirs)
+include(CTest)
 
 option(DSLtk_BUILD_GENERATOR "Build the parser generator" ON)
 
@@ -13,6 +16,22 @@ target_include_directories(DSLtk
 
 target_compile_features(DSLtk INTERFACE cxx_std_20)
 
+option(METAML_BUILD_REPL "Build the C++ MetaML REPL" ON)
+option(METAML_BUILD_C_API "Build the optional C embedding adapter" ON)
+if(METAML_BUILD_REPL OR METAML_BUILD_C_API)
+    find_package(Threads REQUIRED)
+endif()
+if(METAML_BUILD_REPL)
+    add_executable(metaml-repl-cpp repl/metaml.cpp)
+    target_link_libraries(metaml-repl-cpp PRIVATE DSLtk Threads::Threads)
+    install(TARGETS metaml-repl-cpp RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+if(METAML_BUILD_C_API)
+    add_library(metaml-c STATIC metalib/c/MetaML.cpp)
+    target_link_libraries(metaml-c PUBLIC DSLtk Threads::Threads)
+    install(TARGETS metaml-c EXPORT DSLtkTargets ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+endif()
+
 if(BUILD_TESTING)
     enable_testing()
     add_subdirectory(tests)
@@ -26,7 +45,7 @@ if(BUILD_EXAMPLES)
 endif()
 
 install(
-    FILES DSLtk.hpp DSLtk.d
+    FILES DSLtk.hpp DSLtk.d MetaML.hpp MetaML.d
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
@@ -42,7 +61,12 @@ install(
     DESTINATION lib/cmake/DSLtk
 )
 
-if (DSLtk_BUILD_GENERATOR)
+install(DIRECTORY metalib/ DESTINATION share/metaml/stdlib/cpp)
+install(DIRECTORY metalib/ DESTINATION share/metaml/stdlib/d)
+install(DIRECTORY metalib/c metalib/cpp metalib/d DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/metalib)
+install(DIRECTORY MetaML-Manual/ DESTINATION share/doc/metaml OPTIONAL)
+
+if (DSLtk_BUILD_GENERATOR AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generator/DSLtk-ParserGenerator.d")
     find_program(DSLtk_D_COMPILER NAMES ldc2 dmd gdc
                  DOC "D compiler used to build the parser generator")
 

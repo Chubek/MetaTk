@@ -139,6 +139,18 @@ struct FixedString(string text)
     alias view this;
 }
 
+/// Field-wise constructors for callable structs. D resolves `S(args)` to
+/// `opCall` when a struct defines one, so callable structs need explicit
+/// constructors to remain constructible with literal syntax.
+mixin template FieldConstructors()
+{
+    static foreach (n; 1 .. typeof(this.tupleof).length + 1)
+        this(typeof(this.tupleof[0 .. n]) fields)
+        {
+            static foreach (i; 0 .. n) this.tupleof[i] = fields[i];
+        }
+}
+
 /// Bind an alias callable (including a generic lambda) without runtime storage.
 struct StaticCallable(alias fn)
 {
@@ -147,6 +159,7 @@ struct StaticCallable(alias fn)
 
 struct Predicate(F)
 {
+    mixin FieldConstructors;
     F fn;
     bool opCall(T)(auto ref T value) { return cast(bool) fn(value); }
     auto opBinary(string op, G)(Predicate!G other) if (op == "&" || op == "|")
@@ -161,6 +174,7 @@ struct Predicate(F)
 }
 private struct PredicateBinary(string op, F, G)
 {
+    mixin FieldConstructors;
     F left;
     G right;
     bool opCall(T)(auto ref T value)
@@ -171,11 +185,12 @@ private struct PredicateBinary(string op, F, G)
 }
 private struct PredicateNot(F)
 {
+    mixin FieldConstructors;
     F fn;
     bool opCall(T)(auto ref T value) { return !fn(value); }
 }
 auto predicate(F)(F fn) { return Predicate!F(fn); }
-auto predicate(alias fn)() { return predicate(StaticCallable!fn()); }
+auto predicate(alias fn)() { return predicate(StaticCallable!fn.init); }
 
 struct PipeStage(F)
 {
@@ -183,7 +198,7 @@ struct PipeStage(F)
     auto opBinaryRight(string op, T)(auto ref T value) if (op == "|") { return fn(value); }
 }
 auto pipe(F)(F fn) { return PipeStage!F(fn); }
-auto pipe(alias fn)() { return pipe(StaticCallable!fn()); }
+auto pipe(alias fn)() { return pipe(StaticCallable!fn.init); }
 
 // Whole-input patterns: literals, '.', classes/ranges, anchors and */+.
 struct pattern(string text)
@@ -252,9 +267,9 @@ struct OtherwiseClause(F)
     enum isOtherwise = true;
 }
 auto when(alias key, F)(F fn) { return WhenClause!(key, F)(fn); }
-auto when(alias key, alias fn)() { return when!key(StaticCallable!fn()); }
+auto when(alias key, alias fn)() { return when!key(StaticCallable!fn.init); }
 auto otherwise(F)(F fn) { return OtherwiseClause!F(fn); }
-auto otherwise(alias fn)() { return otherwise(StaticCallable!fn()); }
+auto otherwise(alias fn)() { return otherwise(StaticCallable!fn.init); }
 private template MatchReturns(K, A, C...)
 {
     static if (!C.length) alias MatchReturns = AliasSeq!();
@@ -263,6 +278,7 @@ private template MatchReturns(K, A, C...)
 }
 struct MatchTable(C...)
 {
+    mixin FieldConstructors;
     Tuple!C clauses;
     auto opCall(K, A...)(K key, A args)
     {
@@ -500,6 +516,7 @@ auto literal_set(E...)(E entries) { return LiteralSet!E(tuple(entries)); }
 
 struct MemoizedCallable(K, V, F)
 {
+    mixin FieldConstructors;
     F fn;
     private V[K] cache;
     V opCall(K key)
@@ -674,6 +691,7 @@ ExpectedResult!T fail_expected(T)(ParsecInput input, string label,
 
 struct Parser(T, F = ExpectedResult!T delegate(ref ParsecInput))
 {
+    mixin FieldConstructors;
     alias value_type = T;
     F parse;
     ExpectedResult!T opCall(ref ParsecInput input) { return parse(input); }
@@ -697,6 +715,7 @@ auto parser(F)(F fn)
 }
 private struct SequenceParser(A, B)
 {
+    mixin FieldConstructors;
     A a;
     B b;
     ExpectedResult!(Tuple!(A.value_type, B.value_type)) opCall(ref ParsecInput input)
@@ -718,6 +737,7 @@ private struct SequenceParser(A, B)
 }
 private struct ChoiceParser(A, B)
 {
+    mixin FieldConstructors;
     A a;
     B b;
     ExpectedResult!(A.value_type) opCall(ref ParsecInput input)
@@ -733,6 +753,7 @@ private struct ChoiceParser(A, B)
 }
 private struct ManyParser(P)
 {
+    mixin FieldConstructors;
     P p;
     ExpectedResult!(P.value_type[]) opCall(ref ParsecInput input)
     {
@@ -758,6 +779,7 @@ private struct ManyParser(P)
 auto many(P)(P p) { return parser(ManyParser!P(p)); }
 private struct OptionalParser(P)
 {
+    mixin FieldConstructors;
     P p;
     ExpectedResult!(Nullable!(P.value_type)) opCall(ref ParsecInput input)
     {
@@ -773,6 +795,7 @@ private struct OptionalParser(P)
 auto optional(P)(P p) { return parser(OptionalParser!P(p)); }
 private struct TryParser(P)
 {
+    mixin FieldConstructors;
     P p;
     ExpectedResult!(P.value_type) opCall(ref ParsecInput input)
     {
@@ -785,6 +808,7 @@ private struct TryParser(P)
 auto try_parse(P)(P p) { return parser(TryParser!P(p)); }
 private struct LabeledParser(P)
 {
+    mixin FieldConstructors;
     P p;
     string label;
     ExpectedResult!(P.value_type) opCall(ref ParsecInput input)
@@ -811,6 +835,7 @@ ParseOutcome!(P.value_type) run_parser(P)(P p, string source)
 }
 private struct CharParser
 {
+    mixin FieldConstructors;
     char ch;
     ExpectedResult!char opCall(ref ParsecInput input)
     {
@@ -821,6 +846,7 @@ private struct CharParser
 auto ch(char c) { return parser(CharParser(c)); }
 private struct SatisfyParser(P)
 {
+    mixin FieldConstructors;
     P pred;
     string label;
     ExpectedResult!char opCall(ref ParsecInput input)
@@ -1259,6 +1285,7 @@ PEGMatcher peg_new_matcher(PEGDefinition def, string text) { return new PEGMatch
 // PEG combinators over the same concrete Parser templates.
 private struct SpanParser(P)
 {
+    mixin FieldConstructors;
     P p;
     ExpectedResult!PEGMatch opCall(ref ParsecInput input)
     {
@@ -1286,6 +1313,7 @@ auto peg_many(P)(P p) { return many(try_parse(p)); }
 auto peg_many1(P)(P p) { return p & many(try_parse(p)); }
 private struct LookaheadParser(bool positive, P)
 {
+    mixin FieldConstructors;
     P p;
     ExpectedResult!bool opCall(ref ParsecInput input)
     {
@@ -1305,6 +1333,7 @@ auto peg_and(P)(P p) { return parser(LookaheadParser!(true, P)(p)); }
 auto peg_not(P)(P p) { return parser(LookaheadParser!(false, P)(p)); }
 private struct RuleParser
 {
+    mixin FieldConstructors;
     PEGRule rule;
     ExpectedResult!PEGMatch opCall(ref ParsecInput input)
     {
@@ -1318,6 +1347,7 @@ private struct RuleParser
 auto peg_rule(PEGRule rule) { return parser(RuleParser(rule)); }
 private struct ChannelParser(P)
 {
+    mixin FieldConstructors;
     PEGChannel channel;
     P p;
     ExpectedResult!PEGMatch opCall(ref ParsecInput input)
@@ -1465,7 +1495,7 @@ private struct CaseInsensitive
         return a == b;
     }
 }
-enum case_insensitive = CaseInsensitive();
+enum case_insensitive = CaseInsensitive.init;
 private struct CaseSensitive { bool opCall(char a, char b) const { return a == b; } }
 private bool enumNameEquals(P)(string a, string b, P pred)
 {
@@ -1540,7 +1570,7 @@ void enum_for_each(E, F)(F fn) if (integralEnum!E)
 {
     static foreach (v; EnumData!E.values) fn(enum_constant!v());
 }
-void enum_for_each(E, alias fn)() if (integralEnum!E) { enum_for_each!E(StaticCallable!fn()); }
+void enum_for_each(E, alias fn)() if (integralEnum!E) { enum_for_each!E(StaticCallable!fn.init); }
 /// Handler receives a compile-time constant wrapper; unknown values throw.
 auto enum_switch(F, E)(F fn, E value) if (integralEnum!E)
 {
@@ -1555,9 +1585,9 @@ auto enum_switch(F, E, R)(F fn, E value, R fallback) if (integralEnum!E)
     return fallback;
 }
 auto enum_switch(alias fn, E)(E value) if (integralEnum!E)
-{ return enum_switch(StaticCallable!fn(), value); }
+{ return enum_switch(StaticCallable!fn.init, value); }
 auto enum_switch(alias fn, E, R)(E value, R fallback) if (integralEnum!E)
-{ return enum_switch(StaticCallable!fn(), value, fallback); }
+{ return enum_switch(StaticCallable!fn.init, value, fallback); }
 Nullable!ulong enum_fuse(E...)(E values)
 {
     static assert(E.length > 0, "enum_fuse needs at least one enum");
@@ -2383,12 +2413,17 @@ private struct SExprReader
             else break;
         }
     }
+    // Messages match DSLtk.hpp exactly (dialect parity).
+    noreturn error(string message) const
+    {
+        throw new Exception("S-expression at " ~ to!string(pos) ~ ": " ~ message);
+    }
     SExpr read(size_t depth = 0)
     {
-        if (depth > 512) throw new Exception("S-expression nesting limit exceeded");
+        if (depth > 512) error("nesting limit exceeded");
         skip();
-        if (pos == source.length) throw new Exception("expected S-expression at " ~ to!string(pos));
-        if (source[pos] == ')') throw new Exception("unexpected ')' at " ~ to!string(pos));
+        if (pos == source.length) error("expected expression");
+        if (source[pos] == ')') error("unexpected ')'");
         if (source[pos] == '(')
         {
             ++pos;
@@ -2396,7 +2431,7 @@ private struct SExprReader
             while (true)
             {
                 skip();
-                if (pos == source.length) throw new Exception("unterminated S-expression list");
+                if (pos == source.length) error("unterminated list");
                 if (source[pos] == ')') { ++pos; return SExpr.list(items); }
                 items ~= read(depth + 1);
             }
@@ -2411,17 +2446,17 @@ private struct SExprReader
                 if (c == '"') return SExpr.atom(text, true);
                 if (c == '\\')
                 {
-                    if (pos == source.length) throw new Exception("unfinished S-expression escape");
+                    if (pos == source.length) error("unfinished escape");
                     c = source[pos++];
                     switch (c)
                     {
                         case 'n': c = '\n'; break; case 'r': c = '\r'; break; case 't': c = '\t'; break;
-                        case '\\': case '"': break; default: throw new Exception("unknown S-expression escape");
+                        case '\\': case '"': break; default: error("unknown escape");
                     }
                 }
                 text ~= c;
             }
-            throw new Exception("unterminated quoted atom");
+            error("unterminated quoted atom");
         }
         auto begin = pos;
         while (pos < source.length && source[pos] > ' ' && source[pos] != '(' && source[pos] != ')' && source[pos] != ';') ++pos;
@@ -2777,7 +2812,7 @@ struct VisitorCase(string tag, F)
     }
 }
 auto on(string tag, F)(F fn) { return VisitorCase!(tag, F)(fn); }
-auto on(string tag, alias fn)() { return on!tag(StaticCallable!fn()); }
+auto on(string tag, alias fn)() { return on!tag(StaticCallable!fn.init); }
 enum VisitOrder { Preorder, Postorder }
 private string[] astSchemaTags(ASTNode node)
 {
@@ -3877,6 +3912,7 @@ unittest
     struct CountEnums
     {
         size_t* count;
+        this(size_t* c) { count = c; }
         void opCall(T)(T constant) { ++*count; }
     }
     enum_for_each!Color(CountEnums(&visited));
@@ -3902,3 +3938,495 @@ unittest
     assert(set.erase(Color.Blue) && set.empty());
 }
 
+
+// ============================================================
+//  Language front-end facilities: spans, tokens, diagnostics, REPL
+// ============================================================
+// Purely additive; mirrors the C++ section of DSLtk.hpp name for name.
+// A REPL Language policy provides:
+//   alias Program = ...; alias Value = ...;
+//   ParseResult!Program parse(string source);
+//   Result!(Value, Diagnostic[]) eval(ref Program);
+//   string format(Value);                 // "" prints nothing
+//   string format_error(Diagnostic);
+
+/// Half-open byte range [begin, end) plus the 1-based line/column of begin.
+struct Span
+{
+    size_t begin;
+    size_t end;
+    size_t line = 1;
+    size_t column = 1;
+    string file;
+}
+
+Span merge_spans(Span a, Span b)
+{
+    Span s = a;
+    if (b.end > s.end) s.end = b.end;
+    return s;
+}
+
+/// Summary of the trivia (whitespace/comments) preceding a token.
+struct Trivia
+{
+    bool space_before;
+    bool newline_before;
+}
+
+struct BasicToken(Kind)
+{
+    Kind kind;
+    string text;
+    Span span;
+    Trivia trivia;
+}
+alias Token = BasicToken!int;
+
+/// Maps byte offsets to lines/columns and retrieves source lines.
+struct SourceMap
+{
+    private string text_;
+    private size_t[] starts_;
+    this(string text)
+    {
+        text_ = text;
+        starts_ ~= 0;
+        foreach (i, char c; text) if (c == '\n') starts_ ~= i + 1;
+    }
+    size_t[2] line_column(size_t offset) const
+    {
+        import std.range : assumeSorted;
+        auto line = starts_.assumeSorted.lowerBound(offset + 1).length;
+        if (line == 0) line = 1;
+        return [line, offset - starts_[line - 1] + 1];
+    }
+    string line_text(size_t line) const
+    {
+        if (line == 0 || line > starts_.length) return null;
+        size_t b = starts_[line - 1];
+        size_t e = b;
+        while (e < text_.length && text_[e] != '\n' && text_[e] != '\r') ++e;
+        return text_[b .. e];
+    }
+    size_t line_count() const { return starts_.length; }
+}
+
+enum Severity { Error, Warning, Note, Hint }
+
+string severity_name(Severity s)
+{
+    final switch (s)
+    {
+        case Severity.Error: return "error";
+        case Severity.Warning: return "warning";
+        case Severity.Note: return "note";
+        case Severity.Hint: return "hint";
+    }
+}
+
+struct DiagnosticLabel { Span span; string label; }
+/// Structured fix enabling `--fix`: replace primary_span by `edit`.
+struct DiagnosticFix { string description; string edit; }
+
+struct Diagnostic
+{
+    Severity severity = Severity.Error;
+    string code;
+    string message;
+    Span primary_span;
+    DiagnosticLabel[] secondary_spans;
+    Nullable!DiagnosticFix fix;
+    string[] suggestions;
+
+    string headline() const
+    {
+        string result = severity_name(severity);
+        if (code.length) result ~= "[" ~ code ~ "]";
+        return result ~ ": " ~ message;
+    }
+}
+
+/// Renders a diagnostic with location, source excerpt and caret markers.
+string render_diagnostic(Diagnostic d, string source = null)
+{
+    import std.array : replicate;
+    string result = d.headline() ~ "\n";
+    auto s = d.primary_span;
+    string file = s.file.length ? s.file : "<input>";
+    result ~= " --> " ~ file ~ ":" ~ to!string(s.line) ~ ":" ~ to!string(s.column) ~ "\n";
+    if (source.length)
+    {
+        auto map = SourceMap(source);
+        auto text = map.line_text(s.line);
+        if (text.length || s.line <= map.line_count())
+        {
+            string num = to!string(s.line);
+            string pad = replicate(" ", num.length);
+            result ~= pad ~ " |\n";
+            result ~= num ~ " | " ~ text ~ "\n";
+            size_t width = 1;
+            if (s.end > s.begin) width = s.end - s.begin;
+            size_t col = s.column > 0 ? s.column - 1 : 0;
+            if (col > text.length) col = text.length;
+            if (col + width > text.length && text.length > col) width = text.length - col;
+            if (width == 0) width = 1;
+            result ~= pad ~ " | " ~ replicate(" ", col) ~ replicate("^", width) ~ "\n";
+        }
+    }
+    foreach (l; d.secondary_spans)
+        result ~= " = note: " ~ l.label ~ " (" ~ to!string(l.span.line) ~ ":" ~ to!string(l.span.column) ~ ")\n";
+    foreach (sug; d.suggestions) result ~= " = help: " ~ sug ~ "\n";
+    if (!d.fix.isNull) result ~= " = fix: " ~ d.fix.get.description ~ "\n";
+    return result;
+}
+
+/// Collects diagnostics; warnings can be disabled by code.
+final class DiagnosticBag
+{
+    private Diagnostic[] items_;
+    private string[] disabled_;
+
+    ref Diagnostic report(Diagnostic d) { items_ ~= d; return items_[$ - 1]; }
+    ref Diagnostic error(string code, string message, Span span = Span.init)
+    {
+        Diagnostic d;
+        d.code = code; d.message = message; d.primary_span = span;
+        return report(d);
+    }
+    /// Returns null when the warning code is disabled.
+    Diagnostic* warning(string code, string message, Span span = Span.init)
+    {
+        if (is_disabled(code)) return null;
+        Diagnostic d;
+        d.severity = Severity.Warning; d.code = code; d.message = message; d.primary_span = span;
+        return &report(d);
+    }
+    void disable(string code) { if (!is_disabled(code)) disabled_ ~= code; }
+    bool is_disabled(string code) const
+    {
+        foreach (c; disabled_) if (c == code) return true;
+        return false;
+    }
+    const(string)[] disabled() const { return disabled_; }
+    bool has_errors() const
+    {
+        foreach (ref d; items_) if (d.severity == Severity.Error) return true;
+        return false;
+    }
+    size_t error_count() const
+    {
+        size_t n;
+        foreach (ref d; items_) n += d.severity == Severity.Error;
+        return n;
+    }
+    bool empty() const { return items_.length == 0; }
+    Diagnostic[] items() { return items_; }
+    /// Deterministic order: by file, then offset; ties keep report order.
+    Diagnostic[] sorted() const
+    {
+        import std.algorithm : sort, SwapStrategy;
+        Diagnostic[] result;
+        foreach (ref d; items_) result ~= cast(Diagnostic) d;
+        result.sort!((a, b) => a.primary_span.file != b.primary_span.file
+            ? a.primary_span.file < b.primary_span.file
+            : a.primary_span.begin < b.primary_span.begin, SwapStrategy.stable);
+        return result;
+    }
+    void merge(DiagnosticBag other) { items_ ~= other.items_; }
+    void clear() { items_ = null; }
+}
+
+// ---- REPL subsystem (dsltk::repl in C++) ----
+
+enum Outcome { Ok, Err, Incomplete, Quit }
+
+string outcome_name(Outcome o)
+{
+    final switch (o)
+    {
+        case Outcome.Ok: return "Ok";
+        case Outcome.Err: return "Err";
+        case Outcome.Incomplete: return "Incomplete";
+        case Outcome.Quit: return "Quit";
+    }
+}
+
+alias Suggestions = string[];
+
+enum ParseStatus { Ok, Err, Incomplete }
+
+struct ParseResult(Program)
+{
+    ParseStatus status = ParseStatus.Ok;
+    Nullable!Program program;
+    Diagnostic[] diagnostics;
+
+    static ParseResult ok(Program p) { ParseResult r; r.program = p; return r; }
+    static ParseResult err(Diagnostic[] d) { ParseResult r; r.status = ParseStatus.Err; r.diagnostics = d; return r; }
+    static ParseResult incomplete(Diagnostic[] d = null)
+    { ParseResult r; r.status = ParseStatus.Incomplete; r.diagnostics = d; return r; }
+}
+
+/// Reads one line given a prompt; null result (isNull) on end of input.
+alias LineReader = Nullable!string delegate(string prompt);
+
+/**
+ * Generic, reusable read-eval-print session (C++: dsltk::repl::Session).
+ * Owns the multi-line buffer, directive dispatch, history, completion and
+ * the outcome of the last submission.
+ */
+final class Session(Language)
+{
+    alias DirectiveFn = void delegate(Session, string);
+    private struct Directive { string name; string help; DirectiveFn fn; }
+
+    private Language lang_;
+    private void delegate(string) out_;
+    private string buffer_;
+    private Outcome outcome_ = Outcome.Ok;
+    private bool quit_;
+    private size_t errors_;
+    private string primary_ = "> ";
+    private string continuation_ = ".. ";
+    private string unknown_code_ = "R0001";
+    private Directive[] directives_;
+    private string[] history_;
+    private Suggestions delegate(string) completion_;
+
+    this(Language lang)
+    {
+        import std.stdio : stdout;
+        lang_ = lang;
+        out_ = (string s) { stdout.write(s); };
+    }
+    this(Language lang, void delegate(string) output) { lang_ = lang; out_ = output; }
+
+    Language language() { return lang_; }
+    void write(string s) { out_(s); }
+    void set_output(void delegate(string) output) { out_ = output; }
+
+    /// Feeds one physical line (without its newline).
+    void feed(string line)
+    {
+        auto t = trim(line);
+        if (!buffer_.length)
+        {
+            if (!t.length) { outcome_ = Outcome.Ok; return; }
+            if (is_directive(t)) { run_directive(t); return; }
+        }
+        else
+        {
+            if (t == "#reset") { buffer_ = null; outcome_ = Outcome.Ok; return; }
+            if (t == "#quit") { buffer_ = null; outcome_ = Outcome.Quit; quit_ = true; return; }
+        }
+        buffer_ ~= line;
+        buffer_ ~= '\n';
+        submit(false);
+    }
+
+    /// Feeds a complete chunk (several lines) as one submission.
+    void feed_multiline(string chunk)
+    {
+        import std.string : indexOf;
+        if (!buffer_.length)
+        {
+            auto t = trim(chunk);
+            if (!t.length) { outcome_ = Outcome.Ok; return; }
+            if (is_directive(t) && t.indexOf('\n') < 0) { run_directive(t); return; }
+        }
+        buffer_ ~= chunk;
+        if (!buffer_.length || buffer_[$ - 1] != '\n') buffer_ ~= '\n';
+        submit(false);
+    }
+
+    /// Signals end of input: a pending incomplete form becomes an error.
+    void finish() { if (buffer_.length) submit(true); }
+
+    Outcome result() const { return outcome_; }
+    bool pending() const { return buffer_.length > 0; }
+    string buffer() const { return buffer_; }
+    void reset() { buffer_ = null; outcome_ = Outcome.Ok; }
+    bool quit_requested() const { return quit_; }
+    void request_quit() { quit_ = true; outcome_ = Outcome.Quit; }
+    size_t error_count() const { return errors_; }
+    void mark_error() { ++errors_; outcome_ = Outcome.Err; }
+
+    void set_prompts(string primary, string continuation) { primary_ = primary; continuation_ = continuation; }
+    string prompt() const { return buffer_.length ? continuation_ : primary_; }
+
+    void register_directive(string name, string help, DirectiveFn fn)
+    {
+        foreach (ref d; directives_) if (d.name == name) { d.help = help; d.fn = fn; return; }
+        directives_ ~= Directive(name, help, fn);
+    }
+    string[] directive_names() const
+    {
+        import std.algorithm : sort, uniq;
+        import std.array : array;
+        string[] names = ["help", "quit"];
+        foreach (ref d; directives_) names ~= d.name;
+        names.sort();
+        return names.uniq.array;
+    }
+    void set_unknown_directive_code(string code) { unknown_code_ = code; }
+
+    void print_help()
+    {
+        import std.algorithm : sort;
+        import std.array : replicate;
+        write("Directives:\n");
+        write("  #help            show this help\n");
+        write("  #quit            leave the session\n");
+        auto sorted = directives_.dup;
+        sorted.sort!((a, b) => a.name < b.name);
+        foreach (d; sorted)
+        {
+            if (d.name == "help" || d.name == "quit") continue;
+            string head = "  #" ~ d.name;
+            if (head.length < 19) head ~= replicate(" ", 19 - head.length);
+            else head ~= " ";
+            write(head ~ d.help ~ "\n");
+        }
+    }
+
+    void set_completion(Suggestions delegate(string) cb) { completion_ = cb; }
+    /// Completion candidates for `prefix` (directives when it starts with '#').
+    Suggestions complete(string prefix)
+    {
+        import std.algorithm : sort, uniq, startsWith;
+        import std.array : array;
+        Suggestions result;
+        if (prefix.length && prefix[0] == '#')
+        {
+            foreach (n; directive_names()) if (n.startsWith(prefix[1 .. $])) result ~= "#" ~ n;
+            return result;
+        }
+        if (completion_ !is null) result = completion_(prefix);
+        result.sort();
+        return result.uniq.array;
+    }
+
+    void add_history(string line)
+    {
+        if (!line.length || (history_.length && history_[$ - 1] == line)) return;
+        history_ ~= line;
+    }
+    const(string)[] history() const { return history_; }
+    bool load_history(string path)
+    {
+        import std.file : exists, readText;
+        import std.string : splitLines;
+        try
+        {
+            if (!exists(path)) return false;
+            foreach (l; readText(path).splitLines()) add_history(l);
+            return true;
+        }
+        catch (Exception) return false;
+    }
+    bool save_history(string path, size_t keep = 1000) const
+    {
+        import std.file : fwrite = write;
+        try
+        {
+            size_t start = history_.length > keep ? history_.length - keep : 0;
+            string text;
+            foreach (l; history_[start .. $]) text ~= l ~ "\n";
+            fwrite(path, text);
+            return true;
+        }
+        catch (Exception) return false;
+    }
+
+    /**
+     * Runs the loop until end of input or #quit. `reader` may be null, in
+     * which case lines come from `readLine` (stdin by default).
+     * Returns the number of submissions that produced errors.
+     */
+    size_t run(Nullable!string delegate() readLine, bool interactive, LineReader reader = null)
+    {
+        while (!quit_)
+        {
+            Nullable!string line;
+            if (reader !is null) line = reader(interactive ? prompt() : "");
+            else
+            {
+                if (interactive) { write(prompt()); flush(); }
+                line = readLine();
+            }
+            if (line.isNull) break;
+            string l = line.get;
+            if (l.length && l[$ - 1] == '\r') l = l[0 .. $ - 1];
+            if (interactive) add_history(l);
+            feed(l);
+            flush();
+        }
+        if (!quit_) finish();
+        flush();
+        return errors_;
+    }
+
+    private void flush()
+    {
+        import std.stdio : stdout;
+        stdout.flush();
+    }
+
+    private static string trim(string s)
+    {
+        while (s.length && (s[0] == ' ' || s[0] == '\t' || s[0] == '\r' || s[0] == '\n')) s = s[1 .. $];
+        while (s.length && (s[$ - 1] == ' ' || s[$ - 1] == '\t' || s[$ - 1] == '\r' || s[$ - 1] == '\n'))
+            s = s[0 .. $ - 1];
+        return s;
+    }
+    private static bool is_ident(char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'; }
+    private static bool is_directive(string t) { return t.length >= 2 && t[0] == '#' && is_ident(t[1]); }
+
+    private void run_directive(string t)
+    {
+        size_t i = 1;
+        while (i < t.length && (is_ident(t[i]) || (t[i] >= '0' && t[i] <= '9'))) ++i;
+        string name = t[1 .. i];
+        auto arg = trim(t[i .. $]);
+        outcome_ = Outcome.Ok;
+        foreach (ref d; directives_) if (d.name == name) { d.fn(this, arg); return; }
+        if (name == "quit") { request_quit(); return; }
+        if (name == "help") { print_help(); return; }
+        Diagnostic diag;
+        diag.code = unknown_code_;
+        diag.message = "unknown directive `#" ~ name ~ "`; try `#help`";
+        diag.primary_span.file = "<directive>";
+        write(lang_.format_error(diag));
+        mark_error();
+    }
+
+    private void submit(bool at_eof)
+    {
+        auto parsed = lang_.parse(buffer_);
+        if (parsed.status == ParseStatus.Incomplete && !at_eof) { outcome_ = Outcome.Incomplete; return; }
+        buffer_ = null;
+        if (parsed.status != ParseStatus.Ok || parsed.program.isNull)
+        {
+            foreach (d; parsed.diagnostics) write(lang_.format_error(d));
+            mark_error();
+            return;
+        }
+        auto program = parsed.program.get;
+        auto r = lang_.eval(program);
+        if (r.is_err())
+        {
+            foreach (d; r.unwrap_err()) write(lang_.format_error(d));
+            mark_error();
+            return;
+        }
+        outcome_ = Outcome.Ok;
+        auto text = lang_.format(r.unwrap());
+        if (text.length)
+        {
+            write(text);
+            if (text[$ - 1] != '\n') write("\n");
+        }
+    }
+}
+alias ReplSession = Session;

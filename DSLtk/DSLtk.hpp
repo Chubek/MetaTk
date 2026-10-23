@@ -7651,6 +7651,14 @@ public:
       throw std::runtime_error ("dsl::Result::unwrap called on Err");
     return std::get<0> (data_);
   }
+  /// Returns the error or throws if Ok (mirrors D Result.unwrap_err).
+  E
+  unwrap_err () const
+  {
+    if (is_ok ())
+      throw std::runtime_error ("dsl::Result::unwrap_err called on Ok");
+    return std::get<1> (data_);
+  }
   /// Returns value or fallback when Err.
   T
   unwrap_or (T fallback) const
@@ -12108,3 +12116,806 @@ public:
 };
 
 } // namespace dsl
+
+// ============================================================
+//  Language front-end facilities: spans, tokens, diagnostics, REPL
+// ============================================================
+//
+// Purely additive. These facilities are generic: any DSLtk-based language
+// can use them. MetaML (MetaML.hpp) is the first consumer.
+//
+//   dsl::Span / dsl::Trivia / dsl::BasicToken<Kind> / dsl::SourceMap
+//   dsl::Diagnostic / dsl::DiagnosticBag / dsl::render_diagnostic
+//   dsl::repl::Session<Language>   (also reachable as dsltk::repl::Session)
+//
+// A REPL Language policy provides:
+//   using Program = ...; using Value = ...;
+//   dsl::repl::ParseResult<Program> parse(std::string_view source);
+//   dsl::Result<Value, std::vector<dsl::Diagnostic>> eval(Program&);
+//   std::string format(const Value&);            // "" prints nothing
+//   std::string format_error(const dsl::Diagnostic&);
+
+#include <iostream>
+
+namespace dsl
+{
+
+/// Half-open byte range [begin, end) plus the 1-based line/column of begin.
+struct Span
+{
+  std::size_t begin = 0;
+  std::size_t end = 0;
+  std::size_t line = 1;
+  std::size_t column = 1;
+  std::string file{};
+  bool operator== (const Span &) const = default;
+};
+
+/// Span covering both a and b (a must start first).
+inline Span
+merge_spans (const Span &a, const Span &b)
+{
+  Span s = a;
+  if (b.end > s.end)
+    s.end = b.end;
+  return s;
+}
+
+/// Summary of the trivia (whitespace/comments) preceding a token.
+struct Trivia
+{
+  bool space_before = false;   ///< any whitespace or comment precedes
+  bool newline_before = false; ///< a line break (or start of input) precedes
+};
+
+/// Generic token: a language-defined kind, its exact text and location.
+template <class Kind> struct BasicToken
+{
+  Kind kind{};
+  std::string text{};
+  Span span{};
+  Trivia trivia{};
+};
+using Token = BasicToken<int>;
+
+/// Maps byte offsets to lines/columns and retrieves source lines.
+class SourceMap
+{
+public:
+  SourceMap () = default;
+  explicit SourceMap (std::string_view text) : text_ (text)
+  {
+    starts_.push_back (0);
+    for (std::size_t i = 0; i < text.size (); ++i)
+      if (text[i] == '\n')
+        starts_.push_back (i + 1);
+  }
+  std::pair<std::size_t, std::size_t>
+  line_column (std::size_t offset) const
+  {
+    auto it = std::upper_bound (starts_.begin (), starts_.end (), offset);
+    std::size_t line = static_cast<std::size_t> (it - starts_.begin ());
+    if (line == 0)
+      line = 1;
+    return { line, offset - starts_[line - 1] + 1 };
+  }
+  std::string_view
+  line_text (std::size_t line) const
+  {
+    if (line == 0 || line > starts_.size ())
+      return {};
+    std::size_t b = starts_[line - 1];
+    std::size_t e = b;
+    while (e < text_.size () && text_[e] != '\n' && text_[e] != '\r')
+      ++e;
+    return text_.substr (b, e - b);
+  }
+  std::size_t
+  line_count () const
+  {
+    return starts_.size ();
+  }
+
+private:
+  std::string_view text_{};
+  std::vector<std::size_t> starts_{};
+};
+
+enum class Severity
+{
+  Error,
+  Warning,
+  Note,
+  Hint
+};
+
+inline std::string
+severity_name (Severity s)
+{
+  switch (s)
+    {
+    case Severity::Error:
+      return "error";
+    case Severity::Warning:
+      return "warning";
+    case Severity::Note:
+      return "note";
+    case Severity::Hint:
+      return "hint";
+    }
+  return "error";
+}
+
+struct DiagnosticLabel
+{
+  Span span{};
+  std::string label{};
+};
+
+/// Structured fix enabling `--fix`: replace primary_span by `edit`.
+struct DiagnosticFix
+{
+  std::string description{};
+  std::string edit{};
+};
+
+struct Diagnostic
+{
+  Severity severity = Severity::Error;
+  std::string code{};    ///< e.g. "M0301"
+  std::string message{}; ///< single line, user-facing
+  Span primary_span{};
+  std::vector<DiagnosticLabel> secondary_spans{};
+  std::optional<DiagnosticFix> fix{};
+  std::vector<std::string> suggestions{}; ///< suggested-fix list (prose)
+
+  /// "error[M0301]: message"
+  std::string
+  headline () const
+  {
+    std::string out = severity_name (severity);
+    if (!code.empty ())
+      out += "[" + code + "]";
+    return out + ": " + message;
+  }
+};
+
+/// Renders a diagnostic with location, source excerpt and caret markers.
+inline std::string
+render_diagnostic (const Diagnostic &d, std::string_view source = {})
+{
+  std::string out = d.headline () + "\n";
+  const Span &s = d.primary_span;
+  std::string file = s.file.empty () ? std::string ("<input>") : s.file;
+  out += " --> " + file + ":" + std::to_string (s.line) + ":"
+         + std::to_string (s.column) + "\n";
+  if (!source.empty ())
+    {
+      SourceMap map (source);
+      auto text = map.line_text (s.line);
+      if (!text.empty () || s.line <= map.line_count ())
+        {
+          std::string num = std::to_string (s.line);
+          std::string pad (num.size (), ' ');
+          out += pad + " |\n";
+          out += num + " | " + std::string (text) + "\n";
+          std::size_t width = 1;
+          if (s.end > s.begin)
+            width = s.end - s.begin;
+          std::size_t col = s.column > 0 ? s.column - 1 : 0;
+          if (col > text.size ())
+            col = text.size ();
+          if (col + width > text.size () && text.size () > col)
+            width = text.size () - col;
+          if (width == 0)
+            width = 1;
+          out += pad + " | " + std::string (col, ' ') + std::string (width, '^')
+                 + "\n";
+        }
+    }
+  for (const auto &l : d.secondary_spans)
+    out += " = note: " + l.label + " (" + std::to_string (l.span.line) + ":"
+           + std::to_string (l.span.column) + ")\n";
+  for (const auto &sug : d.suggestions)
+    out += " = help: " + sug + "\n";
+  if (d.fix)
+    out += " = fix: " + d.fix->description + "\n";
+  return out;
+}
+
+/// Collects diagnostics; warnings can be disabled by code.
+class DiagnosticBag
+{
+public:
+  Diagnostic &
+  report (Diagnostic d)
+  {
+    items_.push_back (std::move (d));
+    return items_.back ();
+  }
+  Diagnostic &
+  error (std::string code, std::string message, Span span = {})
+  {
+    return report (
+        { Severity::Error, std::move (code), std::move (message), std::move (span) });
+  }
+  /// Returns nullptr when the warning code is disabled.
+  Diagnostic *
+  warning (std::string code, std::string message, Span span = {})
+  {
+    if (is_disabled (code))
+      return nullptr;
+    return &report ({ Severity::Warning, std::move (code), std::move (message),
+                      std::move (span) });
+  }
+  void
+  disable (std::string code)
+  {
+    if (!is_disabled (code))
+      disabled_.push_back (std::move (code));
+  }
+  bool
+  is_disabled (std::string_view code) const
+  {
+    return std::find (disabled_.begin (), disabled_.end (), code)
+           != disabled_.end ();
+  }
+  const std::vector<std::string> &
+  disabled () const
+  {
+    return disabled_;
+  }
+  bool
+  has_errors () const
+  {
+    for (const auto &d : items_)
+      if (d.severity == Severity::Error)
+        return true;
+    return false;
+  }
+  std::size_t
+  error_count () const
+  {
+    std::size_t n = 0;
+    for (const auto &d : items_)
+      n += d.severity == Severity::Error;
+    return n;
+  }
+  bool
+  empty () const
+  {
+    return items_.empty ();
+  }
+  const std::vector<Diagnostic> &
+  items () const
+  {
+    return items_;
+  }
+  /// Deterministic order: by file, then offset; ties keep report order.
+  std::vector<Diagnostic>
+  sorted () const
+  {
+    auto out = items_;
+    std::stable_sort (out.begin (), out.end (),
+                      [] (const Diagnostic &a, const Diagnostic &b)
+                        {
+                          if (a.primary_span.file != b.primary_span.file)
+                            return a.primary_span.file < b.primary_span.file;
+                          return a.primary_span.begin < b.primary_span.begin;
+                        });
+    return out;
+  }
+  void
+  merge (const DiagnosticBag &other)
+  {
+    for (const auto &d : other.items_)
+      items_.push_back (d);
+  }
+  void
+  clear ()
+  {
+    items_.clear ();
+  }
+
+private:
+  std::vector<Diagnostic> items_{};
+  std::vector<std::string> disabled_{};
+};
+
+namespace repl
+{
+
+enum class Outcome
+{
+  Ok,
+  Err,
+  Incomplete,
+  Quit
+};
+
+inline std::string
+outcome_name (Outcome o)
+{
+  switch (o)
+    {
+    case Outcome::Ok:
+      return "Ok";
+    case Outcome::Err:
+      return "Err";
+    case Outcome::Incomplete:
+      return "Incomplete";
+    case Outcome::Quit:
+      return "Quit";
+    }
+  return "Ok";
+}
+
+using Suggestions = std::vector<std::string>;
+
+enum class ParseStatus
+{
+  Ok,
+  Err,
+  Incomplete
+};
+
+template <class Program> struct ParseResult
+{
+  ParseStatus status = ParseStatus::Ok;
+  std::optional<Program> program{};
+  std::vector<Diagnostic> diagnostics{};
+
+  static ParseResult
+  ok (Program p)
+  {
+    ParseResult r;
+    r.program = std::move (p);
+    return r;
+  }
+  static ParseResult
+  err (std::vector<Diagnostic> d)
+  {
+    ParseResult r;
+    r.status = ParseStatus::Err;
+    r.diagnostics = std::move (d);
+    return r;
+  }
+  static ParseResult
+  incomplete (std::vector<Diagnostic> d = {})
+  {
+    ParseResult r;
+    r.status = ParseStatus::Incomplete;
+    r.diagnostics = std::move (d);
+    return r;
+  }
+};
+
+/// Reads one line given a prompt; nullopt on end of input.
+using LineReader
+    = std::function<std::optional<std::string> (const std::string &prompt)>;
+
+/**
+ * @brief Generic, reusable read-eval-print session.
+ *
+ * Owns the multi-line buffer, directive dispatch (`#name arg` at the start
+ * of a form), history, completion and the outcome of the last submission.
+ * All language behaviour comes from the Language policy.
+ */
+template <typename Language> class Session
+{
+public:
+  using DirectiveFn = std::function<void (Session &, std::string_view)>;
+
+  explicit Session (Language &lang) : lang_ (lang), out_ (&std::cout) {}
+  Session (Language &lang, std::ostream &out) : lang_ (lang), out_ (&out) {}
+
+  Language &
+  language ()
+  {
+    return lang_;
+  }
+  std::ostream &
+  out ()
+  {
+    return *out_;
+  }
+  void
+  set_output (std::ostream &out)
+  {
+    out_ = &out;
+  }
+
+  /// Feeds one physical line (without its newline).
+  void
+  feed (std::string_view line)
+  {
+    if (buffer_.empty ())
+      {
+        auto t = trim (line);
+        if (t.empty ())
+          {
+            outcome_ = Outcome::Ok;
+            return;
+          }
+        if (is_directive (t))
+          {
+            run_directive (t);
+            return;
+          }
+      }
+    else
+      {
+        auto t = trim (line);
+        if (t == "#reset")
+          {
+            buffer_.clear ();
+            outcome_ = Outcome::Ok;
+            return;
+          }
+        if (t == "#quit")
+          {
+            buffer_.clear ();
+            outcome_ = Outcome::Quit;
+            quit_ = true;
+            return;
+          }
+      }
+    buffer_ += line;
+    buffer_ += '\n';
+    submit (false);
+  }
+
+  /// Feeds a complete chunk (several lines) as one submission.
+  void
+  feed_multiline (std::string_view chunk)
+  {
+    if (buffer_.empty ())
+      {
+        auto t = trim (chunk);
+        if (t.empty ())
+          {
+            outcome_ = Outcome::Ok;
+            return;
+          }
+        if (is_directive (t) && t.find ('\n') == std::string_view::npos)
+          {
+            run_directive (t);
+            return;
+          }
+      }
+    buffer_ += chunk;
+    if (buffer_.empty () || buffer_.back () != '\n')
+      buffer_ += '\n';
+    submit (false);
+  }
+
+  /// Signals end of input: a pending incomplete form becomes an error.
+  void
+  finish ()
+  {
+    if (!buffer_.empty ())
+      submit (true);
+  }
+
+  Outcome
+  result () const
+  {
+    return outcome_;
+  }
+  bool
+  pending () const
+  {
+    return !buffer_.empty ();
+  }
+  const std::string &
+  buffer () const
+  {
+    return buffer_;
+  }
+  void
+  reset ()
+  {
+    buffer_.clear ();
+    outcome_ = Outcome::Ok;
+  }
+  bool
+  quit_requested () const
+  {
+    return quit_;
+  }
+  void
+  request_quit ()
+  {
+    quit_ = true;
+    outcome_ = Outcome::Quit;
+  }
+  std::size_t
+  error_count () const
+  {
+    return errors_;
+  }
+  void
+  mark_error ()
+  {
+    ++errors_;
+    outcome_ = Outcome::Err;
+  }
+
+  void
+  set_prompts (std::string primary, std::string continuation)
+  {
+    primary_ = std::move (primary);
+    continuation_ = std::move (continuation);
+  }
+  const std::string &
+  prompt () const
+  {
+    return buffer_.empty () ? primary_ : continuation_;
+  }
+
+  void
+  register_directive (std::string name, std::string help, DirectiveFn fn)
+  {
+    for (auto &d : directives_)
+      if (d.name == name)
+        {
+          d.help = std::move (help);
+          d.fn = std::move (fn);
+          return;
+        }
+    directives_.push_back ({ std::move (name), std::move (help), std::move (fn) });
+  }
+  std::vector<std::string>
+  directive_names () const
+  {
+    std::vector<std::string> names{ "help", "quit" };
+    for (const auto &d : directives_)
+      names.push_back (d.name);
+    std::sort (names.begin (), names.end ());
+    names.erase (std::unique (names.begin (), names.end ()), names.end ());
+    return names;
+  }
+  /// Code used when an unknown directive is entered.
+  void
+  set_unknown_directive_code (std::string code)
+  {
+    unknown_code_ = std::move (code);
+  }
+
+  void
+  print_help ()
+  {
+    out () << "Directives:\n";
+    out () << "  #help            show this help\n";
+    out () << "  #quit            leave the session\n";
+    auto sorted = directives_;
+    std::sort (sorted.begin (), sorted.end (),
+               [] (const auto &a, const auto &b) { return a.name < b.name; });
+    for (const auto &d : sorted)
+      {
+        if (d.name == "help" || d.name == "quit")
+          continue;
+        std::string head = "  #" + d.name;
+        if (head.size () < 19)
+          head += std::string (19 - head.size (), ' ');
+        else
+          head += ' ';
+        out () << head << d.help << "\n";
+      }
+  }
+
+  void
+  set_completion (std::function<Suggestions (std::string_view)> cb)
+  {
+    completion_ = std::move (cb);
+  }
+  /// Completion candidates for `prefix` (directives when it starts with '#').
+  Suggestions
+  complete (std::string_view prefix) const
+  {
+    Suggestions out;
+    if (!prefix.empty () && prefix.front () == '#')
+      {
+        for (const auto &n : directive_names ())
+          if (n.compare (0, prefix.size () - 1, prefix.substr (1)) == 0)
+            out.push_back ("#" + n);
+        return out;
+      }
+    if (completion_)
+      out = completion_ (prefix);
+    std::sort (out.begin (), out.end ());
+    out.erase (std::unique (out.begin (), out.end ()), out.end ());
+    return out;
+  }
+
+  void
+  add_history (std::string line)
+  {
+    if (line.empty () || (!history_.empty () && history_.back () == line))
+      return;
+    history_.push_back (std::move (line));
+  }
+  const std::vector<std::string> &
+  history () const
+  {
+    return history_;
+  }
+  bool
+  load_history (const std::string &path)
+  {
+    std::ifstream in (path);
+    if (!in)
+      return false;
+    std::string line;
+    while (std::getline (in, line))
+      add_history (line);
+    return true;
+  }
+  bool
+  save_history (const std::string &path, std::size_t keep = 1000) const
+  {
+    std::ofstream o (path, std::ios::trunc);
+    if (!o)
+      return false;
+    std::size_t start = history_.size () > keep ? history_.size () - keep : 0;
+    for (std::size_t i = start; i < history_.size (); ++i)
+      o << history_[i] << "\n";
+    return true;
+  }
+
+  /**
+   * @brief Runs the loop until end of input or #quit.
+   * @param interactive print prompts (TTY) and record history.
+   * @param reader optional line reader (e.g. GNU Readline); it shows the
+   *        prompt itself.
+   * @return number of submissions that produced errors.
+   */
+  std::size_t
+  run (std::istream &in, bool interactive, LineReader reader = {})
+  {
+    while (!quit_)
+      {
+        std::optional<std::string> line;
+        if (reader)
+          line = reader (interactive ? prompt () : std::string ());
+        else
+          {
+            if (interactive)
+              out () << prompt () << std::flush;
+            std::string l;
+            if (std::getline (in, l))
+              line = std::move (l);
+          }
+        if (!line)
+          break;
+        if (!line->empty () && line->back () == '\r')
+          line->pop_back ();
+        if (interactive)
+          add_history (*line);
+        feed (*line);
+        out () << std::flush;
+      }
+    if (!quit_)
+      finish ();
+    out () << std::flush;
+    return errors_;
+  }
+
+private:
+  struct Directive
+  {
+    std::string name;
+    std::string help;
+    DirectiveFn fn;
+  };
+
+  static std::string_view
+  trim (std::string_view s)
+  {
+    while (!s.empty () && (s.front () == ' ' || s.front () == '\t'
+                           || s.front () == '\r' || s.front () == '\n'))
+      s.remove_prefix (1);
+    while (!s.empty () && (s.back () == ' ' || s.back () == '\t'
+                           || s.back () == '\r' || s.back () == '\n'))
+      s.remove_suffix (1);
+    return s;
+  }
+  static bool
+  is_ident (char c)
+  {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
+  }
+  static bool
+  is_directive (std::string_view t)
+  {
+    return t.size () >= 2 && t[0] == '#' && is_ident (t[1]);
+  }
+
+  void
+  run_directive (std::string_view t)
+  {
+    std::size_t i = 1;
+    while (i < t.size () && (is_ident (t[i]) || (t[i] >= '0' && t[i] <= '9')))
+      ++i;
+    std::string name (t.substr (1, i - 1));
+    auto arg = trim (t.substr (i));
+    outcome_ = Outcome::Ok;
+    for (auto &d : directives_)
+      if (d.name == name)
+        {
+          d.fn (*this, arg);
+          return;
+        }
+    if (name == "quit")
+      {
+        request_quit ();
+        return;
+      }
+    if (name == "help")
+      {
+        print_help ();
+        return;
+      }
+    Diagnostic diag;
+    diag.code = unknown_code_;
+    diag.message = "unknown directive `#" + name + "`; try `#help`";
+    diag.primary_span.file = "<directive>";
+    out () << lang_.format_error (diag);
+    mark_error ();
+  }
+
+  void
+  submit (bool at_eof)
+  {
+    auto parsed = lang_.parse (buffer_);
+    if (parsed.status == ParseStatus::Incomplete && !at_eof)
+      {
+        outcome_ = Outcome::Incomplete;
+        return;
+      }
+    std::string source = std::move (buffer_);
+    buffer_.clear ();
+    if (parsed.status != ParseStatus::Ok || !parsed.program)
+      {
+        for (const auto &d : parsed.diagnostics)
+          out () << lang_.format_error (d);
+        mark_error ();
+        return;
+      }
+    auto r = lang_.eval (*parsed.program);
+    if (r.is_err ())
+      {
+        for (const auto &d : r.unwrap_err ())
+          out () << lang_.format_error (d);
+        mark_error ();
+        return;
+      }
+    outcome_ = Outcome::Ok;
+    auto text = lang_.format (r.unwrap ());
+    if (!text.empty ())
+      {
+        out () << text;
+        if (text.back () != '\n')
+          out () << '\n';
+      }
+  }
+
+  Language &lang_;
+  std::ostream *out_;
+  std::string buffer_{};
+  Outcome outcome_ = Outcome::Ok;
+  bool quit_ = false;
+  std::size_t errors_ = 0;
+  std::string primary_ = "> ";
+  std::string continuation_ = ".. ";
+  std::string unknown_code_ = "R0001";
+  std::vector<Directive> directives_{};
+  std::vector<std::string> history_{};
+  std::function<Suggestions (std::string_view)> completion_{};
+};
+
+} // namespace repl
+} // namespace dsl
+
+/// The toolkit is also reachable as `dsltk` (AGENTS.md naming).
+namespace dsltk = dsl;

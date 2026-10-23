@@ -1,0 +1,287 @@
+ASTBuilder.children	1	Ast -> [Ast]
+ASTBuilder.depth	1	Ast -> Int
+ASTBuilder.dump	1	Ast -> String
+ASTBuilder.find	2	String -> Ast -> [Ast]
+ASTBuilder.is_leaf	1	Ast -> Bool
+ASTBuilder.leaf	2	String -> String -> Ast
+ASTBuilder.node	2	String -> [Ast] -> Ast
+ASTBuilder.of_sexpr	1	SExpr -> Result Ast String
+ASTBuilder.parse	1	String -> Result Ast String
+ASTBuilder.pretty	1	Ast -> String
+ASTBuilder.size	1	Ast -> Int
+ASTBuilder.tag	1	Ast -> String
+ASTBuilder.text	1	Ast -> Option String
+ASTBuilder.to_sexpr	1	Ast -> SExpr
+ASTBuilder.with_children	2	[Ast] -> Ast -> Ast
+Bridge.arity	1	'a -> Int
+Bridge.ctor_name	1	'a -> Option String
+Bridge.encode	1	'a -> String
+Bridge.fields	1	'a -> [String]
+Bridge.kind	1	'a -> String
+Bridge.same	2	'a -> 'a -> Bool
+Bridge.size	1	'a -> Int
+Buffer.add	2	String -> Buffer -> Unit
+Buffer.add_byte	2	Int -> Buffer -> Unit
+Buffer.add_line	2	String -> Buffer -> Unit
+Buffer.add_u16le	2	Int -> Buffer -> Unit
+Buffer.add_u32be	2	Int -> Buffer -> Unit
+Buffer.add_u32le	2	Int -> Buffer -> Unit
+Buffer.add_u64le	2	Int -> Buffer -> Unit
+Buffer.byte_at	2	Int -> Buffer -> Option Int
+Buffer.clear	1	Buffer -> Unit
+Buffer.contents	1	Buffer -> String
+Buffer.create	1	Unit -> Buffer
+Buffer.hex	1	Buffer -> String
+Buffer.length	1	Buffer -> Int
+Buffer.of_string	1	String -> Buffer
+Buffer.sub	3	Int -> Int -> Buffer -> Option String
+Buffer.truncate	2	Int -> Buffer -> Unit
+Core.compare	2	'a -> 'a -> Int
+Core.equal	2	'a -> 'a -> Bool
+Core.error	1	String -> 'a
+Core.hash	1	'a -> Int
+Core.ignore	1	'a -> Unit
+Core.show	1	'a -> String
+Core.version	1	Unit -> String
+FlexBridge.match_prefix	2	String -> String -> Option String
+FlexBridge.matches	2	String -> String -> Bool
+FlexBridge.tokenize	2	[(String, String)] -> String -> Result [(String, String)] String
+FlexBridge.tokenize_spans	2	[(String, String)] -> String -> Result [(String, String, Int)] String
+FlexBridge.valid_pattern	1	String -> Result Unit String
+Float.abs	1	Float -> Float
+Float.atan2	2	Float -> Float -> Float
+Float.ceil	1	Float -> Float
+Float.cos	1	Float -> Float
+Float.exp	1	Float -> Float
+Float.floor	1	Float -> Float
+Float.infinity	1	Unit -> Float
+Float.is_finite	1	Float -> Bool
+Float.is_infinite	1	Float -> Bool
+Float.is_nan	1	Float -> Bool
+Float.log	1	Float -> Float
+Float.nan	1	Unit -> Float
+Float.of_int	1	Int -> Float
+Float.of_string	1	String -> Float
+Float.parse	1	String -> Option Float
+Float.pow	2	Float -> Float -> Float
+Float.round	1	Float -> Float
+Float.sin	1	Float -> Float
+Float.sqrt	1	Float -> Float
+Float.tan	1	Float -> Float
+Float.to_string	1	Float -> String
+Float.truncate	1	Float -> Int
+Frontend.eval	1	String -> Result String String
+Frontend.format_type	1	String -> Result String String
+Frontend.keywords	1	Unit -> [String]
+Frontend.parse	1	String -> Result String String
+Frontend.parse_expr	1	String -> Result String String
+Frontend.tokens	1	String -> Result [(String, String)] String
+Frontend.type_of	1	String -> Result String String
+Graph.depth_first	2	String -> [(String, String)] -> [String]
+Graph.has_cycle	1	[(String, String)] -> Bool
+Graph.nodes	1	[(String, String)] -> [String]
+Graph.predecessors	2	String -> [(String, String)] -> [String]
+Graph.reachable	2	String -> [(String, String)] -> [String]
+Graph.sccs	2	[String] -> [(String, String)] -> [[String]]
+Graph.shortest_path	3	String -> String -> [(String, String)] -> Option [String]
+Graph.successors	2	String -> [(String, String)] -> [String]
+Graph.to_dot	3	String -> [String] -> [(String, String)] -> String
+Graph.topo_sort	2	[String] -> [(String, String)] -> Result [String] String
+Hash.combine	2	Int -> Int -> Int
+Hash.crc32	1	String -> Int
+Hash.djb2	1	String -> Int
+Hash.fnv1a	1	String -> Int
+Hash.hex	1	Int -> String
+Hash.sha256	1	String -> String
+Hash.value	1	'a -> Int
+IO.eprint	1	String -> Unit
+IO.flush	1	Unit -> Unit
+IO.is_tty	1	Unit -> Bool
+IO.print	1	String -> Unit
+IO.print_lines	1	[String] -> Unit
+IO.printf	2	String -> [String] -> Unit
+IO.println	1	String -> Unit
+IO.read_all	1	Unit -> String
+IO.read_line	1	Unit -> Option String
+IO.read_lines	1	Unit -> [String]
+Int.abs	1	Int -> Int
+Int.checked_add	2	Int -> Int -> Option Int
+Int.checked_mul	2	Int -> Int -> Option Int
+Int.checked_sub	2	Int -> Int -> Option Int
+Int.land	2	Int -> Int -> Int
+Int.lor	2	Int -> Int -> Int
+Int.lxor	2	Int -> Int -> Int
+Int.max_value	1	Unit -> Int
+Int.min_value	1	Unit -> Int
+Int.parse	1	String -> Option Int
+Int.pow	2	Int -> Int -> Int
+Int.render	1	Int -> String
+Int.shift_left	2	Int -> Int -> Int
+Int.shift_right	2	Int -> Int -> Int
+Int.to_float	1	Int -> Float
+JSON.at	2	Int -> Json -> Option Json
+JSON.get	2	String -> Json -> Option Json
+JSON.of_value	1	'a -> Json
+JSON.parse	1	String -> Result Json String
+JSON.pretty	1	Json -> String
+JSON.render	1	Json -> String
+List.append	2	['a] -> ['a] -> ['a]
+List.chunks	2	Int -> ['a] -> [['a]]
+List.concat	1	[['a]] -> ['a]
+List.drop_while	2	('a -> Bool) -> ['a] -> ['a]
+List.flatten	1	[['a]] -> ['a]
+List.group	1	['a] -> [['a]]
+List.index_of	2	'a -> ['a] -> Option Int
+List.iterate	3	Int -> ('a -> 'a) -> 'a -> ['a]
+List.length	1	['a] -> Int
+List.max_by	2	('a -> 'a -> Int) -> ['a] -> Option 'a
+List.min_by	2	('a -> 'a -> Int) -> ['a] -> Option 'a
+List.nth	2	Int -> ['a] -> Option 'a
+List.product	1	Num 'a => ['a] -> 'a
+List.range	2	Int -> Int -> [Int]
+List.reverse	1	['a] -> ['a]
+List.rotate	2	Int -> ['a] -> ['a]
+List.scan	3	('b -> 'a -> 'b) -> 'b -> ['a] -> ['b]
+List.shuffle	2	Int -> ['a] -> ['a]
+List.sort	1	['a] -> ['a]
+List.sort_by	2	('a -> 'a -> Int) -> ['a] -> ['a]
+List.sum	1	Num 'a => ['a] -> 'a
+List.take_while	2	('a -> Bool) -> ['a] -> ['a]
+List.transpose	1	[['a]] -> [['a]]
+List.windows	2	Int -> ['a] -> [['a]]
+List.zip3	3	['a] -> ['b] -> ['c] -> [('a, 'b, 'c)]
+Loader.add_path	1	String -> Unit
+Loader.load	1	String -> Result Unit String
+Loader.loaded	1	Unit -> [String]
+Loader.resolve	1	String -> Option String
+Loader.search_path	1	Unit -> [String]
+Loader.stdlib	1	Unit -> Option String
+Metalib.version	1	Unit -> String
+Module.exists	1	String -> Bool
+Module.functors	1	Unit -> [String]
+Module.member_type	2	String -> String -> Option String
+Module.members	1	String -> Option [String]
+Module.names	1	Unit -> [String]
+Module.signature	1	String -> Option String
+Module.signatures	1	Unit -> [String]
+Module.submodules	1	String -> Option [String]
+Module.types	1	String -> Option [String]
+Parsec.alt	2	Parser 'a -> Parser 'a -> Parser 'a
+Parsec.any	1	Unit -> Parser String
+Parsec.between	3	Parser 'o -> Parser 'c -> Parser 'a -> Parser 'a
+Parsec.bind	2	Parser 'a -> ('a -> Parser 'b) -> Parser 'b
+Parsec.char	1	String -> Parser String
+Parsec.choice	1	[Parser 'a] -> Parser 'a
+Parsec.eof	1	Unit -> Parser Unit
+Parsec.fail	1	String -> Parser 'a
+Parsec.label	2	String -> Parser 'a -> Parser 'a
+Parsec.lazy	1	(Unit -> Parser 'a) -> Parser 'a
+Parsec.left	2	Parser 'a -> Parser 'b -> Parser 'a
+Parsec.many	1	Parser 'a -> Parser ['a]
+Parsec.many1	1	Parser 'a -> Parser ['a]
+Parsec.map	2	('a -> 'b) -> Parser 'a -> Parser 'b
+Parsec.one_of	1	String -> Parser String
+Parsec.optional	1	Parser 'a -> Parser (Option 'a)
+Parsec.pure	1	'a -> Parser 'a
+Parsec.regex	1	String -> Parser String
+Parsec.right	2	Parser 'a -> Parser 'b -> Parser 'b
+Parsec.run	2	Parser 'a -> String -> Result 'a String
+Parsec.run_prefix	2	Parser 'a -> String -> Result ('a, String) String
+Parsec.satisfy	1	(String -> Bool) -> Parser String
+Parsec.sep_by	2	Parser 'a -> Parser 's -> Parser ['a]
+Parsec.seq	2	Parser 'a -> Parser 'b -> Parser ('a, 'b)
+Parsec.spaces	1	Unit -> Parser Unit
+Parsec.string	1	String -> Parser String
+Parsec.token	1	Parser 'a -> Parser 'a
+SExpr.atom_text	1	SExpr -> Option String
+SExpr.parse	1	String -> Result [SExpr] String
+SExpr.parse_one	1	String -> Result SExpr String
+SExpr.render	1	SExpr -> String
+String.capitalize	1	String -> String
+String.char_at	2	Int -> String -> Option String
+String.chars	1	String -> [String]
+String.codepoints	1	String -> [Int]
+String.compare	2	String -> String -> Int
+String.compare_ci	2	String -> String -> Int
+String.concat	2	String -> String -> String
+String.contains	2	String -> String -> Bool
+String.count	2	String -> String -> Int
+String.ends_with	2	String -> String -> Bool
+String.escape	1	String -> String
+String.format	2	String -> [String] -> String
+String.index_of	2	String -> String -> Option Int
+String.is_alnum	1	String -> Bool
+String.is_alpha	1	String -> Bool
+String.is_digit	1	String -> Bool
+String.is_space	1	String -> Bool
+String.join	2	String -> [String] -> String
+String.last_index_of	2	String -> String -> Option Int
+String.length	1	String -> Int
+String.lower	1	String -> String
+String.of_codepoints	1	[Int] -> String
+String.of_codes	1	[Int] -> String
+String.pad_left	3	Int -> String -> String -> String
+String.pad_right	3	Int -> String -> String -> String
+String.repeat	2	Int -> String -> String
+String.replace	3	String -> String -> String -> String
+String.split	2	String -> String -> [String]
+String.starts_with	2	String -> String -> Bool
+String.strip_prefix	2	String -> String -> Option String
+String.strip_suffix	2	String -> String -> Option String
+String.sub	3	Int -> Int -> String -> String
+String.to_codes	1	String -> [Int]
+String.trim	1	String -> String
+String.upper	1	String -> String
+String.utf8_chars	1	String -> [String]
+String.utf8_length	1	String -> Int
+String.utf8_valid	1	String -> Bool
+String.words	1	String -> [String]
+TOML.parse	1	String -> Result Json String
+TOML.render	1	Json -> Result String String
+Table.clear	1	Table 'v -> Unit
+Table.clone	1	Table 'v -> Table 'v
+Table.create	1	Unit -> Table 'v
+Table.get	2	String -> Table 'v -> Option 'v
+Table.has	2	String -> Table 'v -> Bool
+Table.keys	1	Table 'v -> [String]
+Table.of_list	1	[(String, 'v)] -> Table 'v
+Table.remove	2	String -> Table 'v -> Unit
+Table.set	3	String -> 'v -> Table 'v -> Unit
+Table.set_if_absent	3	String -> 'v -> Table 'v -> Bool
+Table.size	1	Table 'v -> Int
+Table.to_list	1	Table 'v -> [(String, 'v)]
+Table.values	1	Table 'v -> ['v]
+Type.arity	1	String -> Result Int String
+Type.equal	2	String -> String -> Bool
+Type.instance_of	2	String -> String -> Bool
+Type.normalize	1	String -> Result String String
+Type.unify	2	String -> String -> Result String String
+URI.decode	1	String -> Option String
+URI.encode	1	String -> String
+URI.parse	1	String -> Option Uri
+URI.query_params	1	String -> [(String, String)]
+URI.render	1	Uri -> String
+VisitorBuilder.count_tags	1	Ast -> [(String, Int)]
+VisitorBuilder.dispatch	3	[(String, Ast -> 'r)] -> (Ast -> 'r) -> Ast -> 'r
+VisitorBuilder.fold	3	(String -> String -> 'r) -> (String -> ['r] -> 'r) -> Ast -> 'r
+VisitorBuilder.make	2	(String -> String -> 'r) -> (String -> ['r] -> 'r) -> (Ast -> 'r)
+VisitorBuilder.tags	1	Ast -> [String]
+WalkAST.breadth_first	1	Ast -> [Ast]
+WalkAST.find_all	2	(Ast -> Bool) -> Ast -> [Ast]
+WalkAST.leaves	1	Ast -> [Ast]
+WalkAST.map_bottom_up	2	(Ast -> Ast) -> Ast -> Ast
+WalkAST.map_top_down	2	(Ast -> Ast) -> Ast -> Ast
+WalkAST.postorder	1	Ast -> [Ast]
+WalkAST.preorder	1	Ast -> [Ast]
+WalkAST.rewrite	2	(Ast -> Option Ast) -> Ast -> Ast
+WalkVisitor.at_path	2	[Int] -> Ast -> Option Ast
+WalkVisitor.enter_leave	3	(Ast -> Unit) -> (Ast -> Unit) -> Ast -> Unit
+WalkVisitor.path_to	2	(Ast -> Bool) -> Ast -> Option [Int]
+WalkVisitor.walk	2	(Ast -> Unit) -> Ast -> Unit
+WalkVisitor.walk_depth	2	(Int -> Ast -> Unit) -> Ast -> Unit
+YACCBridge.check	1	String -> Result [String] String
+YACCBridge.literals	1	String -> Result [String] String
+YACCBridge.parse	2	String -> String -> Result Ast String
+YACCBridge.parse_tokens	2	String -> [(String, String)] -> Result Ast String
+YAML.parse	1	String -> Result Json String
+YAML.render	1	Json -> String

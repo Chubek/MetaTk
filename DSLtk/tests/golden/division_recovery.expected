@@ -1,0 +1,6 @@
+error[M0402]: division by zero
+ --> <repl:1>:1:1
+  |
+1 | 1 / 0
+  | ^^^^^
+- : Int = 42
