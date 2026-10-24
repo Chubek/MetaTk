@@ -1,5 +1,35 @@
 # Baseline (2026-10-19, before any edits)
 
+## ArchAS baseline (2026-10-24)
+
+Before implementing ArchAS, the unchanged default suite passed **25/25** tests:
+GCC Release **13.17 s**, GCC Debug ASan+UBSan **87.21 s** (CTest `-j4`). Both
+used `-Wall -Wextra -Wpedantic -Werror` for C and C++, with no compiler warnings
+or sanitizer findings. The first combined sanitizer build/test command reached
+its 120-second tool timeout; the complete test-only rerun passed as recorded.
+The pre-existing `build/` cache refers to the former `MetaArch` source path;
+Ninja is unavailable, so fresh Unix Makefiles trees were used.
+
+The unchanged database's `archdb validate --lint ArchDB/*.dsymspec.yaml` succeeded.
+Its initial output was saved to `/tmp/opencode/archas-baseline-lint.txt`; harness
+restarts cleared that temporary directory. ArchAS changes no architecture or
+backend specification data. Final verification and reproducible build commands
+are recorded in the ArchAS section of `REPORT.md`.
+
+Initial implementation verification, before the final GAS compatibility additions:
+GCC Release **27/27, 18.04 s**; Clang shared Release **27/27, 16.33 s**;
+GCC ASan+UBSan **27/27, 93.72 s**. ArchAS contributed 66 API checks and real
+assembler/linker integration tests. Timings include concurrent build activity.
+
+Final full-suite results: GCC Release **27/27, 12.89 s**; Clang shared Release
+**27/27, 14.25 s**; GCC ASan+UBSan **27/27, 89.02 s**; Clang ASan+UBSan with
+the provided Lua sources **27/27, 100.30 s**. ArchAS now contributes 72 API checks
+and 94 CLI/tool invocations. Lua/plugins-disabled checks pass **2/2, 0.55 s**.
+The final frontend/header changes passed focused ArchAS reruns in all five
+configurations; their timings are recorded in `REPORT.md`.
+Installation and an installed-header C++ consumer also pass. See `REPORT.md`
+for the commands and documented backend boundaries.
+
 ## MetaArchIR baseline (2026-10-24)
 
 Before editing MetaArchIR, the existing default suite passed **12/12** CTest

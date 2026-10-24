@@ -20,6 +20,12 @@ The [generated DSL database](MetaArchDB/README.md) contains all 28 architectures
 at `MetaArchDB/<architecture>/<architecture>.march`.
 The C library and `archdb` remain available without C++ (`ARCHDB_BUILD_DSL=OFF`).
 
+**[ArchAS](ArchAS/README.md)** adds the `domas` assembler and `MetaArch::as` library:
+`domas -T amd64 --intel-syntax foo.mair` produces `foo.o`. It combines GAS syntax,
+MetaArchIR's checked encoders, Lua templates, macros, and Lua/shared-library
+directive extensions. Enable it with `ARCHDB_BUILD_ARCHAS=ON` (the default when
+the C++ layer is enabled).
+
 For cross-language use, see [the bindings guide](docs/BINDINGS.md):
 `MetaArchABI.h` provides opaque C ABI v1 handles, `MetaArchAPI.hpp` provides an
 independent C++17 RAII API, `bindings/d/metaarch.di` provides D declarations,
@@ -46,6 +52,7 @@ exposing internal struct layouts.
 | `ArchBFD.c` | Object-format binder, catalogue and the description-driven object reader |
 | `tools/archdb.c` | CLI |
 | `tools/archbfd.c` | Object-format CLI |
+| `ArchAS/` | `domas`, assembler library, Lua templates and versioned directive plugin ABI |
 | `tools/extract_bfd.py` | Generates `ArchBFD/*.bfd.yaml` from the binutils checkout |
 | `tests/test_archdb.c` | Round-trip, encoding, diagnostics and catalogue tests |
 | `tests/test_archbfd.c` | Object-format round trips, binutils facts, diagnostics and reader tests |

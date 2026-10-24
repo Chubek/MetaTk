@@ -4,6 +4,22 @@ All notable changes are documented here, following Keep a Changelog.
 
 ## [Unreleased]
 
+### Added — ArchAS assembler
+- `domas -T TARGET` compiles GAS/MetaArchIR input to native objects, assembly,
+  flat binary/hex or relocatable JSON section images; AT&T and x86 Intel syntax.
+- `MetaArch::as` C++20 library with immutable target loading, explicit checked
+  encoders/forms, source diagnostics, include tracking, limits and atomic output.
+- GAS macros, repetitions, numeric/string conditionals, constant expressions,
+  Lua code/expression templates and Lua-defined directives.
+- Versioned C11 shared-library directive ABI, optional Lua/plugin builds, system
+  Lua discovery and private static builds from the provided third-party sources.
+- Multi-target encoding tests, real ELF relocation/link/execution checks,
+  ArchLD interoperability, plugin fixtures, examples and developer documentation.
+
+### Fixed — Install directory initialization
+- Initialize GNUInstallDirs before any install rules so the ArchBFD public header
+  and new ArchAS headers honor the selected install prefix.
+
 ### Fixed — MetaArchIR encoding safety
 - Validate the selected encoder before indexing its descriptor, reject malformed
   relocation parameter indices, and guard relocation offset accumulation against

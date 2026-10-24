@@ -1,5 +1,140 @@
 # MetaArch — native and cross-language API checkpoint
 
+## Latest addition: ArchAS / domas (2026-10-24)
+
+### API additions
+
+- `ArchAS/ArchAS.hpp`: `archas::Assembler`, `Options`, `Limits`, `Output`,
+  `DirectiveContext`, `Directive`, `Syntax`, `Backend`, `Format`, `IOError`;
+  `load_target`, `targets`, `has_lua`, `has_plugins`, `read_file`, `write_file`.
+  `Assembler::directive` installs a source-producing callback; `compile` returns
+  owned output and diagnostics and creates a fresh translation unit per call.
+- `ArchAS/ArchASPlugin.h`: C11 plugin ABI v1 with descriptor/version/size checks,
+  initialization/shutdown, directive registration, borrowed invocation context,
+  bounded source emission and error reporting. Plugins export `archas_plugin_v1`.
+- CMake `MetaArch::as`, `archas` library and `domas` tool. New options:
+  `ARCHDB_BUILD_ARCHAS`, `ARCHAS_LUA`, `ARCHAS_PLUGINS`, `ARCHAS_LUA_DIR`.
+- Existing MetaArch, Dsymspec and MetaArchIR APIs are unchanged.
+
+### Implementation and boundaries
+
+`domas -T amd64 --intel-syntax foo.mair` writes `foo.o`. The frontend expands
+GAS macros, repeats, conditions, includes and Lua templates, then lowers explicit
+MetaArchIR encoders/forms through the existing validated specification APIs.
+Native GAS instructions and general object emission use GNU as or LLVM MC;
+target selection is declarative and target endianness comes from Dsymspec.
+The builtin backend encodes directly to binary/hex/JSON without a native assembler.
+See [ArchAS/README.md](ArchAS/README.md) for language/API/CLI/plugin contracts.
+
+Lua is optional, supports the 5.3/5.4 and 5.5 state-creation APIs, and has
+allocation/instruction budgets. CMake prefers system packages, accepts the
+provided `third_party/jiterati/third_party/lua` checkout, and has a FetchContent
+fallback. Local Lua uses its standard C switch dispatcher to preserve strict C11
+compilation. Shared-library plugin loading and native process execution use POSIX.
+
+The native amd64 ELF64 relocation bridge checks Dsymspec metadata against ArchBFD
+and emits symbolic `.reloc` records with explicit addends. This follows
+[GNU as `.reloc`](https://sourceware.org/binutils/docs/as/Reloc.html); REL in-place
+addends are deliberately unsupported. Other targets retain encoded relocations in
+JSON or use native assembly instructions. Native flat output uses ArchBFD's ELF
+reader, rejects unresolved relocations/multiple payload sections, retains NOBITS
+zeros, and omits ELF NOTE metadata. GNU as can synthesize allocated property notes.
+
+All architecture/specification/backend data remains untouched; there are no
+encoder data corrections in this task. Existing database coverage/limitations
+apply to explicit encoders. This assembly IR has no implicit cross-ISA instruction
+translation or register allocation. Alternate GAS macro mode is unsupported.
+
+### Verification notes
+
+The baseline is recorded in `BASELINE.md`. Tests exercise C++/Lua/C plugin
+directives, macro recursion/defaults/keywords/variadics, conditional execution,
+integer overflow, templates, register metadata, source locations, includes,
+output alias protection and optional-extension errors. Native tests inspect
+ELF relocations, link and execute the emitted amd64 object with a C caller, and
+link a syscall-only entry point using the existing ArchLD executable (exit 37).
+LLVM checks cover amd64, AArch64, RISC-V, ppc32 and ppc64le.
+
+One new PowerPC test initially expected big-endian bytes for the shipped ppc64
+target. Inspection of `ArchDB/ppc64.dsymspec.yaml:14` established its ppc64le/ELFv2
+contract; the fixture now checks little-endian bytes and separately checks
+big-endian ppc32. No existing tests were changed or removed.
+
+GNU PowerPC assembler mode/endian flags follow the
+[PowerPC options reference](https://sourceware.org/binutils/docs/as/PowerPC_002dOpts.html).
+Actual cross-GNU assemblers are not installed; cross-target execution tests use
+LLVM MC. Network dependency fetching, non-POSIX hosts, and encoded relocation
+object bridges beyond amd64 ELF64 remain unverified or unsupported as documented.
+
+### Final verification
+
+All builds use `-Wall -Wextra -Wpedantic -Werror` for C and C++. No compiler
+warnings or sanitizer findings remain. The current ArchAS suite contains **72
+API checks and 94 CLI/tool invocations**, including real ArchLD execution.
+
+| Configuration | CTest result | Full suite time |
+| --- | --- | --- |
+| GCC Release, system Lua 5.5.1 | 27/27 | 12.89 s |
+| Clang Release, shared libraries, system Lua 5.5.1 | 27/27 | 14.25 s |
+| GCC Debug ASan+UBSan | 27/27 | 89.02 s |
+| Clang Debug ASan+UBSan, provided Lua 5.5.0 sources | 27/27 | 100.30 s |
+| GCC Release, Lua/plugins disabled (ArchAS tests) | 2/2 | 0.55 s |
+
+These timings are observations, not benchmark claims; some builds ran concurrently.
+After the final statement-budget boundary fix and portable plugin-header cleanup,
+both ArchAS tests were rebuilt and rerun in all five configurations: GCC Release
+0.73 s, Clang shared Release 0.80 s, GCC sanitizers 22.61 s, Clang sanitizers
+19.54 s, extensions-disabled 0.55 s. All passed.
+The suite grew from 25 to 27 CTest cases. `--emit hex` independently verifies
+`ret` as `c3` (amd64), `c0035fd6` (AArch64), and `67800000` (RISC-V).
+No codec/output-schema changes were made, so the prior serialization sizes remain
+outside this task's scope. The final lint run exits 0; its output is retained in
+`build-archas/archas-lint.txt`.
+
+`cmake --install` to `/tmp/opencode/archas-install` succeeded. A separate C++20
+consumer compiled against the installed headers/static libraries and encoded
+`ret`; the installed `domas` compiled the Intel example using the installed
+database. The Lua adapter also passes a strict syntax check against system
+Lua 5.4 headers. Runtime tests use system 5.5.1 and the supplied 5.5.0 sources.
+
+Reproduce from the MetaToolchain root (the local yyjson override is only needed
+for this offline environment):
+
+```sh
+cmake -S . -B build-archas -G 'Unix Makefiles' \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_FLAGS='-Wall -Wextra -Wpedantic -Werror' \
+  -DCMAKE_CXX_FLAGS='-Wall -Wextra -Wpedantic -Werror' \
+  -DFETCHCONTENT_SOURCE_DIR_YYJSON=/mnt/nvme/joltfx/third_party/yyjson
+cmake --build build-archas -j4
+ctest --test-dir build-archas --output-on-failure -j4
+build-archas/domas -T amd64 --intel-syntax ArchAS/examples/answer.mair -o answer.o
+```
+
+For Clang, use a separate tree and add
+`-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++`; the shared test adds
+`-DBUILD_SHARED_LIBS=ON`. For either sanitizer build, use `Debug` and append
+`-fsanitize=address,undefined -fno-omit-frame-pointer` to both language flags.
+The provided-Lua configuration adds
+`-DARCHAS_LUA_DIR=/mnt/nvme/metatk/third_party/jiterati/third_party/lua`.
+The minimal configuration adds `-DARCHAS_LUA=OFF -DARCHAS_PLUGINS=OFF` and runs
+`ctest --test-dir build-archas-minimal --output-on-failure -R archas`.
+
+Native object writing intentionally remains a GNU/LLVM backend integration;
+full standalone ISA parsers/encoders and additional object writers were not
+implemented. The earlier MetaArch phase A–G reports below describe prior work,
+not additional changes made for ArchAS.
+
+The source snapshot is `build-archas/ArchAS-source.tar.gz`, containing the
+committed MetaToolchain tree under the requested `mnt/nvme/metatk/MetaArch/`
+archive prefix, including this report. Build products are excluded. Regenerate
+from the workspace Git root with:
+
+```sh
+git archive --format=tar.gz --prefix=mnt/nvme/metatk/MetaArch/ \
+  -o MetaToolchain/build-archas/ArchAS-source.tar.gz HEAD:MetaToolchain
+```
+
 ## Latest addition: MetaArchIR portable assembly (2026-10-24)
 
 ### Follow-up hardening (2026-10-24)
