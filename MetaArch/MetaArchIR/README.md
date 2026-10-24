@@ -1,5 +1,8 @@
 # MetaArchIR: portable assembly
 
+Read the [35-chapter manual](manual/README.md) for tutorials, language and API
+references, CLI usage, worked examples, and verification guidance.
+
 MetaArchIR is a C++20 assembly builder and `.mair` language implemented with
 **DSLtk parser combinators**. It loads MetaArchDB through `metaarch::Spec::load_dsl`
 and encodes through `Spec::encode` / `Spec::encode_form`. Database specifications
