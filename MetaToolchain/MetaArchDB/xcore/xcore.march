@@ -1,0 +1,158 @@
+# Generated from ArchDB/xcore.dsymspec.yaml by tools/compile_archdb.py.
+# Regenerate from the YAML source; see MetaArchDB/README.md.
+architecture {
+    schema = 1;
+    target {
+        arch = "xcore";
+        subarch = "xs1";
+        addr_size = 32;
+        op_size = 32;
+        addr_def = 32;
+        align = 2;
+        byte_order = "little";
+        obj_format = "ELF32";
+        abi = "XCore";
+        calling_conv = "xcore";
+        features = ["base"];
+    }
+    feature base { desc = "XS1 XCore integer and resource ISA"; }
+    register r0 { class = "gpr"; width = 32; enc = 0; flags = ["readable", "writable"]; }
+    register r1 { class = "gpr"; width = 32; enc = 1; flags = ["readable", "writable"]; }
+    register r2 { class = "gpr"; width = 32; enc = 2; flags = ["readable", "writable"]; }
+    register r3 { class = "gpr"; width = 32; enc = 3; flags = ["readable", "writable"]; }
+    register r4 { class = "gpr"; width = 32; enc = 4; flags = ["readable", "writable"]; }
+    register r5 { class = "gpr"; width = 32; enc = 5; flags = ["readable", "writable"]; }
+    register r6 { class = "gpr"; width = 32; enc = 6; flags = ["readable", "writable"]; }
+    register r7 { class = "gpr"; width = 32; enc = 7; flags = ["readable", "writable"]; }
+    register r8 { class = "gpr"; width = 32; enc = 8; flags = ["readable", "writable"]; }
+    register r9 { class = "gpr"; width = 32; enc = 9; flags = ["readable", "writable"]; }
+    register r10 { class = "gpr"; width = 32; enc = 10; flags = ["readable", "writable"]; }
+    register r11 { class = "gpr"; width = 32; enc = 11; flags = ["readable", "writable"]; }
+    register cp { class = "special"; width = 32; enc = 12; flags = ["readable", "writable"]; }
+    register dp { class = "special"; width = 32; enc = 13; flags = ["readable", "writable"]; }
+    register sp { class = "special"; width = 32; enc = 14; flags = ["readable", "writable"]; }
+    register lr { class = "special"; width = 32; enc = 15; flags = ["readable", "writable"]; }
+    mnemonic ldw {  }
+    mnemonic stw {  }
+    mnemonic ldc {  }
+    mnemonic entsp {  }
+    mnemonic retsp {  }
+    mnemonic add {  }
+    mnemonic sub {  }
+    mnemonic and {  }
+    mnemonic or {  }
+    mnemonic xor {  }
+    mnemonic mul {  }
+    mnemonic divs {  }
+    mnemonic divu {  }
+    mnemonic bl {  }
+    mnemonic bru {  }
+    mnemonic in {  }
+    mnemonic out {  }
+    mnemonic syncr {  }
+    mnemonic waiteu {  }
+    encoder ldw_ru6 {
+        max_bytes = 2;
+        body = "REQUIRE a >= 0\nREQUIRE a <= 11\nREQUIRE b >= 0\nREQUIRE b <= 63\nEMIT16LE 23552 + a*64 + b\n";
+    }
+    encoder stw_ru6 {
+        max_bytes = 2;
+        body = "REQUIRE a >= 0\nREQUIRE a <= 11\nREQUIRE b >= 0\nREQUIRE b <= 63\nEMIT16LE 21504 + a*64 + b\n";
+    }
+    encoder ldc_ru6 {
+        max_bytes = 2;
+        body = "REQUIRE a >= 0\nREQUIRE a <= 11\nREQUIRE b >= 0\nREQUIRE b <= 63\nEMIT16LE 26624 + a*64 + b\n";
+    }
+    encoder entsp_u6 { max_bytes = 2; body = "REQUIRE a >= 0\nREQUIRE a <= 63\nEMIT16LE 30528 + a\n"; }
+    encoder retsp_u6 { max_bytes = 2; body = "REQUIRE a >= 0\nREQUIRE a <= 63\nEMIT16LE 30656 + a\n"; }
+    form {
+        mnemonic = "ldw";
+        encoder = "ldw_ru6";
+        flags = ["reads_mem", "implicit_ops"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; constraint = "r0-r11"; },
+            {
+                kind = "imm";
+                width = 8;
+                imm_min = 0;
+                imm_max = 63;
+                signed = false;
+                constraint = "ldw/stw: sp-relative offset in 4-byte words; ldc: unsigned constant";
+            }
+        ];
+    }
+    form {
+        mnemonic = "stw";
+        encoder = "stw_ru6";
+        flags = ["writes_mem", "implicit_ops"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "read"; constraint = "r0-r11"; },
+            {
+                kind = "imm";
+                width = 8;
+                imm_min = 0;
+                imm_max = 63;
+                signed = false;
+                constraint = "ldw/stw: sp-relative offset in 4-byte words; ldc: unsigned constant";
+            }
+        ];
+    }
+    form {
+        mnemonic = "ldc";
+        encoder = "ldc_ru6";
+        flags = [];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; constraint = "r0-r11"; },
+            {
+                kind = "imm";
+                width = 8;
+                imm_min = 0;
+                imm_max = 63;
+                signed = false;
+                constraint = "ldw/stw: sp-relative offset in 4-byte words; ldc: unsigned constant";
+            }
+        ];
+    }
+    form {
+        mnemonic = "entsp";
+        encoder = "entsp_u6";
+        flags = ["implicit_ops"];
+        operands = [
+            {
+                kind = "imm";
+                width = 8;
+                imm_min = 0;
+                imm_max = 63;
+                signed = false;
+                constraint = "stack adjustment in 4-byte words";
+            }
+        ];
+    }
+    form {
+        mnemonic = "retsp";
+        encoder = "retsp_u6";
+        flags = ["return", "terminator", "implicit_ops"];
+        operands = [
+            {
+                kind = "imm";
+                width = 8;
+                imm_min = 0;
+                imm_max = 63;
+                signed = false;
+                constraint = "stack adjustment in 4-byte words";
+            }
+        ];
+    }
+    syntax default { comment = "#"; separator = ", "; }
+    sections = [
+        { name = ".text"; flags = ["exec", "alloc", "code"]; align = 2; content = "code"; },
+        { name = ".data"; flags = ["write", "alloc", "data"]; align = 4; content = "data"; },
+        {
+            name = ".bss";
+            flags = ["write", "alloc", "zerofill", "data"];
+            align = 4;
+            content = "data";
+        }
+    ];
+    backend = { file = "backend/xcore.json"; };
+}

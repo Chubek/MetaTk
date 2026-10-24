@@ -1,0 +1,449 @@
+{
+  "schema": 1,
+  "name": "m68k",
+  "format": "elf",
+  "container": "ELF32",
+  "description": "ELF32 objects for the Motorola 68000 emulation (bfd/elf32-m68k.c).",
+  "byte_order": "big",
+  "target_vector": "elf32-m68k",
+  "arch": "m68k",
+  "magic": "7f454c46",
+  "flags": [
+    "host"
+  ],
+  "source": [
+    {
+      "file": "bfd/elf32-m68k.c",
+      "note": "elf32-m68k target vector and howto table"
+    },
+    {
+      "file": "include/elf/m68k.h",
+      "note": "R_68K_* numbers"
+    }
+  ],
+  "relocations": [
+    {
+      "name": "R_68K_NONE",
+      "number": 0,
+      "size": 1,
+      "bitsize": 0,
+      "pcrel": false,
+      "overflow": "dont"
+    },
+    {
+      "name": "R_68K_32",
+      "number": 1,
+      "size": 4,
+      "bitsize": 32,
+      "pcrel": false,
+      "overflow": "bitfield",
+      "dst_mask": 4294967295
+    },
+    {
+      "name": "R_68K_16",
+      "number": 2,
+      "size": 2,
+      "bitsize": 16,
+      "pcrel": false,
+      "overflow": "bitfield",
+      "dst_mask": 65535
+    },
+    {
+      "name": "R_68K_8",
+      "number": 3,
+      "size": 1,
+      "bitsize": 8,
+      "pcrel": false,
+      "overflow": "bitfield",
+      "dst_mask": 255
+    },
+    {
+      "name": "R_68K_PC32",
+      "number": 4,
+      "size": 4,
+      "bitsize": 32,
+      "pcrel": true,
+      "overflow": "bitfield",
+      "pcrel_offset": true,
+      "dst_mask": 4294967295
+    },
+    {
+      "name": "R_68K_PC16",
+      "number": 5,
+      "size": 2,
+      "bitsize": 16,
+      "pcrel": true,
+      "overflow": "signed",
+      "pcrel_offset": true,
+      "dst_mask": 65535
+    },
+    {
+      "name": "R_68K_PC8",
+      "number": 6,
+      "size": 1,
+      "bitsize": 8,
+      "pcrel": true,
+      "overflow": "signed",
+      "pcrel_offset": true,
+      "dst_mask": 255
+    },
+    {
+      "name": "R_68K_GOT32",
+      "number": 7,
+      "size": 4,
+      "bitsize": 32,
+      "pcrel": true,
+      "overflow": "bitfield",
+      "pcrel_offset": true,
+      "dst_mask": 4294967295
+    },
+    {
+      "name": "R_68K_GOT16",
+      "number": 8,
+      "size": 2,
+      "bitsize": 16,
+      "pcrel": true,
+      "overflow": "signed",
+      "pcrel_offset": true,
+      "dst_mask": 65535
+    },
+    {
+      "name": "R_68K_GOT8",
+      "number": 9,
+      "size": 1,
+      "bitsize": 8,
+      "pcrel": true,
+      "overflow": "signed",
+      "pcrel_offset": true,
+      "dst_mask": 255
+    },
+    {
+      "name": "R_68K_GOT32O",
+      "number": 10,
+      "size": 4,
+      "bitsize": 32,
+      "pcrel": false,
+      "overflow": "bitfield",
+      "dst_mask": 4294967295
+    },
+    {
+      "name": "R_68K_GOT16O",
+      "number": 11,
+      "size": 2,
+      "bitsize": 16,
+      "pcrel": false,
+      "overflow": "signed",
+      "dst_mask": 65535
+    },
+    {
+      "name": "R_68K_GOT8O",
+      "number": 12,
+      "size": 1,
+      "bitsize": 8,
+      "pcrel": false,
+      "overflow": "signed",
+      "dst_mask": 255
+    },
+    {
+      "name": "R_68K_PLT32",
+      "number": 13,
+      "size": 4,
+      "bitsize": 32,
+      "pcrel": true,
+      "overflow": "bitfield",
+      "pcrel_offset": true,
+      "dst_mask": 4294967295
+    },
+    {
+      "name": "R_68K_PLT16",
+      "number": 14,
+      "size": 2,
+      "bitsize": 16,
+      "pcrel": true,
+      "overflow": "signed",
+      "pcrel_offset": true,
+      "dst_mask": 65535
+    },
+    {
+      "name": "R_68K_PLT8",
+      "number": 15,
+      "size": 1,
+      "bitsize": 8,
+      "pcrel": true,
+      "overflow": "signed",
+      "pcrel_offset": true,
+      "dst_mask": 255
+    },
+    {
+      "name": "R_68K_PLT32O",
+      "number": 16,
+      "size": 4,
+      "bitsize": 32,
+      "pcrel": false,
+      "overflow": "bitfield",
+      "dst_mask": 4294967295
+    },
+    {
+      "name": "R_68K_PLT16O",
+      "number": 17,
+      "size": 2,
+      "bitsize": 16,
+      "pcrel": false,
+      "overflow": "signed",
+      "dst_mask": 65535
+    },
+    {
+      "name": "R_68K_PLT8O",
+      "number": 18,
+      "size": 1,
+      "bitsize": 8,
+      "pcrel": false,
+      "overflow": "signed",
+      "dst_mask": 255
+    },
+    {
+      "name": "R_68K_COPY",
+      "number": 19,
+      "size": 1,
+      "bitsize": 0,
+      "pcrel": false,
+      "overflow": "dont",
+      "dst_mask": 4294967295
+    },
+    {
+      "name": "R_68K_GLOB_DAT",
+      "number": 20,
+      "size": 4,
+      "bitsize": 32,
+      "pcrel": false,
+      "overflow": "dont",
+      "dst_mask": 4294967295
+    },
+    {
+      "name": "R_68K_JMP_SLOT",
+      "number": 21,
+      "size": 4,
+      "bitsize": 32,
+      "pcrel": false,
+      "overflow": "dont",
+      "dst_mask": 4294967295
+    },
+    {
+      "name": "R_68K_RELATIVE",
+      "number": 22,
+      "size": 4,
+      "bitsize": 32,
+      "pcrel": false,
+      "overflow": "dont",
+      "dst_mask": 4294967295
+    },
+    {
+      "name": "R_68K_GNU_VTINHERIT",
+      "number": 23,
+      "size": 4,
+      "bitsize": 0,
+      "pcrel": false,
+      "overflow": "dont"
+    },
+    {
+      "name": "R_68K_GNU_VTENTRY",
+      "number": 24,
+      "size": 4,
+      "bitsize": 0,
+      "pcrel": false,
+      "overflow": "dont"
+    },
+    {
+      "name": "R_68K_TLS_GD32",
+      "number": 25,
+      "size": 4,
+      "bitsize": 32,
+      "pcrel": false,
+      "overflow": "bitfield",
+      "dst_mask": 4294967295
+    },
+    {
+      "name": "R_68K_TLS_GD16",
+      "number": 26,
+      "size": 2,
+      "bitsize": 16,
+      "pcrel": false,
+      "overflow": "signed",
+      "dst_mask": 65535
+    },
+    {
+      "name": "R_68K_TLS_GD8",
+      "number": 27,
+      "size": 1,
+      "bitsize": 8,
+      "pcrel": false,
+      "overflow": "signed",
+      "dst_mask": 255
+    },
+    {
+      "name": "R_68K_TLS_LDM32",
+      "number": 28,
+      "size": 4,
+      "bitsize": 32,
+      "pcrel": false,
+      "overflow": "bitfield",
+      "dst_mask": 4294967295
+    },
+    {
+      "name": "R_68K_TLS_LDM16",
+      "number": 29,
+      "size": 2,
+      "bitsize": 16,
+      "pcrel": false,
+      "overflow": "signed",
+      "dst_mask": 65535
+    },
+    {
+      "name": "R_68K_TLS_LDM8",
+      "number": 30,
+      "size": 1,
+      "bitsize": 8,
+      "pcrel": false,
+      "overflow": "signed",
+      "dst_mask": 255
+    },
+    {
+      "name": "R_68K_TLS_LDO32",
+      "number": 31,
+      "size": 4,
+      "bitsize": 32,
+      "pcrel": false,
+      "overflow": "bitfield",
+      "dst_mask": 4294967295
+    },
+    {
+      "name": "R_68K_TLS_LDO16",
+      "number": 32,
+      "size": 2,
+      "bitsize": 16,
+      "pcrel": false,
+      "overflow": "signed",
+      "dst_mask": 65535
+    },
+    {
+      "name": "R_68K_TLS_LDO8",
+      "number": 33,
+      "size": 1,
+      "bitsize": 8,
+      "pcrel": false,
+      "overflow": "signed",
+      "dst_mask": 255
+    },
+    {
+      "name": "R_68K_TLS_IE32",
+      "number": 34,
+      "size": 4,
+      "bitsize": 32,
+      "pcrel": false,
+      "overflow": "bitfield",
+      "dst_mask": 4294967295
+    },
+    {
+      "name": "R_68K_TLS_IE16",
+      "number": 35,
+      "size": 2,
+      "bitsize": 16,
+      "pcrel": false,
+      "overflow": "signed",
+      "dst_mask": 65535
+    },
+    {
+      "name": "R_68K_TLS_IE8",
+      "number": 36,
+      "size": 1,
+      "bitsize": 8,
+      "pcrel": false,
+      "overflow": "signed",
+      "dst_mask": 255
+    },
+    {
+      "name": "R_68K_TLS_LE32",
+      "number": 37,
+      "size": 4,
+      "bitsize": 32,
+      "pcrel": false,
+      "overflow": "bitfield",
+      "dst_mask": 4294967295
+    },
+    {
+      "name": "R_68K_TLS_LE16",
+      "number": 38,
+      "size": 2,
+      "bitsize": 16,
+      "pcrel": false,
+      "overflow": "signed",
+      "dst_mask": 65535
+    },
+    {
+      "name": "R_68K_TLS_LE8",
+      "number": 39,
+      "size": 1,
+      "bitsize": 8,
+      "pcrel": false,
+      "overflow": "signed",
+      "dst_mask": 255
+    },
+    {
+      "name": "R_68K_TLS_DTPMOD32",
+      "number": 40,
+      "size": 4,
+      "bitsize": 32,
+      "pcrel": false,
+      "overflow": "dont",
+      "dst_mask": 4294967295
+    },
+    {
+      "name": "R_68K_TLS_DTPREL32",
+      "number": 41,
+      "size": 4,
+      "bitsize": 32,
+      "pcrel": false,
+      "overflow": "dont",
+      "dst_mask": 4294967295
+    },
+    {
+      "name": "R_68K_TLS_TPREL32",
+      "number": 42,
+      "size": 4,
+      "bitsize": 32,
+      "pcrel": false,
+      "overflow": "dont",
+      "dst_mask": 4294967295
+    }
+  ],
+  "sections": [
+    {
+      "name": ".text",
+      "desc": "executable code"
+    },
+    {
+      "name": ".data",
+      "desc": "initialised data"
+    },
+    {
+      "name": ".bss",
+      "desc": "uninitialised data"
+    },
+    {
+      "name": ".rodata",
+      "desc": "read-only data"
+    },
+    {
+      "name": ".symtab",
+      "desc": "symbol table"
+    },
+    {
+      "name": ".strtab",
+      "desc": "string table"
+    },
+    {
+      "name": ".rel.text",
+      "desc": "relocations without addends for .text"
+    }
+  ]
+}

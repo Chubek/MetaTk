@@ -1,0 +1,5 @@
+# Assemble entry.s and run.s to entry.o and run.o before running this manifest.
+TARGET(ELF64)
+ENTRY(_start)
+INPUT("entry.o", "run.o")
+OUTPUT("linked")

@@ -1,0 +1,2421 @@
+\input cwebmac
+% ArchLD: executable static linker for the ArchToolchain suite.
+% CWEB is the source of truth for the two emitted files.
+\def\title{ArchLD: An ArchBFD-driven Static Linker}
+\def\contentsname{Contents}
+
+
+\N{1}{1}The linker.
+
+\.{ArchLD} is a real static executable linker for little-endian x86-64
+ELF64 and i386 ELF32 relocatable inputs. All object-file headers,
+sections, symbols and relocations are interpreted through the original
+ArchBFD library and its versioned descriptions, rather than through a
+second object reader.
+
+The supplied ArchBFD library requires DsymspecIR, which was absent from
+the upload. The bundled compatibility satellite implements the subset of
+DsymspecIR's tree API that ArchBFD uses and accepts generated JSON
+representations of the original YAML documents. No dynamic library is
+required at runtime.
+
+The phases are
+$$\hbox{parse}\to\hbox{archive selection}\to\hbox{COMDAT}
+\to\hbox{resolve}\to\hbox{layout}\to\hbox{relocate}
+\to\hbox{ELF serialization}.$$
+
+The relocation computation is $V=S+A-P$ for PC-relative relocation,
+$V=S+A$ otherwise. The checked result is written into the allocated
+field, after checking the ArchBFD howto. The output is a runnable ELF
+executable, not merely a relocated byte array.
+
+\fi
+
+\N{1}{2}The public C API.
+
+The following header is emitted simultaneously with the C translation
+unit. Callers may build a linker, feed it object paths, query symbols,
+and write a final executable. Errors remain available through
+\PB{\\{archld\_error}}.
+
+\Y\B\4\X2:\.{src/ArchLD.h\,}\X${}\E{}$\6
+\8\#\&{ifndef} \.{ARCHTOOLCHAIN\_ARCHLD\_H}\6
+\8\#\&{define} \.{ARCHTOOLCHAIN\_ARCHLD\_H}\6
+\8\#\&{include} \.{<stdbool.h>}\6
+\8\#\&{include} \.{<stddef.h>}\6
+\8\#\&{include} \.{<stdint.h>}\6
+\8\#\&{include} \.{<stdio.h>}\6
+\8\#\&{ifdef} \\{\_\_cplusplus}\6
+\1\1\&{extern} \.{"C"}\2\2\6
+${}\{{}$\6
+\8\#\&{endif}\1\6
+\&{typedef} \&{struct} \\{ArchLD} \&{ArchLD};\6
+\&{ArchLD} ${}{*}{}$\\{archld\_new}(\&{const} \&{char} ${}{*}\\{catalogue},%
+\39{}$\&{const} \&{char} ${}{*}\\{target},\39\\{uint64\_t}\\{base});{}$\6
+\&{bool} \\{archld\_add}(\&{ArchLD} ${}{*}\\{ld},\39{}$\&{const} \&{char}
+${}{*}\\{object\_path});{}$\6
+\&{bool} \\{archld\_link}(\&{ArchLD} ${}{*}\\{ld});{}$\6
+\&{bool} \\{archld\_write\_elf}(\&{ArchLD} ${}{*}\\{ld},\39{}$\&{const} %
+\&{char} ${}{*}\\{path},\39\\{uint64\_t}\\{entry});{}$\6
+\&{bool} \\{archld\_write\_map\_file}(\&{const} \&{ArchLD} ${}{*}\\{ld},\39{}$%
+\&{const} \&{char} ${}{*}\\{path});{}$\6
+\&{size\_t} \\{archld\_global\_count}(\&{const} \&{ArchLD} ${}{*}\\{ld});{}$\6
+\&{bool} \\{archld\_global\_at}(\&{const} \&{ArchLD} ${}{*}\\{ld},\39{}$\&{size%
+\_t} \\{index}${},\39{}$\&{const} \&{char} ${}{*}{*}\\{name},\39\\{uint64\_t}*%
+\\{address},\39\\{uint64\_t}*\\{size});{}$\6
+\&{const} \\{uint8\_t}${}{*}{}$\\{archld\_image}(\&{const} \&{ArchLD} ${}{*}%
+\\{ld});{}$\6
+\&{size\_t} \\{archld\_image\_size}(\&{const} \&{ArchLD} ${}{*}\\{ld});{}$\7
+\\{uint64\_t}\\{archld\_image\_base}(\&{const} \&{ArchLD} ${}{*}\\{ld});{}$\7
+\&{bool} \\{archld\_symbol}(\&{const} \&{ArchLD} ${}{*}\\{ld},\39{}$\&{const} %
+\&{char} ${}{*}\\{name},\39\\{uint64\_t}*\\{address});{}$\6
+\&{void} \\{archld\_map}(\&{const} \&{ArchLD} ${}{*}\\{ld},\39{}$\&{FILE}
+${}{*}\\{stream});{}$\6
+\&{const} \&{char} ${}{*}{}$\\{archld\_error}(\&{const} \&{ArchLD} ${}{*}%
+\\{ld});{}$\6
+\&{void} \\{archld\_free}(\&{ArchLD} ${}{*}\\{ld});{}$\6
+\8\#\&{ifdef} \\{\_\_cplusplus}\6
+\4${}\}{}$\2\6
+\8\#\&{endif}\6
+\8\#\&{endif}\par
+\fi
+
+\N{1}{3}Translation unit.
+
+\Y\B\X4:Headers and ABI constants\X\X6:Input and global state\X\X8:Checked
+arithmetic and diagnostics\X\X10:Lifecycle and input acquisition\X\X12:COMDAT
+and section collection\X\X14:Global definition selection\X\X16:Placement and
+page boundaries\X\X18:Symbol address lookup\X\X20:Relocation validation\X%
+\X22:Relocation section iteration\X\X24:Applying relocation fields\X\X26:Lazy
+archive extraction\X\X28:GOT synthesis\X\X30:Link phases and diagnostics\X%
+\X32:Executable ELF64 output\X\X34:Executable ELF32 output\X\par
+\fi
+
+\N{1}{4}Headers and ABI constants.
+
+Native ELF constants and checked maximum input sizes.
+
+\Y\B\4\X4:Headers and ABI constants\X${}\E{}$\6
+\8\#\&{include} \.{"ArchLD.h"}\6
+\8\#\&{include} \.{"ArchBFD.h"}\6
+\8\#\&{include} \.{<inttypes.h>}\6
+\8\#\&{include} \.{<stdarg.h>}\6
+\8\#\&{include} \.{<stdlib.h>}\6
+\8\#\&{include} \.{<string.h>}\6
+\8\#\&{include} \.{<limits.h>}\6
+\8\#\&{include} \.{<errno.h>}\6
+\&{enum} ${}\{{}$\1\6
+${}\.{LD\_SHT\_PROGBITS}\K\T{1},\39\.{LD\_SHT\_SYMTAB}\K\T{2},\39\.{LD\_SHT%
+\_RELA}\K\T{4},\39\.{LD\_SHT\_NOTE}\K\T{7},\39\.{LD\_SHT\_NOBITS}\K\T{8},\39%
+\.{LD\_SHT\_REL}\K\T{9},\39\.{LD\_SHF\_ALLOC}\K\T{2},\39\.{LD\_SHF\_WRITE}\K%
+\T{1},\39\.{LD\_SHF\_EXEC}\K\T{4},\39\.{LD\_SHF\_UNSUPPORTED}\K\T{\^480},\39%
+\.{LD\_SHN\_UNDEF}\K\T{0},\39\.{LD\_SHN\_ABS}\K\T{\^fff1},\39\.{LD\_SHN%
+\_COMMON}\K\T{\^fff2},\39\.{LD\_BIND\_LOCAL}\K\T{0},\39\.{LD\_BIND\_GLOBAL}\K%
+\T{1},\39\.{LD\_BIND\_WEAK}\K\T{2},\39\.{LD\_ET\_REL}\K\T{1},\39\.{LD\_EM\_X86%
+\_64}\K\T{62},\39\.{LD\_EM\_386}\K\T{3}{}$\2\6
+${}\};{}$\6
+\8\#\&{define} \.{LD\_MAX\_IMAGE}\5${}(\T{512\$U}*\T{1024\$U}*\T{1024\$U}){}$\6
+\8\#\&{define} \.{LD\_MAX\_INPUT}\5${}(\T{512\$U}*\T{1024\$U}*\T{1024\$U}){}$%
+\par
+\U3.\fi
+
+\M{5}
+
+\fi
+
+\N{1}{6}Input and global state.
+
+The link graph owns source images, parsed objects, section placements,
+archives, and GOT slots.
+
+\Y\B\4\X6:Input and global state\X${}\E{}$\6
+\&{typedef} \&{struct} ${}\{{}$\1\6
+\&{char} ${}{*}\\{path};{}$\7
+${}\\{uint8\_t}*\\{bytes};{}$\7
+\&{size\_t} \\{bytes\_len};\7
+${}\\{ArchBFDObject}*\\{bfd};{}$\7
+\&{size\_t} ${}{*}\\{part\_of\_section};{}$\6
+\&{bool} ${}{*}\\{discard};{}$\2\6
+${}\}{}$ \&{LDInput};\6
+\&{typedef} \&{struct} ${}\{{}$\1\6
+\&{size\_t} \\{input}${},\39\\{section};{}$\7
+${}\\{uint64\_t}\\{address},\39\\{image\_offset},\39\\{length},\39\\{align};{}$%
+\7
+\&{unsigned} \\{category};\2\6
+${}\}{}$ \&{LDPart};\6
+\&{typedef} \&{struct} ${}\{{}$\1\6
+\&{char} ${}{*}\\{name};{}$\6
+\&{size\_t} \\{input}${},\39\\{symbol};{}$\6
+\&{int} \\{rank};\7
+${}\\{uint64\_t}\\{common\_size},\39\\{common\_align},\39\\{common\_addr};{}$\2%
+\6
+${}\}{}$ \&{LDGlobal};\6
+\&{typedef} \&{struct} ${}\{{}$\1\6
+\&{size\_t} \\{data\_offset}${},\39\\{data\_size};{}$\6
+\&{char} ${}{*}\\{name};{}$\6
+\&{char} ${}{*}{*}\\{defs};{}$\6
+\&{size\_t} \\{def\_count};\6
+\&{bool} \\{extracted};\2\6
+${}\}{}$ \&{LDMember};\6
+\&{typedef} \&{struct} ${}\{{}$\1\6
+\&{char} ${}{*}\\{path};{}$\7
+${}\\{uint8\_t}*\\{bytes};{}$\7
+\&{size\_t} \\{length};\6
+\&{LDMember} ${}{*}\\{members};{}$\6
+\&{size\_t} \\{count}${},\39\\{cap};{}$\2\6
+${}\}{}$ \&{LDArchive};\6
+\&{typedef} \&{struct} ${}\{{}$\1\6
+\&{size\_t} \\{input}${},\39\\{symbol};{}$\7
+${}\\{uint64\_t}\\{address},\39\\{image\_offset};{}$\2\6
+${}\}{}$ \&{LDGOT}; \&{struct} \&{ArchLD} ${}\{$ $\\{ArchBFD}*\\{db};{}$\7
+\&{const} \\{ArchBFDSpec}${}{*}\\{spec};{}$\6
+\&{bool} \\{elf32};\7
+\\{uint64\_t}\\{base};\7
+\&{LDInput} ${}{*}\\{inputs};{}$\6
+\&{size\_t} \\{input\_count}${},\39\\{input\_cap};{}$\6
+\&{LDArchive} ${}{*}\\{archives};{}$\6
+\&{size\_t} \\{archive\_count}${},\39\\{archive\_cap};{}$\6
+\&{LDGOT} ${}{*}\\{got};{}$\6
+\&{size\_t} \\{got\_count}${},\39\\{got\_cap};{}$\7
+\\{uint64\_t}\\{got\_base};\7
+\&{LDPart} ${}{*}\\{parts};{}$\6
+\&{size\_t} \\{part\_count}${},\39\\{part\_cap};{}$\6
+\&{LDGlobal} ${}{*}\\{globals};{}$\6
+\&{size\_t} \\{global\_count}${},\39\\{global\_cap};{}$\7
+${}\\{uint8\_t}*\\{image};{}$\7
+\&{size\_t} \\{image\_size};\7
+${}\\{uint64\_t}\\{cat\_start}[\T{4}],\39\\{cat\_end}[\T{4}];{}$\7
+\&{bool} \\{linked}; \&{char} \6
+\&{error} [\T{640}]\1\5
+;\2\6
+$\}$  ;\par
+\U3.\fi
+
+\M{7}
+
+\fi
+
+\N{1}{8}Checked arithmetic and diagnostics.
+
+Bounds, alignment and allocation failures are reported before writing output.
+
+\Y\B\4\X8:Checked arithmetic and diagnostics\X${}\E{}$\6
+\1\1\&{static} \&{bool} \\{ld\_fail}(\&{ArchLD} ${}{*}\\{ld},\39{}$\&{const} %
+\&{char} ${}{*}\\{fmt},\39\,\ldots\,)$ $\{$ \&{va\_list} \\{args}; \&{if} ( $\R%
+\\{ld}$ $\MG$ \&{error} [\T{0}] ) $\{$ $\\{va\_start}(\\{args},\39\\{fmt});$ %
+\\{vsnprintf} ( \\{ld} $\MG$ \&{error} $,$ \&{sizeof} \\{ld} $\MG$ \&{error}
+$,$ $\\{fmt},\39\\{args}$ )  ;\6
+\\{va\_end}(\\{args}); $\}$ \&{return} \\{false}; $\}$ \1\1\&{static} \&{char}
+${}{*}{}$\\{ld\_strdup}(\&{const} \&{char} ${}{*}\|s)\2\2{}$\6
+${}\{{}$\1\6
+\&{size\_t} \|n${}\K\\{strlen}(\|s)+\T{1};{}$\6
+\&{char} ${}{*}\|p\K{}$(\&{char} ${}{*})\,\\{malloc}(\|n);{}$\7
+\&{if} (\|p)\1\5
+${}\\{memcpy}(\|p,\39\|s,\39\|n);{}$\2\6
+\&{return} \|p;\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{bool} \\{ld\_grow}(\&{ArchLD} ${}{*}\\{ld},\39{}$\&{void}
+${}{*}{*}\\{storage},\39{}$\&{size\_t} ${}{*}\\{cap},\39{}$\&{size\_t} %
+\\{needed}${},\39{}$\&{size\_t} \\{element\_size})\2\2\6
+${}\{{}$\1\6
+\&{if} ${}(\\{needed}\Z{*}\\{cap}){}$\1\5
+\&{return} \\{true};\2\7
+\&{size\_t} \|n${}\K{*}\\{cap}\?{*}\\{cap}:\T{8};{}$\7
+\&{while} ${}(\|n<\\{needed}){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\|n>\.{SIZE\_MAX}/\T{2}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"array\ size\ overflow}\)\.{"});{}$\2\6
+${}\|n\MRL{*{\K}}\T{2};{}$\6
+\4${}\}{}$\2\6
+\&{if} ${}(\|n>\.{SIZE\_MAX}/\\{element\_size}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"array\ byte\ count\ ov}\)%
+\.{erflow"});{}$\2\7
+\&{void} ${}{*}\|p\K\\{realloc}({*}\\{storage},\39\|n*\\{element\_size});{}$\7
+\&{if} ${}(\R\|p){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"out\ of\ memory"});{}$\2\6
+${}{*}\\{storage}\K\|p;{}$\6
+${}{*}\\{cap}\K\|n;{}$\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{bool} \\{ld\_power\_two}(\\{uint64\_t}\|x)\2\2\6
+${}\{{}$\1\6
+\&{return} \|x${}\W\R(\|x\AND(\|x-\T{1}));{}$\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{bool} \\{ld\_align}(\&{ArchLD} ${}{*}\\{ld},\39\\{uint64\_t}%
+\\{old},\39\\{uint64\_t}\|a,\39\\{uint64\_t}*\\{out})\2\2{}$\6
+${}\{{}$\1\6
+\&{if} ${}(\R\\{ld\_power\_two}(\|a)){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"invalid\ section\ ali}\)\.{gnment:\ %
+\%"}\\{PRIu64},\39\|a);{}$\2\6
+\&{if} ${}(\\{old}>\.{UINT64\_MAX}-(\|a-\T{1})){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"address\ overflow"});{}$\2\6
+${}{*}\\{out}\K(\\{old}+(\|a-\T{1}))\AND\CM(\|a-\T{1});{}$\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{bool} \\{ld\_span}(\&{size\_t} \\{total}${},\39\\{int64\_t}%
+\\{offset},\39\\{int64\_t}\\{length})\2\2{}$\6
+${}\{{}$\1\6
+\&{if} ${}(\\{offset}<\T{0}\V\\{length}<\T{0}){}$\1\5
+\&{return} \\{false};\2\6
+${}\\{uint64\_t}\\{off}\K(\\{uint64\_t})\\{offset},\39\\{len}\K(\\{uint64\_t})%
+\\{length};{}$\6
+\&{return} \\{off}${}\Z\\{total}\W\\{len}\Z(\\{uint64\_t})\\{total}-\\{off};{}$%
+\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{void} \\{ld\_diagnostic}(\&{ArchLD} ${}{*}\\{ld},\39{}$%
+\&{const} \&{char} ${}{*}\\{what},\39{}$\&{const} \\{DsymDiags}${}{*}\|d)\2%
+\2{}$\6
+${}\{{}$\1\6
+\&{if} ${}(\|d\W\|d\MG\\{count}\W\|d\MG\\{items}[\|d\MG\\{count}-\T{1}].%
+\\{msg}){}$\1\5
+${}\\{ld\_fail}(\\{ld},\39\.{"\%s:\ \%s"},\39\\{what},\39\|d\MG\\{items}[\|d\MG%
+\\{count}-\T{1}].\\{msg});{}$\2\6
+\&{else}\1\5
+${}\\{ld\_fail}(\\{ld},\39\.{"\%s:\ ArchBFD\ failed"},\39\\{what});{}$\2\6
+\4${}\}{}$\2\par
+\U3.\fi
+
+\M{9}
+
+\fi
+
+\N{1}{10}Lifecycle and input acquisition.
+
+Inputs pass through the supplied ArchBFD object reader and its format
+catalogue.
+
+\Y\B\4\X10:Lifecycle and input acquisition\X${}\E{}$\6
+\1\1\&{ArchLD} ${}{*}{}$\\{archld\_new}(\&{const} \&{char} ${}{*}\\{catalogue},%
+\39{}$\&{const} \&{char} ${}{*}\\{target},\39\\{uint64\_t}\\{base})\2\2{}$\6
+${}\{{}$\1\6
+\&{if} ${}(\R\\{catalogue}){}$\1\5
+\&{return} ${}\NULL;{}$\2\7
+\&{ArchLD} ${}{*}\\{ld}\K{}$(\&{ArchLD} ${}{*})\,\\{calloc}(\T{1},\39{}$%
+\&{sizeof} ${}{*}\\{ld});{}$\7
+\&{if} ${}(\R\\{ld}){}$\1\5
+\&{return} ${}\NULL;{}$\2\6
+${}\\{ld}\MG\\{base}\K\\{base};{}$\6
+${}\\{ld}\MG\\{elf32}\K\\{target}\W\R\\{strcmp}(\\{target},\39\.{"ELF32"});{}$\6
+\\{DsymDiags}\|d;\6
+${}\\{dsym\_diags\_init}({\AND}\|d);{}$\6
+${}\\{ld}\MG\\{db}\K\\{archbfd\_open}(\\{catalogue},\39{\AND}\|d);{}$\6
+\&{if} ${}(\\{ld}\MG\\{db}){}$\1\5
+${}\\{ld}\MG\\{spec}\K\\{archbfd\_load\_name}(\\{ld}\MG\\{db},\39\\{target}\?%
+\\{target}:\.{"ELF64"},\39\T{0},\39{\AND}\|d);{}$\2\6
+\&{if} ${}(\R\\{ld}\MG\\{db}\V\R\\{ld}\MG\\{spec}){}$\1\5
+${}\\{ld\_diagnostic}(\\{ld},\39\.{"catalogue"},\39{\AND}\|d);{}$\2\6
+${}\\{dsym\_diags\_free}({\AND}\|d);{}$\6
+\&{if} ${}(\\{ld}\MG\\{spec}\W(\\{ld}\MG\\{spec}\MG\\{format}\I\.{ARCHBFD\_FMT%
+\_ELF}\V\\{ld}\MG\\{spec}\MG\\{byte\_order}\I\.{ARCHBFD\_BO\_LITTLE}\V\R\\{ld}%
+\MG\\{spec}\MG\\{has\_byte\_order}\V\R\\{ld}\MG\\{spec}\MG\\{has\_format}\V\R%
+\\{ld}\MG\\{spec}\MG\\{arch}\V\\{strcmp}(\\{ld}\MG\\{spec}\MG\\{arch},\39\\{ld}%
+\MG\\{elf32}\?\.{"i386"}:\.{"x86-64"})\V\\{strcmp}(\\{ld}\MG\\{spec}\MG%
+\\{name},\39\\{ld}\MG\\{elf32}\?\.{"ELF32"}:\.{"ELF64"}))){}$\1\5
+${}\\{ld\_fail}(\\{ld},\39\.{"supported\ targets:\ }\)\.{ELF64\ (x86-64)\ or\
+EL}\)\.{F32\ (i386),\ little-e}\)\.{ndian"});{}$\2\6
+\&{return} \\{ld};\6
+\4${}\}{}$\2\6
+\1\1\&{static} \&{bool} \\{ld\_read\_bytes}(\&{ArchLD} ${}{*}\\{ld},\39{}$%
+\&{const} \&{char} ${}{*}\\{path},\39\\{uint8\_t}*{*}\\{bytes},\39{}$\&{size%
+\_t} ${}{*}\\{length})$ $\{$ \&{FILE} ${}{*}\|f\K\\{fopen}(\\{path},\39%
+\.{"rb"});{}$\7
+\&{if} ${}(\R\|f){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"cannot\ open\ \%s"},\39\\{path});{}$\2%
+\6
+\&{if} ${}(\\{fseek}(\|f,\39\T{0},\39\.{SEEK\_END})\V\\{ftell}(\|f)<\T{0}){}$\5
+${}\{{}$\1\6
+\\{fclose}(\|f);\6
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"cannot\ size\ \%s"},\39\\{path});{}$\6
+\4${}\}{}$\2\7
+\&{long} \|n${}\K\\{ftell}(\|f);{}$\7
+\&{if} ${}((\\{uint64\_t})\|n>\.{LD\_MAX\_INPUT}\V\\{fseek}(\|f,\39\T{0},\39%
+\.{SEEK\_SET})){}$\5
+${}\{{}$\1\6
+\\{fclose}(\|f);\6
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"input\ too\ large\ or\ }\)%
+\.{unseekable:\ \%s"},\39\\{path});{}$\6
+\4${}\}{}$\2\6
+${*}\\{bytes}$ $\K$ ( \\{uint8\_t} $*$ ) $\\{malloc}((\&{size\_t})\,\|n\?(%
+\&{size\_t})\,\|n:\T{1});{}$\6
+\&{if} ${}(\R{*}\\{bytes}){}$\5
+${}\{{}$\1\6
+\\{fclose}(\|f);\6
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"out\ of\ memory"});{}$\6
+\4${}\}{}$\2\7
+\&{size\_t} \\{got}${}\K\\{fread}({*}\\{bytes},\39\T{1},\39(\&{size\_t})\,\|n,%
+\39\|f);{}$\6
+\&{int} \\{bad}${}\K\\{ferror}(\|f);{}$\7
+\\{fclose}(\|f);\6
+\&{if} ${}(\\{bad}\V\\{got}\I(\&{size\_t})\,\|n){}$\5
+${}\{{}$\1\6
+${}\\{free}({*}\\{bytes});{}$\6
+${}{*}\\{bytes}\K\NULL;{}$\6
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"short\ read:\ \%s"},\39\\{path});{}$\6
+\4${}\}{}$\2\6
+${}{*}\\{length}\K(\&{size\_t})\,\|n;{}$\6
+\&{return} \\{true}; $\}$ \&{static} \&{bool}  \\{ld\_add\_archive} (\&{ArchLD}
+${}{*},\39{}$\&{const} \&{char} ${}{*},\39$ \\{uint8\_t} $*$ $,$ \&{size\_t} )
+; \1\1\&{bool} \\{archld\_add}(\&{ArchLD} ${}{*}\\{ld},\39{}$\&{const} \&{char}
+${}{*}\\{path})$ $\{$ \&{if} ( $\R\\{ld}\V\R\\{path}\V\\{ld}$ $\MG$ \&{error} [%
+\T{0}] $\V$ $\\{ld}\MG\\{linked}$ ) \&{return} \\{false};\6
+\&{if} ${}(\R\\{ld}\MG\\{spec}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"ArchBFD\ format\ not\ }\)%
+\.{loaded"});{}$\2\6
+\&{if} ${}(\R\\{ld\_grow}(\\{ld},\39{}$(\&{void} ${}{*}{*})\,{\AND}\\{ld}\MG%
+\\{inputs},\39{\AND}\\{ld}\MG\\{input\_cap},\39\\{ld}\MG\\{input\_count}+\T{1},%
+\39{}$\&{sizeof} ${}{*}\\{ld}\MG\\{inputs})){}$\1\5
+\&{return} \\{false};\2\7
+\&{LDInput} \\{in}${}\K\{\T{0}\};{}$\7
+${}\\{in}.\\{path}\K\\{ld\_strdup}(\\{path});{}$\6
+\&{if} ${}(\R\\{in}.\\{path}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"out\ of\ memory"});{}$\2\6
+\&{if} ${}(\R\\{ld\_read\_bytes}(\\{ld},\39\\{path},\39{\AND}\\{in}.\\{bytes},%
+\39{\AND}\\{in}.\\{bytes\_len})){}$\1\5
+\&{goto} \\{bad};\2\6
+\&{if} ${}(\\{in}.\\{bytes\_len}\G\T{8}\W\R\\{memcmp}(\\{in}.\\{bytes},\39%
+\.{"!<arch>\\n"},\39\T{8})){}$\5
+${}\{{}$\1\6
+\&{bool} \\{ok}${}\K\\{ld\_add\_archive}(\\{ld},\39\\{path},\39\\{in}.%
+\\{bytes},\39\\{in}.\\{bytes\_len});{}$\7
+${}\\{in}.\\{bytes}\K\NULL;{}$\6
+${}\\{in}.\\{bytes\_len}\K\T{0};{}$\6
+${}\\{free}(\\{in}.\\{path});{}$\6
+\&{return} \\{ok};\6
+\4${}\}{}$\2\6
+\\{DsymDiags}\|d;\6
+${}\\{dsym\_diags\_init}({\AND}\|d);{}$\6
+${}\\{in}.\\{bfd}\K\\{archbfd\_object\_open\_memory}(\\{in}.\\{bytes},\39%
+\\{in}.\\{bytes\_len},\39\\{ld}\MG\\{spec},\39{\AND}\|d);{}$\6
+\&{if} ${}(\R\\{in}.\\{bfd}){}$\1\5
+${}\\{ld\_diagnostic}(\\{ld},\39\\{path},\39{\AND}\|d);{}$\2\6
+${}\\{dsym\_diags\_free}({\AND}\|d);{}$\6
+\&{if} ${}(\R\\{in}.\\{bfd}){}$\1\5
+\&{goto} \\{bad};\2\6
+\&{if} ${}(\\{strcmp}(\\{archbfd\_object\_kind}(\\{in}.\\{bfd}),\39\\{ld}\MG%
+\\{elf32}\?\.{"elf32"}:\.{"elf64"})\V\\{archbfd\_object\_machine}(\\{in}.%
+\\{bfd})\I(\\{ld}\MG\\{elf32}\?\.{LD\_EM\_386}:\.{LD\_EM\_X86\_64})\V\\{archbfd%
+\_object\_type}(\\{in}.\\{bfd})\I\.{LD\_ET\_REL}){}$\5
+${}\{{}$\1\6
+${}\\{ld\_fail}(\\{ld},\39\.{"\%s:\ expected\ \%s\ rel}\)\.{ocatable\ ELF"},\39%
+\\{path},\39\\{ld}\MG\\{elf32}\?\.{"i386\ ELF32"}:\.{"x86-64\ ELF64"});{}$\6
+\&{goto} \\{bad};\6
+\4${}\}{}$\2\7
+\&{size\_t} \\{count}${}\K\\{archbfd\_object\_section\_count}(\\{in}.%
+\\{bfd});{}$\7
+${}\\{in}.\\{part\_of\_section}\K{}$(\&{size\_t} ${}{*})\,\\{malloc}((\\{count}%
+\?\\{count}:\T{1})*\&{sizeof}(\&{size\_t}));{}$\6
+${}\\{in}.\\{discard}\K\\{calloc}(\\{count}\?\\{count}:\T{1},\39\&{sizeof}(%
+\&{bool}));{}$\6
+\&{if} ${}(\R\\{in}.\\{part\_of\_section}\V\R\\{in}.\\{discard}){}$\5
+${}\{{}$\1\6
+${}\\{ld\_fail}(\\{ld},\39\.{"out\ of\ memory"});{}$\6
+\&{goto} \\{bad};\6
+\4${}\}{}$\2\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{count};{}$ ${}\PP\|i){}$\1\5
+${}\\{in}.\\{part\_of\_section}[\|i]\K\.{SIZE\_MAX};{}$\2\6
+${}\\{ld}\MG\\{inputs}[\\{ld}\MG\\{input\_count}\PP]\K\\{in};{}$\6
+\&{return} \\{true};\6
+\4\\{bad}:\5
+${}\\{archbfd\_object\_close}(\\{in}.\\{bfd});{}$\6
+${}\\{free}(\\{in}.\\{bytes});{}$\6
+${}\\{free}(\\{in}.\\{path});{}$\6
+${}\\{free}(\\{in}.\\{part\_of\_section});{}$\6
+${}\\{free}(\\{in}.\\{discard});{}$\6
+\&{return} \\{false}; $\}$ \1\1\&{void} \\{archld\_free}(\&{ArchLD} ${}{*}%
+\\{ld})\2\2{}$\6
+${}\{{}$\1\6
+\&{if} ${}(\R\\{ld}){}$\1\5
+\&{return};\2\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{input\_count};{}$ ${}%
+\PP\|i){}$\5
+${}\{{}$\1\6
+${}\\{archbfd\_object\_close}(\\{ld}\MG\\{inputs}[\|i].\\{bfd});{}$\6
+${}\\{free}(\\{ld}\MG\\{inputs}[\|i].\\{path});{}$\6
+${}\\{free}(\\{ld}\MG\\{inputs}[\|i].\\{bytes});{}$\6
+${}\\{free}(\\{ld}\MG\\{inputs}[\|i].\\{part\_of\_section});{}$\6
+${}\\{free}(\\{ld}\MG\\{inputs}[\|i].\\{discard});{}$\6
+\4${}\}{}$\2\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{global\_count};{}$
+${}\PP\|i){}$\1\5
+${}\\{free}(\\{ld}\MG\\{globals}[\|i].\\{name});{}$\2\6
+\&{for} (\&{size\_t} \|a${}\K\T{0};{}$ ${}\|a<\\{ld}\MG\\{archive\_count};{}$
+${}\|a\PP){}$\5
+${}\{{}$\1\6
+\&{LDArchive} ${}{*}\\{ar}\K{\AND}\\{ld}\MG\\{archives}[\|a];{}$\7
+${}\\{free}(\\{ar}\MG\\{path});{}$\6
+${}\\{free}(\\{ar}\MG\\{bytes});{}$\6
+\&{for} (\&{size\_t} \|m${}\K\T{0};{}$ ${}\|m<\\{ar}\MG\\{count};{}$ ${}\|m%
+\PP){}$\5
+${}\{{}$\1\6
+\&{LDMember} ${}{*}\\{me}\K{\AND}\\{ar}\MG\\{members}[\|m];{}$\7
+${}\\{free}(\\{me}\MG\\{name});{}$\6
+\&{for} (\&{size\_t} \|z${}\K\T{0};{}$ ${}\|z<\\{me}\MG\\{def\_count};{}$ ${}%
+\|z\PP){}$\1\5
+${}\\{free}(\\{me}\MG\\{defs}[\|z]);{}$\2\6
+${}\\{free}(\\{me}\MG\\{defs});{}$\6
+\4${}\}{}$\2\6
+${}\\{free}(\\{ar}\MG\\{members});{}$\6
+\4${}\}{}$\2\6
+${}\\{free}(\\{ld}\MG\\{archives});{}$\6
+${}\\{free}(\\{ld}\MG\\{got});{}$\6
+${}\\{free}(\\{ld}\MG\\{globals});{}$\6
+${}\\{free}(\\{ld}\MG\\{parts});{}$\6
+${}\\{free}(\\{ld}\MG\\{inputs});{}$\6
+${}\\{free}(\\{ld}\MG\\{image});{}$\6
+${}\\{archbfd\_close}(\\{ld}\MG\\{db});{}$\6
+\\{free}(\\{ld});\6
+\4${}\}{}$\2\6
+\1\1\&{const} \&{char} ${}{*}{}$\\{archld\_error}(\&{const} \&{ArchLD} ${}{*}%
+\\{ld})$ $\{$ \&{return} \\{ld} $\?$ \\{ld} $\MG$ \&{error} : \.{"no\ linker\
+instance"}; $\}{}$\par
+\U3.\fi
+
+\M{11}
+
+\fi
+
+\N{1}{12}COMDAT and section collection.
+
+Identical COMDAT signatures are coalesced; allocatable sections become
+candidates for placement.
+
+\Y\B\4\X12:COMDAT and section collection\X${}\E{}$\C{ SHT\_GROUP / GRP\_COMDAT
+uses the group's signature symbol as its key.  * Retain only the first COMDAT
+section group and its relocation sections;  * duplicate members cannot
+contribute definitions or loaded bytes. }\6
+\1\1\&{static} \&{bool} \\{ld\_prepare\_groups}(\&{ArchLD} ${}{*}\\{ld})\2\2{}$%
+\6
+${}\{{}$\1\6
+\&{char} ${}{*}{*}\\{seen}\K\NULL;{}$\6
+\&{size\_t} \\{count}${}\K\T{0},\39\\{cap}\K\T{0};{}$\6
+\&{bool} \\{ok}${}\K\\{true};{}$\7
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{input\_count}\W%
+\\{ok};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{LDInput} ${}{*}\\{in}\K{\AND}\\{ld}\MG\\{inputs}[\|i];{}$\6
+\&{size\_t} \|n${}\K\\{archbfd\_object\_section\_count}(\\{in}\MG\\{bfd});{}$\7
+\&{for} (\&{size\_t} \|k${}\K\T{0};{}$ ${}\|k<\|n\W\\{ok};{}$ ${}\|k\PP){}$\5
+${}\{{}$\1\6
+\&{const} \\{ArchBFDObjectSection}${}{*}\\{sec}\K\\{archbfd\_object\_section}(%
+\\{in}\MG\\{bfd},\39\|k);{}$\7
+\&{if} ${}(\\{sec}\MG\\{type}\I\T{17}){}$\1\5
+\&{continue};\2\6
+\&{if} ${}(\R\\{ld\_span}(\\{in}\MG\\{bytes\_len},\39\\{sec}\MG\\{offset},\39%
+\\{sec}\MG\\{size})\V\\{sec}\MG\\{size}<\T{8}\V\\{sec}\MG\\{size}\MOD\T{4}\V%
+\\{sec}\MG\\{info}<\T{0}\V(\\{uint64\_t})\\{sec}\MG\\{info}\G\\{archbfd\_object%
+\_symbol\_count}(\\{in}\MG\\{bfd})){}$\5
+${}\{{}$\1\6
+${}\\{ok}\K\\{ld\_fail}(\\{ld},\39\.{"\%s:\ invalid\ SHT\_GRO}\)\.{UP\
+section"},\39\\{in}\MG\\{path});{}$\6
+\&{break};\6
+\4${}\}{}$\2\7
+\&{const} \\{uint8\_t}${}{*}\|p\K\\{in}\MG\\{bytes}+(\&{size\_t})\,\\{sec}\MG%
+\\{offset};{}$\7
+${}\\{uint32\_t}\\{flags}\K(\\{uint32\_t})\|p[\T{0}]\OR((\\{uint32\_t})\|p[%
+\T{1}]\LL\T{8})\OR((\\{uint32\_t})\|p[\T{2}]\LL\T{16})\OR((\\{uint32\_t})\|p[%
+\T{3}]\LL\T{24});{}$\6
+\&{if} ${}(\\{flags}\I\T{1}){}$\5
+${}\{{}$\1\6
+${}\\{ok}\K\\{ld\_fail}(\\{ld},\39\.{"\%s:\ unsupported\ SHT}\)\.{\_GROUP\
+flags\ 0x\%x"},\39\\{in}\MG\\{path},\39\\{flags});{}$\6
+\&{break};\6
+\4${}\}{}$\2\7
+\&{const} \\{ArchBFDObjectSymbol}${}{*}\\{sig}\K\\{archbfd\_object\_symbol}(%
+\\{in}\MG\\{bfd},\39(\&{size\_t})\,\\{sec}\MG\\{info});{}$\7
+\&{if} ${}(\R\\{sig}\V\R\\{sig}\MG\\{name}\V\R{*}\\{sig}\MG\\{name}){}$\5
+${}\{{}$\1\6
+${}\\{ok}\K\\{ld\_fail}(\\{ld},\39\.{"\%s:\ unnamed\ COMDAT\ }\)\.{signature"},%
+\39\\{in}\MG\\{path});{}$\6
+\&{break};\6
+\4${}\}{}$\2\7
+\&{bool} \\{duplicate}${}\K\\{false};{}$\7
+\&{for} (\&{size\_t} \|z${}\K\T{0};{}$ ${}\|z<\\{count};{}$ ${}\|z\PP){}$\1\6
+\&{if} ${}(\R\\{strcmp}(\\{seen}[\|z],\39\\{sig}\MG\\{name})){}$\5
+${}\{{}$\1\6
+${}\\{duplicate}\K\\{true};{}$\6
+\&{break};\6
+\4${}\}{}$\2\2\6
+\&{if} ${}(\R\\{duplicate}){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\R\\{ld\_grow}(\\{ld},\39{}$(\&{void} ${}{*}{*})\,{\AND}\\{seen},%
+\39{\AND}\\{cap},\39\\{count}+\T{1},\39{}$\&{sizeof}(\&{char} ${}{*}))){}$\5
+${}\{{}$\1\6
+${}\\{ok}\K\\{false};{}$\6
+\&{break};\6
+\4${}\}{}$\2\6
+${}\\{seen}[\\{count}]\K\\{ld\_strdup}(\\{sig}\MG\\{name});{}$\6
+\&{if} ${}(\R\\{seen}[\\{count}]){}$\5
+${}\{{}$\1\6
+${}\\{ok}\K\\{ld\_fail}(\\{ld},\39\.{"out\ of\ memory"});{}$\6
+\&{break};\6
+\4${}\}{}$\2\6
+${}\\{count}\PP;{}$\6
+\4${}\}{}$\2\6
+\&{for} ${}(\\{int64\_t}\\{off}\K\T{4};{}$ ${}\\{off}<\\{sec}\MG\\{size};{}$
+${}\\{off}\MRL{+{\K}}\T{4}){}$\5
+${}\{{}$\1\6
+${}\\{uint32\_t}\|j\K(\\{uint32\_t})\|p[\\{off}]\OR((\\{uint32\_t})\|p[\\{off}+%
+\T{1}]\LL\T{8})\OR((\\{uint32\_t})\|p[\\{off}+\T{2}]\LL\T{16})\OR((\\{uint32%
+\_t})\|p[\\{off}+\T{3}]\LL\T{24});{}$\6
+\&{if} ${}(\|j\G\|n\V\|j\E\|k){}$\5
+${}\{{}$\1\6
+${}\\{ok}\K\\{ld\_fail}(\\{ld},\39\.{"\%s:\ invalid\ COMDAT\ }\)\.{member\
+index\ \%u"},\39\\{in}\MG\\{path},\39\|j);{}$\6
+\&{break};\6
+\4${}\}{}$\2\6
+\&{if} (\\{duplicate})\1\5
+${}\\{in}\MG\\{discard}[\|j]\K\\{true};{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{count};{}$ ${}\|i\PP){}$\1\5
+\\{free}(\\{seen}[\|i]);\2\6
+\\{free}(\\{seen});\6
+\&{return} \\{ok};\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{unsigned} \\{ld\_category}(\&{const} %
+\\{ArchBFDObjectSection}${}{*}\|s)\2\2{}$\6
+${}\{{}$\1\6
+\&{if} ${}(\|s\MG\\{type}\E\.{LD\_SHT\_NOBITS}){}$\1\5
+\&{return} \T{3};\2\6
+\&{if} ${}(\|s\MG\\{flags}\AND\.{LD\_SHF\_EXEC}){}$\1\5
+\&{return} \T{0};\2\6
+\&{if} ${}(\|s\MG\\{flags}\AND\.{LD\_SHF\_WRITE}){}$\1\5
+\&{return} \T{2};\2\6
+\&{return} \T{1};\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{bool} \\{ld\_collect\_parts}(\&{ArchLD} ${}{*}\\{ld})\2\2{}$\6
+${}\{{}$\1\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{input\_count};{}$ ${}%
+\PP\|i){}$\5
+${}\{{}$\1\6
+\&{LDInput} ${}{*}\\{in}\K{\AND}\\{ld}\MG\\{inputs}[\|i];{}$\7
+\&{for} (\&{size\_t} \|j${}\K\T{0};{}$ ${}\|j<\\{archbfd\_object\_section%
+\_count}(\\{in}\MG\\{bfd});{}$ ${}\PP\|j){}$\5
+${}\{{}$\1\6
+\&{const} \\{ArchBFDObjectSection}${}{*}\|s\K\\{archbfd\_object\_section}(%
+\\{in}\MG\\{bfd},\39\|j);{}$\7
+\&{if} ${}(\R(\|s\MG\\{flags}\AND\.{LD\_SHF\_ALLOC})\V\\{in}\MG\\{discard}[%
+\|j]){}$\1\5
+\&{continue};\2\6
+\&{if} ${}(\|s\MG\\{flags}\AND\.{LD\_SHF\_UNSUPPORTED}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\%s:\ TLS/groups/m}\)%
+\.{erge/link-order\ unsu}\)\.{pported"},\39\\{in}\MG\\{path},\39\|s\MG\\{name}%
+\?\|s\MG\\{name}:\.{""});{}$\2\6
+\&{if} ${}(\|s\MG\\{type}\I\.{LD\_SHT\_PROGBITS}\W\|s\MG\\{type}\I\.{LD\_SHT%
+\_NOTE}\W\|s\MG\\{type}\I\.{LD\_SHT\_NOBITS}\W\|s\MG\\{type}\I\T{14}\W\|s\MG%
+\\{type}\I\T{15}\W\|s\MG\\{type}\I\T{16}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\%s:\ unsupported\ }\)\.{allocated%
+\ section\ ty}\)\.{pe\ \%"}\\{PRId64},\39\\{in}\MG\\{path},\39\|s\MG\\{name}\?%
+\|s\MG\\{name}:\.{""},\39\|s\MG\\{type});{}$\2\6
+\&{if} ${}(\|s\MG\\{size}<\T{0}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ negative\ sectio}\)\.{n\ size"},%
+\39\\{in}\MG\\{path});{}$\2\6
+\&{if} ${}(\|s\MG\\{type}\I\.{LD\_SHT\_NOBITS}\W\R\\{ld\_span}(\\{in}\MG%
+\\{bytes\_len},\39\|s\MG\\{offset},\39\|s\MG\\{size})){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\%s:\ payload\ outs}\)\.{ide\
+file"},\39\\{in}\MG\\{path},\39\|s\MG\\{name}\?\|s\MG\\{name}:\.{""});{}$\2\6
+${}\\{uint64\_t}\\{align}\K\|s\MG\\{align}>\T{0}\?(\\{uint64\_t})\|s\MG%
+\\{align}:\T{1};{}$\6
+\&{if} ${}(\R\\{ld\_power\_two}(\\{align})){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\%s:\ non-power-of}\)\.{-two\
+alignment"},\39\\{in}\MG\\{path},\39\|s\MG\\{name}\?\|s\MG\\{name}:\.{""});{}$%
+\2\6
+\&{if} ${}(\R\\{ld\_grow}(\\{ld},\39{}$(\&{void} ${}{*}{*})\,{\AND}\\{ld}\MG%
+\\{parts},\39{\AND}\\{ld}\MG\\{part\_cap},\39\\{ld}\MG\\{part\_count}+\T{1},%
+\39{}$\&{sizeof} ${}{*}\\{ld}\MG\\{parts})){}$\1\5
+\&{return} \\{false};\2\7
+\&{LDPart} \|p${}\K\{\T{0}\};{}$\7
+${}\|p.\\{input}\K\|i;{}$\6
+${}\|p.\\{section}\K\|j;{}$\6
+${}\|p.\\{length}\K(\\{uint64\_t})\|s\MG\\{size};{}$\6
+${}\|p.\\{align}\K\\{align};{}$\6
+${}\|p.\\{category}\K\\{ld\_category}(\|s);{}$\6
+${}\\{in}\MG\\{part\_of\_section}[\|j]\K\\{ld}\MG\\{part\_count};{}$\6
+${}\\{ld}\MG\\{parts}[\\{ld}\MG\\{part\_count}\PP]\K\|p;{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\par
+\U3.\fi
+
+\M{13}
+
+\fi
+
+\N{1}{14}Global definition selection.
+
+Strong globals override weak, COMMON symbols merge, and unresolved strong
+references fail.
+
+\Y\B\4\X14:Global definition selection\X${}\E{}$\6
+\1\1\&{static} \&{LDGlobal} ${}{*}{}$\\{ld\_lookup}(\&{ArchLD} ${}{*}\\{ld},%
+\39{}$\&{const} \&{char} ${}{*}\\{name})\2\2{}$\6
+${}\{{}$\1\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{global\_count};{}$
+${}\PP\|i){}$\1\6
+\&{if} ${}(\R\\{strcmp}(\\{ld}\MG\\{globals}[\|i].\\{name},\39\\{name})){}$\1\5
+\&{return} ${}{\AND}\\{ld}\MG\\{globals}[\|i];{}$\2\2\6
+\&{return} ${}\NULL;{}$\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{bool} \\{ld\_collect\_globals}(\&{ArchLD} ${}{*}\\{ld})\2%
+\2{}$\6
+${}\{{}$\1\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{input\_count};{}$ ${}%
+\PP\|i){}$\5
+${}\{{}$\1\6
+${}\\{ArchBFDObject}*\\{obj}\K\\{ld}\MG\\{inputs}[\|i].\\{bfd};{}$\6
+\&{for} (\&{size\_t} \|j${}\K\T{0};{}$ ${}\|j<\\{archbfd\_object\_symbol%
+\_count}(\\{obj});{}$ ${}\PP\|j){}$\5
+${}\{{}$\1\6
+\&{const} \\{ArchBFDObjectSymbol}${}{*}\|s\K\\{archbfd\_object\_symbol}(%
+\\{obj},\39\|j);{}$\7
+\&{if} ${}(\R\|s\V\R\|s\MG\\{name}\V\R{*}\|s\MG\\{name}\V\|s\MG\\{class\_value}%
+\E\.{LD\_BIND\_LOCAL}\V\|s\MG\\{shndx}\E\.{LD\_SHN\_UNDEF}\V(\|s\MG\\{shndx}\G%
+\T{0}\W(\&{size\_t})\,\|s\MG\\{shndx}<\\{archbfd\_object\_section\_count}(%
+\\{obj})\W\\{ld}\MG\\{inputs}[\|i].\\{discard}[\|s\MG\\{shndx}])){}$\1\5
+\&{continue};\2\6
+\&{if} ${}(\|s\MG\\{class\_value}\I\.{LD\_BIND\_GLOBAL}\W\|s\MG\\{class\_value}%
+\I\.{LD\_BIND\_WEAK}\W\|s\MG\\{class\_value}\I\T{10}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ unsupported\ sym}\)\.{bol\
+binding\ \%"}\\{PRId64},\39\\{ld}\MG\\{inputs}[\|i].\\{path},\39\|s\MG\\{class%
+\_value});{}$\2\7
+\&{int} \\{rank}${}\K\|s\MG\\{shndx}\E\.{LD\_SHN\_COMMON}\?\T{2}:(\|s\MG%
+\\{class\_value}\E\.{LD\_BIND\_WEAK}\?\T{1}:\T{3});{}$\7
+\&{if} ${}(\|s\MG\\{shndx}\I\.{LD\_SHN\_COMMON}\W\|s\MG\\{shndx}\I\.{LD\_SHN%
+\_ABS}\W(\|s\MG\\{shndx}<\T{0}\V(\&{size\_t})\,\|s\MG\\{shndx}\G\\{archbfd%
+\_object\_section\_count}(\\{obj}))){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ bad\ symbol\ sect}\)\.{ion:\ %
+\%s"},\39\\{ld}\MG\\{inputs}[\|i].\\{path},\39\|s\MG\\{name});{}$\2\7
+\&{LDGlobal} ${}{*}\|g\K\\{ld\_lookup}(\\{ld},\39\|s\MG\\{name});{}$\7
+\&{if} ${}(\R\|g){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\R\\{ld\_grow}(\\{ld},\39{}$(\&{void} ${}{*}{*})\,{\AND}\\{ld}\MG%
+\\{globals},\39{\AND}\\{ld}\MG\\{global\_cap},\39\\{ld}\MG\\{global\_count}+%
+\T{1},\39{}$\&{sizeof} ${}{*}\\{ld}\MG\\{globals})){}$\1\5
+\&{return} \\{false};\2\6
+${}\|g\K{\AND}\\{ld}\MG\\{globals}[\\{ld}\MG\\{global\_count}\PP];{}$\6
+${}\\{memset}(\|g,\39\T{0},\39{}$\&{sizeof} ${}{*}\|g);{}$\6
+${}\|g\MG\\{name}\K\\{ld\_strdup}(\|s\MG\\{name});{}$\6
+\&{if} ${}(\R\|g\MG\\{name}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"out\ of\ memory"});{}$\2\6
+${}\|g\MG\\{input}\K\|i;{}$\6
+${}\|g\MG\\{symbol}\K\|j;{}$\6
+${}\|g\MG\\{rank}\K\\{rank};{}$\6
+\4${}\}{}$\2\6
+\&{else} \&{if} ${}(\\{rank}\E\T{3}\W\|g\MG\\{rank}\E\T{3}){}$\5
+${}\{{}$\1\6
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"duplicate\ strong\ de}\)\.{finition:\ %
+\%s\ (\%s,\ \%s}\)\.{)"},\39\|s\MG\\{name},\39\\{ld}\MG\\{inputs}[\|g\MG%
+\\{input}].\\{path},\39\\{ld}\MG\\{inputs}[\|i].\\{path});{}$\6
+\4${}\}{}$\2\6
+\&{else} \&{if} ${}(\\{rank}>\|g\MG\\{rank}){}$\5
+${}\{{}$\1\6
+${}\|g\MG\\{input}\K\|i;{}$\6
+${}\|g\MG\\{symbol}\K\|j;{}$\6
+${}\|g\MG\\{rank}\K\\{rank};{}$\6
+\4${}\}{}$\2\6
+\&{if} ${}(\\{rank}\E\T{2}){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\|s\MG\\{size}<\T{0}\V\|s\MG\\{value}<\T{0}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"bad\ COMMON\ symbol:\ }\)\.{\%s"},\39%
+\|s\MG\\{name});{}$\2\6
+${}\\{uint64\_t}\|a\K\|s\MG\\{value}\?(\\{uint64\_t})\|s\MG\\{value}:\T{1};{}$\6
+\&{if} ${}(\R\\{ld\_power\_two}(\|a)){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"bad\ COMMON\ alignmen}\)\.{t:\ \%s"},%
+\39\|s\MG\\{name});{}$\2\6
+\&{if} ${}(\|g\MG\\{common\_size}<(\\{uint64\_t})\|s\MG\\{size}){}$\1\5
+${}\|g\MG\\{common\_size}\K(\\{uint64\_t})\|s\MG\\{size};{}$\2\6
+\&{if} ${}(\|g\MG\\{common\_align}<\|a){}$\1\5
+${}\|g\MG\\{common\_align}\K\|a;{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{bool} \\{ld\_check\_undefined}(\&{ArchLD} ${}{*}\\{ld})\2%
+\2{}$\6
+${}\{{}$\1\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{input\_count};{}$ ${}%
+\PP\|i){}$\1\6
+\&{for} (\&{size\_t} \|j${}\K\T{0};{}$ ${}\|j<\\{archbfd\_object\_symbol%
+\_count}(\\{ld}\MG\\{inputs}[\|i].\\{bfd});{}$ ${}\PP\|j){}$\5
+${}\{{}$\1\6
+\&{const} \\{ArchBFDObjectSymbol}${}{*}\|s\K\\{archbfd\_object\_symbol}(\\{ld}%
+\MG\\{inputs}[\|i].\\{bfd},\39\|j);{}$\7
+\&{if} ${}(\|s\MG\\{class\_value}\E\.{LD\_BIND\_GLOBAL}\W\|s\MG\\{shndx}\E\.{LD%
+\_SHN\_UNDEF}\W\|s\MG\\{name}\W{*}\|s\MG\\{name}\W\R\\{ld\_lookup}(\\{ld},\39%
+\|s\MG\\{name})\W\R(\\{ld}\MG\\{elf32}\E\\{false}\W\R\\{strcmp}(\|s\MG\\{name},%
+\39\.{"\_GLOBAL\_OFFSET\_TABL}\)\.{E\_"}))){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ undefined\ refer}\)\.{ence\ to\ %
+\%s"},\39\\{ld}\MG\\{inputs}[\|i].\\{path},\39\|s\MG\\{name});{}$\2\6
+\4${}\}{}$\2\2\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\par
+\U3.\fi
+
+\M{15}
+
+\fi
+
+\N{1}{16}Placement and page boundaries.
+
+Text, read-only data, writable data, and zero-fill sections receive final
+virtual addresses.
+
+\Y\B\4\X16:Placement and page boundaries\X${}\E{}$\6
+\1\1\&{static} \&{bool} \\{ld\_place}(\&{ArchLD} ${}{*}\\{ld})$ $\{$ $\\{uint64%
+\_t}\\{cursor}\K\\{ld}\MG\\{base};{}$\6
+\&{for} (\&{unsigned} \\{cat}${}\K\T{0};{}$ ${}\\{cat}<\T{4};{}$ ${}\PP%
+\\{cat}){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\\{cat}\W\\{cat}\Z\T{2}\W\R\\{ld\_align}(\\{ld},\39\\{cursor},\39%
+\T{4096},\39{\AND}\\{cursor})){}$\1\5
+\&{return} \\{false};\2\6
+${}\\{ld}\MG\\{cat\_start}[\\{cat}]\K\\{cursor}-\\{ld}\MG\\{base};{}$\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{part\_count};{}$ ${}%
+\PP\|i){}$\5
+${}\{{}$\1\6
+\&{LDPart} ${}{*}\|p\K{\AND}\\{ld}\MG\\{parts}[\|i];{}$\7
+\&{if} ${}(\|p\MG\\{category}\I\\{cat}){}$\1\5
+\&{continue};\2\6
+\&{if} ${}(\R\\{ld\_align}(\\{ld},\39\\{cursor},\39\|p\MG\\{align},\39{\AND}%
+\\{cursor})){}$\1\5
+\&{return} \\{false};\2\6
+\&{if} ${}(\\{cursor}<\\{ld}\MG\\{base}\V\|p\MG\\{length}>\.{UINT64\_MAX}-%
+\\{cursor}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"image\ address\ overf}\)\.{low"});{}$%
+\2\6
+${}\|p\MG\\{address}\K\\{cursor};{}$\6
+${}\|p\MG\\{image\_offset}\K\\{cursor}-\\{ld}\MG\\{base};{}$\6
+${}\\{cursor}\MRL{+{\K}}\|p\MG\\{length};{}$\6
+\&{if} ${}(\\{cursor}-\\{ld}\MG\\{base}>\.{LD\_MAX\_IMAGE}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"linked\ image\ exceed}\)\.{s\ 512\
+MiB"});{}$\2\6
+\4${}\}{}$\2\6
+\&{if} ${}(\\{cat}\E\T{2}){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\R\\{ld\_align}(\\{ld},\39\\{cursor},\39\T{8},\39{\AND}%
+\\{cursor})){}$\1\5
+\&{return} \\{false};\2\6
+${}\\{ld}\MG\\{got\_base}\K\\{cursor};{}$\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{got\_count};{}$ ${}%
+\|i\PP){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\\{cursor}>\.{UINT64\_MAX}-\T{8}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"GOT\ address\ overflo}\)\.{w"});{}$\2\6
+${}\\{ld}\MG\\{got}[\|i].\\{address}\K\\{cursor};{}$\6
+${}\\{ld}\MG\\{got}[\|i].\\{image\_offset}\K\\{cursor}-\\{ld}\MG\\{base};{}$\6
+${}\\{cursor}\MRL{+{\K}}\T{8};{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+${}\\{ld}\MG\\{cat\_end}[\\{cat}]\K\\{cursor}-\\{ld}\MG\\{base};{}$\6
+\4${}\}{}$\2\6
+${}\\{ld}\MG\\{cat\_start}[\T{3}]\K\\{cursor}-\\{ld}\MG\\{base};{}$\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{global\_count};{}$
+${}\PP\|i){}$\5
+${}\{{}$\1\6
+\&{LDGlobal} ${}{*}\|g\K{\AND}\\{ld}\MG\\{globals}[\|i];{}$\7
+\&{if} ${}(\|g\MG\\{rank}\I\T{2}){}$\1\5
+\&{continue};\2\6
+\&{if} ${}(\R\\{ld\_align}(\\{ld},\39\\{cursor},\39\|g\MG\\{common\_align},\39{%
+\AND}\\{cursor})){}$\1\5
+\&{return} \\{false};\2\6
+\&{if} ${}(\\{cursor}<\\{ld}\MG\\{base}\V\|g\MG\\{common\_size}>\.{UINT64%
+\_MAX}-\\{cursor}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"COMMON\ allocation\ o}\)%
+\.{verflow"});{}$\2\6
+${}\|g\MG\\{common\_addr}\K\\{cursor};{}$\6
+${}\\{cursor}\MRL{+{\K}}\|g\MG\\{common\_size};{}$\6
+\&{if} ${}(\\{cursor}-\\{ld}\MG\\{base}>\.{LD\_MAX\_IMAGE}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"linked\ image\ exceed}\)\.{s\ 512\
+MiB"});{}$\2\6
+\4${}\}{}$\2\6
+${}\\{ld}\MG\\{cat\_end}[\T{3}]\K\\{cursor}-\\{ld}\MG\\{base};{}$\6
+\&{if} ${}(\\{cursor}<\\{ld}\MG\\{base}\V\\{cursor}-\\{ld}\MG\\{base}>\.{SIZE%
+\_MAX}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"linked\ image\ cannot}\)\.{\ fit\
+memory"});{}$\2\6
+${}\\{ld}\MG\\{image\_size}\K(\&{size\_t})(\\{cursor}-\\{ld}\MG\\{base});$ $%
+\\{ld}\MG\\{image}$ $\K$ ( \\{uint8\_t} $*$ ) $\\{calloc}(\\{ld}\MG\\{image%
+\_size}\?\\{ld}\MG\\{image\_size}:\T{1},\39\T{1});{}$\6
+\&{if} ${}(\R\\{ld}\MG\\{image}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"out\ of\ memory\ for\ l}\)\.{inked\
+image"});{}$\2\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{part\_count};{}$ ${}%
+\PP\|i){}$\5
+${}\{{}$\1\6
+\&{const} \&{LDPart} ${}{*}\|p\K{\AND}\\{ld}\MG\\{parts}[\|i];{}$\6
+\&{const} \&{LDInput} ${}{*}\\{in}\K{\AND}\\{ld}\MG\\{inputs}[\|p\MG%
+\\{input}];{}$\6
+\&{const} \\{ArchBFDObjectSection}${}{*}\|s\K\\{archbfd\_object\_section}(%
+\\{in}\MG\\{bfd},\39\|p\MG\\{section});{}$\7
+\&{if} ${}(\|s\MG\\{type}\I\.{LD\_SHT\_NOBITS}\W\|p\MG\\{length}){}$\1\5
+${}\\{memcpy}(\\{ld}\MG\\{image}+(\&{size\_t})\,\|p\MG\\{image\_offset},\39%
+\\{in}\MG\\{bytes}+(\&{size\_t})\,\|s\MG\\{offset},\39(\&{size\_t})\,\|p\MG%
+\\{length});{}$\2\6
+\4${}\}{}$\2\6
+\&{return} \\{true}; $\}{}$\par
+\U3.\fi
+
+\M{17}
+
+\fi
+
+\N{1}{18}Symbol address lookup.
+
+References are mapped to winning definitions, absolute symbols, and locally
+defined symbols.
+
+\Y\B\4\X18:Symbol address lookup\X${}\E{}$\6
+\1\1\&{static} \&{bool} \\{ld\_definition\_address}(\&{ArchLD} ${}{*}\\{ld},%
+\39{}$\&{size\_t} \\{input}${},\39{}$\&{size\_t} \\{index}${},\39\\{uint64\_t}*%
+\\{address})\2\2{}$\6
+${}\{{}$\1\6
+\&{if} ${}(\\{input}\G\\{ld}\MG\\{input\_count}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"bad\ symbol\ input"});{}$\2\7
+\&{const} \&{LDInput} ${}{*}\\{in}\K{\AND}\\{ld}\MG\\{inputs}[\\{input}];{}$\6
+\&{const} \\{ArchBFDObjectSymbol}${}{*}\|s\K\\{archbfd\_object\_symbol}(\\{in}%
+\MG\\{bfd},\39\\{index});{}$\7
+\&{if} ${}(\R\|s){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"symbol\ index\ out\ of}\)\.{\
+range"});{}$\2\6
+\&{if} ${}(\|s\MG\\{shndx}\E\.{LD\_SHN\_ABS}){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\|s\MG\\{value}<\T{0}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"negative\ absolute\ s}\)%
+\.{ymbol"});{}$\2\6
+${}{*}\\{address}\K(\\{uint64\_t})\|s\MG\\{value};{}$\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\6
+\&{if} ${}(\|s\MG\\{shndx}<\T{0}\V(\&{size\_t})\,\|s\MG\\{shndx}\G\\{archbfd%
+\_object\_section\_count}(\\{in}\MG\\{bfd})){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"invalid\ defining\ se}\)\.{ction\ of\ %
+\%s"},\39\|s\MG\\{name});{}$\2\7
+\&{size\_t} \\{part}${}\K\\{in}\MG\\{part\_of\_section}[(\&{size\_t})\,\|s\MG%
+\\{shndx}];{}$\7
+\&{if} ${}(\\{part}\E\.{SIZE\_MAX}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"symbol\ \%s\ defined\ o}\)\.{utside\
+allocated\ ima}\)\.{ge"},\39\|s\MG\\{name});{}$\2\7
+\&{const} \&{LDPart} ${}{*}\|p\K{\AND}\\{ld}\MG\\{parts}[\\{part}];{}$\7
+\&{if} ${}(\|s\MG\\{value}<\T{0}\V(\\{uint64\_t})\|s\MG\\{value}>\|p\MG%
+\\{length}\V(\\{uint64\_t})\|s\MG\\{value}>\.{UINT64\_MAX}-\|p\MG%
+\\{address}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"symbol\ \%s\ exceeds\ i}\)\.{ts\
+section"},\39\|s\MG\\{name});{}$\2\6
+${}{*}\\{address}\K\|p\MG\\{address}+(\\{uint64\_t})\|s\MG\\{value};{}$\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{bool} \\{ld\_global\_address}(\&{ArchLD} ${}{*}\\{ld},\39{}$%
+\&{const} \&{LDGlobal} ${}{*}\|g,\39\\{uint64\_t}*\\{address})\2\2{}$\6
+${}\{{}$\1\6
+\&{if} ${}(\|g\MG\\{rank}\E\T{2}){}$\5
+${}\{{}$\1\6
+${}{*}\\{address}\K\|g\MG\\{common\_addr};{}$\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\6
+\&{return} \\{ld\_definition\_address}${}(\\{ld},\39\|g\MG\\{input},\39\|g\MG%
+\\{symbol},\39\\{address});{}$\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{bool} \\{ld\_check\_global\_addresses}(\&{ArchLD} ${}{*}%
+\\{ld})\2\2{}$\6
+${}\{{}$\1\6
+\\{uint64\_t}\\{address};\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{global\_count};{}$
+${}\PP\|i){}$\1\6
+\&{if} ${}(\R\\{ld\_global\_address}(\\{ld},\39{\AND}\\{ld}\MG\\{globals}[\|i],%
+\39{\AND}\\{address})){}$\1\5
+\&{return} \\{false};\2\2\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{bool} \\{ld\_referenced\_address}(\&{ArchLD} ${}{*}\\{ld},%
+\39{}$\&{size\_t} \\{input}${},\39{}$\&{size\_t} \\{index}${},\39\\{uint64\_t}*%
+\\{address})\2\2{}$\6
+${}\{{}$\1\6
+\&{const} \\{ArchBFDObjectSymbol}${}{*}\|s\K\\{archbfd\_object\_symbol}(\\{ld}%
+\MG\\{inputs}[\\{input}].\\{bfd},\39\\{index});{}$\7
+\&{if} ${}(\R\|s){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ relocation\ has\ }\)\.{bad\
+symbol\ index\ \%zu}\)\.{"},\39\\{ld}\MG\\{inputs}[\\{input}].\\{path},\39%
+\\{index});{}$\2\6
+\&{if} ${}(\|s\MG\\{class\_value}\E\.{LD\_BIND\_LOCAL}){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\|s\MG\\{shndx}\E\.{LD\_SHN\_UNDEF}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ unresolved\ loca}\)\.{l\
+symbol"},\39\\{ld}\MG\\{inputs}[\\{input}].\\{path});{}$\2\6
+\&{return} \\{ld\_definition\_address}${}(\\{ld},\39\\{input},\39\\{index},\39%
+\\{address});{}$\6
+\4${}\}{}$\2\6
+\&{if} ${}(\R\|s\MG\\{name}\V\R{*}\|s\MG\\{name}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ unnamed\ externa}\)\.{l\
+relocation\ symbol"},\39\\{ld}\MG\\{inputs}[\\{input}].\\{path});{}$\2\6
+\&{if} ${}(\R\\{ld}\MG\\{elf32}\W\R\\{strcmp}(\|s\MG\\{name},\39\.{"\_GLOBAL%
+\_OFFSET\_TABL}\)\.{E\_"})){}$\5
+${}\{{}$\1\6
+${}{*}\\{address}\K\\{ld}\MG\\{got\_base};{}$\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\7
+\&{LDGlobal} ${}{*}\|g\K\\{ld\_lookup}(\\{ld},\39\|s\MG\\{name});{}$\7
+\&{if} (\|g)\1\5
+\&{return} \\{ld\_global\_address}${}(\\{ld},\39\|g,\39\\{address});{}$\2\6
+\&{if} ${}(\|s\MG\\{class\_value}\E\.{LD\_BIND\_WEAK}){}$\5
+${}\{{}$\1\6
+${}{*}\\{address}\K\T{0};{}$\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\6
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ undefined\ refer}\)\.{ence\ to\ %
+\%s"},\39\\{ld}\MG\\{inputs}[\\{input}].\\{path},\39\|s\MG\\{name});{}$\6
+\4${}\}{}$\2\par
+\U3.\fi
+
+\M{19}
+
+\fi
+
+\N{1}{20}Relocation validation.
+
+Only relocations with a supported lowering and consistent ArchBFD HOWTO are
+applied.
+
+\Y\B\4\X20:Relocation validation\X${}\E{}$\6
+\&{typedef} \&{struct} ${}\{{}$\1\6
+\&{unsigned} \\{bits};\6
+\&{bool} \\{pcrel};\6
+\&{bool} \\{signed\_range};\6
+\&{bool} \\{no\_op};\2\6
+${}\}{}$ \&{LDHow};\7
+\1\1\&{static} \&{bool} \\{ld\_how}(\&{ArchLD} ${}{*}\\{ld},\39\\{int64\_t}%
+\\{number},\39{}$\&{LDHow} ${}{*}\\{how})\2\2{}$\6
+${}\{{}$\1\6
+${}\\{memset}(\\{how},\39\T{0},\39{}$\&{sizeof} ${}{*}\\{how});{}$\6
+\&{if} ${}(\\{ld}\MG\\{elf32}){}$\5
+${}\{{}$\1\6
+\&{switch} (\\{number})\5
+${}\{{}$\1\6
+\4\&{case} \T{0}:\5
+${}\\{how}\MG\\{no\_op}\K\\{true};{}$\6
+\&{return} \\{true};\6
+\4\&{case} \T{1}:\5
+${}\\{how}\MG\\{bits}\K\T{32};{}$\6
+\&{return} \\{true};\6
+\4\&{case} \T{2}:\5
+\&{case} \T{4}:\5
+${}\\{how}\MG\\{bits}\K\T{32};{}$\6
+${}\\{how}\MG\\{pcrel}\K\\{true};{}$\6
+${}\\{how}\MG\\{signed\_range}\K\\{true};{}$\6
+\&{return} \\{true};\6
+\4\&{default}:\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"unsupported\ ELF32\ i}\)\.{386\
+relocation\ \%"}\\{PRId64},\39\\{number});{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\&{switch} (\\{number})\5
+${}\{{}$\1\6
+\4\&{case} \T{0}:\5
+${}\\{how}\MG\\{no\_op}\K\\{true};{}$\6
+\&{return} \\{true};\6
+\4\&{case} \T{1}:\5
+${}\\{how}\MG\\{bits}\K\T{64};{}$\6
+\&{return} \\{true};\6
+\4\&{case} \T{2}:\5
+\&{case} \T{4}:\5
+\&{case} \T{9}:\5
+\&{case} \T{41}:\5
+\&{case} \T{42}:\5
+${}\\{how}\MG\\{bits}\K\T{32};{}$\6
+${}\\{how}\MG\\{pcrel}\K\\{true};{}$\6
+${}\\{how}\MG\\{signed\_range}\K\\{true};{}$\6
+\&{return} \\{true};\6
+\4\&{case} \T{10}:\5
+${}\\{how}\MG\\{bits}\K\T{32};{}$\6
+\&{return} \\{true};\6
+\4\&{case} \T{11}:\5
+${}\\{how}\MG\\{bits}\K\T{32};{}$\6
+${}\\{how}\MG\\{signed\_range}\K\\{true};{}$\6
+\&{return} \\{true};\6
+\4\&{case} \T{12}:\5
+${}\\{how}\MG\\{bits}\K\T{16};{}$\6
+\&{return} \\{true};\6
+\4\&{case} \T{13}:\5
+${}\\{how}\MG\\{bits}\K\T{16};{}$\6
+${}\\{how}\MG\\{pcrel}\K\\{true};{}$\6
+${}\\{how}\MG\\{signed\_range}\K\\{true};{}$\6
+\&{return} \\{true};\6
+\4\&{case} \T{14}:\5
+${}\\{how}\MG\\{bits}\K\T{8};{}$\6
+\&{return} \\{true};\6
+\4\&{case} \T{15}:\5
+${}\\{how}\MG\\{bits}\K\T{8};{}$\6
+${}\\{how}\MG\\{pcrel}\K\\{true};{}$\6
+${}\\{how}\MG\\{signed\_range}\K\\{true};{}$\6
+\&{return} \\{true};\6
+\4\&{case} \T{24}:\5
+${}\\{how}\MG\\{bits}\K\T{64};{}$\6
+${}\\{how}\MG\\{pcrel}\K\\{true};{}$\6
+${}\\{how}\MG\\{signed\_range}\K\\{true};{}$\6
+\&{return} \\{true};\6
+\4\&{default}:\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"relocation\ kind\ \%"}\\{PRId64}\.{"\
+needs\ an\ architect}\)\.{ure-specific\ lowerin}\)\.{g\ pass"},\39%
+\\{number});{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{bool} \\{ld\_validate\_howto}(\&{ArchLD} ${}{*}\\{ld},\39%
+\\{int64\_t}\\{number},\39{}$\&{LDHow} \\{how})\2\2\6
+${}\{{}$\1\6
+\&{if} ${}(\\{how}.\\{no\_op}){}$\1\5
+\&{return} \\{true};\2\6
+${}\\{int32\_t}\|k\K\\{archbfd\_find\_reloc\_number}(\\{ld}\MG\\{spec},\39%
+\\{number});{}$\6
+\&{if} ${}(\|k<\T{0}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"relocation\ \%"}\\{PRId64}\.{"\ absent%
+\ from\ ArchBF}\)\.{D"},\39\\{number});{}$\2\7
+\&{const} \\{ArchBFDReloc}${}{*}\|h\K{\AND}\\{ld}\MG\\{spec}\MG\\{relocations}[%
+\|k];{}$\7
+\&{if} ${}(\|h\MG\\{size}\I(\\{int64\_t})(\\{how}.\\{bits}/\T{8})\V\|h\MG%
+\\{bitsize}\I(\\{int64\_t})\\{how}.\\{bits}\V\|h\MG\\{pcrel}\I\\{how}.\\{pcrel}%
+\V\|h\MG\\{rightshift}\I\T{0}\V\|h\MG\\{bitpos}\I\T{0}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"ArchBFD\ HOWTO\ misma}\)\.{tch\ for\ %
+\%s"},\39\|h\MG\\{name});{}$\2\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\7
+\1\1\&{static} \\{uint64\_t}\\{ld\_load\_le}(\&{const} \\{uint8\_t}${}{*}%
+\\{data},\39{}$\&{unsigned} \\{bytes})\2\2\6
+${}\{{}$\1\6
+${}\\{uint64\_t}\|x\K\T{0};{}$\6
+\&{for} (\&{unsigned} \|i${}\K\T{0};{}$ ${}\|i<\\{bytes};{}$ ${}\PP\|i){}$\1\5
+${}\|x\MRL{{\OR}{\K}}(\\{uint64\_t})\\{data}[\|i]\LL(\T{8}*\|i);{}$\2\6
+\&{return} \|x;\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{void} ${}\\{ld\_store\_le}(\\{uint8\_t}*\\{data},\39{}$%
+\&{unsigned} \\{bytes}${},\39\\{uint64\_t}\|v)\2\2{}$\6
+${}\{{}$\1\6
+\&{for} (\&{unsigned} \|i${}\K\T{0};{}$ ${}\|i<\\{bytes};{}$ ${}\PP\|i){}$\1\5
+${}\\{data}[\|i]\K(\\{uint8\_t})(\|v\GG(\T{8}*\|i));{}$\2\6
+\4${}\}{}$\2\7
+\1\1\&{static} ${}\\{\_\_int128}\\{ld\_sign\_extend}(\\{uint64\_t}\|x,\39{}$%
+\&{unsigned} \\{bits})\2\2\6
+${}\{{}$\1\6
+\&{if} ${}(\\{bits}\E\T{64}){}$\1\5
+\&{return} (\\{\_\_int128})(\\{int64\_t})\|x;\2\6
+${}\\{uint64\_t}\\{top}\K(\\{uint64\_t})\T{1}\LL(\\{bits}-\T{1});{}$\6
+${}\|x\MRL{\AND{\K}}((\\{uint64\_t})\T{1}\LL\\{bits})-\T{1};{}$\6
+\&{return} (\\{\_\_int128})(\\{int64\_t})${}((\|x\XOR\\{top})-\\{top});{}$\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{bool} \\{ld\_put\_relocated}(\&{ArchLD} ${}{*}\\{ld},\39%
+\\{uint8\_t}*\\{data},\39{}$\&{LDHow} \\{how}${},\39\\{\_\_int128}\\{value})\2%
+\2{}$\6
+${}\{{}$\1\6
+\&{unsigned} \\{bits}${}\K\\{how}.\\{bits};{}$\7
+${}\\{\_\_int128}\\{min}\K\\{how}.\\{signed\_range}\?{-}((\\{\_\_int128})\T{1}%
+\LL(\\{bits}-\T{1})):\T{0};{}$\6
+${}\\{\_\_int128}\\{max}\K\\{how}.\\{signed\_range}\?(((\\{\_\_int128})\T{1}%
+\LL(\\{bits}-\T{1}))-\T{1}):(((\\{\_\_int128})\T{1}\LL\\{bits})-\T{1});{}$\6
+\&{if} ${}(\\{bits}\E\T{64}\W\R\\{how}.\\{signed\_range}){}$\1\5
+${}\\{min}\K{-}((\\{\_\_int128})\T{1}\LL\T{63});{}$\2\6
+\&{if} ${}(\\{value}<\\{min}\V\\{value}>\\{max}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"relocation\ overflow}\)\.{:\ \%u-bit\
+field"},\39\\{bits});{}$\2\6
+${}\\{ld\_store\_le}(\\{data},\39\\{bits}/\T{8},\39(\\{uint64\_t})%
+\\{value});{}$\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\par
+\U3.\fi
+
+\M{21}
+
+\fi
+
+\N{1}{22}Relocation section iteration.
+
+ArchBFD relocation records are matched against their ELF relocation-section
+targets.
+
+\Y\B\4\X22:Relocation section iteration\X${}\E{}$\6
+\&{static} \&{bool} \\{ld\_apply\_one}(\&{ArchLD} ${}{*},\39\&{size\_t},\39%
+\&{size\_t},\39{}$\&{const} \\{ArchBFDObjectReloc}${}{*},\39\&{bool});{}$\7
+\1\1\&{static} \&{bool} \\{ld\_relocate}(\&{ArchLD} ${}{*}\\{ld})\2\2{}$\6
+${}\{{}$\1\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{input\_count};{}$ ${}%
+\PP\|i){}$\5
+${}\{{}$\1\6
+\&{LDInput} ${}{*}\\{in}\K{\AND}\\{ld}\MG\\{inputs}[\|i];{}$\6
+\&{size\_t} \\{nsec}${}\K\\{archbfd\_object\_section\_count}(\\{in}\MG%
+\\{bfd});{}$\6
+\&{size\_t} \\{cursor}${}\K\T{0};{}$\6
+\&{size\_t} \\{symtab}${}\K\.{SIZE\_MAX};{}$\7
+\&{for} (\&{size\_t} \|s${}\K\T{0};{}$ ${}\|s<\\{nsec};{}$ ${}\PP\|s){}$\5
+${}\{{}$\1\6
+\&{const} \\{ArchBFDObjectSection}${}{*}\\{sec}\K\\{archbfd\_object\_section}(%
+\\{in}\MG\\{bfd},\39\|s);{}$\7
+\&{if} ${}(\\{sec}\MG\\{type}\E\.{LD\_SHT\_SYMTAB}){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\\{symtab}\I\.{SIZE\_MAX}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ multiple\ symbol}\)\.{\ tables\
+not\ supporte}\)\.{d"},\39\\{in}\MG\\{path});{}$\2\6
+${}\\{symtab}\K\|s;{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\&{for} (\&{size\_t} \\{rsec}${}\K\T{0};{}$ ${}\\{rsec}<\\{nsec};{}$ ${}\PP%
+\\{rsec}){}$\5
+${}\{{}$\1\6
+\&{const} \\{ArchBFDObjectSection}${}{*}\\{rs}\K\\{archbfd\_object\_section}(%
+\\{in}\MG\\{bfd},\39\\{rsec});{}$\6
+\&{bool} \\{rela}${}\K\\{rs}\MG\\{type}\E\.{LD\_SHT\_RELA};{}$\6
+\&{bool} \\{rel}${}\K\\{rs}\MG\\{type}\E\.{LD\_SHT\_REL};{}$\7
+\&{if} ${}(\R\\{rela}\W\R\\{rel}){}$\1\5
+\&{continue};\2\7
+\&{const} \\{ArchBFDRecord}${}{*}\\{record}\K\\{archbfd\_resolve\_record}(%
+\\{ld}\MG\\{spec},\39\\{rela}\?\.{"rela"}:\.{"rel"});{}$\7
+\&{if} ${}(\R\\{record}\V\\{record}\MG\\{size}\Z\T{0}\V\\{rs}\MG\\{size}<\T{0}%
+\V\\{rs}\MG\\{offset}<\T{0}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ invalid\ relocat}\)\.{ion\
+section"},\39\\{in}\MG\\{path});{}$\2\6
+${}\\{int64\_t}\\{entsize}\K\\{rs}\MG\\{entsize}\?\\{rs}\MG\\{entsize}:%
+\\{record}\MG\\{size};{}$\6
+\&{if} ${}(\\{entsize}<\\{record}\MG\\{size}\V\\{rs}\MG\\{size}\MOD\\{entsize}%
+\V\R\\{ld\_span}(\\{in}\MG\\{bytes\_len},\39\\{rs}\MG\\{offset},\39\\{rs}\MG%
+\\{size})){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ corrupt\ relocat}\)\.{ion\ entry%
+\ extent"},\39\\{in}\MG\\{path});{}$\2\6
+\&{if} ${}(\\{rs}\MG\\{info}<\T{0}\V(\&{size\_t})\,\\{rs}\MG\\{info}\G\\{nsec}%
+\V\\{symtab}\E\.{SIZE\_MAX}\V\\{rs}\MG\\{link}<\T{0}\V(\&{size\_t})\,\\{rs}\MG%
+\\{link}\I\\{symtab}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ unsupported\ rel}\)%
+\.{ocation-to-symbol-ta}\)\.{ble\ link"},\39\\{in}\MG\\{path});{}$\2\7
+\&{size\_t} \\{target}${}\K(\&{size\_t})\,\\{rs}\MG\\{info};{}$\6
+\&{size\_t} \\{part}${}\K\\{in}\MG\\{part\_of\_section}[\\{target}];{}$\6
+\&{size\_t} \\{count}${}\K(\&{size\_t})(\\{rs}\MG\\{size}/\\{entsize});{}$\7
+\&{for} (\&{size\_t} \|k${}\K\T{0};{}$ ${}\|k<\\{count};{}$ ${}\PP\|k){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\\{cursor}\G\\{archbfd\_object\_reloc\_count}(\\{in}\MG\\{bfd})){}$%
+\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ truncated\ ArchB}\)\.{FD\
+relocation\ stream}\)\.{"},\39\\{in}\MG\\{path});{}$\2\7
+\&{const} \\{ArchBFDObjectReloc}${}{*}\|r\K\\{archbfd\_object\_reloc}(\\{in}\MG%
+\\{bfd},\39\\{cursor}\PP);{}$\7
+\&{if} ${}(\\{part}\E\.{SIZE\_MAX}){}$\1\5
+\&{continue};\2\6
+\&{if} ${}(\R\\{ld\_apply\_one}(\\{ld},\39\|i,\39\\{part},\39\|r,\39%
+\\{rela})){}$\1\5
+\&{return} \\{false};\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\&{if} ${}(\\{cursor}\I\\{archbfd\_object\_reloc\_count}(\\{in}\MG\\{bfd})){}$%
+\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ unmatched\ ArchB}\)\.{FD\
+relocations"},\39\\{in}\MG\\{path});{}$\2\6
+\4${}\}{}$\2\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\par
+\U3.\fi
+
+\M{23}
+
+\fi
+
+\N{1}{24}Applying relocation fields.
+
+For PC-relative references calculate S + A - P; reject out-of-range values.
+
+\Y\B\4\X24:Applying relocation fields\X${}\E{}$\6
+\1\1\&{static} \&{bool} \\{ld\_apply\_one}(\&{ArchLD} ${}{*}\\{ld},\39{}$%
+\&{size\_t} \\{input}${},\39{}$\&{size\_t} \\{part\_index}${},\39{}$\&{const} %
+\\{ArchBFDObjectReloc}${}{*}\|r,\39{}$\&{bool} \\{explicit\_addend})\2\2\6
+${}\{{}$\1\6
+\&{LDInput} ${}{*}\\{in}\K{\AND}\\{ld}\MG\\{inputs}[\\{input}];{}$\6
+\&{const} \&{LDPart} ${}{*}\\{part}\K{\AND}\\{ld}\MG\\{parts}[\\{part%
+\_index}];{}$\6
+\&{const} \\{ArchBFDObjectSection}${}{*}\|s\K\\{archbfd\_object\_section}(%
+\\{in}\MG\\{bfd},\39\\{part}\MG\\{section});{}$\6
+\&{LDHow} \\{how};\7
+\&{if} ${}(\R\\{ld\_how}(\\{ld},\39\|r\MG\\{type},\39{\AND}\\{how})){}$\1\5
+\&{return} \\{false};\2\6
+\&{if} ${}(\\{how}.\\{no\_op}){}$\1\5
+\&{return} \\{true};\2\6
+\&{if} ${}(\R\\{ld\_validate\_howto}(\\{ld},\39\|r\MG\\{type},\39\\{how})){}$\1%
+\5
+\&{return} \\{false};\2\6
+${}\\{uint64\_t}\\{nbytes}\K\\{how}.\\{bits}/\T{8};{}$\6
+\&{if} ${}(\|s\MG\\{type}\E\.{LD\_SHT\_NOBITS}\V\|r\MG\\{offset}<\T{0}\V(%
+\\{uint64\_t})\|r\MG\\{offset}>\\{part}\MG\\{length}\V\\{nbytes}>\\{part}\MG%
+\\{length}-(\\{uint64\_t})\|r\MG\\{offset}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ relocation\ patc}\)\.{h\ outside%
+\ section\ \%s}\)\.{"},\39\\{in}\MG\\{path},\39\|s\MG\\{name}\?\|s\MG\\{name}:%
+\.{""});{}$\2\6
+\&{if} ${}(\|r\MG\\{symbol}<\T{0}\V(\\{uint64\_t})\|r\MG\\{symbol}\G\\{archbfd%
+\_object\_symbol\_count}(\\{in}\MG\\{bfd})){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ relocation\ symb}\)\.{ol\ index\
+invalid"},\39\\{in}\MG\\{path});{}$\2\6
+${}\\{uint8\_t}*\\{patch}\K\\{ld}\MG\\{image}+(\&{size\_t})\,\\{part}\MG%
+\\{image\_offset}+(\&{size\_t})\,\|r\MG\\{offset};{}$\6
+\\{\_\_int128}\|a;\6
+\&{if} (\\{explicit\_addend})\1\5
+${}\|a\K(\\{\_\_int128})\|r\MG\\{addend};{}$\2\6
+\&{else}\5
+${}\{{}$\1\6
+${}\\{uint64\_t}\\{encoded}\K\\{ld\_load\_le}(\\{patch},\39\\{how}.\\{bits}/%
+\T{8});{}$\6
+${}\|a\K(\\{how}.\\{pcrel}\V\\{how}.\\{signed\_range})\?\\{ld\_sign\_extend}(%
+\\{encoded},\39\\{how}.\\{bits}):(\\{\_\_int128})\\{encoded};{}$\6
+\4${}\}{}$\2\6
+${}\\{uint64\_t}\\{sym}\K\T{0};{}$\6
+\&{if} ${}(\|r\MG\\{type}\E\T{9}\V\|r\MG\\{type}\E\T{41}\V\|r\MG\\{type}\E%
+\T{42}){}$\5
+${}\{{}$\1\6
+\&{bool} \\{found}${}\K\\{false};{}$\7
+\&{for} (\&{size\_t} \|k${}\K\T{0};{}$ ${}\|k<\\{ld}\MG\\{got\_count};{}$ ${}%
+\|k\PP){}$\1\6
+\&{if} ${}(\\{ld}\MG\\{got}[\|k].\\{input}\E\\{input}\W\\{ld}\MG\\{got}[\|k].%
+\\{symbol}\E(\&{size\_t})\,\|r\MG\\{symbol}){}$\5
+${}\{{}$\1\6
+${}\\{sym}\K\\{ld}\MG\\{got}[\|k].\\{address};{}$\6
+${}\\{found}\K\\{true};{}$\6
+\&{break};\6
+\4${}\}{}$\2\2\6
+\&{if} ${}(\R\\{found}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"missing\ generated\ G}\)\.{OT\
+entry"});{}$\2\6
+\4${}\}{}$\2\6
+\&{else} \&{if} ${}(\R\\{ld\_referenced\_address}(\\{ld},\39\\{input},\39(%
+\&{size\_t})\,\|r\MG\\{symbol},\39{\AND}\\{sym})){}$\1\5
+\&{return} \\{false};\2\6
+${}\\{uint64\_t}\\{place}\K\\{part}\MG\\{address}+(\\{uint64\_t})\|r\MG%
+\\{offset};{}$\6
+${}\\{\_\_int128}\\{value}\K(\\{\_\_int128})\\{sym}+\|a-(\\{how}.\\{pcrel}\?(%
+\\{\_\_int128})\\{place}:\T{0});{}$\6
+\&{if} ${}(\R\\{ld\_put\_relocated}(\\{ld},\39\\{patch},\39\\{how},\39%
+\\{value})){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ failed\ relocati}\)\.{on"},\39%
+\\{in}\MG\\{path});{}$\2\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\par
+\U3.\fi
+
+\M{25}
+
+\fi
+
+\N{1}{26}Lazy archive extraction.
+
+GNU/BSD ar members are loaded on demand until no strong unresolved symbols can
+be satisfied.
+
+\Y\B\4\X26:Lazy archive extraction\X${}\E{}$\C{ SysV, GNU and BSD ar, with lazy
+extraction driven by symbol demand.  * Archive metadata never enters the actual
+object set until selected. }\6
+\1\1\&{static} \&{bool} \\{ld\_archive\_number}(\&{const} \&{char} ${}{*}\|s,%
+\39{}$\&{size\_t} \|n${},\39{}$\&{size\_t} ${}{*}\\{out})\2\2{}$\6
+${}\{{}$\1\6
+\&{size\_t} \|v${}\K\T{0};{}$\6
+\&{bool} \\{digit}${}\K\\{false};{}$\7
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\|n;{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\|s[\|i]\E\.{'\ '}){}$\5
+${}\{{}$\1\6
+\&{for} (\&{size\_t} \|k${}\K\|i;{}$ ${}\|k<\|n;{}$ ${}\|k\PP){}$\1\6
+\&{if} ${}(\|s[\|k]\I\.{'\ '}){}$\1\5
+\&{return} \\{false};\2\2\6
+\&{break};\6
+\4${}\}{}$\2\6
+\&{if} ${}(\|s[\|i]<\.{'0'}\V\|s[\|i]>\.{'9'}\V\|v>(\.{SIZE\_MAX}-(\&{size%
+\_t})(\|s[\|i]-\.{'0'}))/\T{10}){}$\1\5
+\&{return} \\{false};\2\6
+${}\|v\K\|v*\T{10}+(\&{size\_t})(\|s[\|i]-\.{'0'});{}$\6
+${}\\{digit}\K\\{true};{}$\6
+\4${}\}{}$\2\6
+\&{if} ${}(\R\\{digit}){}$\1\5
+\&{return} \\{false};\2\6
+${}{*}\\{out}\K\|v;{}$\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{bool} \\{ld\_add\_archive}(\&{ArchLD} ${}{*}\\{ld},\39{}$%
+\&{const} \&{char} ${}{*}\\{path},\39\\{uint8\_t}*\\{bytes},\39{}$\&{size\_t} %
+\\{length})\2\2\6
+${}\{{}$\1\6
+\&{if} ${}(\R\\{ld\_grow}(\\{ld},\39{}$(\&{void} ${}{*}{*})\,{\AND}\\{ld}\MG%
+\\{archives},\39{\AND}\\{ld}\MG\\{archive\_cap},\39\\{ld}\MG\\{archive\_count}+%
+\T{1},\39\&{sizeof}(\&{LDArchive}))){}$\5
+${}\{{}$\1\6
+\\{free}(\\{bytes});\6
+\&{return} \\{false};\6
+\4${}\}{}$\2\7
+\&{LDArchive} ${}{*}\\{ar}\K{\AND}\\{ld}\MG\\{archives}[\\{ld}\MG\\{archive%
+\_count}\PP];{}$\7
+${}\\{memset}(\\{ar},\39\T{0},\39{}$\&{sizeof} ${}({*}\\{ar}));{}$\6
+${}\\{ar}\MG\\{bytes}\K\\{bytes};{}$\6
+${}\\{ar}\MG\\{length}\K\\{length};{}$\6
+${}\\{ar}\MG\\{path}\K\\{ld\_strdup}(\\{path});{}$\6
+\&{if} ${}(\R\\{ar}\MG\\{path}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"out\ of\ memory"});{}$\2\7
+\&{size\_t} \\{pos}${}\K\T{8};{}$\6
+\&{const} \\{uint8\_t}${}{*}\\{gnu\_names}\K\NULL;{}$\6
+\&{size\_t} \\{names\_size}${}\K\T{0}{}$;\C{ GNU name table may precede
+members, as produced by ar. }\7
+\&{while} ${}(\\{pos}<\\{length}){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\\{length}-\\{pos}<\T{60}\V\\{memcmp}(\\{bytes}+\\{pos}+\T{58},\39%
+\.{"`\\n"},\39\T{2})){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ corrupt\ archive}\)\.{\ header\
+at\ \%zu"},\39\\{path},\39\\{pos});{}$\2\7
+\&{const} \\{uint8\_t}${}{*}\|h\K\\{bytes}+\\{pos};{}$\6
+\&{size\_t} \\{size}${}\K\T{0};{}$\7
+\&{if} ${}(\R\\{ld\_archive\_number}{}$((\&{const} \&{char} ${}{*})\,\|h+%
+\T{48},\39\T{10},\39{\AND}\\{size})){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ corrupt\ archive}\)\.{\ member\
+size"},\39\\{path});{}$\2\6
+\&{if} ${}(\\{size}>\\{length}-\\{pos}-\T{60}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ archive\ member\ }\)\.{crosses\
+file\ boundar}\)\.{y"},\39\\{path});{}$\2\7
+\&{size\_t} \\{off}${}\K\\{pos}+\T{60},\39\\{dataoff}\K\\{off},\39\\{datasize}%
+\K\\{size};{}$\6
+\&{char} \\{namebuf}[\T{17}];\7
+${}\\{memcpy}(\\{namebuf},\39\|h,\39\T{16});{}$\6
+${}\\{namebuf}[\T{16}]\K\T{0};{}$\7
+\&{size\_t} \\{name\_len}${}\K\T{16};{}$\7
+\&{while} ${}(\\{name\_len}\W\\{namebuf}[\\{name\_len}-\T{1}]\E\.{'\ '}){}$\1\5
+${}\\{name\_len}\MM;{}$\2\6
+${}\\{namebuf}[\\{name\_len}]\K\T{0};{}$\7
+\&{char} ${}{*}\\{name}\K\NULL;{}$\7
+\&{if} ${}(\R\\{strcmp}(\\{namebuf},\39\.{"//"})){}$\5
+${}\{{}$\1\6
+${}\\{gnu\_names}\K\\{bytes}+\\{off};{}$\6
+${}\\{names\_size}\K\\{size};{}$\6
+\4${}\}{}$\2\6
+\&{else} \&{if} ${}(\R\\{strcmp}(\\{namebuf},\39\.{"/"})\V\R\\{strcmp}(%
+\\{namebuf},\39\.{"/SYM64/"})\V\R\\{strncmp}(\\{namebuf},\39\.{"\_\_.SYMDEF"},%
+\39\T{9})){}$\5
+${}\{\,\}{}$\6
+\&{else} \&{if} ${}(\R\\{strncmp}(\\{namebuf},\39\.{"\#1/"},\39\T{3})){}$\5
+${}\{{}$\1\6
+\&{size\_t} \|n${}\K\T{0};{}$\7
+\&{if} ${}(\R\\{ld\_archive\_number}(\\{namebuf}+\T{3},\39\\{strlen}(%
+\\{namebuf}+\T{3}),\39{\AND}\|n)\V\|n>\\{size}\V\|n>\T{4096}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ bad\ BSD\ extende}\)\.{d\
+name"},\39\\{path});{}$\2\6
+${}\\{name}\K\\{malloc}(\|n+\T{1});{}$\6
+\&{if} ${}(\R\\{name}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"out\ of\ memory"});{}$\2\6
+${}\\{memcpy}(\\{name},\39\\{bytes}+\\{off},\39\|n);{}$\6
+${}\\{name}[\|n]\K\T{0};{}$\6
+${}\\{dataoff}\MRL{+{\K}}\|n;{}$\6
+${}\\{datasize}\MRL{-{\K}}\|n;{}$\6
+\4${}\}{}$\2\6
+\&{else} \&{if} ${}(\\{namebuf}[\T{0}]\E\.{'/'}\W\\{namebuf}[\T{1}]\G\.{'0'}\W%
+\\{namebuf}[\T{1}]\Z\.{'9'}){}$\5
+${}\{{}$\1\6
+\&{size\_t} \|n${}\K\T{0};{}$\7
+\&{if} ${}(\R\\{ld\_archive\_number}(\\{namebuf}+\T{1},\39\\{strlen}(%
+\\{namebuf}+\T{1}),\39{\AND}\|n)\V\R\\{gnu\_names}\V\|n\G\\{names\_size}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ bad\ GNU\ name\ of}\)\.{fset"},%
+\39\\{path});{}$\2\7
+\&{const} \&{char} ${}{*}\\{start}\K{}$(\&{const} \&{char} ${}{*})\,\\{gnu%
+\_names}+\|n;{}$\6
+\&{size\_t} \|l${}\K\T{0};{}$\7
+\&{while} ${}(\|n+\|l<\\{names\_size}\W\\{start}[\|l]\I\.{'/'}\W\\{start}[\|l]%
+\I\.{'\\n'}\W\\{start}[\|l]\I\T{0}){}$\1\5
+${}\|l\PP;{}$\2\6
+${}\\{name}\K\\{malloc}(\|l+\T{1});{}$\6
+\&{if} ${}(\R\\{name}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"out\ of\ memory"});{}$\2\6
+${}\\{memcpy}(\\{name},\39\\{start},\39\|l);{}$\6
+${}\\{name}[\|l]\K\T{0};{}$\6
+\4${}\}{}$\2\6
+\&{else}\5
+${}\{{}$\1\6
+\&{size\_t} \|n${}\K\\{name\_len};{}$\7
+\&{if} ${}(\|n\W\\{namebuf}[\|n-\T{1}]\E\.{'/'}){}$\1\5
+${}\|n\MM;{}$\2\6
+${}\\{name}\K\\{malloc}(\|n+\T{1});{}$\6
+\&{if} ${}(\R\\{name}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"out\ of\ memory"});{}$\2\6
+${}\\{memcpy}(\\{name},\39\\{namebuf},\39\|n);{}$\6
+${}\\{name}[\|n]\K\T{0};{}$\6
+\4${}\}{}$\2\6
+\&{if} (\\{name})\5
+${}\{{}$\1\6
+\&{if} ${}(\R\\{ld\_grow}(\\{ld},\39{}$(\&{void} ${}{*}{*})\,{\AND}\\{ar}\MG%
+\\{members},\39{\AND}\\{ar}\MG\\{cap},\39\\{ar}\MG\\{count}+\T{1},\39{}$%
+\&{sizeof} ${}({*}\\{ar}\MG\\{members}))){}$\5
+${}\{{}$\1\6
+\\{free}(\\{name});\6
+\&{return} \\{false};\6
+\4${}\}{}$\2\7
+\&{LDMember} ${}{*}\|m\K{\AND}\\{ar}\MG\\{members}[\\{ar}\MG\\{count}\PP];{}$\7
+${}\\{memset}(\|m,\39\T{0},\39{}$\&{sizeof} ${}({*}\|m));{}$\6
+${}\|m\MG\\{name}\K\\{name};{}$\6
+${}\|m\MG\\{data\_offset}\K\\{dataoff};{}$\6
+${}\|m\MG\\{data\_size}\K\\{datasize};{}$\6
+\4${}\}{}$\2\6
+${}\\{pos}\K\\{off}+\\{size}+(\\{size}\AND\T{1});{}$\6
+\&{if} ${}(\\{pos}>\\{length}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"\%s:\ truncated\ archi}\)\.{ve\
+padding"},\39\\{path});{}$\2\6
+\4${}\}{}$\2\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{bool} \\{ld\_defined\_now}(\&{ArchLD} ${}{*}\\{ld},\39{}$%
+\&{const} \&{char} ${}{*}\\{name})\2\2{}$\6
+${}\{{}$\1\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{input\_count};{}$ ${}%
+\|i\PP){}$\5
+${}\{{}$\1\6
+${}\\{ArchBFDObject}*\\{obj}\K\\{ld}\MG\\{inputs}[\|i].\\{bfd};{}$\6
+\&{for} (\&{size\_t} \|j${}\K\T{0};{}$ ${}\|j<\\{archbfd\_object\_symbol%
+\_count}(\\{obj});{}$ ${}\|j\PP){}$\5
+${}\{{}$\1\6
+\&{const} \\{ArchBFDObjectSymbol}${}{*}\|s\K\\{archbfd\_object\_symbol}(%
+\\{obj},\39\|j);{}$\7
+\&{if} ${}(\|s\MG\\{class\_value}\I\.{LD\_BIND\_LOCAL}\W\|s\MG\\{shndx}\I\.{LD%
+\_SHN\_UNDEF}\W\|s\MG\\{name}\W\R\\{strcmp}(\\{name},\39\|s\MG\\{name})){}$\1\5
+\&{return} \\{true};\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\&{return} \\{false};\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{bool} \\{ld\_wanted\_now}(\&{ArchLD} ${}{*}\\{ld},\39{}$%
+\&{const} \&{char} ${}{*}\\{name})\2\2{}$\6
+${}\{{}$\1\6
+\&{if} ${}(\\{ld\_defined\_now}(\\{ld},\39\\{name})){}$\1\5
+\&{return} \\{false};\2\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{input\_count};{}$ ${}%
+\|i\PP){}$\5
+${}\{{}$\1\6
+${}\\{ArchBFDObject}*\\{obj}\K\\{ld}\MG\\{inputs}[\|i].\\{bfd};{}$\6
+\&{for} (\&{size\_t} \|j${}\K\T{0};{}$ ${}\|j<\\{archbfd\_object\_symbol%
+\_count}(\\{obj});{}$ ${}\|j\PP){}$\5
+${}\{{}$\1\6
+\&{const} \\{ArchBFDObjectSymbol}${}{*}\|s\K\\{archbfd\_object\_symbol}(%
+\\{obj},\39\|j);{}$\7
+\&{if} ${}(\|s\MG\\{class\_value}\E\.{LD\_BIND\_GLOBAL}\W\|s\MG\\{shndx}\E\.{LD%
+\_SHN\_UNDEF}\W\|s\MG\\{name}\W\R\\{strcmp}(\\{name},\39\|s\MG\\{name})){}$\1\5
+\&{return} \\{true};\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\&{return} \\{false};\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{bool} \\{ld\_archive\_member\_add}(\&{ArchLD} ${}{*}\\{ld},%
+\39{}$\&{LDArchive} ${}{*}\\{ar},\39{}$\&{LDMember} ${}{*}\|m)\2\2{}$\6
+${}\{{}$\1\6
+\&{if} ${}(\R\\{ld\_grow}(\\{ld},\39{}$(\&{void} ${}{*}{*})\,{\AND}\\{ld}\MG%
+\\{inputs},\39{\AND}\\{ld}\MG\\{input\_cap},\39\\{ld}\MG\\{input\_count}+\T{1},%
+\39{}$\&{sizeof} ${}({*}\\{ld}\MG\\{inputs}))){}$\1\5
+\&{return} \\{false};\2\7
+\&{LDInput} \\{in}${}\K\{\T{0}\};{}$\6
+\&{size\_t} \|n${}\K\\{strlen}(\\{ar}\MG\\{path})+\\{strlen}(\|m\MG\\{name})+%
+\T{3};{}$\7
+${}\\{in}.\\{path}\K\\{malloc}(\|n);{}$\6
+\&{if} ${}(\R\\{in}.\\{path}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"out\ of\ memory"});{}$\2\6
+${}\\{snprintf}(\\{in}.\\{path},\39\|n,\39\.{"\%s(\%s)"},\39\\{ar}\MG\\{path},%
+\39\|m\MG\\{name});{}$\6
+${}\\{in}.\\{bytes}\K\\{malloc}(\|m\MG\\{data\_size}\?\|m\MG\\{data\_size}:%
+\T{1});{}$\6
+\&{if} ${}(\R\\{in}.\\{bytes}){}$\5
+${}\{{}$\1\6
+${}\\{free}(\\{in}.\\{path});{}$\6
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"out\ of\ memory"});{}$\6
+\4${}\}{}$\2\6
+${}\\{memcpy}(\\{in}.\\{bytes},\39\\{ar}\MG\\{bytes}+\|m\MG\\{data\_offset},\39%
+\|m\MG\\{data\_size});{}$\6
+${}\\{in}.\\{bytes\_len}\K\|m\MG\\{data\_size};{}$\6
+\\{DsymDiags}\|d;\6
+${}\\{dsym\_diags\_init}({\AND}\|d);{}$\6
+${}\\{in}.\\{bfd}\K\\{archbfd\_object\_open\_memory}(\\{in}.\\{bytes},\39%
+\\{in}.\\{bytes\_len},\39\\{ld}\MG\\{spec},\39{\AND}\|d);{}$\6
+\&{if} ${}(\R\\{in}.\\{bfd}){}$\1\5
+${}\\{ld\_diagnostic}(\\{ld},\39\\{in}.\\{path},\39{\AND}\|d);{}$\2\6
+${}\\{dsym\_diags\_free}({\AND}\|d);{}$\6
+\&{if} ${}(\R\\{in}.\\{bfd}\V\\{strcmp}(\\{archbfd\_object\_kind}(\\{in}.%
+\\{bfd}),\39\\{ld}\MG\\{elf32}\?\.{"elf32"}:\.{"elf64"})\V\\{archbfd\_object%
+\_machine}(\\{in}.\\{bfd})\I(\\{ld}\MG\\{elf32}\?\.{LD\_EM\_386}:\.{LD\_EM\_X86%
+\_64})\V\\{archbfd\_object\_type}(\\{in}.\\{bfd})\I\.{LD\_ET\_REL}){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\\{in}.\\{bfd}){}$\1\5
+${}\\{ld\_fail}(\\{ld},\39\.{"\%s:\ archive\ member\ }\)\.{has\ wrong\ ELF\
+target}\)\.{"},\39\\{in}.\\{path});{}$\2\6
+${}\\{archbfd\_object\_close}(\\{in}.\\{bfd});{}$\6
+${}\\{free}(\\{in}.\\{bytes});{}$\6
+${}\\{free}(\\{in}.\\{path});{}$\6
+\&{return} \\{false};\6
+\4${}\}{}$\2\7
+\&{size\_t} \\{count}${}\K\\{archbfd\_object\_section\_count}(\\{in}.%
+\\{bfd});{}$\7
+${}\\{in}.\\{part\_of\_section}\K\\{malloc}((\\{count}\?\\{count}:\T{1})*%
+\&{sizeof}(\&{size\_t}));{}$\6
+${}\\{in}.\\{discard}\K\\{calloc}(\\{count}\?\\{count}:\T{1},\39\&{sizeof}(%
+\&{bool}));{}$\6
+\&{if} ${}(\R\\{in}.\\{part\_of\_section}\V\R\\{in}.\\{discard}){}$\5
+${}\{{}$\1\6
+${}\\{archbfd\_object\_close}(\\{in}.\\{bfd});{}$\6
+${}\\{free}(\\{in}.\\{bytes});{}$\6
+${}\\{free}(\\{in}.\\{path});{}$\6
+${}\\{free}(\\{in}.\\{part\_of\_section});{}$\6
+${}\\{free}(\\{in}.\\{discard});{}$\6
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"out\ of\ memory"});{}$\6
+\4${}\}{}$\2\6
+\&{for} (\&{size\_t} \|j${}\K\T{0};{}$ ${}\|j<\\{count};{}$ ${}\|j\PP){}$\1\5
+${}\\{in}.\\{part\_of\_section}[\|j]\K\.{SIZE\_MAX};{}$\2\6
+${}\\{ld}\MG\\{inputs}[\\{ld}\MG\\{input\_count}\PP]\K\\{in};{}$\6
+${}\|m\MG\\{extracted}\K\\{true};{}$\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{bool} \\{ld\_extract\_archives}(\&{ArchLD} ${}{*}\\{ld})\2%
+\2{}$\6
+${}\{{}$\1\6
+\&{size\_t} \\{loops}${}\K\T{0};{}$\6
+\&{bool} \\{progress};\7
+\&{do}\5
+${}\{{}$\1\6
+${}\\{progress}\K\\{false};{}$\6
+\&{for} (\&{size\_t} \|a${}\K\T{0};{}$ ${}\|a<\\{ld}\MG\\{archive\_count};{}$
+${}\|a\PP){}$\5
+${}\{{}$\1\6
+\&{LDArchive} ${}{*}\\{ar}\K{\AND}\\{ld}\MG\\{archives}[\|a];{}$\7
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ar}\MG\\{count};{}$ ${}\|i%
+\PP){}$\5
+${}\{{}$\1\6
+\&{LDMember} ${}{*}\|m\K{\AND}\\{ar}\MG\\{members}[\|i];{}$\7
+\&{if} ${}(\|m\MG\\{extracted}){}$\1\5
+\&{continue};\2\6
+\&{if} ${}(\R\|m\MG\\{defs}){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\|m\MG\\{data\_size}<\T{4}\V\\{memcmp}(\\{ar}\MG\\{bytes}+\|m\MG%
+\\{data\_offset},\39\.{"\\177ELF"},\39\T{4})){}$\1\5
+\&{continue};\2\6
+\\{DsymDiags}\|d;\6
+${}\\{dsym\_diags\_init}({\AND}\|d);{}$\6
+${}\\{ArchBFDObject}*\\{obj}\K\\{archbfd\_object\_open\_memory}(\\{ar}\MG%
+\\{bytes}+\|m\MG\\{data\_offset},\39\|m\MG\\{data\_size},\39\\{ld}\MG\\{spec},%
+\39{\AND}\|d);{}$\6
+${}\\{dsym\_diags\_free}({\AND}\|d);{}$\6
+\&{if} ${}(\R\\{obj}){}$\1\5
+\&{continue};\2\7
+\&{size\_t} \\{cap}${}\K\T{0};{}$\7
+\&{for} (\&{size\_t} \|j${}\K\T{0};{}$ ${}\|j<\\{archbfd\_object\_symbol%
+\_count}(\\{obj});{}$ ${}\|j\PP){}$\5
+${}\{{}$\1\6
+\&{const} \\{ArchBFDObjectSymbol}${}{*}\|s\K\\{archbfd\_object\_symbol}(%
+\\{obj},\39\|j);{}$\7
+\&{if} ${}(\|s\MG\\{class\_value}\E\.{LD\_BIND\_LOCAL}\V\|s\MG\\{shndx}\E\.{LD%
+\_SHN\_UNDEF}\V\R\|s\MG\\{name}\V\R{*}\|s\MG\\{name}){}$\1\5
+\&{continue};\2\6
+\&{if} ${}(\R\\{ld\_grow}(\\{ld},\39{}$(\&{void} ${}{*}{*})\,{\AND}\|m\MG%
+\\{defs},\39{\AND}\\{cap},\39\|m\MG\\{def\_count}+\T{1},\39{}$\&{sizeof}(%
+\&{char} ${}{*}))){}$\5
+${}\{{}$\1\6
+\\{archbfd\_object\_close}(\\{obj});\6
+\&{return} \\{false};\6
+\4${}\}{}$\2\6
+${}\|m\MG\\{defs}[\|m\MG\\{def\_count}]\K\\{ld\_strdup}(\|s\MG\\{name});{}$\6
+\&{if} ${}(\R\|m\MG\\{defs}[\|m\MG\\{def\_count}]){}$\5
+${}\{{}$\1\6
+\\{archbfd\_object\_close}(\\{obj});\6
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"out\ of\ memory"});{}$\6
+\4${}\}{}$\2\6
+${}\|m\MG\\{def\_count}\PP;{}$\6
+\4${}\}{}$\2\6
+\\{archbfd\_object\_close}(\\{obj});\6
+\&{if} ${}(\R\|m\MG\\{defs}){}$\5
+${}\{{}$\1\6
+${}\|m\MG\\{defs}\K\\{calloc}(\T{1},\39{}$\&{sizeof}(\&{char} ${}{*}));{}$\6
+\&{if} ${}(\R\|m\MG\\{defs}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"out\ of\ memory"});{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\7
+\&{bool} \\{wanted}${}\K\\{false};{}$\7
+\&{for} (\&{size\_t} \|z${}\K\T{0};{}$ ${}\|z<\|m\MG\\{def\_count};{}$ ${}\|z%
+\PP){}$\1\6
+\&{if} ${}(\\{ld\_wanted\_now}(\\{ld},\39\|m\MG\\{defs}[\|z])){}$\5
+${}\{{}$\1\6
+${}\\{wanted}\K\\{true};{}$\6
+\&{break};\6
+\4${}\}{}$\2\2\6
+\&{if} (\\{wanted})\5
+${}\{{}$\1\6
+\&{if} ${}(\R\\{ld\_archive\_member\_add}(\\{ld},\39\\{ar},\39\|m)){}$\1\5
+\&{return} \\{false};\2\6
+${}\\{progress}\K\\{true};{}$\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\6
+\&{if} ${}(\PP\\{loops}>\T{100000}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"archive\ extraction\ }\)\.{iteration\
+limit\ exce}\)\.{eded"});{}$\2\6
+\4${}\}{}$\2\5
+\&{while} (\\{progress});\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\par
+\U3.\fi
+
+\M{27}
+
+\fi
+
+\N{1}{28}GOT synthesis.
+
+Produce initialized GOT cells for nonrelaxed GOTPCREL and GOTPCRELX
+instructions.
+
+\Y\B\4\X28:GOT synthesis\X${}\E{}$\C{ GOT entries are real data cells. The
+non-relaxing GOTPCRELX lowering keeps  * the original machine instruction and
+directs it to a populated GOT slot. }\6
+\1\1\&{static} \&{bool} \\{ld\_collect\_got}(\&{ArchLD} ${}{*}\\{ld})$ $\{$ \6
+\&{if} ${}(\\{ld}\MG\\{elf32}){}$\1\5
+\&{return} \\{true};\2\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{input\_count};{}$ ${}%
+\|i\PP)$ $\{$ \&{LDInput} ${}{*}\\{in}\K{\AND}\\{ld}\MG\\{inputs}[\|i];{}$\6
+\&{size\_t} \\{nsec}${}\K\\{archbfd\_object\_section\_count}(\\{in}\MG%
+\\{bfd});{}$\6
+\&{size\_t} \\{cursor}${}\K\T{0};$ \&{for} (\&{size\_t} \|j${}\K\T{0};{}$ ${}%
+\|j<\\{nsec};{}$ ${}\|j\PP)$ $\{$ \&{const} \\{ArchBFDObjectSection}${}{*}%
+\\{sec}\K\\{archbfd\_object\_section}(\\{in}\MG\\{bfd},\39\|j);{}$\7
+\&{if} ${}(\\{sec}\MG\\{type}\I\.{LD\_SHT\_RELA}\W\\{sec}\MG\\{type}\I\.{LD%
+\_SHT\_REL}){}$\1\5
+\&{continue};\2\7
+\&{const} \\{ArchBFDRecord}${}{*}\\{rec}\K\\{archbfd\_resolve\_record}(\\{ld}%
+\MG\\{spec},\39\\{sec}\MG\\{type}\E\.{LD\_SHT\_RELA}\?\.{"rela"}:\.{"rel"});{}$%
+\7
+${}\\{int64\_t}\\{entsize}\K\\{sec}\MG\\{entsize}>\T{0}\?\\{sec}\MG\\{entsize}:%
+\\{rec}\?\\{rec}\MG\\{size}:\T{0};{}$\7
+\&{size\_t} \\{cnt}${}\K\\{entsize}>\T{0}\W\\{sec}\MG\\{size}\G\T{0}\?(\&{size%
+\_t})(\\{sec}\MG\\{size}/\\{entsize}):\T{0};{}$\6
+\&{bool} \\{active}${}\K\\{sec}\MG\\{info}\G\T{0}\W(\&{size\_t})\,\\{sec}\MG%
+\\{info}<\\{nsec}\W\\{in}\MG\\{part\_of\_section}[\\{sec}\MG\\{info}]\I\.{SIZE%
+\_MAX};$ \&{for} (\&{size\_t} \|k${}\K\T{0};{}$ ${}\|k<\\{cnt};{}$ ${}\|k\PP)$
+$\{$ \6
+\&{if} ${}(\\{cursor}\G\\{archbfd\_object\_reloc\_count}(\\{in}\MG\\{bfd})){}$%
+\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"ArchBFD\ relocation\ }\)\.{stream\
+inconsistent"});{}$\2\7
+\&{const} \\{ArchBFDObjectReloc}${}{*}\|r\K\\{archbfd\_object\_reloc}(\\{in}\MG%
+\\{bfd},\39\\{cursor}\PP);{}$\7
+\&{if} ${}(\R\\{active}\V(\|r\MG\\{type}\I\T{9}\W\|r\MG\\{type}\I\T{41}\W\|r\MG%
+\\{type}\I\T{42})){}$\1\5
+\&{continue};\2\6
+\&{if} ${}(\|r\MG\\{symbol}<\T{0}\V(\&{size\_t})\,\|r\MG\\{symbol}\G\\{archbfd%
+\_object\_symbol\_count}(\\{in}\MG\\{bfd})){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"invalid\ GOT\ relocat}\)\.{ion\
+symbol"});{}$\2\7
+\&{bool} \\{exists}${}\K\\{false};{}$\7
+\&{for} (\&{size\_t} \|z${}\K\T{0};{}$ ${}\|z<\\{ld}\MG\\{got\_count};{}$ ${}%
+\|z\PP){}$\1\6
+\&{if} ${}(\\{ld}\MG\\{got}[\|z].\\{input}\E\|i\W\\{ld}\MG\\{got}[\|z].%
+\\{symbol}\E(\&{size\_t})\,\|r\MG\\{symbol}){}$\5
+${}\{{}$\1\6
+${}\\{exists}\K\\{true};{}$\6
+\&{break};\6
+\4${}\}{}$\2\2\6
+\&{if} (\\{exists})\1\5
+\&{continue};\2\6
+\&{if} ${}(\R\\{ld\_grow}(\\{ld},\39{}$(\&{void} ${}{*}{*})\,{\AND}\\{ld}\MG%
+\\{got},\39{\AND}\\{ld}\MG\\{got\_cap},\39\\{ld}\MG\\{got\_count}+\T{1},\39{}$%
+\&{sizeof} ${}({*}\\{ld}\MG\\{got}))){}$\1\5
+\&{return} \\{false};\2\6
+$\\{ld}\MG\\{got}[\\{ld}\MG\\{got\_count}\PP]$ $\K$ (\&{LDGOT}) $\{$ $.$ $%
+\\{input}\K\|i$ $,$ $.$ $\\{symbol}\K(\&{size\_t})\,\|r\MG\\{symbol}$ $\}$  ; $%
+\}$ $\}$ $\}$ \&{return} \\{true}; $\}$ \1\1\&{static} \&{bool} \\{ld\_fill%
+\_got}(\&{ArchLD} ${}{*}\\{ld})\2\2{}$\6
+${}\{{}$\1\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{got\_count};{}$ ${}%
+\|i\PP){}$\5
+${}\{{}$\1\6
+\&{LDGOT} ${}{*}\|e\K{\AND}\\{ld}\MG\\{got}[\|i];{}$\7
+${}\\{uint64\_t}\|v\K\T{0};{}$\6
+\&{if} ${}(\R\\{ld\_referenced\_address}(\\{ld},\39\|e\MG\\{input},\39\|e\MG%
+\\{symbol},\39{\AND}\|v)){}$\1\5
+\&{return} \\{false};\2\6
+\&{if} ${}(\|e\MG\\{image\_offset}>\\{ld}\MG\\{image\_size}\V\\{ld}\MG\\{image%
+\_size}-\|e\MG\\{image\_offset}<\T{8}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"GOT\ entry\ out\ of\ bo}\)%
+\.{unds"});{}$\2\6
+${}\\{ld\_store\_le}(\\{ld}\MG\\{image}+(\&{size\_t})\,\|e\MG\\{image\_offset},%
+\39\T{8},\39\|v);{}$\6
+\4${}\}{}$\2\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\par
+\U3.\fi
+
+\M{29}
+
+\fi
+
+\N{1}{30}Link phases and diagnostics.
+
+The phases are executed deterministically and expose a symbol and map
+inspection API.
+
+\Y\B\4\X30:Link phases and diagnostics\X${}\E{}$\6
+\1\1\&{bool} \\{archld\_link}(\&{ArchLD} ${}{*}\\{ld})$ $\{$ \&{if} ( $\R\\{ld}%
+\V\\{ld}$ $\MG$ \&{error} [\T{0}] $\V$ $\\{ld}\MG\\{linked}$ ) \&{return} %
+\\{false};\6
+\&{if} ${}(\R\\{ld}\MG\\{input\_count}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"no\ input\ object\ fil}\)\.{es"});{}$%
+\2\6
+\&{if} ${}(\R\\{ld\_extract\_archives}(\\{ld})\V\R\\{ld\_prepare\_groups}(%
+\\{ld})\V\R\\{ld\_collect\_parts}(\\{ld})\V\R\\{ld\_collect\_globals}(\\{ld})\V%
+\R\\{ld\_collect\_got}(\\{ld})\V\R\\{ld\_check\_undefined}(\\{ld})\V\R\\{ld%
+\_place}(\\{ld})\V\R\\{ld\_check\_global\_addresses}(\\{ld})\V\R\\{ld\_fill%
+\_got}(\\{ld})\V\R\\{ld\_relocate}(\\{ld})){}$\1\5
+\&{return} \\{false};\2\6
+${}\\{ld}\MG\\{linked}\K\\{true};{}$\6
+\&{return} \\{true}; $\}$ \1\1\&{const} \\{uint8\_t}${}{*}{}$\\{archld\_image}(%
+\&{const} \&{ArchLD} ${}{*}\\{ld})\2\2{}$\6
+${}\{{}$\1\6
+\&{return} \\{ld}${}\W\\{ld}\MG\\{linked}\?\\{ld}\MG\\{image}:\NULL;{}$\6
+\4${}\}{}$\2\7
+\1\1\&{size\_t} \\{archld\_image\_size}(\&{const} \&{ArchLD} ${}{*}\\{ld})\2%
+\2{}$\6
+${}\{{}$\1\6
+\&{return} \\{ld}${}\W\\{ld}\MG\\{linked}\?\\{ld}\MG\\{image\_size}:\T{0};{}$\6
+\4${}\}{}$\2\7
+\1\1\\{uint64\_t}\\{archld\_image\_base}(\&{const} \&{ArchLD} ${}{*}\\{ld})\2%
+\2{}$\6
+${}\{{}$\1\6
+\&{return} \\{ld}${}\?\\{ld}\MG\\{base}:\T{0};{}$\6
+\4${}\}{}$\2\7
+\1\1\&{bool} \\{archld\_symbol}(\&{const} \&{ArchLD} ${}{*}\\{ld},\39{}$%
+\&{const} \&{char} ${}{*}\\{name},\39\\{uint64\_t}*\\{address})\2\2{}$\6
+${}\{{}$\1\6
+\&{if} ${}(\R\\{ld}\V\R\\{ld}\MG\\{linked}\V\R\\{name}\V\R\\{address}){}$\1\5
+\&{return} \\{false};\2\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{global\_count};{}$
+${}\PP\|i){}$\5
+${}\{{}$\1\6
+\&{const} \&{LDGlobal} ${}{*}\|g\K{\AND}\\{ld}\MG\\{globals}[\|i];{}$\7
+\&{if} ${}(\\{strcmp}(\|g\MG\\{name},\39\\{name})){}$\1\5
+\&{continue};\2\6
+\&{if} ${}(\|g\MG\\{rank}\E\T{2}){}$\5
+${}\{{}$\1\6
+${}{*}\\{address}\K\|g\MG\\{common\_addr};{}$\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\6
+\&{return} \\{ld\_definition\_address}((\&{ArchLD} ${}{*})\,\\{ld},\39\|g\MG%
+\\{input},\39\|g\MG\\{symbol},\39\\{address});{}$\6
+\4${}\}{}$\2\6
+\&{return} \\{false};\6
+\4${}\}{}$\2\7
+\1\1\&{void} \\{archld\_map}(\&{const} \&{ArchLD} ${}{*}\\{ld},\39{}$\&{FILE}
+${}{*}\\{out})\2\2{}$\6
+${}\{{}$\1\6
+\&{if} ${}(\R\\{ld}\V\R\\{ld}\MG\\{linked}\V\R\\{out}){}$\1\5
+\&{return};\2\6
+${}\\{fprintf}(\\{out},\39\.{"ArchLD\ link\ map:\ \%s}\)\.{;\ base=0x\%016"}%
+\\{PRIx64}\.{";\ image=\%zu\ bytes\\n}\)\.{"},\39\\{ld}\MG\\{elf32}\?\.{"ELF32\
+i386"}:\.{"ELF64\ x86-64"},\39\\{ld}\MG\\{base},\39\\{ld}\MG\\{image%
+\_size});{}$\6
+${}\\{fprintf}(\\{out},\39\.{"Sections\ (virtual\ a}\)\.{ddresses):\\n"});{}$\6
+\&{for} (\&{unsigned} \\{category}${}\K\T{0};{}$ ${}\\{category}<\T{4};{}$ ${}%
+\PP\\{category}){}$\1\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{part\_count};{}$ ${}%
+\PP\|i){}$\5
+${}\{{}$\1\6
+\&{const} \&{LDPart} ${}{*}\|p\K{\AND}\\{ld}\MG\\{parts}[\|i];{}$\7
+\&{if} ${}(\|p\MG\\{category}\I\\{category}){}$\1\5
+\&{continue};\2\7
+\&{const} \&{LDInput} ${}{*}\\{in}\K{\AND}\\{ld}\MG\\{inputs}[\|p\MG%
+\\{input}];{}$\6
+\&{const} \\{ArchBFDObjectSection}${}{*}\|s\K\\{archbfd\_object\_section}(%
+\\{in}\MG\\{bfd},\39\|p\MG\\{section});{}$\7
+${}\\{fprintf}(\\{out},\39\.{"\ \ \%016"}\\{PRIx64}\.{"\ \ \%8"}\\{PRIu64}\.{"\
+\ \%-18s\ \%s\\n"},\39\|p\MG\\{address},\39\|p\MG\\{length},\39\|s\MG\\{name}\?%
+\|s\MG\\{name}:\.{""},\39\\{in}\MG\\{path});{}$\6
+\4${}\}{}$\2\2\6
+${}\\{fprintf}(\\{out},\39\.{"Global\ definitions:}\)\.{\\n"});{}$\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{global\_count};{}$
+${}\PP\|i){}$\5
+${}\{{}$\1\6
+\&{const} \&{LDGlobal} ${}{*}\|g\K{\AND}\\{ld}\MG\\{globals}[\|i];{}$\7
+${}\\{uint64\_t}\\{value}\K\T{0};{}$\6
+\&{if} (\\{ld\_global\_address}((\&{ArchLD} ${}{*})\,\\{ld},\39\|g,\39{\AND}%
+\\{value})){}$\1\5
+${}\\{fprintf}(\\{out},\39\.{"\ \ \%016"}\\{PRIx64}\.{"\ \ \%-30s\ \%s\%s\\n"},%
+\39\\{value},\39\|g\MG\\{name},\39\\{ld}\MG\\{inputs}[\|g\MG\\{input}].%
+\\{path},\39\|g\MG\\{rank}\E\T{2}\?\.{"\ (COMMON)"}:\.{""});{}$\2\6
+\4${}\}{}$\2\6
+\4${}\}{}$\2\par
+\U3.\fi
+
+\M{31}
+
+\fi
+
+\N{1}{32}Executable ELF64 output.
+
+Page-congruent W-X load segments, zero fill, deterministic symbol and string
+tables.
+
+\Y\B\4\X32:Executable ELF64 output\X${}\E{}$\C{ Production output layer: a
+real, page-congruent, non-PIE static ELF64  * executable, with W-X PT\_LOADs
+and useful section/symbol tables.  * All source input section and relocation
+metadata comes from ArchBFD. }\6
+\8\#\&{include} \.{<elf.h>}\6
+\8\#\&{include} \.{<sys/stat.h>}\6
+\8\#\&{include} \.{<unistd.h>}\6
+\8\#\&{include} \.{<fcntl.h>}\6
+\8\#\&{if} ${}\.{\_\_BYTE\_ORDER\_\_}\I\.{\_\_ORDER\_LITTLE\_ENDIAN\_\_}{}$\6
+\8\#\&{error} \.{"ArchLD\ standalone\ E}\)\.{LF64\ writer\ needs\ a\ }\)%
+\.{little-endian\ build\ }\)\.{host"}\6
+\8\#\&{endif}\6
+\1\1\&{size\_t} \\{archld\_global\_count}(\&{const} \&{ArchLD} ${}{*}\\{ld})\2%
+\2{}$\6
+${}\{{}$\1\6
+\&{return} \\{ld}${}\W\\{ld}\MG\\{linked}\?\\{ld}\MG\\{global\_count}:\T{0};{}$%
+\6
+\4${}\}{}$\2\7
+\1\1\&{bool} \\{archld\_global\_at}(\&{const} \&{ArchLD} ${}{*}\\{ld},\39{}$%
+\&{size\_t} \|i${},\39{}$\&{const} \&{char} ${}{*}{*}\\{name},\39\\{uint64\_t}*%
+\\{addr},\39\\{uint64\_t}*\\{sz})\2\2{}$\6
+${}\{{}$\1\6
+\&{if} ${}(\R\\{ld}\V\R\\{ld}\MG\\{linked}\V\|i\G\\{ld}\MG\\{global\_count}){}$%
+\1\5
+\&{return} \\{false};\2\7
+\&{const} \&{LDGlobal} ${}{*}\|g\K{\AND}\\{ld}\MG\\{globals}[\|i];{}$\7
+\&{if} (\\{name})\1\5
+${}{*}\\{name}\K\|g\MG\\{name};{}$\2\6
+\&{if} ${}(\\{addr}\W\R\\{ld\_global\_address}{}$((\&{ArchLD} ${}{*})\,\\{ld},%
+\39\|g,\39\\{addr})){}$\1\5
+\&{return} \\{false};\2\6
+\&{if} (\\{sz})\5
+${}\{{}$\1\6
+\&{const} \\{ArchBFDObjectSymbol}${}{*}\|s\K\\{archbfd\_object\_symbol}(\\{ld}%
+\MG\\{inputs}[\|g\MG\\{input}].\\{bfd},\39\|g\MG\\{symbol});{}$\7
+${}{*}\\{sz}\K\|g\MG\\{rank}\E\T{2}\?\|g\MG\\{common\_size}:\|s\W\|s\MG\\{size}%
+\G\T{0}\?(\\{uint64\_t})\|s\MG\\{size}:\T{0};{}$\6
+\4${}\}{}$\2\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\7
+\1\1\&{bool} \\{archld\_write\_map\_file}(\&{const} \&{ArchLD} ${}{*}\\{ld},%
+\39{}$\&{const} \&{char} ${}{*}\\{path})\2\2{}$\6
+${}\{{}$\1\6
+\&{FILE} ${}{*}\|f\K\\{fopen}(\\{path},\39\.{"w"});{}$\7
+\&{if} ${}(\R\|f){}$\1\5
+\&{return} \\{false};\2\6
+${}\\{archld\_map}(\\{ld},\39\|f);{}$\7
+\&{bool} \\{ok}${}\K\R\\{ferror}(\|f)\W\\{fclose}(\|f)\E\T{0};{}$\7
+\&{if} ${}(\R\\{ok}){}$\1\5
+\\{remove}(\\{path});\2\6
+\&{return} \\{ok};\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{bool} ${}\\{ld\_buf\_append}(\\{DsymBuf}*\|b,\39{}$\&{const} %
+\&{char} ${}{*}\|p,\39{}$\&{size\_t} \|n)\2\2\6
+${}\{{}$\1\6
+\&{if} ${}(\|n>\.{SIZE\_MAX}-\|b\MG\\{len}-\T{1}){}$\1\5
+\&{return} \\{false};\2\6
+\&{if} ${}(\|b\MG\\{len}+\|n+\T{1}>\|b\MG\\{cap}){}$\5
+${}\{{}$\1\6
+\&{size\_t} \\{cap}${}\K\|b\MG\\{cap}\?\|b\MG\\{cap}:\T{64};{}$\7
+\&{while} ${}(\\{cap}<\|b\MG\\{len}+\|n+\T{1}){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\\{cap}>\.{SIZE\_MAX}/\T{2}){}$\1\5
+\&{return} \\{false};\2\6
+${}\\{cap}\MRL{*{\K}}\T{2};{}$\6
+\4${}\}{}$\2\7
+\&{char} ${}{*}\|q\K\\{realloc}(\|b\MG\\{data},\39\\{cap});{}$\7
+\&{if} ${}(\R\|q){}$\1\5
+\&{return} \\{false};\2\6
+${}\|b\MG\\{data}\K\|q;{}$\6
+${}\|b\MG\\{cap}\K\\{cap};{}$\6
+\4${}\}{}$\2\6
+${}\\{memcpy}(\|b\MG\\{data}+\|b\MG\\{len},\39\|p,\39\|n);{}$\6
+${}\|b\MG\\{len}\MRL{+{\K}}\|n;{}$\6
+${}\|b\MG\\{data}[\|b\MG\\{len}]\K\T{0};{}$\6
+\&{return} \\{true};\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{bool} \\{ld\_write\_all}(\&{FILE} ${}{*}\|f,\39{}$\&{const} %
+\&{void} ${}{*}\\{data},\39{}$\&{size\_t} \|n)\2\2\6
+${}\{{}$\1\6
+\&{return} \\{fwrite}${}(\\{data},\39\T{1},\39\|n,\39\|f)\E\|n;{}$\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{bool} \\{ld\_seek}(\&{FILE} ${}{*}\|f,\39\\{uint64\_t}%
+\\{offset})\2\2{}$\6
+${}\{{}$\1\6
+\&{if} ${}(\\{offset}>\.{INT64\_MAX}){}$\1\5
+\&{return} \\{false};\2\6
+\&{return} \\{fseeko}${}(\|f,\39(\\{off\_t})\\{offset},\39\.{SEEK\_SET})\E%
+\T{0};{}$\6
+\4${}\}{}$\2\7
+\1\1\&{static} ${}\\{uint64\_t}\\{ld\_align\_up}(\\{uint64\_t}\|n,\39\\{uint64%
+\_t}\|a)\2\2{}$\6
+${}\{{}$\1\6
+\&{return} ${}(\|n+\|a-\T{1})\AND\CM(\|a-\T{1});{}$\6
+\4${}\}{}$\2\7
+\1\1\&{static} \\{uint32\_t}\\{ld\_symbol\_section}(\&{const} \&{ArchLD} ${}{*}%
+\\{ld},\39{}$\&{const} \&{LDGlobal} ${}{*}\|g,\39\\{uint64\_t}\\{address})\2%
+\2{}$\6
+${}\{{}$\1\6
+\&{const} \\{ArchBFDObjectSymbol}${}{*}\|s\K\\{archbfd\_object\_symbol}(\\{ld}%
+\MG\\{inputs}[\|g\MG\\{input}].\\{bfd},\39\|g\MG\\{symbol});{}$\7
+\&{if} ${}(\|s\MG\\{shndx}\E\.{LD\_SHN\_ABS}\W\|g\MG\\{rank}\I\T{2}){}$\1\5
+\&{return} \.{SHN\_ABS};\2\6
+\&{if} ${}(\|g\MG\\{rank}\E\T{2}){}$\1\5
+\&{return} \T{4};\2\6
+\&{for} (\&{unsigned} \|i${}\K\T{0};{}$ ${}\|i<\T{4};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{if} ${}(\\{address}\G\\{ld}\MG\\{base}+\\{ld}\MG\\{cat\_start}[\|i]\W%
+\\{address}\Z\\{ld}\MG\\{base}+\\{ld}\MG\\{cat\_end}[\|i]){}$\1\5
+\&{return} (\\{uint32\_t})${}(\|i+\T{1});{}$\2\6
+\4${}\}{}$\2\6
+\&{return} \.{SHN\_UNDEF};\6
+\4${}\}{}$\C{ Create the output alongside its destination; never truncate the
+original  * file before all relocations, metadata and writes have succeeded. }%
+\2\7
+\1\1\&{static} \&{FILE} ${}{*}{}$\\{ld\_open\_atomic}(\&{ArchLD} ${}{*}\\{ld},%
+\39{}$\&{const} \&{char} ${}{*}\\{path},\39{}$\&{char} ${}{*}{*}\\{temp})\2%
+\2{}$\6
+${}\{{}$\1\6
+\&{size\_t} \\{len}${}\K\\{strlen}(\\{path});{}$\7
+\&{if} ${}(\\{len}>\.{SIZE\_MAX}-\T{24}){}$\5
+${}\{{}$\1\6
+${}\\{ld\_fail}(\\{ld},\39\.{"output\ filename\ too}\)\.{\ long"});{}$\6
+\&{return} ${}\NULL;{}$\6
+\4${}\}{}$\2\7
+\&{char} ${}{*}\\{name}\K\\{malloc}(\\{len}+\T{20});{}$\7
+\&{if} ${}(\R\\{name}){}$\5
+${}\{{}$\1\6
+${}\\{ld\_fail}(\\{ld},\39\.{"out\ of\ memory"});{}$\6
+\&{return} ${}\NULL;{}$\6
+\4${}\}{}$\2\6
+${}\\{sprintf}(\\{name},\39\.{"\%s.archld-XXXXXX"},\39\\{path});{}$\7
+\&{int} \\{fd}${}\K\\{mkstemp}(\\{name});{}$\7
+\&{if} ${}(\\{fd}<\T{0}){}$\5
+${}\{{}$\1\6
+${}\\{ld\_fail}(\\{ld},\39\.{"cannot\ create\ outpu}\)\.{t\ next\ to\ \%s:\ %
+\%s"},\39\\{path},\39\\{strerror}(\\{errno}));{}$\6
+\\{free}(\\{name});\6
+\&{return} ${}\NULL;{}$\6
+\4${}\}{}$\2\7
+\&{FILE} ${}{*}\|f\K\\{fdopen}(\\{fd},\39\.{"wb"});{}$\7
+\&{if} ${}(\R\|f){}$\5
+${}\{{}$\1\6
+${}\\{ld\_fail}(\\{ld},\39\.{"cannot\ open\ tempora}\)\.{ry\ output:\ \%s"},\39%
+\\{strerror}(\\{errno}));{}$\6
+\\{close}(\\{fd});\6
+\\{unlink}(\\{name});\6
+\\{free}(\\{name});\6
+\&{return} ${}\NULL;{}$\6
+\4${}\}{}$\2\6
+${}{*}\\{temp}\K\\{name};{}$\6
+\&{return} \|f;\6
+\4${}\}{}$\2\7
+\1\1\&{static} \&{bool} \\{ld\_close\_atomic}(\&{ArchLD} ${}{*}\\{ld},\39{}$%
+\&{FILE} ${}{*}\|f,\39{}$\&{char} ${}{*}\\{temp},\39{}$\&{const} \&{char}
+${}{*}\\{path},\39{}$\&{bool} \\{ok})\2\2\6
+${}\{{}$\1\6
+\&{if} ${}(\\{ok}\W\\{fflush}(\|f)){}$\1\5
+${}\\{ok}\K\\{false};{}$\2\6
+\&{if} ${}(\\{ok}\W\\{fsync}(\\{fileno}(\|f))){}$\1\5
+${}\\{ok}\K\\{false};{}$\2\6
+\&{if} (\\{fclose}(\|f))\1\5
+${}\\{ok}\K\\{false};{}$\2\6
+\&{if} ${}(\\{ok}\W\\{chmod}(\\{temp},\39\T{\~755})){}$\1\5
+${}\\{ok}\K\\{false};{}$\2\6
+\&{if} ${}(\\{ok}\W\\{rename}(\\{temp},\39\\{path})){}$\1\5
+${}\\{ok}\K\\{false};{}$\2\6
+\&{if} ${}(\R\\{ok}){}$\5
+${}\{{}$\1\6
+${}\\{ld\_fail}(\\{ld},\39\.{"cannot\ publish\ exec}\)\.{utable\ \%s:\ \%s"},%
+\39\\{path},\39\\{strerror}(\\{errno}));{}$\6
+\\{unlink}(\\{temp});\6
+\4${}\}{}$\2\6
+\\{free}(\\{temp});\6
+\&{return} \\{ok};\6
+\4${}\}{}$\2\par
+\U3.\fi
+
+\M{33}
+
+\fi
+
+\N{1}{34}Executable ELF32 output.
+
+Parallel ELFCLASS32 writer with genuine 32-bit program, section and symbol
+entries.
+
+\Y\B\4\X34:Executable ELF32 output\X${}\E{}$\6
+\&{static} \&{bool} \\{ld\_write\_elf32}(\&{ArchLD} ${}{*},\39{}$\&{const} %
+\&{char} ${}{*},\39\\{uint64\_t});$ \1\1\&{bool} \\{archld\_write\_elf}(%
+\&{ArchLD} ${}{*}\\{ld},\39{}$\&{const} \&{char} ${}{*}\\{path},\39\\{uint64%
+\_t}\\{entry})$ $\{$ \6
+\&{if} ${}(\\{ld}\W\\{ld}\MG\\{elf32}){}$\1\5
+\&{return} \\{ld\_write\_elf32}${}(\\{ld},\39\\{path},\39\\{entry});{}$\2\6
+\&{if} ${}(\R\\{ld}\V\R\\{ld}\MG\\{linked}\V\R\\{path}\V\R\\{path}[\T{0}]){}$\1%
+\5
+\&{return} \\{false};\2\6
+\&{if} ${}(\\{ld}\MG\\{base}<\T{4096}\V\\{ld}\MG\\{base}\MOD\T{4096}\V%
+\\{entry}<\\{ld}\MG\\{base}+\\{ld}\MG\\{cat\_start}[\T{0}]\V\\{entry}\G\\{ld}%
+\MG\\{base}+\\{ld}\MG\\{cat\_end}[\T{0}]){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"ELF64\ executable\ re}\)\.{quires\
+page-aligned\ }\)\.{base\ >=\ 0x1000\ and\ e}\)\.{ntry\ inside\ executab}\)%
+\.{le\ text"});{}$\2\6
+\&{if} ${}(\\{ld}\MG\\{image\_size}>\.{LD\_MAX\_IMAGE}\V\\{ld}\MG\\{global%
+\_count}>\.{UINT32\_MAX}){}$\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"ELF\ output\ size\ exc}\)\.{eeds\
+limits"});{}$\2\7
+\&{enum} ${}\{{}$\1\6
+${}\.{SEC\_COUNT}\K\T{8},\39\.{SEG\_COUNT}\K\T{5}{}$\2\6
+${}\};{}$\6
+\&{const} \&{char} ${}{*}\\{labels}[\.{SEC\_COUNT}]\K\{\.{""},\39\.{".text"},%
+\39\.{".rodata"},\39\.{".data"},\39\.{".bss"},\39\.{".symtab"},\39%
+\.{".strtab"},\39\.{".shstrtab"}\};{}$\7
+${}\\{uint32\_t}\\{shnames}[\.{SEC\_COUNT}]\K\{\T{0}\};{}$\6
+${}\\{DsymBuf}\\{shstr},\39\\{str};{}$\6
+${}\\{dsym\_buf\_init}({\AND}\\{shstr});{}$\6
+${}\\{dsym\_buf\_init}({\AND}\\{str});{}$\7
+\&{bool} \\{ok}${}\K\\{dsym\_buf\_puts}({\AND}\\{shstr},\39\.{""})\W\\{dsym%
+\_buf\_puts}({\AND}\\{str},\39\.{""}){}$;\C{ DsymBuf puts() appends zero bytes
+only for C strings; write initial NUL explicitly. }\6
+\&{char} \\{zero}${}\K\T{0};{}$\7
+\&{if} (\\{ok})\5
+${}\{{}$\1\6
+${}\\{ok}\K\\{ld\_buf\_append}({\AND}\\{shstr},\39{\AND}\\{zero},\39\T{1})\W%
+\\{ld\_buf\_append}({\AND}\\{str},\39{\AND}\\{zero},\39\T{1});{}$\6
+\4${}\}{}$\2\6
+\&{for} (\&{size\_t} \|i${}\K\T{1};{}$ ${}\|i<\.{SEC\_COUNT}\W\\{ok};{}$ ${}\|i%
+\PP){}$\5
+${}\{{}$\1\6
+${}\\{shnames}[\|i]\K(\\{uint32\_t})\\{shstr}.\\{len};{}$\6
+${}\\{ok}\K\\{ld\_buf\_append}({\AND}\\{shstr},\39\\{labels}[\|i],\39%
+\\{strlen}(\\{labels}[\|i])+\T{1});{}$\6
+\4${}\}{}$\2\6
+${}\\{Elf64\_Sym}*\\{symbols}\K\NULL;{}$\6
+${}\\{uint32\_t}*\\{nameoff}\K\NULL;{}$\7
+\&{size\_t} \\{symcount}${}\K\\{ld}\MG\\{global\_count}+\T{1};{}$\7
+\&{if} (\\{ok})\5
+${}\{{}$\1\6
+${}\\{symbols}\K\\{calloc}(\\{symcount},\39{}$\&{sizeof} ${}({*}%
+\\{symbols}));{}$\6
+${}\\{nameoff}\K\\{calloc}(\\{symcount},\39{}$\&{sizeof} ${}({*}%
+\\{nameoff}));{}$\6
+${}\\{ok}\K\\{symbols}\W\\{nameoff};{}$\6
+\4${}\}{}$\2\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{global\_count}\W%
+\\{ok};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+\&{const} \&{LDGlobal} ${}{*}\|g\K{\AND}\\{ld}\MG\\{globals}[\|i];{}$\7
+${}\\{uint64\_t}\|a\K\T{0},\39\\{sz}\K\T{0};{}$\6
+${}\\{ok}\K\\{archld\_global\_at}(\\{ld},\39\|i,\39\NULL,\39{\AND}\|a,\39{\AND}%
+\\{sz});{}$\6
+\&{if} ${}(\R\\{ok}){}$\1\5
+\&{break};\2\6
+\&{if} ${}(\\{str}.\\{len}>\.{UINT32\_MAX}){}$\5
+${}\{{}$\1\6
+${}\\{ok}\K\\{false};{}$\6
+\&{break};\6
+\4${}\}{}$\2\6
+${}\\{nameoff}[\|i+\T{1}]\K(\\{uint32\_t})\\{str}.\\{len};{}$\6
+${}\\{ok}\K\\{ld\_buf\_append}({\AND}\\{str},\39\|g\MG\\{name},\39\\{strlen}(%
+\|g\MG\\{name})+\T{1});{}$\6
+${}\\{symbols}[\|i+\T{1}].\\{st\_name}\K\\{nameoff}[\|i+\T{1}];{}$\6
+${}\\{symbols}[\|i+\T{1}].\\{st\_info}\K\.{ELF64\_ST\_INFO}(\|g\MG\\{rank}\E%
+\T{1}\?\.{STB\_WEAK}:\.{STB\_GLOBAL},\39\.{STT\_NOTYPE});{}$\6
+${}\\{symbols}[\|i+\T{1}].\\{st\_shndx}\K(\\{Elf64\_Half})\\{ld\_symbol%
+\_section}(\\{ld},\39\|g,\39\|a);{}$\6
+${}\\{symbols}[\|i+\T{1}].\\{st\_value}\K\|a;{}$\6
+${}\\{symbols}[\|i+\T{1}].\\{st\_size}\K\\{sz};{}$\6
+\4${}\}{}$\2\6
+\&{if} ${}(\R\\{ok}){}$\5
+${}\{{}$\1\6
+\\{free}(\\{symbols});\6
+\\{free}(\\{nameoff});\6
+${}\\{dsym\_buf\_free}({\AND}\\{str});{}$\6
+${}\\{dsym\_buf\_free}({\AND}\\{shstr});{}$\6
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"out\ of\ memory\ build}\)\.{ing\ ELF\
+symbol\ table}\)\.{"});{}$\6
+\4${}\}{}$\2\6
+${}\\{uint64\_t}\\{max\_file}\K\\{ld}\MG\\{cat\_end}[\T{2}];{}$\6
+\&{if} ${}(\\{ld}\MG\\{cat\_end}[\T{1}]>\\{max\_file}){}$\1\5
+${}\\{max\_file}\K\\{ld}\MG\\{cat\_end}[\T{1}];{}$\2\6
+\&{if} ${}(\\{ld}\MG\\{cat\_end}[\T{0}]>\\{max\_file}){}$\1\5
+${}\\{max\_file}\K\\{ld}\MG\\{cat\_end}[\T{0}];{}$\2\6
+${}\\{uint64\_t}\\{syoff}\K\\{ld\_align\_up}(\T{4096}+\\{max\_file},\39%
+\T{8});{}$\6
+${}\\{uint64\_t}\\{stroff}\K\\{syoff}+\\{symcount}*{}$\&{sizeof} (\\{Elf64%
+\_Sym});\6
+${}\\{uint64\_t}\\{shstroff}\K\\{stroff}+\\{str}.\\{len};{}$\6
+${}\\{uint64\_t}\\{shoff}\K\\{ld\_align\_up}(\\{shstroff}+\\{shstr}.\\{len},\39%
+\T{8});{}$\6
+\&{if} ${}(\\{shoff}>\.{UINT64\_MAX}-\.{SEC\_COUNT}*{}$\&{sizeof} (\\{Elf64%
+\_Shdr})${}\V\\{shoff}>\.{INT64\_MAX}){}$\5
+${}\{{}$\1\6
+${}\\{ok}\K\\{false};{}$\6
+\&{goto} \\{done};\6
+\4${}\}{}$\2\6
+${}\\{Elf64\_Ehdr}\\{eh}\K\{\T{0}\};{}$\6
+${}\\{memcpy}(\\{eh}.\\{e\_ident},\39\.{ELFMAG},\39\.{SELFMAG});{}$\6
+${}\\{eh}.\\{e\_ident}[\.{EI\_CLASS}]\K\.{ELFCLASS64};{}$\6
+${}\\{eh}.\\{e\_ident}[\.{EI\_DATA}]\K\.{ELFDATA2LSB};{}$\6
+${}\\{eh}.\\{e\_ident}[\.{EI\_VERSION}]\K\.{EV\_CURRENT};{}$\6
+${}\\{eh}.\\{e\_ident}[\.{EI\_OSABI}]\K\.{ELFOSABI\_SYSV};{}$\6
+${}\\{eh}.\\{e\_type}\K\.{ET\_EXEC};{}$\6
+${}\\{eh}.\\{e\_machine}\K\.{EM\_X86\_64};{}$\6
+${}\\{eh}.\\{e\_version}\K\.{EV\_CURRENT};{}$\6
+${}\\{eh}.\\{e\_entry}\K\\{entry};{}$\6
+${}\\{eh}.\\{e\_phoff}\K{}$\&{sizeof} (\\{eh});\6
+${}\\{eh}.\\{e\_ehsize}\K{}$\&{sizeof} (\\{eh});\6
+${}\\{eh}.\\{e\_phentsize}\K{}$\&{sizeof} (\\{Elf64\_Phdr});\6
+${}\\{eh}.\\{e\_phnum}\K\.{SEG\_COUNT};{}$\6
+${}\\{eh}.\\{e\_shoff}\K\\{shoff};{}$\6
+${}\\{eh}.\\{e\_shentsize}\K{}$\&{sizeof} (\\{Elf64\_Shdr});\6
+${}\\{eh}.\\{e\_shnum}\K\.{SEC\_COUNT};{}$\6
+${}\\{eh}.\\{e\_shstrndx}\K\T{7};{}$\6
+${}\\{Elf64\_Phdr}\\{ph}[\.{SEG\_COUNT}]\K\{\T{0}\};$ \1\1${}\\{ph}[\T{0}]\K(%
+\\{Elf64\_Phdr})$ $\{$ $.$ $\\{p\_type}\K\.{PT\_LOAD}$ $,$ $.$ $\\{p\_flags}\K%
+\.{PF\_R}$ $,$ $.$ $\\{p\_offset}\K\T{0}$ $,$ $.$ $\\{p\_vaddr}\K\\{ld}\MG%
+\\{base}-\T{4096}$ $,$ $.$ $\\{p\_paddr}\K\\{ld}\MG\\{base}-\T{4096}$ $,$ $.$ $%
+\\{p\_filesz}\K\T{4096}$ $,$ $.$ $\\{p\_memsz}\K\T{4096}$ $,$ $.$ $\\{p\_align}%
+\K\T{4096}$ $\}$  ; \&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{3};{}$ ${}\|i%
+\PP)$ $\{$ $\\{uint64\_t}\\{start}\K\\{ld}\MG\\{cat\_start}[\|i],\39\\{end}\K%
+\\{ld}\MG\\{cat\_end}[\|i];$ \1\1${}\\{ph}[\|i+\T{1}]\K(\\{Elf64\_Phdr})$ $\{$
+$.$ $\\{p\_type}\K\.{PT\_LOAD}$ $,$ $.$ $\\{p\_flags}\K(\|i\E\T{0}\?\.{PF\_R}%
+\OR\.{PF\_X}:\|i\E\T{1}\?\.{PF\_R}:\.{PF\_R}\OR\.{PF\_W})$ $,$ $.$ $\\{p%
+\_offset}\K\T{4096}+\\{start}$ $,$ $.$ $\\{p\_vaddr}\K\\{ld}\MG\\{base}+%
+\\{start}$ $,$ $.$ $\\{p\_paddr}\K\\{ld}\MG\\{base}+\\{start}$ $,$ $.$ $\\{p%
+\_filesz}\K\\{end}-\\{start}$ $,$ $.$ $\\{p\_memsz}\K\|i\E\T{2}\?\\{ld}\MG%
+\\{image\_size}-\\{start}:\\{end}-\\{start}$ $,$ $.$ $\\{p\_align}\K\T{4096}$ $%
+\}$  ; $\}$ \6
+\&{for} (\&{int} \|i${}\K\T{1};{}$ ${}\|i\Z\T{3};{}$ ${}\|i\PP){}$\1\6
+\&{if} ${}(\\{ph}[\|i].\\{p\_memsz}\E\T{0}){}$\1\5
+${}\\{memset}({\AND}\\{ph}[\|i],\39\T{0},\39{}$\&{sizeof} (\\{ph}[\|i]));\2\2\6
+\1\1${}\\{ph}[\T{4}]\K(\\{Elf64\_Phdr})$ $\{$ $.$ $\\{p\_type}\K\.{PT\_GNU%
+\_STACK}$ $,$ $.$ $\\{p\_flags}\K\.{PF\_R}\OR\.{PF\_W}$ $,$ $.$ $\\{p\_align}\K%
+\T{16}$ $\}$  ;\6
+${}\\{Elf64\_Shdr}\\{sh}[\.{SEC\_COUNT}]\K\{\T{0}\};$ \&{for} (\&{int} \|i${}\K%
+\T{1};{}$ ${}\|i\Z\T{4};{}$ ${}\|i\PP)$ $\{$ $\\{uint64\_t}\\{st}\K\\{ld}\MG%
+\\{cat\_start}[\|i-\T{1}],\39\\{end}\K\\{ld}\MG\\{cat\_end}[\|i-\T{1}];$ \1%
+\1${}\\{sh}[\|i]\K(\\{Elf64\_Shdr})$ $\{$ $.$ $\\{sh\_name}\K\\{shnames}[\|i]$
+$,$ $.$ $\\{sh\_type}\K\|i\E\T{4}\?\.{SHT\_NOBITS}:\.{SHT\_PROGBITS}$ $,$ $.$ $%
+\\{sh\_flags}\K\.{SHF\_ALLOC}\OR(\|i\E\T{1}\?\.{SHF\_EXECINSTR}:\|i\G\T{3}\?%
+\.{SHF\_WRITE}:\T{0})$ $,$ $.$ $\\{sh\_addr}\K\\{ld}\MG\\{base}+\\{st}$ $,$ $.$
+$\\{sh\_offset}\K\T{4096}+\\{st}$ $,$ $.$ $\\{sh\_size}\K\|i\E\T{4}\?\\{ld}\MG%
+\\{image\_size}-\\{st}:\\{end}-\\{st}$ $,$ $.$ $\\{sh\_addralign}\K\|i\E\T{4}\?%
+\T{16}:\T{4096}$ $\}$  ; $\}$ \1\1${}\\{sh}[\T{5}]\K(\\{Elf64\_Shdr})$ $\{$ $.$
+$\\{sh\_name}\K\\{shnames}[\T{5}]$ $,$ $.$ $\\{sh\_type}\K\.{SHT\_SYMTAB}$ $,$
+$.$ $\\{sh\_offset}\K\\{syoff}$ $,$ $.$ $\\{sh\_size}\K\\{symcount}*{}$%
+\&{sizeof} (\\{Elf64\_Sym}) $,$ $.$ $\\{sh\_link}\K\T{6}$ $,$ $.$ $\\{sh\_info}%
+\K\T{1}$ $,$ $.$ $\\{sh\_addralign}\K\T{8}$ $,$ $.$ $\\{sh\_entsize}\K{}$%
+\&{sizeof} (\\{Elf64\_Sym}) $\}$  ; \1\1${}\\{sh}[\T{6}]\K(\\{Elf64\_Shdr})$ $%
+\{$ $.$ $\\{sh\_name}\K\\{shnames}[\T{6}]$ $,$ $.$ $\\{sh\_type}\K\.{SHT%
+\_STRTAB}$ $,$ $.$ $\\{sh\_offset}\K\\{stroff}$ $,$ $.$ $\\{sh\_size}\K\\{str}.%
+\\{len}$ $,$ $.$ $\\{sh\_addralign}\K\T{1}$ $\}$  ; \1\1${}\\{sh}[\T{7}]\K(%
+\\{Elf64\_Shdr})$ $\{$ $.$ $\\{sh\_name}\K\\{shnames}[\T{7}]$ $,$ $.$ $\\{sh%
+\_type}\K\.{SHT\_STRTAB}$ $,$ $.$ $\\{sh\_offset}\K\\{shstroff}$ $,$ $.$ $\\{sh%
+\_size}\K\\{shstr}.\\{len}$ $,$ $.$ $\\{sh\_addralign}\K\T{1}$ $\}$  ;\7
+\&{char} ${}{*}\\{tmp}\K\NULL;{}$\6
+\&{FILE} ${}{*}\|f\K\\{ld\_open\_atomic}(\\{ld},\39\\{path},\39{\AND}%
+\\{tmp});{}$\7
+\&{if} ${}(\R\|f){}$\5
+${}\{{}$\1\6
+${}\\{ok}\K\\{false};{}$\6
+\&{goto} \\{done};\6
+\4${}\}{}$\2\6
+${}\\{ok}\K\\{ld\_write\_all}(\|f,\39{\AND}\\{eh},\39{}$\&{sizeof} (\\{eh}))${}%
+\W\\{ld\_write\_all}(\|f,\39\\{ph},\39{}$\&{sizeof} (\\{ph}));\6
+\&{if} (\\{ok})\5
+${}\{{}$\C{ Do not materialize SHT\_NOBITS/common into the file. }\1\6
+\&{for} (\&{unsigned} \|i${}\K\T{0};{}$ ${}\|i<\T{3}\W\\{ok};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+${}\\{uint64\_t}\|a\K\\{ld}\MG\\{cat\_start}[\|i],\39\|b\K\\{ld}\MG\\{cat%
+\_end}[\|i];{}$\6
+\&{if} ${}(\|a\E\|b){}$\1\5
+\&{continue};\2\6
+${}\\{ok}\K\\{ld\_seek}(\|f,\39\T{4096}+\|a)\W\\{ld\_write\_all}(\|f,\39\\{ld}%
+\MG\\{image}+(\&{size\_t})\,\|a,\39(\&{size\_t})(\|b-\|a));{}$\6
+\4${}\}{}$\2\6
+${}\\{ok}\K\\{ok}\W\\{ld\_seek}(\|f,\39\\{syoff})\W\\{ld\_write\_all}(\|f,\39%
+\\{symbols},\39\\{symcount}*{}$\&{sizeof} ${}({*}\\{symbols}))\W\\{ld\_write%
+\_all}(\|f,\39\\{str}.\\{data},\39\\{str}.\\{len})\W\\{ld\_write\_all}(\|f,\39%
+\\{shstr}.\\{data},\39\\{shstr}.\\{len})\W\\{ld\_seek}(\|f,\39\\{shoff})\W\\{ld%
+\_write\_all}(\|f,\39\\{sh},\39{}$\&{sizeof} (\\{sh}));\6
+\4${}\}{}$\2\6
+${}\\{ok}\K\\{ld\_close\_atomic}(\\{ld},\39\|f,\39\\{tmp},\39\\{path},\39%
+\\{ok});{}$\6
+\4\\{done}:\5
+\\{free}(\\{symbols});\6
+\\{free}(\\{nameoff});\6
+${}\\{dsym\_buf\_free}({\AND}\\{shstr});{}$\6
+${}\\{dsym\_buf\_free}({\AND}\\{str});{}$\6
+\&{return} \\{ok}; $\}{}$\C{ ELFCLASS32 i386 output shares section placement,
+symbol selection and the  * ArchBFD-driven input machinery with the ELF64
+backend. The output ABI is  * genuinely 32-bit: headers, program headers,
+section headers and symbols. }\6
+\1\1\&{static} \&{bool} \\{ld\_write\_elf32}(\&{ArchLD} ${}{*}\\{ld},\39{}$%
+\&{const} \&{char} ${}{*}\\{path},\39\\{uint64\_t}\\{entry})$ $\{$ \6
+\&{if} ${}(\R\\{ld}\V\R\\{ld}\MG\\{linked}\V\\{ld}\MG\\{base}<\T{4096}\V\\{ld}%
+\MG\\{base}\MOD\T{4096}\V\\{entry}>\.{UINT32\_MAX}\V\\{ld}\MG\\{base}+\\{ld}\MG%
+\\{image\_size}>\.{UINT32\_MAX}\V\\{entry}<\\{ld}\MG\\{base}+\\{ld}\MG\\{cat%
+\_start}[\T{0}]\V\\{entry}\G\\{ld}\MG\\{base}+\\{ld}\MG\\{cat\_end}[\T{0}]){}$%
+\1\5
+\&{return} \\{ld\_fail}${}(\\{ld},\39\.{"ELF32\ requires\ a\ pa}\)\.{ge-aligned%
+\ 32-bit\ ad}\)\.{dress\ range\ and\ an\ e}\)\.{xecutable\ entry"});{}$\2\7
+\&{enum} ${}\{{}$\1\6
+${}\.{SEC\_COUNT}\K\T{8},\39\.{SEG\_COUNT}\K\T{5}{}$\2\6
+${}\};{}$\6
+\&{const} \&{char} ${}{*}\\{labels}[\.{SEC\_COUNT}]\K\{\.{""},\39\.{".text"},%
+\39\.{".rodata"},\39\.{".data"},\39\.{".bss"},\39\.{".symtab"},\39%
+\.{".strtab"},\39\.{".shstrtab"}\};{}$\7
+${}\\{uint32\_t}\\{shnames}[\.{SEC\_COUNT}]\K\{\T{0}\};{}$\6
+${}\\{DsymBuf}\\{shstr},\39\\{str};{}$\6
+${}\\{dsym\_buf\_init}({\AND}\\{shstr});{}$\6
+${}\\{dsym\_buf\_init}({\AND}\\{str});{}$\7
+\&{char} \\{zero}${}\K\T{0};{}$\6
+\&{bool} \\{ok}${}\K\\{ld\_buf\_append}({\AND}\\{shstr},\39{\AND}\\{zero},\39%
+\T{1})\W\\{ld\_buf\_append}({\AND}\\{str},\39{\AND}\\{zero},\39\T{1});{}$\7
+\&{for} (\&{int} \|i${}\K\T{1};{}$ ${}\|i<\.{SEC\_COUNT}\W\\{ok};{}$ ${}\|i%
+\PP){}$\5
+${}\{{}$\1\6
+${}\\{shnames}[\|i]\K(\\{uint32\_t})\\{shstr}.\\{len};{}$\6
+${}\\{ok}\K\\{ld\_buf\_append}({\AND}\\{shstr},\39\\{labels}[\|i],\39%
+\\{strlen}(\\{labels}[\|i])+\T{1});{}$\6
+\4${}\}{}$\2\7
+\&{size\_t} \|n${}\K\\{ld}\MG\\{global\_count}+\T{1};{}$\7
+${}\\{Elf32\_Sym}*\\{symbols}\K\\{calloc}(\|n,\39{}$\&{sizeof} (\\{Elf32%
+\_Sym}));\6
+\&{if} ${}(\R\\{symbols}){}$\1\5
+${}\\{ok}\K\\{false};{}$\2\6
+\&{for} (\&{size\_t} \|i${}\K\T{0};{}$ ${}\|i<\\{ld}\MG\\{global\_count}\W%
+\\{ok};{}$ ${}\|i\PP)$ $\{$ \&{const} \&{LDGlobal} ${}{*}\|g\K{\AND}\\{ld}\MG%
+\\{globals}[\|i];{}$\7
+${}\\{uint64\_t}\\{addr}\K\T{0},\39\\{sz}\K\T{0};{}$\6
+\&{if} ${}(\R\\{archld\_global\_at}(\\{ld},\39\|i,\39\NULL,\39{\AND}\\{addr},%
+\39{\AND}\\{sz})\V\\{addr}>\.{UINT32\_MAX}\V\\{sz}>\.{UINT32\_MAX}\V\\{str}.%
+\\{len}>\.{UINT32\_MAX}){}$\5
+${}\{{}$\1\6
+${}\\{ok}\K\\{false};{}$\6
+\&{break};\6
+\4${}\}{}$\2\6
+\1\1${}\\{symbols}[\|i+\T{1}]\K(\\{Elf32\_Sym})$ $\{$ $.$ $\\{st\_name}\K(%
+\\{uint32\_t})\\{str}.\\{len}$ $,$ $.$ $\\{st\_value}\K(\\{uint32\_t})\\{addr}$
+$,$ $.$ $\\{st\_size}\K(\\{uint32\_t})\\{sz}$ $,$ $.$ $\\{st\_info}\K\.{ELF32%
+\_ST\_INFO}(\|g\MG\\{rank}\E\T{1}\?\.{STB\_WEAK}:\.{STB\_GLOBAL},\39\.{STT%
+\_NOTYPE})$ $,$ $.$ $\\{st\_shndx}\K(\\{uint16\_t})\\{ld\_symbol\_section}(%
+\\{ld},\39\|g,\39\\{addr})$ $\}$  ;\6
+${}\\{ok}\K\\{ld\_buf\_append}({\AND}\\{str},\39\|g\MG\\{name},\39\\{strlen}(%
+\|g\MG\\{name})+\T{1});$ $\}$ \6
+\&{if} ${}(\R\\{ok}){}$\5
+${}\{{}$\1\6
+${}\\{ld\_fail}(\\{ld},\39\.{"invalid\ ELF32\ symbo}\)\.{ls\ or\ out\ of\
+memory"});{}$\6
+\&{goto} \\{done};\6
+\4${}\}{}$\2\6
+${}\\{uint64\_t}\\{max\_file}\K\\{ld}\MG\\{cat\_end}[\T{2}];{}$\6
+\&{if} ${}(\\{ld}\MG\\{cat\_end}[\T{0}]>\\{max\_file}){}$\1\5
+${}\\{max\_file}\K\\{ld}\MG\\{cat\_end}[\T{0}];{}$\2\6
+\&{if} ${}(\\{ld}\MG\\{cat\_end}[\T{1}]>\\{max\_file}){}$\1\5
+${}\\{max\_file}\K\\{ld}\MG\\{cat\_end}[\T{1}];{}$\2\6
+${}\\{uint64\_t}\\{syoff}\K\\{ld\_align\_up}(\T{4096}+\\{max\_file},\39%
+\T{4});{}$\6
+${}\\{uint64\_t}\\{stroff}\K\\{syoff}+\|n*{}$\&{sizeof} (\\{Elf32\_Sym})${},\39%
+\\{shstroff}\K\\{stroff}+\\{str}.\\{len};{}$\6
+${}\\{uint64\_t}\\{shoff}\K\\{ld\_align\_up}(\\{shstroff}+\\{shstr}.\\{len},\39%
+\T{4});{}$\6
+\&{if} ${}(\\{shoff}+\.{SEC\_COUNT}*{}$\&{sizeof} (\\{Elf32\_Shdr})${}>%
+\.{UINT32\_MAX}){}$\5
+${}\{{}$\1\6
+${}\\{ok}\K\\{ld\_fail}(\\{ld},\39\.{"ELF32\ output\ too\ la}\)\.{rge"});{}$\6
+\&{goto} \\{done};\6
+\4${}\}{}$\2\6
+${}\\{Elf32\_Ehdr}\\{eh}\K\{\T{0}\};{}$\6
+${}\\{memcpy}(\\{eh}.\\{e\_ident},\39\.{ELFMAG},\39\.{SELFMAG});{}$\6
+${}\\{eh}.\\{e\_ident}[\.{EI\_CLASS}]\K\.{ELFCLASS32};{}$\6
+${}\\{eh}.\\{e\_ident}[\.{EI\_DATA}]\K\.{ELFDATA2LSB};{}$\6
+${}\\{eh}.\\{e\_ident}[\.{EI\_VERSION}]\K\.{EV\_CURRENT};{}$\6
+${}\\{eh}.\\{e\_ident}[\.{EI\_OSABI}]\K\.{ELFOSABI\_SYSV};{}$\6
+${}\\{eh}.\\{e\_type}\K\.{ET\_EXEC};{}$\6
+${}\\{eh}.\\{e\_machine}\K\.{EM\_386};{}$\6
+${}\\{eh}.\\{e\_version}\K\.{EV\_CURRENT};{}$\6
+${}\\{eh}.\\{e\_entry}\K(\\{uint32\_t})\\{entry};{}$\6
+${}\\{eh}.\\{e\_phoff}\K{}$\&{sizeof} (\\{eh});\6
+${}\\{eh}.\\{e\_ehsize}\K{}$\&{sizeof} (\\{eh});\6
+${}\\{eh}.\\{e\_phentsize}\K{}$\&{sizeof} (\\{Elf32\_Phdr});\6
+${}\\{eh}.\\{e\_phnum}\K\.{SEG\_COUNT};{}$\6
+${}\\{eh}.\\{e\_shoff}\K(\\{uint32\_t})\\{shoff};{}$\6
+${}\\{eh}.\\{e\_shentsize}\K{}$\&{sizeof} (\\{Elf32\_Shdr});\6
+${}\\{eh}.\\{e\_shnum}\K\.{SEC\_COUNT};{}$\6
+${}\\{eh}.\\{e\_shstrndx}\K\T{7};{}$\6
+${}\\{Elf32\_Phdr}\\{ph}[\.{SEG\_COUNT}]\K\{\T{0}\};$ \1\1${}\\{ph}[\T{0}]\K(%
+\\{Elf32\_Phdr})$ $\{$ $.$ $\\{p\_type}\K\.{PT\_LOAD}$ $,$ $.$ $\\{p\_flags}\K%
+\.{PF\_R}$ $,$ $.$ $\\{p\_offset}\K\T{0}$ $,$ $.$ $\\{p\_vaddr}\K(\\{uint32%
+\_t})(\\{ld}\MG\\{base}-\T{4096})$ $,$ $.$ $\\{p\_paddr}\K(\\{uint32\_t})(%
+\\{ld}\MG\\{base}-\T{4096})$ $,$ $.$ $\\{p\_filesz}\K\T{4096}$ $,$ $.$ $\\{p%
+\_memsz}\K\T{4096}$ $,$ $.$ $\\{p\_align}\K\T{4096}$ $\}$  ; \&{for} (\&{int} %
+\|i${}\K\T{0};{}$ ${}\|i<\T{3};{}$ ${}\|i\PP)$ $\{$ $\\{uint64\_t}\\{st}\K%
+\\{ld}\MG\\{cat\_start}[\|i],\39\\{end}\K\\{ld}\MG\\{cat\_end}[\|i];$ \1\1${}%
+\\{ph}[\|i+\T{1}]\K(\\{Elf32\_Phdr})$ $\{$ $.$ $\\{p\_type}\K\.{PT\_LOAD}$ $,$
+$.$ $\\{p\_flags}\K\|i\E\T{0}\?\.{PF\_R}\OR\.{PF\_X}:\|i\E\T{1}\?\.{PF\_R}:%
+\.{PF\_R}\OR\.{PF\_W}$ $,$ $.$ $\\{p\_offset}\K(\\{uint32\_t})(\T{4096}+%
+\\{st})$ $,$ $.$ $\\{p\_vaddr}\K(\\{uint32\_t})(\\{ld}\MG\\{base}+\\{st})$ $,$
+$.$ $\\{p\_paddr}\K(\\{uint32\_t})(\\{ld}\MG\\{base}+\\{st})$ $,$ $.$ $\\{p%
+\_filesz}\K(\\{uint32\_t})(\\{end}-\\{st})$ $,$ $.$ $\\{p\_memsz}\K(\\{uint32%
+\_t})(\|i\E\T{2}\?\\{ld}\MG\\{image\_size}-\\{st}:\\{end}-\\{st})$ $,$ $.$ $%
+\\{p\_align}\K\T{4096}$ $\}$  ; $\}$ \6
+\&{for} (\&{int} \|i${}\K\T{1};{}$ ${}\|i\Z\T{3};{}$ ${}\|i\PP){}$\1\6
+\&{if} ${}(\\{ph}[\|i].\\{p\_memsz}\E\T{0}){}$\1\5
+${}\\{memset}({\AND}\\{ph}[\|i],\39\T{0},\39{}$\&{sizeof} (\\{ph}[\|i]));\2\2\6
+\1\1${}\\{ph}[\T{4}]\K(\\{Elf32\_Phdr})$ $\{$ $.$ $\\{p\_type}\K\.{PT\_GNU%
+\_STACK}$ $,$ $.$ $\\{p\_flags}\K\.{PF\_R}\OR\.{PF\_W}$ $,$ $.$ $\\{p\_align}\K%
+\T{16}$ $\}$  ;\6
+${}\\{Elf32\_Shdr}\\{sh}[\.{SEC\_COUNT}]\K\{\T{0}\};$ \&{for} (\&{int} \|i${}\K%
+\T{1};{}$ ${}\|i\Z\T{4};{}$ ${}\|i\PP)$ $\{$ $\\{uint64\_t}\\{st}\K\\{ld}\MG%
+\\{cat\_start}[\|i-\T{1}],\39\\{end}\K\\{ld}\MG\\{cat\_end}[\|i-\T{1}];$ \1%
+\1${}\\{sh}[\|i]\K(\\{Elf32\_Shdr})$ $\{$ $.$ $\\{sh\_name}\K\\{shnames}[\|i]$
+$,$ $.$ $\\{sh\_type}\K\|i\E\T{4}\?\.{SHT\_NOBITS}:\.{SHT\_PROGBITS}$ $,$ $.$ $%
+\\{sh\_flags}\K\.{SHF\_ALLOC}\OR(\|i\E\T{1}\?\.{SHF\_EXECINSTR}:\|i\G\T{3}\?%
+\.{SHF\_WRITE}:\T{0})$ $,$ $.$ $\\{sh\_addr}\K(\\{uint32\_t})(\\{ld}\MG%
+\\{base}+\\{st})$ $,$ $.$ $\\{sh\_offset}\K(\\{uint32\_t})(\T{4096}+\\{st})$
+$,$ $.$ $\\{sh\_size}\K(\\{uint32\_t})(\|i\E\T{4}\?\\{ld}\MG\\{image\_size}-%
+\\{st}:\\{end}-\\{st})$ $,$ $.$ $\\{sh\_addralign}\K\|i\E\T{4}\?\T{16}:%
+\T{4096}$ $\}$  ; $\}$ \1\1${}\\{sh}[\T{5}]\K(\\{Elf32\_Shdr})$ $\{$ $.$ $\\{sh%
+\_name}\K\\{shnames}[\T{5}]$ $,$ $.$ $\\{sh\_type}\K\.{SHT\_SYMTAB}$ $,$ $.$ $%
+\\{sh\_offset}\K(\\{uint32\_t})\\{syoff}$ $,$ $.$ $\\{sh\_size}\K(\\{uint32%
+\_t})(\|n*{}$\&{sizeof} (\\{Elf32\_Sym})) $,$ $.$ $\\{sh\_link}\K\T{6}$ $,$ $.$
+$\\{sh\_info}\K\T{1}$ $,$ $.$ $\\{sh\_addralign}\K\T{4}$ $,$ $.$ $\\{sh%
+\_entsize}\K{}$\&{sizeof} (\\{Elf32\_Sym}) $\}$  ; \1\1${}\\{sh}[\T{6}]\K(%
+\\{Elf32\_Shdr})$ $\{$ $.$ $\\{sh\_name}\K\\{shnames}[\T{6}]$ $,$ $.$ $\\{sh%
+\_type}\K\.{SHT\_STRTAB}$ $,$ $.$ $\\{sh\_offset}\K(\\{uint32\_t})\\{stroff}$
+$,$ $.$ $\\{sh\_size}\K(\\{uint32\_t})\\{str}.\\{len}$ $,$ $.$ $\\{sh%
+\_addralign}\K\T{1}$ $\}$  ; \1\1${}\\{sh}[\T{7}]\K(\\{Elf32\_Shdr})$ $\{$ $.$
+$\\{sh\_name}\K\\{shnames}[\T{7}]$ $,$ $.$ $\\{sh\_type}\K\.{SHT\_STRTAB}$ $,$
+$.$ $\\{sh\_offset}\K(\\{uint32\_t})\\{shstroff}$ $,$ $.$ $\\{sh\_size}\K(%
+\\{uint32\_t})\\{shstr}.\\{len}$ $,$ $.$ $\\{sh\_addralign}\K\T{1}$ $\}$  ;\7
+\&{char} ${}{*}\\{tmp}\K\NULL;{}$\6
+\&{FILE} ${}{*}\|f\K\\{ld\_open\_atomic}(\\{ld},\39\\{path},\39{\AND}%
+\\{tmp});{}$\7
+\&{if} ${}(\R\|f){}$\5
+${}\{{}$\1\6
+${}\\{ok}\K\\{false};{}$\6
+\&{goto} \\{done};\6
+\4${}\}{}$\2\6
+${}\\{ok}\K\\{ld\_write\_all}(\|f,\39{\AND}\\{eh},\39{}$\&{sizeof} (\\{eh}))${}%
+\W\\{ld\_write\_all}(\|f,\39\\{ph},\39{}$\&{sizeof} (\\{ph}));\6
+\&{for} (\&{int} \|i${}\K\T{0};{}$ ${}\|i<\T{3}\W\\{ok};{}$ ${}\|i\PP){}$\5
+${}\{{}$\1\6
+${}\\{uint64\_t}\\{st}\K\\{ld}\MG\\{cat\_start}[\|i],\39\\{end}\K\\{ld}\MG%
+\\{cat\_end}[\|i];{}$\6
+\&{if} ${}(\\{st}\I\\{end}){}$\1\5
+${}\\{ok}\K\\{ld\_seek}(\|f,\39\T{4096}+\\{st})\W\\{ld\_write\_all}(\|f,\39%
+\\{ld}\MG\\{image}+(\&{size\_t})\,\\{st},\39(\&{size\_t})(\\{end}-\\{st}));{}$%
+\2\6
+\4${}\}{}$\2\6
+${}\\{ok}\K\\{ok}\W\\{ld\_seek}(\|f,\39\\{syoff})\W\\{ld\_write\_all}(\|f,\39%
+\\{symbols},\39\|n*{}$\&{sizeof} ${}({*}\\{symbols}))\W\\{ld\_write\_all}(\|f,%
+\39\\{str}.\\{data},\39\\{str}.\\{len})\W\\{ld\_write\_all}(\|f,\39\\{shstr}.%
+\\{data},\39\\{shstr}.\\{len})\W\\{ld\_seek}(\|f,\39\\{shoff})\W\\{ld\_write%
+\_all}(\|f,\39\\{sh},\39{}$\&{sizeof} (\\{sh}));\6
+${}\\{ok}\K\\{ld\_close\_atomic}(\\{ld},\39\|f,\39\\{tmp},\39\\{path},\39%
+\\{ok});{}$\6
+\4\\{done}:\5
+\\{free}(\\{symbols});\6
+${}\\{dsym\_buf\_free}({\AND}\\{shstr});{}$\6
+${}\\{dsym\_buf\_free}({\AND}\\{str});{}$\6
+\&{return} \\{ok}; $\}{}$\par
+\U3.\fi
+
+\M{35}
+
+\fi
+
+
+\inx
+\fin
+\con

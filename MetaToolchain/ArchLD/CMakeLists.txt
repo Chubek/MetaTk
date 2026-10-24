@@ -1,0 +1,76 @@
+cmake_minimum_required(VERSION 3.20)
+project(ArchLD VERSION 0.1.0 LANGUAGES C CXX)
+
+# This standalone reader uses the JSON satellite's ABI. It must never share
+# a process with MetaToolchain's complete Dsymspec implementation.
+if(NOT CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
+  message(FATAL_ERROR "Configure ArchLD as a standalone project to isolate its Dsymspec ABI")
+endif()
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS ON) # private __int128 relocation arithmetic
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(DSLTK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../DSLtk" CACHE PATH "Workspace DSLtk directory")
+if(NOT EXISTS "${DSLTK_ROOT}/DSLtk.hpp")
+  message(FATAL_ERROR "DSLTK_ROOT must contain DSLtk.hpp")
+endif()
+option(ARCHLD_SANITIZERS "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(ARCHLD_WERROR "Treat compiler warnings as errors" ON)
+
+add_library(archld_build_options INTERFACE)
+target_compile_options(archld_build_options INTERFACE -Wall -Wextra)
+if(ARCHLD_WERROR)
+  target_compile_options(archld_build_options INTERFACE -Werror)
+endif()
+if(ARCHLD_SANITIZERS)
+  target_compile_options(archld_build_options INTERFACE -fsanitize=address,undefined -fno-omit-frame-pointer)
+  target_link_options(archld_build_options INTERFACE -fsanitize=address,undefined)
+endif()
+
+# Layers: JSON support -> object reader -> linker -> DSLtk frontends.
+add_library(archld_json STATIC third_party/dsymspec/DsymspecIR.c)
+target_include_directories(archld_json PUBLIC third_party/dsymspec)
+target_link_libraries(archld_json PRIVATE archld_build_options)
+add_library(archld_bfd STATIC third_party/archbfd/ArchBFD.c)
+target_include_directories(archld_bfd PUBLIC third_party/archbfd)
+target_link_libraries(archld_bfd PUBLIC archld_json PRIVATE archld_build_options)
+add_library(archld STATIC src/ArchLD.c)
+target_include_directories(archld PUBLIC src)
+target_link_libraries(archld PUBLIC archld_bfd PRIVATE archld_build_options)
+add_executable(ArchTool src/Tools.cpp)
+target_include_directories(ArchTool PRIVATE "${DSLTK_ROOT}")
+target_link_libraries(ArchTool PRIVATE archld archld_build_options)
+set_target_properties(ArchTool PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+foreach(tool ArchLD ArchNm ArchSize ArchSections ArchRelocs ArchTargets ArchSpec ArchLex)
+  add_custom_command(TARGET ArchTool POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E create_symlink ArchTool "${CMAKE_BINARY_DIR}/bin/${tool}")
+endforeach()
+file(GLOB target_descriptions CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/targets/*.json")
+foreach(description IN LISTS target_descriptions)
+  get_filename_component(name "${description}" NAME)
+  configure_file("${description}" "${CMAKE_BINARY_DIR}/targets/${name}" COPYONLY)
+endforeach()
+
+include(CTest)
+if(BUILD_TESTING)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  find_package(Threads REQUIRED)
+  add_executable(archld_test_api tests/test_api.c)
+  target_compile_options(archld_test_api PRIVATE -UNDEBUG)
+  target_link_libraries(archld_test_api PRIVATE archld archld_build_options Threads::Threads)
+  foreach(suite run tools hardening)
+    add_test(NAME archld_${suite}
+      COMMAND "${CMAKE_COMMAND}" -E env
+        "ARCHLD_BIN=${CMAKE_BINARY_DIR}/bin"
+        "ARCHLD_API_TEST=$<TARGET_FILE:archld_test_api>"
+        "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/${suite}.py")
+    set_tests_properties(archld_${suite} PROPERTIES TIMEOUT 120)
+  endforeach()
+  find_program(CTANGLE_EXECUTABLE ctangle)
+  if(CTANGLE_EXECUTABLE)
+    add_test(NAME archld_generated
+      COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_generated.py")
+  endif()
+endif()

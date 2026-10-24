@@ -1,0 +1,233 @@
+# msp430.dsymspec.yaml
+# Migrated from the Lua DSL (msp430.dsymspec). Encoder bodies are imperative
+# pseudo-code; the grammar is documented in README.md.
+#
+# Classic 16-bit MSP430, little endian, TI EABI (not MSP430X).
+# Resolved TableGen records and DomSleigh p-code are emitted in backend.
+# Register-direct encoders use rd/rs; source precedes destination in assembly.
+
+schema: 1
+targets:
+  - {arch: msp430, subarch: msp430, addr_size: 16, op_size: 16, addr_def: 16, align: 2, byte_order: little, obj_format: ELF32, abi: TI-EABI, calling_conv: msp430, features: [base]}
+features:
+  - {name: base, desc: "Classic MSP430; 16-bit addresses and registers"}
+registers:
+  - {name: r0, class: gpr, width: 16, enc: 0, flags: [readable, writable]}
+  - {name: r0b, class: gpr, width: 8, enc: 0, parent: r0, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: r1, class: gpr, width: 16, enc: 1, flags: [readable, writable]}
+  - {name: r1b, class: gpr, width: 8, enc: 1, parent: r1, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: r2, class: gpr, width: 16, enc: 2, flags: [readable, writable]}
+  - {name: r2b, class: gpr, width: 8, enc: 2, parent: r2, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: r3, class: gpr, width: 16, enc: 3, flags: [readable, writable]}
+  - {name: r3b, class: gpr, width: 8, enc: 3, parent: r3, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: r4, class: gpr, width: 16, enc: 4, flags: [readable, writable]}
+  - {name: r4b, class: gpr, width: 8, enc: 4, parent: r4, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: r5, class: gpr, width: 16, enc: 5, flags: [readable, writable]}
+  - {name: r5b, class: gpr, width: 8, enc: 5, parent: r5, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: r6, class: gpr, width: 16, enc: 6, flags: [readable, writable]}
+  - {name: r6b, class: gpr, width: 8, enc: 6, parent: r6, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: r7, class: gpr, width: 16, enc: 7, flags: [readable, writable]}
+  - {name: r7b, class: gpr, width: 8, enc: 7, parent: r7, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: r8, class: gpr, width: 16, enc: 8, flags: [readable, writable]}
+  - {name: r8b, class: gpr, width: 8, enc: 8, parent: r8, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: r9, class: gpr, width: 16, enc: 9, flags: [readable, writable]}
+  - {name: r9b, class: gpr, width: 8, enc: 9, parent: r9, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: r10, class: gpr, width: 16, enc: 10, flags: [readable, writable]}
+  - {name: r10b, class: gpr, width: 8, enc: 10, parent: r10, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: r11, class: gpr, width: 16, enc: 11, flags: [readable, writable]}
+  - {name: r11b, class: gpr, width: 8, enc: 11, parent: r11, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: r12, class: gpr, width: 16, enc: 12, flags: [readable, writable]}
+  - {name: r12b, class: gpr, width: 8, enc: 12, parent: r12, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: r13, class: gpr, width: 16, enc: 13, flags: [readable, writable]}
+  - {name: r13b, class: gpr, width: 8, enc: 13, parent: r13, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: r14, class: gpr, width: 16, enc: 14, flags: [readable, writable]}
+  - {name: r14b, class: gpr, width: 8, enc: 14, parent: r14, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: r15, class: gpr, width: 16, enc: 15, flags: [readable, writable]}
+  - {name: r15b, class: gpr, width: 8, enc: 15, parent: r15, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: pc, class: special, width: 16, enc: 0, parent: r0, sub_lo: 0, sub_hi: 16}
+  - {name: sp, class: special, width: 16, enc: 1, parent: r1, sub_lo: 0, sub_hi: 16}
+  - {name: sr, class: special, width: 16, enc: 2, parent: r2, sub_lo: 0, sub_hi: 16}
+  - {name: cg, class: special, width: 16, enc: 3, parent: r3, sub_lo: 0, sub_hi: 16}
+  - {name: fp, class: special, width: 16, enc: 4, parent: r4, sub_lo: 0, sub_hi: 16}
+mnemonics:
+  - {name: mov}
+  - {name: add}
+  - {name: addc}
+  - {name: subc}
+  - {name: sub}
+  - {name: cmp}
+  - {name: bit}
+  - {name: bic}
+  - {name: bis}
+  - {name: xor}
+  - {name: and}
+  - {name: ret}
+  - {name: nop}
+encoders:
+  - name: mov_rr
+    max_bytes: 2
+    body: |
+      REQUIRE rd >= 4
+      REQUIRE rd <= 15
+      REQUIRE rs >= 4
+      REQUIRE rs <= 15
+      EMIT16LE 16384 + rs*256 + rd
+  - name: add_rr
+    max_bytes: 2
+    body: |
+      REQUIRE rd >= 4
+      REQUIRE rd <= 15
+      REQUIRE rs >= 4
+      REQUIRE rs <= 15
+      EMIT16LE 20480 + rs*256 + rd
+  - name: addc_rr
+    max_bytes: 2
+    body: |
+      REQUIRE rd >= 4
+      REQUIRE rd <= 15
+      REQUIRE rs >= 4
+      REQUIRE rs <= 15
+      EMIT16LE 24576 + rs*256 + rd
+  - name: subc_rr
+    max_bytes: 2
+    body: |
+      REQUIRE rd >= 4
+      REQUIRE rd <= 15
+      REQUIRE rs >= 4
+      REQUIRE rs <= 15
+      EMIT16LE 28672 + rs*256 + rd
+  - name: sub_rr
+    max_bytes: 2
+    body: |
+      REQUIRE rd >= 4
+      REQUIRE rd <= 15
+      REQUIRE rs >= 4
+      REQUIRE rs <= 15
+      EMIT16LE 32768 + rs*256 + rd
+  - name: cmp_rr
+    max_bytes: 2
+    body: |
+      REQUIRE rd >= 4
+      REQUIRE rd <= 15
+      REQUIRE rs >= 4
+      REQUIRE rs <= 15
+      EMIT16LE 36864 + rs*256 + rd
+  - name: bit_rr
+    max_bytes: 2
+    body: |
+      REQUIRE rd >= 4
+      REQUIRE rd <= 15
+      REQUIRE rs >= 4
+      REQUIRE rs <= 15
+      EMIT16LE 45056 + rs*256 + rd
+  - name: bic_rr
+    max_bytes: 2
+    body: |
+      REQUIRE rd >= 4
+      REQUIRE rd <= 15
+      REQUIRE rs >= 4
+      REQUIRE rs <= 15
+      EMIT16LE 49152 + rs*256 + rd
+  - name: bis_rr
+    max_bytes: 2
+    body: |
+      REQUIRE rd >= 4
+      REQUIRE rd <= 15
+      REQUIRE rs >= 4
+      REQUIRE rs <= 15
+      EMIT16LE 53248 + rs*256 + rd
+  - name: xor_rr
+    max_bytes: 2
+    body: |
+      REQUIRE rd >= 4
+      REQUIRE rd <= 15
+      REQUIRE rs >= 4
+      REQUIRE rs <= 15
+      EMIT16LE 57344 + rs*256 + rd
+  - name: and_rr
+    max_bytes: 2
+    body: |
+      REQUIRE rd >= 4
+      REQUIRE rd <= 15
+      REQUIRE rs >= 4
+      REQUIRE rs <= 15
+      EMIT16LE 61440 + rs*256 + rd
+  - name: ret
+    max_bytes: 2
+    body: |
+      EMIT16LE 0x4130
+  - name: nop
+    max_bytes: 2
+    body: |
+      EMIT16LE 0x4303
+forms:
+  - mnemonic: mov
+    encoder: mov_rr
+    operands:
+      - {kind: reg, class: gpr, width: 16, access: read, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+      - {kind: reg, class: gpr, width: 16, access: write, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+  - mnemonic: add
+    encoder: add_rr
+    operands:
+      - {kind: reg, class: gpr, width: 16, access: read, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+      - {kind: reg, class: gpr, width: 16, access: readwrite, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+  - mnemonic: addc
+    encoder: addc_rr
+    operands:
+      - {kind: reg, class: gpr, width: 16, access: read, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+      - {kind: reg, class: gpr, width: 16, access: readwrite, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+  - mnemonic: subc
+    encoder: subc_rr
+    operands:
+      - {kind: reg, class: gpr, width: 16, access: read, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+      - {kind: reg, class: gpr, width: 16, access: readwrite, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+  - mnemonic: sub
+    encoder: sub_rr
+    operands:
+      - {kind: reg, class: gpr, width: 16, access: read, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+      - {kind: reg, class: gpr, width: 16, access: readwrite, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+  - mnemonic: cmp
+    encoder: cmp_rr
+    operands:
+      - {kind: reg, class: gpr, width: 16, access: read, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+      - {kind: reg, class: gpr, width: 16, access: read, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+  - mnemonic: bit
+    encoder: bit_rr
+    operands:
+      - {kind: reg, class: gpr, width: 16, access: read, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+      - {kind: reg, class: gpr, width: 16, access: read, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+  - mnemonic: bic
+    encoder: bic_rr
+    operands:
+      - {kind: reg, class: gpr, width: 16, access: read, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+      - {kind: reg, class: gpr, width: 16, access: readwrite, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+  - mnemonic: bis
+    encoder: bis_rr
+    operands:
+      - {kind: reg, class: gpr, width: 16, access: read, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+      - {kind: reg, class: gpr, width: 16, access: readwrite, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+  - mnemonic: xor
+    encoder: xor_rr
+    operands:
+      - {kind: reg, class: gpr, width: 16, access: read, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+      - {kind: reg, class: gpr, width: 16, access: readwrite, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+  - mnemonic: and
+    encoder: and_rr
+    operands:
+      - {kind: reg, class: gpr, width: 16, access: read, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+      - {kind: reg, class: gpr, width: 16, access: readwrite, constraint: "r4-r15; r0-r3 have PC/SP/SR/constant-generator semantics"}
+  - mnemonic: ret
+    encoder: ret
+    flags: [return, terminator, reads_mem, implicit_ops]
+  - mnemonic: nop
+    encoder: nop
+syntaxes:
+  - {name: default, comment: ";", separator: ", "}
+sections:
+  - {name: ".text", flags: [exec, alloc, code], align: 2, content: code}
+  - {name: ".data", flags: [write, alloc, data], align: 2, content: data}
+  - {name: ".bss", flags: [write, alloc, zerofill, data], align: 2, content: data}
+relocs:
+  - {name: R_MSP430_16, width: 16, expr: "S + A", addend: explicit}
+backend:
+  file: backend/msp430.json

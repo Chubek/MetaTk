@@ -1,0 +1,6 @@
+// Form 11 is addi in the shipped riscv64 database; inspect with --list-forms.
+section .text
+global decrement
+decrement:
+form 11, rd=x10, rs1=x10, imm=-1
+encode ret

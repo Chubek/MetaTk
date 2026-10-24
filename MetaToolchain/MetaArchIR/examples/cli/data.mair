@@ -1,0 +1,8 @@
+// Target-independent directives; byte order follows the selected target.
+section .rodata
+align 8
+global message
+message:
+ascii "Hello, portable assembly!\n\000"
+word 0x1234
+long -1

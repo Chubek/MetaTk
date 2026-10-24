@@ -1,0 +1,934 @@
+{
+  "schema": 1,
+  "name": "COFF",
+  "format": "coff",
+  "description": "Common Object File Format: BFD coff target vector, i386 emulation.",
+  "byte_order": "little",
+  "target_vector": "coff-i386",
+  "arch": "i386",
+  "magic": "4c01",
+  "source": [
+    {
+      "file": "include/coff/external.h",
+      "note": "COFF container layouts"
+    },
+    {
+      "file": "include/coff/i386.h",
+      "note": "COFF relocation entry and magic numbers"
+    },
+    {
+      "file": "include/coff/internal.h",
+      "note": "COFF relocation type numbers"
+    },
+    {
+      "file": "bfd/coff-i386.c",
+      "note": "i386 COFF relocation howto table"
+    }
+  ],
+  "records": [
+    {
+      "name": "filehdr",
+      "desc": "COFF file header",
+      "size": 20,
+      "fields": [
+        {
+          "name": "f_magic",
+          "offset": 0,
+          "size": 2
+        },
+        {
+          "name": "f_nscns",
+          "offset": 2,
+          "size": 2
+        },
+        {
+          "name": "f_timdat",
+          "offset": 4,
+          "size": 4
+        },
+        {
+          "name": "f_symptr",
+          "offset": 8,
+          "size": 4
+        },
+        {
+          "name": "f_nsyms",
+          "offset": 12,
+          "size": 4
+        },
+        {
+          "name": "f_opthdr",
+          "offset": 16,
+          "size": 2
+        },
+        {
+          "name": "f_flags",
+          "offset": 18,
+          "size": 2
+        }
+      ]
+    },
+    {
+      "name": "scnhdr",
+      "desc": "COFF section header",
+      "size": 40,
+      "fields": [
+        {
+          "name": "s_name",
+          "offset": 0,
+          "size": 8
+        },
+        {
+          "name": "s_paddr",
+          "offset": 8,
+          "size": 4
+        },
+        {
+          "name": "s_vaddr",
+          "offset": 12,
+          "size": 4
+        },
+        {
+          "name": "s_size",
+          "offset": 16,
+          "size": 4
+        },
+        {
+          "name": "s_scnptr",
+          "offset": 20,
+          "size": 4
+        },
+        {
+          "name": "s_relptr",
+          "offset": 24,
+          "size": 4
+        },
+        {
+          "name": "s_lnnoptr",
+          "offset": 28,
+          "size": 4
+        },
+        {
+          "name": "s_nreloc",
+          "offset": 32,
+          "size": 2
+        },
+        {
+          "name": "s_nlnno",
+          "offset": 34,
+          "size": 2
+        },
+        {
+          "name": "s_flags",
+          "offset": 36,
+          "size": 4
+        }
+      ]
+    },
+    {
+      "name": "syment",
+      "desc": "COFF symbol table entry",
+      "size": 18,
+      "fields": [
+        {
+          "name": "e_name",
+          "offset": 0,
+          "size": 8
+        },
+        {
+          "name": "e_value",
+          "offset": 8,
+          "size": 4
+        },
+        {
+          "name": "e_scnum",
+          "offset": 12,
+          "size": 2
+        },
+        {
+          "name": "e_type",
+          "offset": 14,
+          "size": 2
+        },
+        {
+          "name": "e_sclass",
+          "offset": 16,
+          "size": 1
+        },
+        {
+          "name": "e_numaux",
+          "offset": 17,
+          "size": 1
+        }
+      ],
+      "encodings": [
+        {
+          "field": "e_type",
+          "target": "type",
+          "mask": 65535,
+          "shift": 0
+        },
+        {
+          "field": "e_sclass",
+          "target": "class",
+          "mask": 255,
+          "shift": 0
+        }
+      ]
+    },
+    {
+      "name": "reloc",
+      "desc": "COFF relocation entry",
+      "size": 10,
+      "fields": [
+        {
+          "name": "r_vaddr",
+          "offset": 0,
+          "size": 4
+        },
+        {
+          "name": "r_symndx",
+          "offset": 4,
+          "size": 4
+        },
+        {
+          "name": "r_type",
+          "offset": 8,
+          "size": 2
+        }
+      ]
+    }
+  ],
+  "constants": [
+    {
+      "name": "reloc_types",
+      "desc": "COFF relocation types",
+      "items": [
+        {
+          "name": "R_AMD64_ABS",
+          "value": 0,
+          "desc": "Reference is absolute, no relocation is necessary."
+        },
+        {
+          "name": "R_AMD64_DIR32",
+          "value": 2,
+          "desc": "32-bit address (VA) R_DIR32."
+        },
+        {
+          "name": "R_AMD64_DIR64",
+          "value": 1,
+          "desc": "64-bit address (VA)."
+        },
+        {
+          "name": "R_AMD64_IMAGEBASE",
+          "value": 3,
+          "desc": "32-bit absolute ref w/o base R_IMAGEBASE."
+        },
+        {
+          "name": "R_AMD64_PCRLONG",
+          "value": 4,
+          "desc": "32-bit relative address from byte following reloc R_PCRLONG."
+        },
+        {
+          "name": "R_AMD64_PCRLONG_1",
+          "value": 5,
+          "desc": "32-bit relative address from byte distance 1 from reloc."
+        },
+        {
+          "name": "R_AMD64_PCRLONG_2",
+          "value": 6,
+          "desc": "32-bit relative address from byte distance 2 from reloc."
+        },
+        {
+          "name": "R_AMD64_PCRLONG_3",
+          "value": 7,
+          "desc": "32-bit relative address from byte distance 3 from reloc."
+        },
+        {
+          "name": "R_AMD64_PCRLONG_4",
+          "value": 8,
+          "desc": "32-bit relative address from byte distance 4 from reloc."
+        },
+        {
+          "name": "R_AMD64_PCRLONG_5",
+          "value": 9,
+          "desc": "32-bit relative address from byte distance 5 from reloc."
+        },
+        {
+          "name": "R_AMD64_PCRQUAD",
+          "value": 14,
+          "desc": "Pseude PC64 relocation - Note: not specified by MS/AMD but need for gas pc-relative 64bit wide relocation generated by ELF."
+        },
+        {
+          "name": "R_AMD64_SECREL",
+          "value": 11,
+          "desc": "32 bit offset from base of section containing target R_SECREL."
+        },
+        {
+          "name": "R_AMD64_SECREL7",
+          "value": 12,
+          "desc": "7 bit unsigned offset from base of section containing target."
+        },
+        {
+          "name": "R_AMD64_SECTION",
+          "value": 10,
+          "desc": "Section index."
+        },
+        {
+          "name": "R_AMD64_TOKEN",
+          "value": 13,
+          "desc": "32 bit metadata token."
+        },
+        {
+          "name": "R_BCC_INV",
+          "value": 78,
+          "desc": "This reloc identifies a jmp instruction that has been deleted."
+        },
+        {
+          "name": "R_CALLR",
+          "value": 5,
+          "desc": "callr 12 bit disp"
+        },
+        {
+          "name": "R_DIR16",
+          "value": 1
+        },
+        {
+          "name": "R_DIR32",
+          "value": 6
+        },
+        {
+          "name": "R_DISP7",
+          "value": 37,
+          "desc": "djnz displacement"
+        },
+        {
+          "name": "R_GETPA",
+          "value": 30
+        },
+        {
+          "name": "R_GETSEG",
+          "value": 29
+        },
+        {
+          "name": "R_H8500_HIGH16",
+          "value": 9,
+          "desc": "high 16 bits of 32 bit immediate"
+        },
+        {
+          "name": "R_H8500_HIGH8",
+          "value": 5,
+          "desc": "high 8 bits of 24 bit address"
+        },
+        {
+          "name": "R_H8500_IMM16",
+          "value": 2,
+          "desc": "16 bit immediate"
+        },
+        {
+          "name": "R_H8500_IMM24",
+          "value": 6,
+          "desc": "24 bit immediate"
+        },
+        {
+          "name": "R_H8500_IMM32",
+          "value": 8,
+          "desc": "32 bit immediate"
+        },
+        {
+          "name": "R_H8500_IMM8",
+          "value": 1,
+          "desc": "8 bit immediate"
+        },
+        {
+          "name": "R_H8500_LOW16",
+          "value": 7,
+          "desc": "low 16 bits of 24 bit immediate"
+        },
+        {
+          "name": "R_H8500_PCREL16",
+          "value": 4,
+          "desc": "16 bit pcrel"
+        },
+        {
+          "name": "R_H8500_PCREL8",
+          "value": 3,
+          "desc": "8 bit pcrel"
+        },
+        {
+          "name": "R_HVRT16",
+          "value": 131
+        },
+        {
+          "name": "R_IMAGEBASE",
+          "value": 7
+        },
+        {
+          "name": "R_IMM16",
+          "value": 1,
+          "desc": "16 bit abs"
+        },
+        {
+          "name": "R_IMM24",
+          "value": 51,
+          "desc": "24 bit abs"
+        },
+        {
+          "name": "R_IMM4H",
+          "value": 36,
+          "desc": "high nibble"
+        },
+        {
+          "name": "R_IMM4L",
+          "value": 35,
+          "desc": "low nibble"
+        },
+        {
+          "name": "R_IMM8",
+          "value": 34,
+          "desc": "8 bit abs"
+        },
+        {
+          "name": "R_IPRLONG",
+          "value": 26
+        },
+        {
+          "name": "R_IPRSHORT",
+          "value": 24
+        },
+        {
+          "name": "R_JMP1",
+          "value": 67
+        },
+        {
+          "name": "R_JMP2",
+          "value": 68,
+          "desc": "???"
+        },
+        {
+          "name": "R_JMPL1",
+          "value": 70
+        },
+        {
+          "name": "R_JMPL2",
+          "value": 71
+        },
+        {
+          "name": "R_JMP_DEL",
+          "value": 79,
+          "desc": "Z8k modes"
+        },
+        {
+          "name": "R_JR",
+          "value": 2,
+          "desc": "jr 8 bit disp"
+        },
+        {
+          "name": "R_JUMPTARG",
+          "value": 32,
+          "desc": "strange 29k 00xx00xx reloc"
+        },
+        {
+          "name": "R_LVRT16",
+          "value": 132
+        },
+        {
+          "name": "R_MEM_INDIRECT",
+          "value": 74
+        },
+        {
+          "name": "R_MOV16B1",
+          "value": 65
+        },
+        {
+          "name": "R_MOV16B2",
+          "value": 66
+        },
+        {
+          "name": "R_MOV24B1",
+          "value": 72
+        },
+        {
+          "name": "R_MOV24B2",
+          "value": 73
+        },
+        {
+          "name": "R_MOVL1",
+          "value": 76
+        },
+        {
+          "name": "R_MOVL2",
+          "value": 77
+        },
+        {
+          "name": "R_OFF8",
+          "value": 50,
+          "desc": "8 bit signed abs, for (i[xy]+d)"
+        },
+        {
+          "name": "R_PARTLS16",
+          "value": 32
+        },
+        {
+          "name": "R_PARTMS8",
+          "value": 33
+        },
+        {
+          "name": "R_PCR16L",
+          "value": 128
+        },
+        {
+          "name": "R_PCR24",
+          "value": 21
+        },
+        {
+          "name": "R_PCR26L",
+          "value": 129
+        },
+        {
+          "name": "R_PCRBYTE",
+          "value": 18
+        },
+        {
+          "name": "R_PCRLONG",
+          "value": 20
+        },
+        {
+          "name": "R_PCRWORD",
+          "value": 19
+        },
+        {
+          "name": "R_PCRWORD_B",
+          "value": 75
+        },
+        {
+          "name": "R_REL16",
+          "value": 4,
+          "desc": "16 bit PC rel"
+        },
+        {
+          "name": "R_REL24",
+          "value": 5
+        },
+        {
+          "name": "R_RELBYTE",
+          "value": 15
+        },
+        {
+          "name": "R_RELLONG",
+          "value": 17
+        },
+        {
+          "name": "R_RELLONG_NEG",
+          "value": 69
+        },
+        {
+          "name": "R_RELWORD",
+          "value": 16
+        },
+        {
+          "name": "R_SECREL32",
+          "value": 11
+        },
+        {
+          "name": "R_SEG",
+          "value": 16,
+          "desc": "set if in segmented mode"
+        },
+        {
+          "name": "R_TAGWORD",
+          "value": 31
+        },
+        {
+          "name": "R_VRT16",
+          "value": 130
+        },
+        {
+          "name": "R_VRT32",
+          "value": 133
+        },
+        {
+          "name": "R_W65_ABS16",
+          "value": 2,
+          "desc": "addr & 0xffff"
+        },
+        {
+          "name": "R_W65_ABS16S16",
+          "value": 7,
+          "desc": "(addr >> 16) & 0ffff"
+        },
+        {
+          "name": "R_W65_ABS16S8",
+          "value": 6,
+          "desc": "(addr >> 8) & 0ffff"
+        },
+        {
+          "name": "R_W65_ABS24",
+          "value": 3,
+          "desc": "addr & 0xffffff"
+        },
+        {
+          "name": "R_W65_ABS8",
+          "value": 1,
+          "desc": "addr & 0xff"
+        },
+        {
+          "name": "R_W65_ABS8S16",
+          "value": 5,
+          "desc": "(addr >> 16) & 0xff"
+        },
+        {
+          "name": "R_W65_ABS8S8",
+          "value": 4,
+          "desc": "(addr >> 8) & 0xff"
+        },
+        {
+          "name": "R_W65_DP",
+          "value": 10,
+          "desc": "direct page 8 bits only"
+        },
+        {
+          "name": "R_W65_PCR16",
+          "value": 9
+        },
+        {
+          "name": "R_W65_PCR8",
+          "value": 8
+        }
+      ]
+    },
+    {
+      "name": "storage_classes",
+      "desc": "COFF symbol storage classes",
+      "items": [
+        {
+          "name": "C_EFCN",
+          "value": 255
+        },
+        {
+          "name": "C_NULL",
+          "value": 0
+        },
+        {
+          "name": "C_AUTO",
+          "value": 1
+        },
+        {
+          "name": "C_EXT",
+          "value": 2
+        },
+        {
+          "name": "C_STAT",
+          "value": 3
+        },
+        {
+          "name": "C_REG",
+          "value": 4
+        },
+        {
+          "name": "C_EXTDEF",
+          "value": 5
+        },
+        {
+          "name": "C_LABEL",
+          "value": 6
+        },
+        {
+          "name": "C_ULABEL",
+          "value": 7
+        },
+        {
+          "name": "C_MOS",
+          "value": 8
+        },
+        {
+          "name": "C_ARG",
+          "value": 9
+        },
+        {
+          "name": "C_STRTAG",
+          "value": 10
+        },
+        {
+          "name": "C_MOU",
+          "value": 11
+        },
+        {
+          "name": "C_UNTAG",
+          "value": 12
+        },
+        {
+          "name": "C_TPDEF",
+          "value": 13
+        },
+        {
+          "name": "C_USTATIC",
+          "value": 14
+        },
+        {
+          "name": "C_ENTAG",
+          "value": 15
+        },
+        {
+          "name": "C_MOE",
+          "value": 16
+        },
+        {
+          "name": "C_REGPARM",
+          "value": 17
+        },
+        {
+          "name": "C_FIELD",
+          "value": 18
+        },
+        {
+          "name": "C_AUTOARG",
+          "value": 19
+        },
+        {
+          "name": "C_LASTENT",
+          "value": 20
+        },
+        {
+          "name": "C_BLOCK",
+          "value": 100
+        },
+        {
+          "name": "C_FCN",
+          "value": 101
+        },
+        {
+          "name": "C_EOS",
+          "value": 102
+        },
+        {
+          "name": "C_FILE",
+          "value": 103
+        },
+        {
+          "name": "C_LINE",
+          "value": 104
+        },
+        {
+          "name": "C_ALIAS",
+          "value": 105
+        },
+        {
+          "name": "C_HIDDEN",
+          "value": 106
+        },
+        {
+          "name": "C_UEXT",
+          "value": 19
+        },
+        {
+          "name": "C_STATLAB",
+          "value": 20
+        },
+        {
+          "name": "C_EXTLAB",
+          "value": 21
+        },
+        {
+          "name": "C_SYSTEM",
+          "value": 23
+        },
+        {
+          "name": "C_SECTION",
+          "value": 104
+        },
+        {
+          "name": "C_NT_WEAK",
+          "value": 105
+        },
+        {
+          "name": "C_LEAFPROC",
+          "value": 108
+        },
+        {
+          "name": "C_SCALL",
+          "value": 107
+        },
+        {
+          "name": "C_LEAFEXT",
+          "value": 108
+        },
+        {
+          "name": "C_LEAFSTAT",
+          "value": 113
+        },
+        {
+          "name": "C_OPTVAR",
+          "value": 109
+        },
+        {
+          "name": "C_DEFINE",
+          "value": 110
+        },
+        {
+          "name": "C_PRAGMA",
+          "value": 111
+        },
+        {
+          "name": "C_SEGMENT",
+          "value": 112
+        },
+        {
+          "name": "C_SHADOW",
+          "value": 107
+        },
+        {
+          "name": "C_VERSION",
+          "value": 108
+        },
+        {
+          "name": "C_HIDEXT",
+          "value": 107
+        },
+        {
+          "name": "C_BINCL",
+          "value": 108
+        },
+        {
+          "name": "C_EINCL",
+          "value": 109
+        },
+        {
+          "name": "C_AIX_WEAKEXT",
+          "value": 111
+        },
+        {
+          "name": "C_NULL_VALUE",
+          "value": 14556672
+        }
+      ]
+    },
+    {
+      "name": "magic_numbers",
+      "desc": "COFF file magic numbers",
+      "items": [
+        {
+          "name": "I386MAGIC",
+          "value": 332
+        },
+        {
+          "name": "I386PTXMAGIC",
+          "value": 340
+        },
+        {
+          "name": "I386AIXMAGIC",
+          "value": 373
+        }
+      ]
+    }
+  ],
+  "relocations": [
+    {
+      "name": "dir32",
+      "number": 6,
+      "size": 4,
+      "bitsize": 32,
+      "pcrel": false,
+      "overflow": "bitfield",
+      "partial": true,
+      "pcrel_offset": true,
+      "src_mask": 4294967295,
+      "dst_mask": 4294967295
+    },
+    {
+      "name": "rva32",
+      "number": 7,
+      "size": 4,
+      "bitsize": 32,
+      "pcrel": false,
+      "overflow": "bitfield",
+      "partial": true,
+      "src_mask": 4294967295,
+      "dst_mask": 4294967295
+    },
+    {
+      "name": "8",
+      "number": 15,
+      "size": 1,
+      "bitsize": 8,
+      "pcrel": false,
+      "overflow": "bitfield",
+      "partial": true,
+      "src_mask": 255,
+      "dst_mask": 255
+    },
+    {
+      "name": "16",
+      "number": 16,
+      "size": 2,
+      "bitsize": 16,
+      "pcrel": false,
+      "overflow": "bitfield",
+      "partial": true,
+      "src_mask": 65535,
+      "dst_mask": 65535
+    },
+    {
+      "name": "32",
+      "number": 17,
+      "size": 4,
+      "bitsize": 32,
+      "pcrel": false,
+      "overflow": "bitfield",
+      "partial": true,
+      "src_mask": 4294967295,
+      "dst_mask": 4294967295
+    },
+    {
+      "name": "DISP8",
+      "number": 18,
+      "size": 1,
+      "bitsize": 8,
+      "pcrel": true,
+      "overflow": "signed",
+      "partial": true,
+      "src_mask": 255,
+      "dst_mask": 255
+    },
+    {
+      "name": "DISP16",
+      "number": 19,
+      "size": 2,
+      "bitsize": 16,
+      "pcrel": true,
+      "overflow": "signed",
+      "partial": true,
+      "src_mask": 65535,
+      "dst_mask": 65535
+    },
+    {
+      "name": "DISP32",
+      "number": 20,
+      "size": 4,
+      "bitsize": 32,
+      "pcrel": true,
+      "overflow": "signed",
+      "partial": true,
+      "src_mask": 4294967295,
+      "dst_mask": 4294967295
+    }
+  ],
+  "sections": [
+    {
+      "name": ".text",
+      "desc": "executable code"
+    },
+    {
+      "name": ".data",
+      "desc": "initialised data"
+    },
+    {
+      "name": ".bss",
+      "desc": "uninitialised data"
+    },
+    {
+      "name": ".comment",
+      "desc": "compiler version"
+    }
+  ]
+}

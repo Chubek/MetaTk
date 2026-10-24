@@ -1,0 +1,4 @@
+// Use --emit json to retain the external symbol and relocation information.
+section .text
+encode call, sym=@external_function-4
+encode ret

@@ -1,0 +1,322 @@
+# Generated from ArchDB/directx.dsymspec.yaml by tools/compile_archdb.py.
+# Regenerate from the YAML source; see MetaArchDB/README.md.
+architecture {
+    schema = 1;
+    target {
+        arch = "directx";
+        subarch = "dxil";
+        addr_size = 64;
+        op_size = 32;
+        addr_def = 64;
+        align = 4;
+        byte_order = "little";
+        obj_format = "dxil";
+        abi = "DXIL";
+        calling_conv = "dxil-signature";
+        features = ["base", "sm6.0", "wave-ops"];
+    }
+    features = [
+        { name = "base"; desc = "DXIL base arithmetic + memory"; },
+        { name = "sm6.0"; desc = "Shader Model 6.0"; },
+        { name = "sm6.8"; desc = "Shader Model 6.8"; },
+        { name = "wave-ops"; desc = "wave intrinsics"; },
+        { name = "raytracing"; desc = "ray tracing (DXR)"; },
+        { name = "mesh"; desc = "mesh shaders"; },
+        { name = "16-bit"; desc = "16-bit types"; },
+        { name = "work-graphs"; desc = "work graphs"; },
+        { name = "dot"; desc = "dot-product/DP2/DP4"; },
+        { name = "sample"; desc = "texture sample/gather"; },
+        { name = "barrier"; desc = "sync/barrier"; },
+        { name = "priv"; desc = "validator-privileged ops"; }
+    ];
+    register i1 { class = "gpr"; width = 32; enc = 0; }
+    register i16 { class = "gpr"; width = 32; enc = 0; }
+    register i32 { class = "gpr"; width = 32; enc = 0; }
+    register i64 { class = "gpr"; width = 32; enc = 0; }
+    register f16 { class = "gpr"; width = 32; enc = 0; }
+    register f32 { class = "gpr"; width = 32; enc = 0; }
+    register f64 { class = "gpr"; width = 32; enc = 0; }
+    register cbv { class = "special"; width = 32; enc = 0; }
+    register srv { class = "special"; width = 32; enc = 0; }
+    register uav { class = "special"; width = 32; enc = 0; }
+    register sampler { class = "special"; width = 32; enc = 0; }
+    register thread_id { class = "special"; width = 32; enc = 0; }
+    register group_id { class = "special"; width = 32; enc = 0; }
+    register lane_id { class = "special"; width = 32; enc = 0; }
+    register wave_mask { class = "special"; width = 32; enc = 0; }
+    register payload { class = "special"; width = 32; enc = 0; }
+    register mesh_vertices { class = "special"; width = 32; enc = 0; }
+    register mesh_primitives { class = "special"; width = 32; enc = 0; }
+    mnemonic nop {  }
+    mnemonic mov {  }
+    mnemonic add {  }
+    mnemonic sub {  }
+    mnemonic mul {  }
+    mnemonic fadd {  }
+    mnemonic fmul {  }
+    mnemonic fma {  }
+    mnemonic dot4 {  }
+    mnemonic ld {  }
+    mnemonic st {  }
+    mnemonic cbuf {  }
+    mnemonic sample {  }
+    mnemonic gather {  }
+    mnemonic br {  }
+    mnemonic br.cond {  }
+    mnemonic ret {  }
+    mnemonic call {  }
+    mnemonic wave.op {  }
+    mnemonic wave.lane {  }
+    mnemonic trace {  }
+    mnemonic mesh.v {  }
+    mnemonic barrier {  }
+    mnemonic bitcast {  }
+    encoder nop { max_bytes = 4; body = "EMIT32LE 0x00000000\n"; }
+    encoder mov { max_bytes = 4; body = "EMIT32LE 0x01000000 + dst*256 + src*65536\n"; }
+    encoder add { max_bytes = 4; body = "EMIT32LE 0x01020000 + dst*256 + a*65536 + b*131072\n"; }
+    encoder sub { max_bytes = 4; body = "EMIT32LE 0x01040000 + dst*256 + a*65536 + b*131072\n"; }
+    encoder mul { max_bytes = 4; body = "EMIT32LE 0x01060000 + dst*256 + a*65536 + b*131072\n"; }
+    encoder fadd { max_bytes = 4; body = "EMIT32LE 0x02020000 + dst*256 + a*65536 + b*131072\n"; }
+    encoder fmul { max_bytes = 4; body = "EMIT32LE 0x02060000 + dst*256 + a*65536 + b*131072\n"; }
+    encoder fma { max_bytes = 4; body = "EMIT32LE 0x02080000 + dst*256 + a*65536 + b*131072\n"; }
+    encoder dot4 { max_bytes = 4; body = "EMIT32LE 0x02100000 + dst*256 + a*65536 + b*131072\n"; }
+    encoder ld { max_bytes = 4; body = "EMIT32LE 0x03000000 + dst*256 + addr*65536\n"; }
+    encoder st { max_bytes = 4; body = "EMIT32LE 0x03020000 + addr*65536 + val*256\n"; }
+    encoder cbuf { max_bytes = 4; body = "EMIT32LE 0x03040000 + dst*256 + addr*65536\n"; }
+    encoder sample { max_bytes = 4; body = "EMIT32LE 0x03100000 + dst*256 + srv*65536 + sampler*256\n"; }
+    encoder gather { max_bytes = 4; body = "EMIT32LE 0x03120000 + dst*256 + srv*65536 + sampler*256\n"; }
+    encoder br {
+        max_bytes = 4;
+        max_relocs = 1;
+        body = "EMIT32LE 0x04000000\nEMIT_RELOCATION sym, R_DXIL_REL32\n";
+    }
+    encoder brcond {
+        max_bytes = 4;
+        max_relocs = 1;
+        body = "EMIT32LE 0x04020000\nEMIT_RELOCATION sym, R_DXIL_REL32\n";
+    }
+    encoder ret { max_bytes = 4; body = "EMIT32LE 0x04040000\n"; }
+    encoder call {
+        max_bytes = 4;
+        max_relocs = 1;
+        body = "EMIT32LE 0x04060000\nEMIT_RELOCATION sym, R_DXIL_FN\n";
+    }
+    encoder waveop { max_bytes = 4; body = "EMIT32LE 0x05000000 + dst*256 + src*65536\n"; }
+    encoder wavelane { max_bytes = 4; body = "EMIT32LE 0x05020000 + dst*256\n"; }
+    encoder trace { max_bytes = 4; body = "EMIT32LE 0x06000000 + srv*65536\n"; }
+    encoder meshv { max_bytes = 4; body = "EMIT32LE 0x07000000 + dst*256 + src*65536\n"; }
+    encoder barrier { max_bytes = 4; body = "EMIT32LE 0x08000000\n"; }
+    encoder bitcast { max_bytes = 4; body = "EMIT32LE 0x09000000 + dst*256 + src*65536\n"; }
+    form { mnemonic = "nop"; encoder = "nop"; }
+    form {
+        mnemonic = "mov";
+        encoder = "mov";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "add";
+        encoder = "add";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "sub";
+        encoder = "sub";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "mul";
+        encoder = "mul";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "fadd";
+        encoder = "fadd";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "fmul";
+        encoder = "fmul";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "fma";
+        encoder = "fma";
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "dot4";
+        encoder = "dot4";
+        required = ["dot"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "ld";
+        encoder = "ld";
+        flags = ["reads_mem"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "st";
+        encoder = "st";
+        flags = ["writes_mem"];
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; }, { kind = "reg"; width = 32; class = "gpr"; }];
+    }
+    form {
+        mnemonic = "cbuf";
+        encoder = "cbuf";
+        flags = ["reads_mem"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "sample";
+        encoder = "sample";
+        flags = ["reads_mem"];
+        required = ["sample"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "gather";
+        encoder = "gather";
+        flags = ["reads_mem"];
+        required = ["sample"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "br";
+        encoder = "br";
+        flags = ["branch", "terminator", "reloc"];
+        operands = [{ kind = "sym"; width = 64; }];
+    }
+    form {
+        mnemonic = "br.cond";
+        encoder = "brcond";
+        flags = ["cond_branch", "reloc"];
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; }, { kind = "sym"; width = 64; }];
+    }
+    form { mnemonic = "ret"; encoder = "ret"; flags = ["return", "terminator"]; }
+    form {
+        mnemonic = "call";
+        encoder = "call";
+        flags = ["branch", "reloc"];
+        operands = [{ kind = "sym"; width = 64; }];
+    }
+    form {
+        mnemonic = "wave.op";
+        encoder = "waveop";
+        required = ["wave-ops"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form {
+        mnemonic = "wave.lane";
+        encoder = "wavelane";
+        required = ["wave-ops"];
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; access = "write"; }];
+    }
+    form {
+        mnemonic = "trace";
+        encoder = "trace";
+        required = ["raytracing"];
+        operands = [{ kind = "reg"; width = 32; class = "gpr"; }];
+    }
+    form {
+        mnemonic = "mesh.v";
+        encoder = "meshv";
+        required = ["mesh"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    form { mnemonic = "barrier"; encoder = "barrier"; required = ["barrier"]; }
+    form {
+        mnemonic = "bitcast";
+        encoder = "bitcast";
+        required = ["16-bit"];
+        operands = [
+            { kind = "reg"; width = 32; class = "gpr"; access = "write"; },
+            { kind = "reg"; width = 32; class = "gpr"; }
+        ];
+    }
+    syntax dxil { comment = ";"; separator = ", "; }
+    syntax dxbc { comment = ";"; separator = ", "; }
+    sections = [
+        { name = ".text"; flags = ["exec", "alloc", "code"]; align = 4; content = "code"; },
+        { name = ".rodata"; flags = ["alloc", "readonly", "data"]; align = 4; content = "data"; },
+        {
+            name = ".dxil.signature";
+            flags = ["alloc", "readonly", "meta"];
+            align = 4;
+            content = "meta";
+        },
+        {
+            name = ".dxil.validator";
+            flags = ["alloc", "readonly", "meta"];
+            align = 4;
+            content = "meta";
+        }
+    ];
+    linkages = [
+        { name = "entry_export"; binding = "global"; visibility = "default"; symtype = "func"; },
+        { name = "func_local"; binding = "local"; visibility = "default"; symtype = "func"; }
+    ];
+    reloc R_DXIL_NONE { width = 32; expr = "S + A"; }
+    reloc R_DXIL_REL32 { width = 32; signed = true; pcrel = true; expr = "S + A - P"; }
+    reloc R_DXIL_FN { width = 32; expr = "S + A"; }
+    reloc R_DXIL_HANDLE { width = 32; expr = "S + A"; }
+    reloc R_DXIL_RESOURCE { width = 32; expr = "S + A"; }
+    debug = [
+        { kind = "target"; msg = "dxil shader IR: base+wave+ray/mesh+sample+barrier"; ref = ""; },
+        { kind = "form"; msg = "wave forms require wave-ops"; ref = "wave.op"; },
+        { kind = "form"; msg = "resource forms require sample"; ref = "sample"; }
+    ];
+    backend = { file = "backend/directx.json"; };
+}

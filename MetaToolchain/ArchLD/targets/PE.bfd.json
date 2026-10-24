@@ -1,0 +1,893 @@
+{
+  "schema": 1,
+  "name": "PE",
+  "format": "pe",
+  "container": "COFF",
+  "description": "Portable Executable: PE32/PE32+ images (BFD pei target vectors).",
+  "byte_order": "little",
+  "target_vector": "pei-i386",
+  "arch": "i386",
+  "magic": "4d5a",
+  "source": [
+    {
+      "file": "include/coff/pe.h",
+      "note": "PE/COFF file header layouts"
+    },
+    {
+      "file": "bfd/peicode.h",
+      "note": "PE optional header and relocations"
+    }
+  ],
+  "records": [
+    {
+      "name": "filehdr",
+      "desc": "PE/COFF file header (DOS stub plus COFF header)",
+      "size": 152,
+      "fields": [
+        {
+          "name": "e_magic",
+          "offset": 0,
+          "size": 2
+        },
+        {
+          "name": "e_cblp",
+          "offset": 2,
+          "size": 2
+        },
+        {
+          "name": "e_cp",
+          "offset": 4,
+          "size": 2
+        },
+        {
+          "name": "e_crlc",
+          "offset": 6,
+          "size": 2
+        },
+        {
+          "name": "e_cparhdr",
+          "offset": 8,
+          "size": 2
+        },
+        {
+          "name": "e_minalloc",
+          "offset": 10,
+          "size": 2
+        },
+        {
+          "name": "e_maxalloc",
+          "offset": 12,
+          "size": 2
+        },
+        {
+          "name": "e_ss",
+          "offset": 14,
+          "size": 2
+        },
+        {
+          "name": "e_sp",
+          "offset": 16,
+          "size": 2
+        },
+        {
+          "name": "e_csum",
+          "offset": 18,
+          "size": 2
+        },
+        {
+          "name": "e_ip",
+          "offset": 20,
+          "size": 2
+        },
+        {
+          "name": "e_cs",
+          "offset": 22,
+          "size": 2
+        },
+        {
+          "name": "e_lfarlc",
+          "offset": 24,
+          "size": 2
+        },
+        {
+          "name": "e_ovno",
+          "offset": 26,
+          "size": 2
+        },
+        {
+          "name": "e_res",
+          "offset": 28,
+          "size": 8
+        },
+        {
+          "name": "e_oemid",
+          "offset": 36,
+          "size": 2
+        },
+        {
+          "name": "e_oeminfo",
+          "offset": 38,
+          "size": 2
+        },
+        {
+          "name": "e_res2",
+          "offset": 40,
+          "size": 20
+        },
+        {
+          "name": "e_lfanew",
+          "offset": 60,
+          "size": 4
+        },
+        {
+          "name": "dos_message",
+          "offset": 64,
+          "size": 64
+        },
+        {
+          "name": "nt_signature",
+          "offset": 128,
+          "size": 4
+        },
+        {
+          "name": "f_magic",
+          "offset": 132,
+          "size": 2
+        },
+        {
+          "name": "f_nscns",
+          "offset": 134,
+          "size": 2
+        },
+        {
+          "name": "f_timdat",
+          "offset": 136,
+          "size": 4
+        },
+        {
+          "name": "f_symptr",
+          "offset": 140,
+          "size": 4
+        },
+        {
+          "name": "f_nsyms",
+          "offset": 144,
+          "size": 4
+        },
+        {
+          "name": "f_opthdr",
+          "offset": 148,
+          "size": 2
+        },
+        {
+          "name": "f_flags",
+          "offset": 150,
+          "size": 2
+        }
+      ]
+    },
+    {
+      "name": "optional_header",
+      "desc": "PE32 optional header",
+      "size": 96,
+      "fields": [
+        {
+          "name": "Magic",
+          "offset": 0,
+          "size": 2,
+          "desc": "PE signature: 0x10b (PE32) or 0x20b (PE32+)"
+        },
+        {
+          "name": "MajorLinkerVersion",
+          "offset": 2,
+          "size": 1,
+          "desc": "linker major version"
+        },
+        {
+          "name": "MinorLinkerVersion",
+          "offset": 3,
+          "size": 1,
+          "desc": "linker minor version"
+        },
+        {
+          "name": "SizeOfCode",
+          "offset": 4,
+          "size": 4,
+          "desc": "sum of the code section sizes"
+        },
+        {
+          "name": "SizeOfInitializedData",
+          "offset": 8,
+          "size": 4,
+          "desc": "sum of the initialised data sizes"
+        },
+        {
+          "name": "SizeOfUninitializedData",
+          "offset": 12,
+          "size": 4,
+          "desc": "sum of the uninitialised data sizes"
+        },
+        {
+          "name": "AddressOfEntryPoint",
+          "offset": 16,
+          "size": 4,
+          "desc": "entry point relative to the image base"
+        },
+        {
+          "name": "BaseOfCode",
+          "offset": 20,
+          "size": 4,
+          "desc": "address of the first code section"
+        },
+        {
+          "name": "BaseOfData",
+          "offset": 24,
+          "size": 4,
+          "desc": "address of the first data section"
+        },
+        {
+          "name": "ImageBase",
+          "offset": 28,
+          "size": 4,
+          "desc": "preferred image base"
+        },
+        {
+          "name": "SectionAlignment",
+          "offset": 32,
+          "size": 4,
+          "desc": "alignment of sections when loaded"
+        },
+        {
+          "name": "FileAlignment",
+          "offset": 36,
+          "size": 4,
+          "desc": "alignment of raw data in the file"
+        },
+        {
+          "name": "MajorOperatingSystemVersion",
+          "offset": 40,
+          "size": 2,
+          "desc": "required major OS version"
+        },
+        {
+          "name": "MinorOperatingSystemVersion",
+          "offset": 42,
+          "size": 2,
+          "desc": "required minor OS version"
+        },
+        {
+          "name": "MajorImageVersion",
+          "offset": 44,
+          "size": 2,
+          "desc": "major image version"
+        },
+        {
+          "name": "MinorImageVersion",
+          "offset": 46,
+          "size": 2,
+          "desc": "minor image version"
+        },
+        {
+          "name": "MajorSubsystemVersion",
+          "offset": 48,
+          "size": 2,
+          "desc": "required major subsystem version"
+        },
+        {
+          "name": "MinorSubsystemVersion",
+          "offset": 50,
+          "size": 2,
+          "desc": "required minor subsystem version"
+        },
+        {
+          "name": "Win32VersionValue",
+          "offset": 52,
+          "size": 4,
+          "desc": "reserved, must be zero"
+        },
+        {
+          "name": "SizeOfImage",
+          "offset": 56,
+          "size": 4,
+          "desc": "size of the image in memory"
+        },
+        {
+          "name": "SizeOfHeaders",
+          "offset": 60,
+          "size": 4,
+          "desc": "size of the headers rounded to FileAlignment"
+        },
+        {
+          "name": "CheckSum",
+          "offset": 64,
+          "size": 4,
+          "desc": "image checksum"
+        },
+        {
+          "name": "Subsystem",
+          "offset": 68,
+          "size": 2,
+          "desc": "subsystem the image runs in"
+        },
+        {
+          "name": "DllCharacteristics",
+          "offset": 70,
+          "size": 2,
+          "desc": "DLL characteristics flags"
+        },
+        {
+          "name": "SizeOfStackReserve",
+          "offset": 72,
+          "size": 4,
+          "desc": "stack space to reserve"
+        },
+        {
+          "name": "SizeOfStackCommit",
+          "offset": 76,
+          "size": 4,
+          "desc": "stack space to commit"
+        },
+        {
+          "name": "SizeOfHeapReserve",
+          "offset": 80,
+          "size": 4,
+          "desc": "heap space to reserve"
+        },
+        {
+          "name": "SizeOfHeapCommit",
+          "offset": 84,
+          "size": 4,
+          "desc": "heap space to commit"
+        },
+        {
+          "name": "LoaderFlags",
+          "offset": 88,
+          "size": 4,
+          "desc": "loader flags, must be zero"
+        },
+        {
+          "name": "NumberOfRvaAndSizes",
+          "offset": 92,
+          "size": 4,
+          "desc": "number of data directory entries"
+        }
+      ]
+    },
+    {
+      "name": "optional_header_64",
+      "desc": "PE32+ optional header",
+      "size": 112,
+      "fields": [
+        {
+          "name": "Magic",
+          "offset": 0,
+          "size": 2,
+          "desc": "PE signature: 0x10b (PE32) or 0x20b (PE32+)"
+        },
+        {
+          "name": "MajorLinkerVersion",
+          "offset": 2,
+          "size": 1,
+          "desc": "linker major version"
+        },
+        {
+          "name": "MinorLinkerVersion",
+          "offset": 3,
+          "size": 1,
+          "desc": "linker minor version"
+        },
+        {
+          "name": "SizeOfCode",
+          "offset": 4,
+          "size": 4,
+          "desc": "sum of the code section sizes"
+        },
+        {
+          "name": "SizeOfInitializedData",
+          "offset": 8,
+          "size": 4,
+          "desc": "sum of the initialised data sizes"
+        },
+        {
+          "name": "SizeOfUninitializedData",
+          "offset": 12,
+          "size": 4,
+          "desc": "sum of the uninitialised data sizes"
+        },
+        {
+          "name": "AddressOfEntryPoint",
+          "offset": 16,
+          "size": 4,
+          "desc": "entry point relative to the image base"
+        },
+        {
+          "name": "BaseOfCode",
+          "offset": 20,
+          "size": 4,
+          "desc": "address of the first code section"
+        },
+        {
+          "name": "ImageBase",
+          "offset": 24,
+          "size": 8,
+          "desc": "preferred image base"
+        },
+        {
+          "name": "SectionAlignment",
+          "offset": 32,
+          "size": 4,
+          "desc": "alignment of sections when loaded"
+        },
+        {
+          "name": "FileAlignment",
+          "offset": 36,
+          "size": 4,
+          "desc": "alignment of raw data in the file"
+        },
+        {
+          "name": "MajorOperatingSystemVersion",
+          "offset": 40,
+          "size": 2,
+          "desc": "required major OS version"
+        },
+        {
+          "name": "MinorOperatingSystemVersion",
+          "offset": 42,
+          "size": 2,
+          "desc": "required minor OS version"
+        },
+        {
+          "name": "MajorImageVersion",
+          "offset": 44,
+          "size": 2,
+          "desc": "major image version"
+        },
+        {
+          "name": "MinorImageVersion",
+          "offset": 46,
+          "size": 2,
+          "desc": "minor image version"
+        },
+        {
+          "name": "MajorSubsystemVersion",
+          "offset": 48,
+          "size": 2,
+          "desc": "required major subsystem version"
+        },
+        {
+          "name": "MinorSubsystemVersion",
+          "offset": 50,
+          "size": 2,
+          "desc": "required minor subsystem version"
+        },
+        {
+          "name": "Win32VersionValue",
+          "offset": 52,
+          "size": 4,
+          "desc": "reserved, must be zero"
+        },
+        {
+          "name": "SizeOfImage",
+          "offset": 56,
+          "size": 4,
+          "desc": "size of the image in memory"
+        },
+        {
+          "name": "SizeOfHeaders",
+          "offset": 60,
+          "size": 4,
+          "desc": "size of the headers rounded to FileAlignment"
+        },
+        {
+          "name": "CheckSum",
+          "offset": 64,
+          "size": 4,
+          "desc": "image checksum"
+        },
+        {
+          "name": "Subsystem",
+          "offset": 68,
+          "size": 2,
+          "desc": "subsystem the image runs in"
+        },
+        {
+          "name": "DllCharacteristics",
+          "offset": 70,
+          "size": 2,
+          "desc": "DLL characteristics flags"
+        },
+        {
+          "name": "SizeOfStackReserve",
+          "offset": 72,
+          "size": 8,
+          "desc": "stack space to reserve"
+        },
+        {
+          "name": "SizeOfStackCommit",
+          "offset": 80,
+          "size": 8,
+          "desc": "stack space to commit"
+        },
+        {
+          "name": "SizeOfHeapReserve",
+          "offset": 88,
+          "size": 8,
+          "desc": "heap space to reserve"
+        },
+        {
+          "name": "SizeOfHeapCommit",
+          "offset": 96,
+          "size": 8,
+          "desc": "heap space to commit"
+        },
+        {
+          "name": "LoaderFlags",
+          "offset": 104,
+          "size": 4,
+          "desc": "loader flags, must be zero"
+        },
+        {
+          "name": "NumberOfRvaAndSizes",
+          "offset": 108,
+          "size": 4,
+          "desc": "number of data directory entries"
+        }
+      ]
+    },
+    {
+      "name": "data_directory",
+      "desc": "PE data directory entry",
+      "size": 8,
+      "fields": [
+        {
+          "name": "VirtualAddress",
+          "offset": 0,
+          "size": 4,
+          "desc": "relative virtual address of the table"
+        },
+        {
+          "name": "Size",
+          "offset": 4,
+          "size": 4,
+          "desc": "size of the table"
+        }
+      ]
+    }
+  ],
+  "constants": [
+    {
+      "name": "machine_types",
+      "desc": "FILE_HEADER.Machine values",
+      "items": [
+        {
+          "name": "IMAGE_FILE_MACHINE_ALPHA",
+          "value": 388
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_ALPHA64",
+          "value": 644
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_AM33",
+          "value": 467
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_AMD64",
+          "value": 34404
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_ARM",
+          "value": 448
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_CEE",
+          "value": 49390
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_CEF",
+          "value": 3311
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_EBC",
+          "value": 3772
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_I386",
+          "value": 332
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_IA64",
+          "value": 512
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_M32R",
+          "value": 36929
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_M68K",
+          "value": 616
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_MIPS16",
+          "value": 614
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_MIPSFPU",
+          "value": 870
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_MIPSFPU16",
+          "value": 1126
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_POWERPC",
+          "value": 496
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_POWERPCFP",
+          "value": 497
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_R10000",
+          "value": 360
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_R3000",
+          "value": 354
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_R4000",
+          "value": 358
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_SH3",
+          "value": 418
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_SH3DSP",
+          "value": 419
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_SH3E",
+          "value": 420
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_SH4",
+          "value": 422
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_SH5",
+          "value": 424
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_THUMB",
+          "value": 450
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_TRICORE",
+          "value": 1312
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_UNKNOWN",
+          "value": 0
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_WCEMIPSV2",
+          "value": 361
+        }
+      ]
+    },
+    {
+      "name": "characteristics",
+      "desc": "FILE_HEADER.Characteristics bits",
+      "items": [
+        {
+          "name": "IMAGE_FILE_16BIT_MACHINE",
+          "value": 64
+        },
+        {
+          "name": "IMAGE_FILE_32BIT_MACHINE",
+          "value": 256
+        },
+        {
+          "name": "IMAGE_FILE_AGGRESSIVE_WS_TRIM",
+          "value": 16
+        },
+        {
+          "name": "IMAGE_FILE_BYTES_REVERSED_HI",
+          "value": 32768
+        },
+        {
+          "name": "IMAGE_FILE_BYTES_REVERSED_LO",
+          "value": 128
+        },
+        {
+          "name": "IMAGE_FILE_DEBUG_STRIPPED",
+          "value": 512
+        },
+        {
+          "name": "IMAGE_FILE_DLL",
+          "value": 8192
+        },
+        {
+          "name": "IMAGE_FILE_EXECUTABLE_IMAGE",
+          "value": 2
+        },
+        {
+          "name": "IMAGE_FILE_LARGE_ADDRESS_AWARE",
+          "value": 32
+        },
+        {
+          "name": "IMAGE_FILE_LINE_NUMS_STRIPPED",
+          "value": 4
+        },
+        {
+          "name": "IMAGE_FILE_LOCAL_SYMS_STRIPPED",
+          "value": 8
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_ALPHA",
+          "value": 388
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_ALPHA64",
+          "value": 644
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_AM33",
+          "value": 467
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_AMD64",
+          "value": 34404
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_ARM",
+          "value": 448
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_CEE",
+          "value": 49390
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_CEF",
+          "value": 3311
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_EBC",
+          "value": 3772
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_I386",
+          "value": 332
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_IA64",
+          "value": 512
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_M32R",
+          "value": 36929
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_M68K",
+          "value": 616
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_MIPS16",
+          "value": 614
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_MIPSFPU",
+          "value": 870
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_MIPSFPU16",
+          "value": 1126
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_POWERPC",
+          "value": 496
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_POWERPCFP",
+          "value": 497
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_R10000",
+          "value": 360
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_R3000",
+          "value": 354
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_R4000",
+          "value": 358
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_SH3",
+          "value": 418
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_SH3DSP",
+          "value": 419
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_SH3E",
+          "value": 420
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_SH4",
+          "value": 422
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_SH5",
+          "value": 424
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_THUMB",
+          "value": 450
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_TRICORE",
+          "value": 1312
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_UNKNOWN",
+          "value": 0
+        },
+        {
+          "name": "IMAGE_FILE_MACHINE_WCEMIPSV2",
+          "value": 361
+        },
+        {
+          "name": "IMAGE_FILE_NET_RUN_FROM_SWAP",
+          "value": 2048
+        },
+        {
+          "name": "IMAGE_FILE_RELOCS_STRIPPED",
+          "value": 1
+        },
+        {
+          "name": "IMAGE_FILE_REMOVABLE_RUN_FROM_SWAP",
+          "value": 1024
+        },
+        {
+          "name": "IMAGE_FILE_SYSTEM",
+          "value": 4096
+        },
+        {
+          "name": "IMAGE_FILE_UP_SYSTEM_ONLY",
+          "value": 16384
+        }
+      ]
+    }
+  ],
+  "sections": [
+    {
+      "name": ".text",
+      "desc": "executable code"
+    },
+    {
+      "name": ".data",
+      "desc": "initialised data"
+    },
+    {
+      "name": ".bss",
+      "desc": "uninitialised data"
+    },
+    {
+      "name": ".rdata",
+      "desc": "read-only data"
+    },
+    {
+      "name": ".idata",
+      "desc": "import data"
+    },
+    {
+      "name": ".rsrc",
+      "desc": "resources"
+    }
+  ]
+}

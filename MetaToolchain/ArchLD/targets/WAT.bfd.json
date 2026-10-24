@@ -1,0 +1,137 @@
+{
+  "schema": 1,
+  "name": "WAT",
+  "format": "wasm",
+  "description": "WebAssembly binary format (wasm modules).",
+  "byte_order": "little",
+  "target_vector": "wasm32",
+  "arch": "wasm",
+  "magic": "0061736d",
+  "source": [
+    {
+      "file": "wasm/core/binary.rst",
+      "note": "WebAssembly core specification, binary format"
+    }
+  ],
+  "records": [
+    {
+      "name": "header",
+      "desc": "WebAssembly module header",
+      "size": 8,
+      "fields": [
+        {
+          "name": "magic",
+          "offset": 0,
+          "size": 4,
+          "desc": "\\0asm"
+        },
+        {
+          "name": "version",
+          "offset": 4,
+          "size": 4,
+          "desc": "binary format version, 1"
+        }
+      ]
+    },
+    {
+      "name": "section",
+      "desc": "WebAssembly section header",
+      "size": 1,
+      "fields": [
+        {
+          "name": "id",
+          "offset": 0,
+          "size": 1,
+          "desc": "section id"
+        }
+      ]
+    }
+  ],
+  "constants": [
+    {
+      "name": "section_types",
+      "desc": "WebAssembly section ids",
+      "items": [
+        {
+          "name": "custom",
+          "value": 0,
+          "desc": "custom section"
+        },
+        {
+          "name": "type",
+          "value": 1,
+          "desc": "type section"
+        },
+        {
+          "name": "import",
+          "value": 2,
+          "desc": "import section"
+        },
+        {
+          "name": "function",
+          "value": 3,
+          "desc": "function section"
+        },
+        {
+          "name": "table",
+          "value": 4,
+          "desc": "table section"
+        },
+        {
+          "name": "memory",
+          "value": 5,
+          "desc": "memory section"
+        },
+        {
+          "name": "global",
+          "value": 6,
+          "desc": "global section"
+        },
+        {
+          "name": "export",
+          "value": 7,
+          "desc": "export section"
+        },
+        {
+          "name": "start",
+          "value": 8,
+          "desc": "start section"
+        },
+        {
+          "name": "element",
+          "value": 9,
+          "desc": "element section"
+        },
+        {
+          "name": "code",
+          "value": 10,
+          "desc": "code section"
+        },
+        {
+          "name": "data",
+          "value": 11,
+          "desc": "data section"
+        },
+        {
+          "name": "data_count",
+          "value": 12,
+          "desc": "data count section"
+        }
+      ]
+    }
+  ],
+  "sections": [
+    {
+      "name": "custom",
+      "desc": "custom section (name, reloc.*)"
+    },
+    {
+      "name": "code",
+      "desc": "function bodies"
+    },
+    {
+      "name": "data",
+      "desc": "data segments"
+    }
+  ]
+}

@@ -1,0 +1,491 @@
+# nvptx.dsymspec.yaml
+# Migrated from the Lua DSL (nvptx.dsymspec). Encoder bodies are imperative
+# pseudo-code; the grammar is documented in README.md.
+#
+# nvptx.dsymspec — NVIDIA PTX virtual GPU ISA (sm_80), kernel ABI.
+# PTX is a textual virtual ISA; registers are typed/unbounded virtual
+# registers (%r32/%rd64/%f32/%f64/%p8 + specials). Instruction encodings
+# below are representative SASS-level words, not bit-exact. Cross-checked
+# via arch_oracle + ccbe_oracle SIMT/vector-ISA topics + toolchain_orace.
+# Strata: base | sm_70 | sm_80 | sm_90 | mma/wmma | cp.async | shfl/vote |
+#   atomics | priv.
+
+schema: 1
+targets:
+  - {arch: nvptx, subarch: sm_80, addr_size: 64, op_size: 32, addr_def: 64, align: 4, byte_order: little, obj_format: ptx, abi: NVPTX, calling_conv: nvptx-kernel, features: [base, sm_80, shfl]}
+features:
+  - {name: base, desc: "PTX base integer + moves + branches"}
+  - {name: sm_50, desc: "compute capability 5.0"}
+  - {name: sm_70, desc: "compute capability 7.0"}
+  - {name: sm_80, desc: "compute capability 8.0"}
+  - {name: sm_90, desc: "compute capability 9.0 (wgmma/dist)"}
+  - {name: mma, desc: "matrix multiply-accumulate"}
+  - {name: wmma, desc: "warp matrix ops"}
+  - {name: cp.async, desc: "asynchronous copy"}
+  - {name: shfl, desc: "warp shuffle"}
+  - {name: vote, desc: "warp vote"}
+  - {name: atomics, desc: "atomics (atom.add/cas)"}
+  - {name: fp16, desc: half-precision}
+  - {name: bf16, desc: "brain float 16"}
+  - {name: priv, desc: "privileged (cluster/barrier cluster)"}
+registers:
+  - {name: "%p0", class: mask, width: 8, enc: 0, flags: [readable, writable]}
+  - {name: "%p1", class: mask, width: 8, enc: 1, flags: [readable, writable]}
+  - {name: "%p2", class: mask, width: 8, enc: 2, flags: [readable, writable]}
+  - {name: "%p3", class: mask, width: 8, enc: 3, flags: [readable, writable]}
+  - {name: "%p4", class: mask, width: 8, enc: 4, flags: [readable, writable]}
+  - {name: "%p5", class: mask, width: 8, enc: 5, flags: [readable, writable]}
+  - {name: "%p6", class: mask, width: 8, enc: 6, flags: [readable, writable]}
+  - {name: "%p7", class: mask, width: 8, enc: 7, flags: [readable, writable]}
+  - {name: "%r0", class: gpr, width: 32, enc: 0, flags: [readable, writable]}
+  - {name: "%r1", class: gpr, width: 32, enc: 1, flags: [readable, writable]}
+  - {name: "%r2", class: gpr, width: 32, enc: 2, flags: [readable, writable]}
+  - {name: "%r3", class: gpr, width: 32, enc: 3, flags: [readable, writable]}
+  - {name: "%r4", class: gpr, width: 32, enc: 4, flags: [readable, writable]}
+  - {name: "%r5", class: gpr, width: 32, enc: 5, flags: [readable, writable]}
+  - {name: "%r6", class: gpr, width: 32, enc: 6, flags: [readable, writable]}
+  - {name: "%r7", class: gpr, width: 32, enc: 7, flags: [readable, writable]}
+  - {name: "%r8", class: gpr, width: 32, enc: 8, flags: [readable, writable]}
+  - {name: "%r9", class: gpr, width: 32, enc: 9, flags: [readable, writable]}
+  - {name: "%r10", class: gpr, width: 32, enc: 10, flags: [readable, writable]}
+  - {name: "%r11", class: gpr, width: 32, enc: 11, flags: [readable, writable]}
+  - {name: "%r12", class: gpr, width: 32, enc: 12, flags: [readable, writable]}
+  - {name: "%r13", class: gpr, width: 32, enc: 13, flags: [readable, writable]}
+  - {name: "%r14", class: gpr, width: 32, enc: 14, flags: [readable, writable]}
+  - {name: "%r15", class: gpr, width: 32, enc: 15, flags: [readable, writable]}
+  - {name: "%r16", class: gpr, width: 32, enc: 16, flags: [readable, writable]}
+  - {name: "%r17", class: gpr, width: 32, enc: 17, flags: [readable, writable]}
+  - {name: "%r18", class: gpr, width: 32, enc: 18, flags: [readable, writable]}
+  - {name: "%r19", class: gpr, width: 32, enc: 19, flags: [readable, writable]}
+  - {name: "%r20", class: gpr, width: 32, enc: 20, flags: [readable, writable]}
+  - {name: "%r21", class: gpr, width: 32, enc: 21, flags: [readable, writable]}
+  - {name: "%r22", class: gpr, width: 32, enc: 22, flags: [readable, writable]}
+  - {name: "%r23", class: gpr, width: 32, enc: 23, flags: [readable, writable]}
+  - {name: "%r24", class: gpr, width: 32, enc: 24, flags: [readable, writable]}
+  - {name: "%r25", class: gpr, width: 32, enc: 25, flags: [readable, writable]}
+  - {name: "%r26", class: gpr, width: 32, enc: 26, flags: [readable, writable]}
+  - {name: "%r27", class: gpr, width: 32, enc: 27, flags: [readable, writable]}
+  - {name: "%r28", class: gpr, width: 32, enc: 28, flags: [readable, writable]}
+  - {name: "%r29", class: gpr, width: 32, enc: 29, flags: [readable, writable]}
+  - {name: "%r30", class: gpr, width: 32, enc: 30, flags: [readable, writable]}
+  - {name: "%r31", class: gpr, width: 32, enc: 31, flags: [readable, writable]}
+  - {name: "%rd0", class: gpr, width: 64, enc: 0, flags: [readable, writable]}
+  - {name: "%rd1", class: gpr, width: 64, enc: 1, flags: [readable, writable]}
+  - {name: "%rd2", class: gpr, width: 64, enc: 2, flags: [readable, writable]}
+  - {name: "%rd3", class: gpr, width: 64, enc: 3, flags: [readable, writable]}
+  - {name: "%rd4", class: gpr, width: 64, enc: 4, flags: [readable, writable]}
+  - {name: "%rd5", class: gpr, width: 64, enc: 5, flags: [readable, writable]}
+  - {name: "%rd6", class: gpr, width: 64, enc: 6, flags: [readable, writable]}
+  - {name: "%rd7", class: gpr, width: 64, enc: 7, flags: [readable, writable]}
+  - {name: "%rd8", class: gpr, width: 64, enc: 8, flags: [readable, writable]}
+  - {name: "%rd9", class: gpr, width: 64, enc: 9, flags: [readable, writable]}
+  - {name: "%rd10", class: gpr, width: 64, enc: 10, flags: [readable, writable]}
+  - {name: "%rd11", class: gpr, width: 64, enc: 11, flags: [readable, writable]}
+  - {name: "%rd12", class: gpr, width: 64, enc: 12, flags: [readable, writable]}
+  - {name: "%rd13", class: gpr, width: 64, enc: 13, flags: [readable, writable]}
+  - {name: "%rd14", class: gpr, width: 64, enc: 14, flags: [readable, writable]}
+  - {name: "%rd15", class: gpr, width: 64, enc: 15, flags: [readable, writable]}
+  - {name: "%rd16", class: gpr, width: 64, enc: 16, flags: [readable, writable]}
+  - {name: "%rd17", class: gpr, width: 64, enc: 17, flags: [readable, writable]}
+  - {name: "%rd18", class: gpr, width: 64, enc: 18, flags: [readable, writable]}
+  - {name: "%rd19", class: gpr, width: 64, enc: 19, flags: [readable, writable]}
+  - {name: "%rd20", class: gpr, width: 64, enc: 20, flags: [readable, writable]}
+  - {name: "%rd21", class: gpr, width: 64, enc: 21, flags: [readable, writable]}
+  - {name: "%rd22", class: gpr, width: 64, enc: 22, flags: [readable, writable]}
+  - {name: "%rd23", class: gpr, width: 64, enc: 23, flags: [readable, writable]}
+  - {name: "%rd24", class: gpr, width: 64, enc: 24, flags: [readable, writable]}
+  - {name: "%rd25", class: gpr, width: 64, enc: 25, flags: [readable, writable]}
+  - {name: "%rd26", class: gpr, width: 64, enc: 26, flags: [readable, writable]}
+  - {name: "%rd27", class: gpr, width: 64, enc: 27, flags: [readable, writable]}
+  - {name: "%rd28", class: gpr, width: 64, enc: 28, flags: [readable, writable]}
+  - {name: "%rd29", class: gpr, width: 64, enc: 29, flags: [readable, writable]}
+  - {name: "%rd30", class: gpr, width: 64, enc: 30, flags: [readable, writable]}
+  - {name: "%rd31", class: gpr, width: 64, enc: 31, flags: [readable, writable]}
+  - {name: "%f0", class: fp, width: 32, enc: 0, flags: [readable, writable]}
+  - {name: "%f1", class: fp, width: 32, enc: 1, flags: [readable, writable]}
+  - {name: "%f2", class: fp, width: 32, enc: 2, flags: [readable, writable]}
+  - {name: "%f3", class: fp, width: 32, enc: 3, flags: [readable, writable]}
+  - {name: "%f4", class: fp, width: 32, enc: 4, flags: [readable, writable]}
+  - {name: "%f5", class: fp, width: 32, enc: 5, flags: [readable, writable]}
+  - {name: "%f6", class: fp, width: 32, enc: 6, flags: [readable, writable]}
+  - {name: "%f7", class: fp, width: 32, enc: 7, flags: [readable, writable]}
+  - {name: "%f8", class: fp, width: 32, enc: 8, flags: [readable, writable]}
+  - {name: "%f9", class: fp, width: 32, enc: 9, flags: [readable, writable]}
+  - {name: "%f10", class: fp, width: 32, enc: 10, flags: [readable, writable]}
+  - {name: "%f11", class: fp, width: 32, enc: 11, flags: [readable, writable]}
+  - {name: "%f12", class: fp, width: 32, enc: 12, flags: [readable, writable]}
+  - {name: "%f13", class: fp, width: 32, enc: 13, flags: [readable, writable]}
+  - {name: "%f14", class: fp, width: 32, enc: 14, flags: [readable, writable]}
+  - {name: "%f15", class: fp, width: 32, enc: 15, flags: [readable, writable]}
+  - {name: "%f16", class: fp, width: 32, enc: 16, flags: [readable, writable]}
+  - {name: "%f17", class: fp, width: 32, enc: 17, flags: [readable, writable]}
+  - {name: "%f18", class: fp, width: 32, enc: 18, flags: [readable, writable]}
+  - {name: "%f19", class: fp, width: 32, enc: 19, flags: [readable, writable]}
+  - {name: "%f20", class: fp, width: 32, enc: 20, flags: [readable, writable]}
+  - {name: "%f21", class: fp, width: 32, enc: 21, flags: [readable, writable]}
+  - {name: "%f22", class: fp, width: 32, enc: 22, flags: [readable, writable]}
+  - {name: "%f23", class: fp, width: 32, enc: 23, flags: [readable, writable]}
+  - {name: "%f24", class: fp, width: 32, enc: 24, flags: [readable, writable]}
+  - {name: "%f25", class: fp, width: 32, enc: 25, flags: [readable, writable]}
+  - {name: "%f26", class: fp, width: 32, enc: 26, flags: [readable, writable]}
+  - {name: "%f27", class: fp, width: 32, enc: 27, flags: [readable, writable]}
+  - {name: "%f28", class: fp, width: 32, enc: 28, flags: [readable, writable]}
+  - {name: "%f29", class: fp, width: 32, enc: 29, flags: [readable, writable]}
+  - {name: "%f30", class: fp, width: 32, enc: 30, flags: [readable, writable]}
+  - {name: "%f31", class: fp, width: 32, enc: 31, flags: [readable, writable]}
+  - {name: "%fd0", class: fp, width: 64, enc: 0, flags: [readable, writable]}
+  - {name: "%fd1", class: fp, width: 64, enc: 1, flags: [readable, writable]}
+  - {name: "%fd2", class: fp, width: 64, enc: 2, flags: [readable, writable]}
+  - {name: "%fd3", class: fp, width: 64, enc: 3, flags: [readable, writable]}
+  - {name: "%fd4", class: fp, width: 64, enc: 4, flags: [readable, writable]}
+  - {name: "%fd5", class: fp, width: 64, enc: 5, flags: [readable, writable]}
+  - {name: "%fd6", class: fp, width: 64, enc: 6, flags: [readable, writable]}
+  - {name: "%fd7", class: fp, width: 64, enc: 7, flags: [readable, writable]}
+  - {name: "%fd8", class: fp, width: 64, enc: 8, flags: [readable, writable]}
+  - {name: "%fd9", class: fp, width: 64, enc: 9, flags: [readable, writable]}
+  - {name: "%fd10", class: fp, width: 64, enc: 10, flags: [readable, writable]}
+  - {name: "%fd11", class: fp, width: 64, enc: 11, flags: [readable, writable]}
+  - {name: "%fd12", class: fp, width: 64, enc: 12, flags: [readable, writable]}
+  - {name: "%fd13", class: fp, width: 64, enc: 13, flags: [readable, writable]}
+  - {name: "%fd14", class: fp, width: 64, enc: 14, flags: [readable, writable]}
+  - {name: "%fd15", class: fp, width: 64, enc: 15, flags: [readable, writable]}
+  - {name: "%fd16", class: fp, width: 64, enc: 16, flags: [readable, writable]}
+  - {name: "%fd17", class: fp, width: 64, enc: 17, flags: [readable, writable]}
+  - {name: "%fd18", class: fp, width: 64, enc: 18, flags: [readable, writable]}
+  - {name: "%fd19", class: fp, width: 64, enc: 19, flags: [readable, writable]}
+  - {name: "%fd20", class: fp, width: 64, enc: 20, flags: [readable, writable]}
+  - {name: "%fd21", class: fp, width: 64, enc: 21, flags: [readable, writable]}
+  - {name: "%fd22", class: fp, width: 64, enc: 22, flags: [readable, writable]}
+  - {name: "%fd23", class: fp, width: 64, enc: 23, flags: [readable, writable]}
+  - {name: "%fd24", class: fp, width: 64, enc: 24, flags: [readable, writable]}
+  - {name: "%fd25", class: fp, width: 64, enc: 25, flags: [readable, writable]}
+  - {name: "%fd26", class: fp, width: 64, enc: 26, flags: [readable, writable]}
+  - {name: "%fd27", class: fp, width: 64, enc: 27, flags: [readable, writable]}
+  - {name: "%fd28", class: fp, width: 64, enc: 28, flags: [readable, writable]}
+  - {name: "%fd29", class: fp, width: 64, enc: 29, flags: [readable, writable]}
+  - {name: "%fd30", class: fp, width: 64, enc: 30, flags: [readable, writable]}
+  - {name: "%fd31", class: fp, width: 64, enc: 31, flags: [readable, writable]}
+  - {name: "%tid", class: special, width: 32, enc: 0}
+  - {name: "%ntid", class: special, width: 32, enc: 0}
+  - {name: "%ctaid", class: special, width: 32, enc: 0}
+  - {name: "%nctaid", class: special, width: 32, enc: 0}
+  - {name: "%warpid", class: special, width: 32, enc: 0}
+  - {name: "%laneid", class: special, width: 32, enc: 0}
+  - {name: "%clock", class: special, width: 32, enc: 0}
+  - {name: "%smid", class: special, width: 32, enc: 0}
+  - {name: "%gridid", class: special, width: 64, enc: 0}
+mnemonics:
+  - {name: nop}
+  - {name: mov}
+  - {name: add}
+  - {name: sub}
+  - {name: mul}
+  - {name: mad}
+  - {name: and}
+  - {name: or}
+  - {name: xor}
+  - {name: shl}
+  - {name: setp}
+  - {name: cvt}
+  - {name: ld}
+  - {name: st}
+  - {name: cp.async}
+  - {name: atom.add}
+  - {name: bra}
+  - {name: call}
+  - {name: ret}
+  - {name: exit}
+  - {name: bar.sync}
+  - {name: membar}
+  - {name: shfl}
+  - {name: vote}
+  - {name: fadd}
+  - {name: fmul}
+  - {name: mma}
+encoders:
+  - name: nop
+    max_bytes: 1
+    body: |
+      EMIT8 0x00
+  - name: mov
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x80000000 + dst*256 + src*65536
+  - name: add
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x80020000 + dst*256 + a*65536 + b*131072
+  - name: sub
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x80040000 + dst*256 + a*65536 + b*131072
+  - name: mul
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x80050000 + dst*256 + a*65536 + b*131072
+  - name: mad
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x80060000 + dst*256 + a*65536 + b*131072
+  - name: and
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x80070000 + dst*256 + a*65536 + b*131072
+  - name: or
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x80080000 + dst*256 + a*65536 + b*131072
+  - name: xor
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x80090000 + dst*256 + a*65536 + b*131072
+  - name: shl
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x800A0000 + dst*256 + a*65536 + b*131072
+  - name: setp
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x80100000 + dst*256 + a*65536 + b*131072
+  - name: cvt
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x80120000 + dst*256 + src*65536
+  - name: ld
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x10000000 + dst*256 + addr*65536
+  - name: st
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x10020000 + addr*65536 + val*256
+  - name: cpload
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x10040000 + dst*256 + addr*65536
+  - name: atomadd
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x10080000 + addr*65536 + val*256
+  - name: bra
+    max_bytes: 4
+    max_relocs: 1
+    body: |
+      EMIT32LE 0x20000000
+      EMIT_RELOCATION sym, R_NVPTX_REL32
+  - name: call
+    max_bytes: 4
+    max_relocs: 1
+    body: |
+      EMIT32LE 0x21000000
+      EMIT_RELOCATION sym, R_NVPTX_REL32
+  - name: ret
+    max_bytes: 1
+    body: |
+      EMIT8 0x01
+  - name: exit
+    max_bytes: 1
+    body: |
+      EMIT8 0x02
+  - name: bar
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x22000000 + (imm % 16)
+  - name: membar
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x23000000
+  - name: shfl
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x30000000 + dst*256 + a*65536 + b*131072
+  - name: vote
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x31000000 + dst*256 + src*65536
+  - name: fadd
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x81000000 + dst*256 + a*65536 + b*131072
+  - name: fmul
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x81020000 + dst*256 + a*65536 + b*131072
+  - name: mma
+    max_bytes: 8
+    body: |
+      EMIT64LE 0x4000000000000000 + dst*16777216
+forms:
+  - mnemonic: nop
+    encoder: nop
+  - mnemonic: mov
+    encoder: mov
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: add
+    encoder: add
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: sub
+    encoder: sub
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: mul
+    encoder: mul
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: mad
+    encoder: mad
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: and
+    encoder: and
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: or
+    encoder: or
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: xor
+    encoder: xor
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: shl
+    encoder: shl
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: setp
+    encoder: setp
+    operands:
+      - {kind: reg, class: mask, width: 8, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: cvt
+    encoder: cvt
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: ld
+    encoder: ld
+    flags: [reads_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: st
+    encoder: st
+    flags: [writes_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: cp.async
+    encoder: cpload
+    flags: [reads_mem, writes_mem]
+    required: [cp.async]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: atom.add
+    encoder: atomadd
+    flags: [reads_mem, writes_mem]
+    required: [atomics]
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: bra
+    encoder: bra
+    flags: [branch, terminator, reloc]
+    operands:
+      - {kind: sym, width: 64}
+  - mnemonic: call
+    encoder: call
+    flags: [branch, reloc]
+    operands:
+      - {kind: sym, width: 64}
+  - mnemonic: ret
+    encoder: ret
+    flags: [return, terminator]
+  - mnemonic: exit
+    encoder: exit
+    flags: [terminator]
+  - mnemonic: bar.sync
+    encoder: bar
+    operands:
+      - {kind: imm, width: 8, imm_min: 0, imm_max: 15, signed: false}
+  - mnemonic: membar
+    encoder: membar
+  - mnemonic: shfl
+    encoder: shfl
+    required: [shfl]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: vote
+    encoder: vote
+    required: [vote]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: fadd
+    encoder: fadd
+    operands:
+      - {kind: reg, class: fp, width: 32, access: write}
+      - {kind: reg, class: fp, width: 32}
+      - {kind: reg, class: fp, width: 32}
+  - mnemonic: fmul
+    encoder: fmul
+    operands:
+      - {kind: reg, class: fp, width: 32, access: write}
+      - {kind: reg, class: fp, width: 32}
+      - {kind: reg, class: fp, width: 32}
+  - mnemonic: mma
+    encoder: mma
+    required: [mma]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+syntaxes:
+  - {name: ptx, comment: "//", separator: ", "}
+  - {name: sass, comment: "//", separator: ", "}
+sections:
+  - {name: ".text", flags: [exec, alloc, code], align: 4, content: code}
+  - {name: ".param", flags: [alloc, data], align: 4, content: data}
+  - {name: ".shared", flags: [write, alloc, data], align: 4, content: data}
+  - {name: ".const", flags: [alloc, readonly, data], align: 4, content: data}
+  - {name: ".local", flags: [write, alloc, data], align: 4, content: data}
+  - {name: ".global", flags: [write, alloc, data], align: 4, content: data}
+linkages:
+  - {name: kernel_entry, binding: global, visibility: default, symtype: func}
+  - {name: func_device, binding: global, visibility: default, symtype: func}
+  - {name: var_global, binding: global, visibility: default, symtype: object}
+relocs:
+  - {name: R_NVPTX_NONE, width: 32, expr: "S + A"}
+  - {name: R_NVPTX_ABS64, width: 64, expr: "S + A"}
+  - {name: R_NVPTX_ABS32, width: 32, expr: "S + A"}
+  - {name: R_NVPTX_REL32, width: 32, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_NVPTX_PARAM, width: 64, expr: "S + A"}
+debug:
+  - {kind: target, ref: "", msg: "ptx virtual ISA: base+fp+mma/copy/async+shfl/vote+atomics"}
+  - {kind: form, ref: cp.async, msg: "async-copy forms require cp.async"}
+  - {kind: form, ref: mma, msg: "mma forms require mma/wmma"}
+backend:
+  file: backend/nvptx.json

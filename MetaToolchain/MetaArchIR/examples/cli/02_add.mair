@@ -1,0 +1,6 @@
+section .text
+global add2
+add2:
+    mov %edi, %eax
+    add %esi, %eax
+    ret
