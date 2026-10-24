@@ -1,0 +1,14 @@
+{% local count = domas.defines.COUNT or 4 %}
+.section .rodata
+.globl squares
+squares:
+{% for i = 1, count do %}
+    .4byte {{ i * i }}
+{% end %}
+
+.macro pair value:req
+    .byte \value, \value
+.endm
+.rept 2
+    pair 7
+.endr

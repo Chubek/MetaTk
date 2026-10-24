@@ -1,0 +1,9 @@
+# domas -T amd64 --intel-syntax answer.mair
+.text
+.globl answer
+.type answer, @function
+answer:
+    mov eax, 42
+    ret
+.size answer, .-answer
+.section .note.GNU-stack,"",@progbits

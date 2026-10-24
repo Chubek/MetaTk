@@ -1,0 +1,5 @@
+# The selected database supplies the return instruction's encoding.
+section .text
+global portable_return
+portable_return:
+encode ret

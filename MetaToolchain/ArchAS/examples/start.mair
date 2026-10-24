@@ -1,0 +1,9 @@
+# domas -T amd64 --intel-syntax start.mair
+# ArchLD -o start start.o
+.text
+.globl _start
+_start:
+    mov eax, 60
+    mov edi, 37
+    syscall
+.section .note.GNU-stack,"",@progbits
