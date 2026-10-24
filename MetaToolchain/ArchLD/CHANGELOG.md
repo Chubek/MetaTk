@@ -32,3 +32,9 @@
   are checked before dispatching to the writer.
 - DSLtk resolves to the workspace dependency, and header edits trigger Make
   rebuilds. Link manifests preserve input/library/search-directory ordering.
+
+## 2026-10-24
+
+- Added optional `larchld` Lua module and documented the Lua scripting API.
+  The existing restricted `-T` LDScript-compatible manifest path remains
+  available for deterministic command-line linking.

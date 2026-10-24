@@ -215,3 +215,20 @@ file recursion are bounded. Quotes and `#` comments are supported.
 `GROUP(...)` adds inputs to the existing global fixed-point archive search;
 it does not implement GNU ld's scoped group or left-to-right extraction
 semantics. This is **not** a GNU linker script interpreter.
+
+### Lua integration
+
+The optional `larchld` Lua module exposes the linker library to scripts. Build
+with `-DARCHLD_LUA=ON` (Lua is discovered through CMake), then run scripts with
+Lua's normal interpreter:
+
+```lua
+local ld = require "larchld".new(nil, "ELF64")
+ld:add("entry.o")
+ld:link()
+local entry = assert(ld:symbol("_start"))
+ld:write_elf("a.out", entry)
+```
+
+The existing `-T` interface remains the LDScript-compatible restricted manifest
+mode; Lua is intended for programmable workflows and inspection.

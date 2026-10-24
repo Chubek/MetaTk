@@ -1,0 +1,28 @@
+# ArchLD Manual
+
+This manual is organized as 24 short chapters. Read chapters 1–4 for a quick start, then use the remaining chapters as a reference.
+
+1. [Overview](01-overview.md)
+2. [Installation](02-installation.md)
+3. [Your First Link](03-first-link.md)
+4. [Command-Line Reference](04-command-line.md)
+5. [Targets and Catalogue](05-targets.md)
+6. [Object and Archive Inputs](06-inputs.md)
+7. [Symbol Resolution](07-symbols.md)
+8. [Sections and Layout](08-sections.md)
+9. [Relocations](09-relocations.md)
+10. [GOT and Position-Independent Code](10-got-pic.md)
+11. [ELF Output](11-elf-output.md)
+12. [Entry Points and Addresses](12-entry-and-base.md)
+13. [LDScript-Compatible Manifests](13-link-manifests.md)
+14. [Manifest Paths and Includes](14-manifest-paths.md)
+15. [Response Files](15-response-files.md)
+16. [Lua Integration](16-lua.md)
+17. [C API](17-c-api.md)
+18. [Memory and Ownership](18-memory-and-ownership.md)
+19. [Map Files and Inspection](19-map-files.md)
+20. [Errors and Diagnostics](20-errors.md)
+21. [Limits and Hardening](21-security-limits.md)
+22. [Testing and Verification](22-testing.md)
+23. [Troubleshooting](23-troubleshooting.md)
+24. [Extending ArchLD](24-extending.md)
