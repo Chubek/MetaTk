@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <cerrno>
 #include <cstring>
+#include <poll.h>
 namespace metalib {
 namespace ipc_detail {
 struct Endpoint { int fd = -1; ~Endpoint() { if (fd >= 0) ::close(fd); } };
@@ -26,7 +27,15 @@ inline void install_IPC(metaml::Session &s) {
     if (h.data.fd < 0) return err("endpoint is closed");
     if (S(a[1]).size() > 65536) return err("message exceeds 65536 bytes");
     ssize_t n;
-    do { n = ::send(h.data.fd, S(a[1]).data(), S(a[1]).size(), MSG_NOSIGNAL | MSG_DONTWAIT); } while (n < 0 && errno == EINTR);
+    do {
+      n = ::send(h.data.fd, S(a[1]).data(), S(a[1]).size(), MSG_NOSIGNAL | MSG_DONTWAIT);
+      if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+        pollfd pfd{h.data.fd, POLLOUT, 0};
+        int ready = ::poll(&pfd, 1, 1000);
+        if (ready > 0) continue;
+        if (ready == 0) { errno = EAGAIN; break; }
+      }
+    } while (n < 0 && errno == EINTR);
     return n < 0 ? err(std::strerror(errno)) : ok(unit());
   });
   prim(s, "IPC.recv", "IpcEndpoint -> Result String String", 1, [](C &c, V &a) {
