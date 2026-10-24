@@ -26,6 +26,11 @@ MetaArchIR's checked encoders, Lua templates, macros, and Lua/shared-library
 directive extensions. Enable it with `ARCHDB_BUILD_ARCHAS=ON` (the default when
 the C++ layer is enabled).
 
+**Embedding:** [MetaAS](MetaAS/README.md) and [MetaLD](MetaLD/README.md) expose
+versioned C11 APIs and C++20 RAII wrappers for in-memory assembly/linking,
+custom directives, host symbol definitions and lazy symbol resolvers. Link
+`MetaAS::metaas` and `MetaLD::metald` together to compile and link in one process.
+
 For cross-language use, see [the bindings guide](docs/BINDINGS.md):
 `MetaArchABI.h` provides opaque C ABI v1 handles, `MetaArchAPI.hpp` provides an
 independent C++17 RAII API, `bindings/d/metaarch.di` provides D declarations,

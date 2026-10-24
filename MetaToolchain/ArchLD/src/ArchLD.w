@@ -54,6 +54,14 @@ bool archld_add(ArchLD*ld,const char*object_path);
 /* Copy an ELF object or ordinary ar archive. name is diagnostic context;
  * the caller retains ownership of data and may release it on return. */
 bool archld_add_memory(ArchLD*ld,const char*name,const void*data,size_t size);
+/* Host definitions are strong absolute symbols, copied before linking.
+ * A resolver runs after archive extraction for still-undefined strong symbols.
+ * Return 1 with an address, 0 if absent, -1 on error (optionally fill message).
+ * Successful resolutions are cached. Callbacks must not reenter or free ld. */
+typedef int (*ArchLDResolveSymbol)(void*user,const char*name,uint64_t*address,
+char*message,size_t capacity);
+bool archld_define_symbol(ArchLD*ld,const char*name,uint64_t address);
+bool archld_set_symbol_resolver(ArchLD*ld,ArchLDResolveSymbol resolver,void*user);
 bool archld_link(ArchLD*ld);
 bool archld_write_elf(ArchLD*ld,const char*path,uint64_t entry);
 bool archld_write_map_file(const ArchLD*ld,const char*path);
@@ -107,6 +115,8 @@ Native ELF constants and checked maximum input sizes.
 #include <string.h> 
 #include <limits.h> 
 #include <errno.h> 
+/* Private checked relocation arithmetic; public headers remain ISO C11. */
+__extension__ typedef __int128 LDInt128;
 
 enum{LD_SHT_PROGBITS= 1,LD_SHT_SYMTAB= 2,LD_SHT_RELA= 4,LD_SHT_NOTE= 7,
 LD_SHT_NOBITS= 8,LD_SHT_REL= 9,LD_SHF_ALLOC= 2,
@@ -182,6 +192,9 @@ uint8_t*image;
 size_t image_size;
 uint64_t cat_start[4],cat_end[4];
 bool linked;
+bool linking;
+ArchLDResolveSymbol resolver;
+void*resolver_user;
 char error[640];
 };
 
@@ -358,7 +371,7 @@ return ld_object_take(ld,in);
 }
 
 bool archld_add(ArchLD*ld,const char*path){
-if(!ld||!path||ld->error[0]||ld->linked)return false;
+if(!ld||!path||ld->error[0]||ld->linked||ld->linking)return false;
 LDInput in={0};
 in.path=ld_strdup(path);
 if(!in.path)return ld_fail(ld,"out of memory");
@@ -367,7 +380,7 @@ return ld_input_take(ld,in);
 }
 
 bool archld_add_memory(ArchLD*ld,const char*name,const void*data,size_t size){
-if(!ld||ld->error[0]||ld->linked)return false;
+if(!ld||ld->error[0]||ld->linked||ld->linking)return false;
 if(!name||(!data&&size))return ld_fail(ld,"invalid memory input");
 if(size>LD_MAX_INPUT)return ld_fail(ld,"%s: input exceeds 512 MiB",name);
 LDInput in={0};in.path=ld_strdup(name);in.bytes=malloc(size?size:1);in.bytes_len=size;
@@ -498,6 +511,26 @@ if(!strcmp(ld->globals[i].name,name))return&ld->globals[i];
 return NULL;
 }
 
+static bool ld_host_symbol(ArchLD*ld,const char*name,uint64_t address){
+ if(!name||!*name)return ld_fail(ld,"empty host symbol name");
+ if(!ld->elf32&&!strcmp(name,"_GLOBAL_OFFSET_TABLE_"))return ld_fail(ld,"reserved linker symbol: %s",name);
+ if(ld->elf32&&address>UINT32_MAX)return ld_fail(ld,"host symbol %s exceeds ELF32 address range",name);
+ if(ld_lookup(ld,name))return ld_fail(ld,"duplicate host symbol: %s",name);
+ if(!ld_grow(ld,(void**)&ld->globals,&ld->global_cap,ld->global_count+1,sizeof*ld->globals))return false;
+ char*copy=ld_strdup(name);
+ if(!copy)return ld_fail(ld,"out of memory");
+ ld->globals[ld->global_count++]=(LDGlobal){.name=copy,.input=SIZE_MAX,.rank=3,.address=address};
+ return true;
+}
+bool archld_define_symbol(ArchLD*ld,const char*name,uint64_t address){
+ if(!ld||ld->error[0]||ld->linked||ld->linking)return false;
+ return ld_host_symbol(ld,name,address);
+}
+bool archld_set_symbol_resolver(ArchLD*ld,ArchLDResolveSymbol resolver,void*user){
+ if(!ld||ld->error[0]||ld->linked||ld->linking)return false;
+ ld->resolver=resolver;ld->resolver_user=user;return true;
+}
+
 static bool ld_collect_globals(ArchLD*ld){
 for(size_t i= 0;i<ld->input_count;++i){
 ArchBFDObject*obj= ld->inputs[i].bfd;
@@ -531,7 +564,7 @@ if(!g->name)return ld_fail(ld,"out of memory");
 g->input= i;g->symbol= j;g->rank= rank;
 }else if(rank==3&&g->rank==3){
 return ld_fail(ld,"duplicate strong definition: %s (%s, %s)",
-s->name,ld->inputs[g->input].path,
+s->name,g->input==SIZE_MAX?"<host>":ld->inputs[g->input].path,
 ld->inputs[i].path);
 }else if(rank> g->rank){
 g->input= i;g->symbol= j;g->rank= rank;
@@ -556,9 +589,18 @@ for(size_t j= 0;j<archbfd_object_symbol_count(ld->inputs[i].bfd);++j){
 const ArchBFDObjectSymbol*s= archbfd_object_symbol(ld->inputs[i].bfd,j);
 if(s->class_value==LD_BIND_GLOBAL&&s->shndx==LD_SHN_UNDEF&&
 s->name&&*s->name&&!ld_lookup(ld,s->name)&&
-!(ld->elf32==false&&!strcmp(s->name,"_GLOBAL_OFFSET_TABLE_")))
+!(ld->elf32==false&&!strcmp(s->name,"_GLOBAL_OFFSET_TABLE_"))){
+if(ld->resolver){
+ uint64_t address=0;char message[512]={0};
+ int status=ld->resolver(ld->resolver_user,s->name,&address,message,sizeof message);
+ message[sizeof message-1]=0;
+ if(status==1){if(!ld_host_symbol(ld,s->name,address))return false;continue;}
+ if(status!=0)return ld_fail(ld,"%s: symbol resolver failed for %s: %s",
+ ld->inputs[i].path,s->name,*message?message:"callback error");
+}
 return ld_fail(ld,"%s: undefined reference to %s",
 ld->inputs[i].path,s->name);
+}
 }
 return true;
 }
@@ -663,6 +705,7 @@ return true;
 }
 
 static bool ld_global_address(ArchLD*ld,const LDGlobal*g,uint64_t*address){
+if(g->input==SIZE_MAX){*address=g->address;return true;}
 if(g->rank==2){*address= g->common_addr;return true;}
 return ld_definition_address(ld,g->input,g->symbol,address);
 }
@@ -761,21 +804,21 @@ static void ld_store_le(uint8_t*data,unsigned bytes,uint64_t v){
 for(unsigned i= 0;i<bytes;++i)data[i]= (uint8_t)(v>>(8*i));
 }
 
-static __int128 ld_sign_extend(uint64_t x,unsigned bits){
-if(bits==64)return(__int128)(int64_t)x;
+static LDInt128 ld_sign_extend(uint64_t x,unsigned bits){
+if(bits==64)return(LDInt128)(int64_t)x;
 uint64_t top= (uint64_t)1<<(bits-1);
 x&= ((uint64_t)1<<bits)-1;
-return(__int128)(int64_t)((x^top)-top);
+return(LDInt128)(int64_t)((x^top)-top);
 }
 
 static bool ld_put_relocated(ArchLD*ld,uint8_t*data,
-LDHow how,__int128 value){
+LDHow how,LDInt128 value){
 unsigned bits= how.bits;
-__int128 min= how.signed_range?-((__int128)1<<(bits-1)):0;
-__int128 max= how.signed_range?(((__int128)1<<(bits-1))-1):
-(((__int128)1<<bits)-1);
+LDInt128 min= how.signed_range?-((LDInt128)1<<(bits-1)):0;
+LDInt128 max= how.signed_range?(((LDInt128)1<<(bits-1))-1):
+(((LDInt128)1<<bits)-1);
 
-if(bits==64&&!how.signed_range)min= -((__int128)1<<63);
+if(bits==64&&!how.signed_range)min= -((LDInt128)1<<63);
 if(value<min||value> max)
 return ld_fail(ld,"relocation overflow: %u-bit field",bits);
 ld_store_le(data,bits/8,(uint64_t)value);
@@ -837,12 +880,12 @@ if(r->symbol<0||(uint64_t)r->symbol>=
 archbfd_object_symbol_count(in->bfd))
 return ld_fail(ld,"%s: relocation symbol index invalid",in->path);
 uint8_t*patch= ld->image+(size_t)part->image_offset+(size_t)r->offset;
-__int128 a;
-if(explicit_addend)a= (__int128)r->addend;
+LDInt128 a;
+if(explicit_addend)a= (LDInt128)r->addend;
 else{
 uint64_t encoded= ld_load_le(patch,how.bits/8);
 a= (how.pcrel||how.signed_range)?
-ld_sign_extend(encoded,how.bits):(__int128)encoded;
+ld_sign_extend(encoded,how.bits):(LDInt128)encoded;
 }
 uint64_t sym= 0;
 if(!ld->elf32&&(r->type==9||r->type==41||r->type==42)){
@@ -851,7 +894,7 @@ if(!ld->elf32&&(r->type==9||r->type==41||r->type==42)){
  if(!found)return ld_fail(ld,"missing generated GOT entry");
 }else if(!ld_referenced_address(ld,input,(size_t)r->symbol,&sym))return false;
 uint64_t place= part->address+(uint64_t)r->offset;
-__int128 value= (__int128)sym+a-(how.pcrel?(__int128)place:0);
+LDInt128 value= (LDInt128)sym+a-(how.pcrel?(LDInt128)place:0);
 if(!ld_put_relocated(ld,patch,how,value))
 return ld_fail(ld,"%s: failed relocation",in->path);
 return true;
@@ -934,6 +977,7 @@ static bool ld_add_archive(ArchLD *ld,const char*path,uint8_t*bytes,size_t lengt
  return true;
 }
 static bool ld_defined_now(ArchLD*ld,const char*name){
+ if(ld_lookup(ld,name))return true;
  for(size_t i=0;i<ld->input_count;i++){
   ArchBFDObject *obj=ld->inputs[i].bfd;
   for(size_t j=0;j<archbfd_object_symbol_count(obj);j++){
@@ -1056,8 +1100,7 @@ static bool ld_fill_got(ArchLD*ld){
 The phases are executed deterministically and expose a symbol and map inspection API.
 
 @<Link phases and diagnostics@>=
-bool archld_link(ArchLD*ld){
-if(!ld||ld->error[0]||ld->linked)return false;
+static bool ld_link(ArchLD*ld){
 if(!ld_extract_archives(ld))return false;
 if(!ld->input_count)return ld_fail(ld,"no input object files");
 if(!ld_prepare_groups(ld)||!ld_collect_parts(ld)||!ld_collect_globals(ld)||
@@ -1066,6 +1109,14 @@ if(!ld_prepare_groups(ld)||!ld_collect_parts(ld)||!ld_collect_globals(ld)||
 !ld_check_global_addresses(ld)||!ld_fill_got(ld)||!ld_relocate(ld))return false;
 ld->linked= true;
 return true;
+}
+
+bool archld_link(ArchLD*ld){
+ if(!ld||ld->error[0]||ld->linked||ld->linking)return false;
+ ld->linking=true;
+ bool ok=ld_link(ld);
+ ld->linking=false;
+ return ok;
 }
 
 const uint8_t*archld_image(const ArchLD*ld){
@@ -1105,7 +1156,7 @@ fprintf(out,"Global definitions:\n");
 for(size_t i= 0;i<ld->global_count;++i){
 const LDGlobal*g= &ld->globals[i];
 fprintf(out,"  %016"PRIx64"  %-30s %s%s\n",g->address,g->name,
-ld->inputs[g->input].path,g->rank==2?" (COMMON)":"");
+g->input==SIZE_MAX?"<host>":ld->inputs[g->input].path,g->rank==2?" (COMMON)":"");
 }
 }
 
@@ -1134,7 +1185,7 @@ bool archld_global_at(const ArchLD *ld,size_t i,const char **name,uint64_t *addr
  const LDGlobal *g=&ld->globals[i];
  if(name)*name=g->name;
  if(addr)*addr=g->address;
- if(sz){const ArchBFDObjectSymbol *s=archbfd_object_symbol(ld->inputs[g->input].bfd,g->symbol);*sz=g->rank==2?g->common_size:s&&s->size>=0?(uint64_t)s->size:0;}
+ if(sz){const ArchBFDObjectSymbol *s=g->input==SIZE_MAX?NULL:archbfd_object_symbol(ld->inputs[g->input].bfd,g->symbol);*sz=g->rank==2?g->common_size:s&&s->size>=0?(uint64_t)s->size:0;}
  return true;
 }
 bool archld_write_map_file(const ArchLD *ld,const char *path){
@@ -1153,6 +1204,7 @@ static bool ld_seek(FILE*f,uint64_t offset){
 }
 static uint64_t ld_align_up(uint64_t n,uint64_t a){return (n+a-1)&~(a-1);}
 static uint32_t ld_symbol_section(const ArchLD *ld, const LDGlobal*g){
+ if(g->input==SIZE_MAX)return SHN_ABS;
  const ArchBFDObjectSymbol*s=archbfd_object_symbol(ld->inputs[g->input].bfd,g->symbol);
  if(s->shndx==LD_SHN_ABS &&g->rank!=2)return SHN_ABS;
  if(g->rank==2)return 4;

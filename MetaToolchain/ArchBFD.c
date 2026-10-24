@@ -1591,9 +1591,10 @@ static bool read_field_at(const uint8_t *data, size_t len, const ArchBFDRecord *
                           const char *name, bool little, size_t base, uint64_t *out) {
     const ArchBFDField *f = find_field(rec, name);
     if (!f) return false;
-    if (f->offset < 0 || base > len) return false;
+    if (f->offset < 0 || f->size <= 0 || base > len ||
+        (uint64_t)f->offset > len - base) return false;
     size_t off = base + (size_t)f->offset;
-    if (off + (size_t)f->size > len) return false;
+    if ((uint64_t)f->size > len - off) return false;
     uint64_t v = 0;
     const uint8_t *p = data + off;
     switch (f->size) {
@@ -1641,6 +1642,7 @@ static bool split_encoded(const ArchBFDRecord *rec, const char *target, uint64_t
     for (size_t i = 0; i < rec->encoding_count; i++) {
         const ArchBFDEncoding *e = &rec->encodings[i];
         if (!e->target || !target || strcmp(e->target, target)) continue;
+        if (e->shift < 0 || e->shift >= 64) return false;
         uint64_t v = raw >> (e->shift > 0 ? (uint64_t)e->shift : 0);
         *out = v & e->mask;
         return true;
@@ -1712,6 +1714,26 @@ size_t archbfd_magic_bytes(const ArchBFDSpec *s, uint8_t *out, size_t cap) {
 
 /* ---- ELF ---------------------------------------------------------------- */
 
+static bool elf_error(const ArchBFDObject *obj, DsymDiags *diags,
+                      size_t section, const char *message) {
+    dsym_diag_add(diags, DSYM_ERROR, obj->spec->source_path, 0, 0, NULL,
+                  "ELF section %zu: %s", section, message);
+    return false;
+}
+
+static const char *elf_string(ArchBFDObject *obj, DsymDiags *diags,
+                             size_t section, const char *strings,
+                             size_t length, uint64_t offset) {
+    if (offset >= length || !memchr(strings + (size_t)offset, 0,
+                                   length - (size_t)offset)) {
+        elf_error(obj, diags, section, "invalid or unterminated string table reference");
+        return NULL;
+    }
+    const char *s = dsym_arena_strdup(obj->arena, strings + (size_t)offset);
+    if (!s) elf_error(obj, diags, section, "out of memory reading string table");
+    return s;
+}
+
 static bool read_elf(ArchBFDObject *obj, DsymDiags *diags) {
     const ArchBFDSpec *spec = obj->spec;
     const uint8_t *data = obj->data;
@@ -1720,11 +1742,16 @@ static bool read_elf(ArchBFDObject *obj, DsymDiags *diags) {
     const ArchBFDRecord *ehdr = archbfd_resolve_record(spec, "ehdr");
     const ArchBFDRecord *shdr = archbfd_resolve_record(spec, "shdr");
     const ArchBFDRecord *symrec = archbfd_resolve_record(spec, "sym");
-    if (!ehdr || !shdr || !symrec) {
+    if (!ehdr || !shdr || !symrec || ehdr->size <= 0 ||
+        shdr->size <= 0 || symrec->size <= 0) {
         dsym_diag_add(diags, DSYM_ERROR, spec->source_path, 0, 0, NULL,
                       "the ELF description has no ehdr/shdr/sym record");
         return false;
     }
+    if (len < 16 || (uint64_t)ehdr->size > len)
+        return elf_error(obj, diags, 0, "incomplete ELF header");
+    if ((data[5] != 1 && data[5] != 2) || data[6] != 1)
+        return elf_error(obj, diags, 0, "invalid ELF byte order or identification version");
     /* e_ident carries the class (byte 4) and the byte order (byte 5). */
     if (len >= 6) {
         int expected_class = ehdr->size == 64 ? 2 : 1; /* ELFCLASS64 / ELFCLASS32 */
@@ -1758,6 +1785,13 @@ static bool read_elf(ArchBFDObject *obj, DsymDiags *diags) {
     }
     obj->machine = (int64_t)emachine;
     obj->type = (int64_t)etype;
+    uint64_t version = 0, header_size = 0;
+    if (!read_field(data, len, ehdr, "e_version", little, &version) || version != 1 ||
+        !read_field(data, len, ehdr, "e_ehsize", little, &header_size) ||
+        header_size != (uint64_t)ehdr->size)
+        return elf_error(obj, diags, 0, "invalid ELF version or header size");
+    if (shstrndx >= shnum && shstrndx != 0)
+        return elf_error(obj, diags, 0, "invalid or unsupported extended section name index");
     if (shnum == 0 || shoff == 0) {
         dsym_diag_add(diags, DSYM_ERROR, spec->source_path, 0, 0, NULL,
                       "the object has no section header table");
@@ -1769,7 +1803,8 @@ static bool read_elf(ArchBFDObject *obj, DsymDiags *diags) {
                       (unsigned long long)shentsize, shdr->size);
         return false;
     }
-    if (shoff + shnum * shentsize > len) {
+    /* Prove the extent before multiplying attacker-controlled ELF counts. */
+    if (shoff > len || shentsize == 0 || shnum > (len - shoff) / shentsize) {
         dsym_diag_add(diags, DSYM_ERROR, spec->source_path, 0, 0, NULL,
                       "the section header table is outside the file");
         return false;
@@ -1792,22 +1827,44 @@ static bool read_elf(ArchBFDObject *obj, DsymDiags *diags) {
         if (read_field(p, (size_t)shentsize, shdr, "sh_info", little, &v)) sec->info = (int64_t)v;
         if (read_field(p, (size_t)shentsize, shdr, "sh_addralign", little, &v)) sec->align = (int64_t)v;
         if (read_field(p, (size_t)shentsize, shdr, "sh_entsize", little, &v)) sec->entsize = (int64_t)v;
+        if (sec->size < 0 || sec->offset < 0 || sec->align < 0 || sec->entsize < 0 ||
+            (sec->align && ((uint64_t)sec->align & ((uint64_t)sec->align - 1))))
+            return elf_error(obj, diags, i, "invalid section size, offset or alignment");
+        /* SHT_NULL has no payload; SHT_NOBITS occupies memory only. */
+        if (sec->type != 0 && sec->type != 8 &&
+            ((uint64_t)sec->offset > len ||
+             (uint64_t)sec->size > len - (uint64_t)sec->offset))
+            return elf_error(obj, diags, i, "section payload outside file");
+        if (sec->type == 3 && sec->size &&
+            (data[sec->offset] || data[sec->offset + sec->size - 1]))
+            return elf_error(obj, diags, i, "string table must begin and end with NUL");
     }
+    if (obj->sections[0].type != 0)
+        return elf_error(obj, diags, 0, "first section must be SHT_NULL");
     /* Section names come from the section header string table. */
-    if (shstrndx < shnum) {
+    if (shstrndx != 0) {
         const ArchBFDObjectSection *strsec = &obj->sections[shstrndx];
+        if (strsec->type != 3)
+            return elf_error(obj, diags, shstrndx, "section names must link to SHT_STRTAB");
         if (strsec->offset >= 0 && strsec->size >= 0 &&
-            (size_t)strsec->offset + (size_t)strsec->size <= len) {
+            (uint64_t)strsec->offset <= len &&
+            (uint64_t)strsec->size <= len - (uint64_t)strsec->offset) {
             const char *names = (const char *)data + strsec->offset;
             size_t names_len = (size_t)strsec->size;
             for (size_t i = 0; i < obj->section_count; i++) {
                 uint64_t name_off = 0;
                 const uint8_t *p = data + shoff + i * shentsize;
                 if (!read_field(p, (size_t)shentsize, shdr, "sh_name", little, &name_off)) continue;
-                if (name_off < names_len)
-                    obj->sections[i].name = dup_string(obj->arena, names + name_off,
-                                                       names_len - (size_t)name_off);
+                obj->sections[i].name = elf_string(obj, diags, i, names, names_len, name_off);
+                if (!obj->sections[i].name) return false;
             }
+        }
+    } else {
+        for (size_t i = 0; i < obj->section_count; i++) {
+            uint64_t name = 0;
+            if (!read_field(data + shoff + i * shentsize, (size_t)shentsize,
+                            shdr, "sh_name", little, &name) || name)
+                return elf_error(obj, diags, i, "section name without a section string table");
         }
     }
 
@@ -1816,23 +1873,41 @@ static bool read_elf(ArchBFDObject *obj, DsymDiags *diags) {
     int64_t symtab_index = -1;
     for (size_t i = 0; i < obj->section_count; i++)
         if (symtab_type >= 0 && obj->sections[i].type == symtab_type) {
+            if (symtab_index >= 0)
+                return elf_error(obj, diags, i, "multiple symbol tables are unsupported");
             symtab_index = (int64_t)i;
-            break;
         }
     const char *strdata = NULL;
     size_t strdata_len = 0;
+    for (size_t i = 0; i < obj->section_count; i++) {
+        const ArchBFDObjectSection *sec = &obj->sections[i];
+        if (sec->type == 17 && (symtab_index < 0 || sec->link != symtab_index))
+            return elf_error(obj, diags, i, "invalid group symbol table link");
+    }
     if (symtab_index >= 0) {
         const ArchBFDObjectSection *symsec = &obj->sections[symtab_index];
+        if (symsec->link <= 0 || (uint64_t)symsec->link >= obj->section_count ||
+            obj->sections[symsec->link].type != 3)
+            return elf_error(obj, diags, (size_t)symtab_index, "symbol table must link to SHT_STRTAB");
         if (symsec->link >= 0 && (size_t)symsec->link < obj->section_count) {
             const ArchBFDObjectSection *strsec = &obj->sections[symsec->link];
             if (strsec->offset >= 0 && strsec->size >= 0 &&
-                (size_t)strsec->offset + (size_t)strsec->size <= len) {
+                (uint64_t)strsec->offset <= len &&
+                (uint64_t)strsec->size <= len - (uint64_t)strsec->offset) {
                 strdata = (const char *)data + strsec->offset;
                 strdata_len = (size_t)strsec->size;
             }
         }
-        int64_t entsize = symsec->entsize ? symsec->entsize : symrec->size;
-        size_t count = entsize > 0 ? (size_t)symsec->size / (size_t)entsize : 0;
+        int64_t entsize = symsec->entsize;
+        if (symsec->offset < 0 || symsec->size < 0 ||
+            (uint64_t)symsec->offset > len ||
+            (uint64_t)symsec->size > len - (uint64_t)symsec->offset ||
+            entsize != symrec->size || entsize <= 0 || symsec->size % entsize) {
+            dsym_diag_add(diags, DSYM_ERROR, spec->source_path, 0, 0, NULL,
+                          "ELF symbol table has invalid extent or entry size");
+            return false;
+        }
+        size_t count = (size_t)(symsec->size / entsize);
         obj->symbols = dsym_arena_calloc(obj->arena, count ? count : 1, sizeof *obj->symbols);
         if (!obj->symbols) return false;
         for (size_t i = 0; i < count; i++) {
@@ -1841,16 +1916,18 @@ static bool read_elf(ArchBFDObject *obj, DsymDiags *diags) {
             ArchBFDObjectSymbol *sym = &obj->symbols[obj->symbol_count++];
             sym->index = obj->symbol_count - 1;
             uint64_t v = 0;
-            if (read_field(p, (size_t)entsize, symrec, "st_name", little, &v) && strdata &&
-                v < strdata_len)
-                sym->name = dup_string(obj->arena, strdata + v, strdata_len - (size_t)v);
-            else
-                sym->name = "";
+            if (!read_field(p, (size_t)entsize, symrec, "st_name", little, &v))
+                return elf_error(obj, diags, (size_t)symtab_index, "missing symbol name field");
+            sym->name = elf_string(obj, diags, (size_t)symtab_index, strdata, strdata_len, v);
+            if (!sym->name) return false;
             if (read_field(p, (size_t)entsize, symrec, "st_value", little, &v)) sym->value = (int64_t)v;
             if (read_field(p, (size_t)entsize, symrec, "st_size", little, &v)) sym->size = (int64_t)v;
             if (read_field(p, (size_t)entsize, symrec, "st_shndx", little, &v)) sym->shndx = (int64_t)v;
             if (read_field(p, (size_t)entsize, symrec, "st_info", little, &v)) sym->info = (uint8_t)v;
             if (read_field(p, (size_t)entsize, symrec, "st_other", little, &v)) sym->other = (uint8_t)v;
+            if ((sym->shndx < 0xff00 && (uint64_t)sym->shndx >= shnum) ||
+                sym->shndx == 0xffff)
+                return elf_error(obj, diags, (size_t)symtab_index, "invalid or unsupported extended symbol section index");
             uint64_t bind = 0, type = 0;
             if (split_encoded(symrec, "bind", sym->info, &bind)) {
                 sym->class_value = (int64_t)bind;
@@ -1875,10 +1952,23 @@ static bool read_elf(ArchBFDObject *obj, DsymDiags *diags) {
         bool is_rel = rel_type >= 0 && sec->type == rel_type;
         if (!is_rela && !is_rel) continue;
         const ArchBFDRecord *rec = is_rela ? relarec : relrec;
-        if (!rec) continue;
-        int64_t entsize = sec->entsize ? sec->entsize : rec->size;
-        if (entsize <= 0) continue;
-        total += (size_t)(sec->size / entsize);
+        if (!rec || rec->size <= 0)
+            return elf_error(obj, diags, i, "missing relocation record description");
+        if (symtab_index < 0 || sec->link != symtab_index ||
+            sec->info < 0 || (uint64_t)sec->info >= shnum || (etype == 1 && sec->info == 0))
+            return elf_error(obj, diags, i, "invalid relocation symbol table or target section link");
+        int64_t entsize = sec->entsize;
+        if (entsize <= 0 || entsize != rec->size || sec->offset < 0 ||
+            sec->size < 0 || (uint64_t)sec->offset > len ||
+            (uint64_t)sec->size > len - (uint64_t)sec->offset ||
+            sec->size % entsize) {
+            dsym_diag_add(diags, DSYM_ERROR, spec->source_path, 0, 0, NULL,
+                          "ELF relocation section has invalid extent or entry size");
+            return false;
+        }
+        size_t nr = (size_t)(sec->size / entsize);
+        if (nr > SIZE_MAX - total) return false;
+        total += nr;
     }
     obj->relocs = dsym_arena_calloc(obj->arena, total ? total : 1, sizeof *obj->relocs);
     if (!obj->relocs) return false;
@@ -1898,18 +1988,27 @@ static bool read_elf(ArchBFDObject *obj, DsymDiags *diags) {
             const uint8_t *p = data + off;
             ArchBFDObjectReloc *rel = &obj->relocs[obj->reloc_count++];
             rel->index = obj->reloc_count - 1;
+            rel->source_section = i;
+            rel->target_section = (size_t)sec->info;
+            rel->has_addend = is_rela;
             rel->symbol = -1;
             uint64_t v = 0;
             if (read_field(p, (size_t)entsize, rec, "r_offset", little, &v))
                 rel->offset = (int64_t)v;
-            if (read_field(p, (size_t)entsize, rec, "r_addend", little, &v))
-                rel->addend = (int64_t)v;
+            if (read_field(p, (size_t)entsize, rec, "r_addend", little, &v)) {
+                /* GABI 6.1: Elf32_Rela uses Elf32_Sword, not Elf32_Word. */
+                const ArchBFDField *addend = find_field(rec, "r_addend");
+                rel->addend = addend->size == 4 && (v & UINT64_C(0x80000000))
+                    ? (int64_t)v - INT64_C(0x100000000) : (int64_t)v;
+            }
             uint64_t info = 0;
             if (read_field(p, (size_t)entsize, rec, "r_info", little, &info)) {
                 uint64_t type = 0, sym = 0;
                 if (split_encoded(rec, "type", info, &type)) rel->type = (int64_t)type;
                 if (split_encoded(rec, "symbol", info, &sym)) rel->symbol = (int64_t)sym;
             }
+            if (rel->symbol < 0 || (uint64_t)rel->symbol >= obj->symbol_count)
+                return elf_error(obj, diags, i, "relocation symbol index outside symbol table");
             int32_t ri = archbfd_find_reloc_number(spec, rel->type);
             if (ri >= 0) rel->type_name = spec->relocations[ri].name;
             if (rel->symbol >= 0 && (size_t)rel->symbol < obj->symbol_count)
@@ -2070,6 +2169,8 @@ static bool read_coff(ArchBFDObject *obj, DsymDiags *diags, bool pe) {
                 const uint8_t *p = data + off;
                 ArchBFDObjectReloc *rel = &obj->relocs[obj->reloc_count++];
                 rel->index = obj->reloc_count - 1;
+                rel->source_section = SIZE_MAX;
+                rel->target_section = i;
                 rel->symbol = -1;
                 uint64_t v = 0;
                 if (read_field(p, (size_t)relrec->size, relrec, "r_vaddr", little, &v))

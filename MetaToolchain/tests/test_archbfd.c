@@ -479,7 +479,7 @@ static size_t build_elf64(uint8_t *buf, size_t cap) {
     memcpy(sh + 4 * shdr_size + 4, &type, 4);
     memcpy(sh + 4 * shdr_size + 24, &rela_off, 8);
     memcpy(sh + 4 * shdr_size + 32, &rela_size, 8);
-    link = 3;
+    link = 2; /* SHT_RELA.sh_link names .symtab, not .strtab (ELF gABI). */
     info = 1;
     memcpy(sh + 4 * shdr_size + 40, &link, 4);
     memcpy(sh + 4 * shdr_size + 44, &info, 4);
@@ -590,6 +590,8 @@ static void object_reader(const char *dir, const char *write_path) {
               "the relocation points at g");
         CHECK(rel && rel->offset == 8, "the relocation is at offset 8");
         CHECK(rel && rel->addend == -4, "the addend is -4");
+        CHECK(rel && rel->source_section == 4 && rel->target_section == 1 && rel->has_addend,
+              "relocation provenance identifies RELA and .text");
     }
     archbfd_object_close(obj);
 
@@ -602,6 +604,15 @@ static void object_reader(const char *dir, const char *write_path) {
     ArchBFDObject *obj2 = archbfd_object_open_memory(broken, blen, s, &bad);
     CHECK(obj2 == NULL, "a mismatching class is rejected");
     CHECK(bad.errors > 0, "the rejection is reported");
+    archbfd_object_close(obj2);
+    dsym_diags_free(&bad);
+
+    dsym_diags_init(&bad);
+    blen = build_elf64(broken, sizeof broken);
+    uint32_t bad_link = 3; /* Regression: old fixture linked to .strtab. */
+    memcpy(broken + 64 + 4 * 64 + 40, &bad_link, sizeof bad_link);
+    obj2 = archbfd_object_open_memory(broken, blen, s, &bad);
+    CHECK(obj2 == NULL && bad.errors, "relocation linked to a string table is rejected");
     archbfd_object_close(obj2);
     dsym_diags_free(&bad);
 

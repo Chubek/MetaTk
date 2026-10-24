@@ -21,6 +21,14 @@ bool archld_add(ArchLD*ld,const char*object_path);
 
 
 bool archld_add_memory(ArchLD*ld,const char*name,const void*data,size_t size);
+
+
+
+
+typedef int(*ArchLDResolveSymbol)(void*user,const char*name,uint64_t*address,
+char*message,size_t capacity);
+bool archld_define_symbol(ArchLD*ld,const char*name,uint64_t address);
+bool archld_set_symbol_resolver(ArchLD*ld,ArchLDResolveSymbol resolver,void*user);
 bool archld_link(ArchLD*ld);
 bool archld_write_elf(ArchLD*ld,const char*path,uint64_t entry);
 bool archld_write_map_file(const ArchLD*ld,const char*path);
@@ -37,9 +45,9 @@ void archld_free(ArchLD*ld);
 #ifdef __cplusplus
 }
 #endif
-#line 73 "src/ArchLD.w"
+#line 81 "src/ArchLD.w"
 #endif
-#line 74 "src/ArchLD.w"
+#line 82 "src/ArchLD.w"
 
 
 

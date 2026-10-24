@@ -308,6 +308,10 @@ typedef struct ArchBFDObjectReloc {
     const char *type_name;   /* from the description, NULL when unknown */
     const char *symbol_name; /* from the symbol table, NULL when unknown */
     size_t index;
+    /* Validated provenance: ELF relocation section, or SIZE_MAX for COFF. */
+    size_t source_section;
+    size_t target_section;
+    bool has_addend; /* ELF RELA; false for implicit-addend REL/COFF */
 } ArchBFDObjectReloc;
 
 /* Read an object file with the given description.  Returns NULL on failure
