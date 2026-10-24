@@ -1,0 +1,7 @@
+module Uri := struct
+  val parse := URI.parse($1)
+  val render := URI.render($1)
+  val encode := URI.encode($1)
+  val decode := URI.decode($1)
+  val query_params := URI.query_params($1)
+end

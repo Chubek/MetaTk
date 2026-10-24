@@ -1,0 +1,10 @@
+import "string"
+module Shell := struct
+  val quote text := "'" ^ String.replace "'" "'\\''" text ^ "'"
+  val run := Process.run($1, $2)
+  val command := Process.shell($1)
+  val env := Process.env($1)
+  val cwd := Process.cwd($1)
+  val chdir := Process.chdir($1)
+  val args := Process.args($1)
+end

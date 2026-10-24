@@ -1,0 +1,4 @@
+module MsgPack := struct
+  val pack := MsgPack.pack($1)
+  val unpack := MsgPack.unpack($1)
+end

@@ -1,0 +1,15 @@
+import "db"
+import "list"
+{- Document collections represented as immutable (id, document) pairs. -}
+module NoSQL := struct
+  val empty := []
+  val insert id document collection := match Db.get id collection with
+    | Some _ -> Err "duplicate document id"
+    | None -> Ok (Db.put id document collection)
+  val upsert id document collection := Db.put id document collection
+  val get id collection := Db.get id collection
+  val remove id collection := Db.remove id collection
+  val find predicate collection := List.filter (fn (_, doc) -> predicate doc) collection
+  val update predicate transform collection :=
+    List.map (fn (id, doc) -> (id, if predicate doc then transform doc else doc)) collection
+end

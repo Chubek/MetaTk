@@ -1,0 +1,6 @@
+module SysIPC := struct
+  val pair := IPC.pair($1)
+  val send := IPC.send($1, $2)
+  val recv := IPC.recv($1)
+  val close := IPC.close($1)
+end

@@ -1,0 +1,6 @@
+module Http := struct
+  val available := HTTP.available($1)
+  val get := HTTP.get($1)
+  val post := HTTP.post($1, $2)
+  val request := HTTP.request($1, $2, $3, $4, $5)
+end

@@ -1,0 +1,9 @@
+module Nng := struct
+  val create := NNG.create($1)
+  val listen := NNG.listen($1, $2)
+  val dial := NNG.dial($1, $2)
+  val subscribe := NNG.subscribe($1, $2)
+  val send := NNG.send($1, $2)
+  val recv := NNG.recv($1)
+  val close := NNG.close($1)
+end

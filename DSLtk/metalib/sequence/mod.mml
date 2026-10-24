@@ -1,0 +1,18 @@
+import "list"
+module Sequence := struct
+  val empty := []
+  val singleton x := [x]
+  val map f xs := List.map f xs
+  val filter p xs := List.filter p xs
+  val fold f z xs := List.fold_left f z xs
+  val append xs ys := List.append xs ys
+  val concat xs := List.concat xs
+  val take n xs := List.take n xs
+  val drop n xs := List.drop n xs
+  val zip xs ys := List.zip xs ys
+  val unfold step seed :=
+    let rec go state acc := match step state with
+      | None -> List.reverse acc
+      | Some (value, next) -> go next (value :: acc) in
+    go seed []
+end

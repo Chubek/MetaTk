@@ -1,0 +1,22 @@
+import "list"
+type Stream 'a := | Stream (Unit -> Option ('a, Stream 'a))
+module Stream := struct
+  val next stream := match stream with | Stream step -> step ()
+  val empty _ := Stream (fn _ -> None)
+  val unfold step seed := Stream (fn _ -> match step seed with
+    | None -> None | Some (x, state) -> Some (x, unfold step state))
+  val of_list xs := unfold (fn ys -> match ys with
+    | [] -> None | x :: rest -> Some (x, rest)) xs
+  val map f stream := Stream (fn _ -> match next stream with
+    | None -> None | Some (x, rest) -> Some (f x, map f rest))
+  val filter p stream := Stream (fn _ -> match next stream with
+    | None -> None
+    | Some (x, rest) -> if p x then Some (x, filter p rest) else next (filter p rest))
+  val take n stream :=
+    let rec go count current acc := if count <= 0 then List.reverse acc
+      else match next current with | None -> List.reverse acc
+      | Some (x, rest) -> go (count - 1) rest (x :: acc) in
+    go n stream []
+  val fold f acc stream := match next stream with
+    | None -> acc | Some (x, rest) -> fold f (f acc x) rest
+end

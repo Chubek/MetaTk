@@ -1,0 +1,13 @@
+import "list"
+{- Persistent key/value database; keys use structural equality. -}
+module Db := struct
+  val empty := []
+  val get key entries := match List.find (fn (k, _) -> k == key) entries with
+    | None -> None | Some (_, value) -> Some value
+  val remove key entries := List.filter (fn (k, _) -> k != key) entries
+  val put key value entries := (key, value) :: remove key entries
+  val keys entries := List.map (fn (key, _) -> key) entries
+  val values entries := List.map (fn (_, value) -> value) entries
+  val size entries := List.length entries
+  val merge left right := List.fold_left (fn acc (k, v) -> put k v acc) left right
+end

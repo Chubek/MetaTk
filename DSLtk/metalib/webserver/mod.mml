@@ -1,0 +1,8 @@
+module Webserver := struct
+  val create := Webserver.create($1)
+  val route := Webserver.route($1, $2, $3, $4, $5, $6)
+  val start := Webserver.start($1, $2, $3)
+  val stop := Webserver.stop($1)
+  val text server path body := Webserver.route(server, "GET", path, 200, "text/plain; charset=utf-8", body)
+  val html server path body := Webserver.route(server, "GET", path, 200, "text/html; charset=utf-8", body)
+end

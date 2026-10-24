@@ -1,0 +1,17 @@
+import "sqlite"
+module SQL := struct
+  val connect path := SQLite.connect path
+  val close db := SQLite.close db
+  val query db sql parameters := SQLite.query db sql parameters
+  val execute db sql parameters := SQLite.execute db sql parameters
+  {- Callback must return Result and must not close the connection. -}
+  val transaction db action := match SQLite.execute db "BEGIN" [] with
+    | Err error -> Err error
+    | Ok _ -> match action db with
+      | Err error -> match SQLite.execute db "ROLLBACK" [] with
+        | Ok _ -> Err error | Err rollback -> Err (error ^ "; rollback: " ^ rollback)
+      | Ok value -> match SQLite.execute db "COMMIT" [] with
+        | Ok _ -> Ok value
+        | Err error -> match SQLite.execute db "ROLLBACK" [] with
+          | Ok _ -> Err error | Err rollback -> Err (error ^ "; rollback: " ^ rollback)
+end

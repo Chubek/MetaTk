@@ -6962,7 +6962,7 @@ private:
         foreach (s; search_path_) bases ~= s;
         if (stdlib_dir_.length) bases ~= stdlib_dir_;
         foreach (b; bases)
-            foreach (cand; [buildPath(b, spec), buildPath(b, spec ~ ".ml"), buildPath(b, spec, "mod.ml")])
+            foreach (cand; [buildPath(b, spec), buildPath(b, spec ~ ".ml"), buildPath(b, spec ~ ".mml"), buildPath(b, spec, "mod.ml"), buildPath(b, spec, "mod.mml")])
             {
                 try
                 {

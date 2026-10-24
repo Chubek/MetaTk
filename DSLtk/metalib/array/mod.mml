@@ -1,0 +1,20 @@
+import "list"
+{- Persistent, list-backed arrays. Indexing and updates are O(n). -}
+module Array := struct
+  val empty := []
+  val of_list xs := xs
+  val to_list xs := xs
+  val length xs := List.length xs
+  val get i xs := List.nth i xs
+  val init n f := List.map f (List.range 0 n)
+  val make n x := List.replicate n x
+  val map f xs := List.map f xs
+  val fold f z xs := List.fold_left f z xs
+  val set i value xs :=
+    if i < 0 || i >= List.length xs then None
+    else Some (List.mapi (fn j x -> if i == j then value else x) xs)
+  val slice start count xs :=
+    if start < 0 || count < 0 || start > List.length xs then None
+    else if count > List.length xs - start then None
+    else Some (List.take count (List.drop start xs))
+end

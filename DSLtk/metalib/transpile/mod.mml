@@ -1,0 +1,14 @@
+import "string"
+import "list"
+{- Composable text-generation passes, with explicit failure propagation. -}
+module Transpile := struct
+  val compose first second source := match first source with
+    | Err error -> Err error | Ok intermediate -> second intermediate
+  val pipeline passes source := match passes with
+    | [] -> Ok source
+    | pass :: rest -> match pass source with
+      | Err error -> Err error | Ok output -> pipeline rest output
+  val replace needle replacement source := Ok (String.replace needle replacement source)
+  val indent prefix source := String.join "\n" (List.map (fn line -> prefix ^ line) (String.split "\n" source))
+  val join separator fragments := String.join separator fragments
+end

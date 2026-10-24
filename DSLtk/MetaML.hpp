@@ -9118,7 +9118,7 @@ private:
     if (!stdlib_dir_.empty ())
       bases.push_back (stdlib_dir_);
     for (auto &b : bases)
-      for (auto cand : { b / spec, b / (spec + ".ml"), b / spec / "mod.ml" })
+      for (auto cand : { b / spec, b / (spec + ".ml"), b / (spec + ".mml"), b / spec / "mod.ml", b / spec / "mod.mml" })
         {
           std::error_code ec;
           if (std::filesystem::is_regular_file (cand, ec))

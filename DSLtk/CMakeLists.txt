@@ -16,6 +16,28 @@ target_include_directories(DSLtk
 
 target_compile_features(DSLtk INTERFACE cxx_std_20)
 
+# Opt-in platform services. The portable runtime does not require these libraries.
+option(METAML_BUILD_SERVICES "Build SQLite, NNG and HTTP-server service tests" OFF)
+set(METAML_THIRD_PARTY_DIR "/mnt/warble/metatk/third_party" CACHE PATH "MetaML third-party source root")
+if(NOT EXISTS "${METAML_THIRD_PARTY_DIR}" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../third_party")
+    set(METAML_THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../third_party")
+endif()
+if(METAML_BUILD_SERVICES)
+    find_package(SQLite3 REQUIRED)
+    if(TARGET SQLite3::SQLite3)
+        set(_metaml_sqlite_target SQLite3::SQLite3)
+    else()
+        set(_metaml_sqlite_target SQLite::SQLite3)
+    endif()
+    find_package(Threads REQUIRED)
+    find_path(METAML_NNG_INCLUDE_DIR nng/nng.h REQUIRED)
+    find_library(METAML_NNG_LIBRARY nng REQUIRED)
+    find_path(METAML_HTTPLIB_INCLUDE_DIR httplib.h HINTS "${METAML_THIRD_PARTY_DIR}/cpp-httplib" REQUIRED)
+    add_library(metaml-services INTERFACE)
+    target_link_libraries(metaml-services INTERFACE DSLtk ${_metaml_sqlite_target} Threads::Threads ${METAML_NNG_LIBRARY} ${CMAKE_DL_LIBS})
+    target_include_directories(metaml-services INTERFACE ${METAML_NNG_INCLUDE_DIR} ${METAML_HTTPLIB_INCLUDE_DIR})
+endif()
+
 option(METAML_BUILD_REPL "Build the C++ MetaML REPL" ON)
 option(METAML_BUILD_C_API "Build the optional C embedding adapter" ON)
 if(METAML_BUILD_REPL OR METAML_BUILD_C_API)
@@ -63,7 +85,8 @@ install(
 
 install(DIRECTORY metalib/ DESTINATION share/metaml/stdlib/cpp)
 install(DIRECTORY metalib/ DESTINATION share/metaml/stdlib/d)
-install(DIRECTORY metalib/c metalib/cpp metalib/d DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/metalib)
+install(DIRECTORY metalib/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/metalib
+        FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp" PATTERN "*.c" PATTERN "*.d")
 install(DIRECTORY metaml-manual/ DESTINATION share/doc/metaml)
 
 if (DSLtk_BUILD_GENERATOR AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generator/DSLtk-ParserGenerator.d")

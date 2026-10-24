@@ -1,0 +1,12 @@
+import "string"
+import "list"
+{- HTML components. `element` accepts trusted tag/attribute names; all values
+   are escaped. Children are already-rendered components. -}
+module Weblets := struct
+  val text value := String.replace "\"" "&quot;" (String.replace "'" "&#39;"
+    (String.replace ">" "&gt;" (String.replace "<" "&lt;" (String.replace "&" "&amp;" value))))
+  val attributes attrs := String.join "" (List.map (fn (key, value) -> " " ^ key ^ "=\"" ^ text value ^ "\"") attrs)
+  val element tag attrs children := "<" ^ tag ^ attributes attrs ^ ">" ^ String.join "" children ^ "</" ^ tag ^ ">"
+  val void_element tag attrs := "<" ^ tag ^ attributes attrs ^ ">"
+  val page title body := "<!doctype html>" ^ element "html" [] [element "head" [] [element "title" [] [text title]], element "body" [] body]
+end

@@ -1,0 +1,38 @@
+import "list"
+{- JSON-RPC 2.0 envelopes and transport-independent dispatch.
+   Handler: method -> params -> Result Json (Int, String).
+   Notifications return None, including notification handler failures. -}
+module JsonRPC := struct
+  val request id method params := JObj [("jsonrpc", JStr "2.0"), ("id", id), ("method", JStr method), ("params", params)]
+  val notification method params := JObj [("jsonrpc", JStr "2.0"), ("method", JStr method), ("params", params)]
+  val success id result := JObj [("jsonrpc", JStr "2.0"), ("id", id), ("result", result)]
+  val error id code message := JObj [("jsonrpc", JStr "2.0"), ("id", id),
+    ("error", JObj [("code", JSON.of_value(code)), ("message", JStr message)])]
+  val valid_id id := match id with | JNull -> true | JStr _ -> true | JNum _ -> true | _ -> false
+  val dispatch handler input := match input with
+    | JArr requests -> if List.is_empty requests then Some (error JNull (~32600) "Invalid Request")
+      else let responses := List.filter_map (fn request -> match request with
+        | JArr _ -> Some (error JNull (~32600) "Invalid Request")
+        | _ -> dispatch handler request) requests in
+        if List.is_empty responses then None else Some (JArr responses)
+    | JObj _ ->
+      let id := JSON.get("id", input) in
+      let valid := match id with | None -> true | Some x -> valid_id x in
+      let params := match JSON.get("params", input) with | None -> JArr [] | Some p -> p in
+      let valid_params := match params with | JArr _ -> true | JObj _ -> true | _ -> false in
+      match (JSON.get("jsonrpc", input), JSON.get("method", input)) with
+        | (Some (JStr "2.0"), Some (JStr method)) ->
+          if valid && valid_params then
+            let result := handler method params in
+            match id with | None -> None
+              | Some request_id -> Some (match result with
+                | Ok value -> success request_id value
+                | Err (code, message) -> error request_id code message)
+          else Some (error JNull (~32600) "Invalid Request")
+        | _ -> Some (error JNull (~32600) "Invalid Request")
+    | _ -> Some (error JNull (~32600) "Invalid Request")
+  val handle handler text := match JSON.parse(text) with
+    | Err _ -> Some (JSON.render(error JNull (~32700) "Parse error"))
+    | Ok input -> match dispatch handler input with
+      | None -> None | Some output -> Some (JSON.render(output))
+end

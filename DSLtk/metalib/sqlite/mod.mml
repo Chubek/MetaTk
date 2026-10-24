@@ -1,0 +1,7 @@
+module SQLite := struct
+  val connect := SQLite.connect($1)
+  val close := SQLite.close($1)
+  val query := SQLite.query($1, $2, $3)
+  val execute db sql params := match SQLite.query(db, sql, params) with
+    | Err error -> Err error | Ok _ -> Ok ()
+end

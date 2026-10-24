@@ -1,0 +1,5 @@
+module Ffi := struct
+  val available := FFI.available($1)
+  val symbol_exists := FFI.symbol_exists($1, $2)
+  val call := FFI.call($1, $2, $3, $4)
+end

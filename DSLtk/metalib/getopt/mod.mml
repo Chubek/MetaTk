@@ -1,0 +1,30 @@
+import "list"
+import "string"
+{- Long options: specification is [(name, takes_argument)].
+   Supports --name=value, --name value, flags, --, and positional arguments.
+   Returns (options in encounter order, positional arguments). -}
+module Getopt := struct
+  val parse specs args :=
+    let rec go rest opts positional := match rest with
+      | [] -> Ok (List.reverse opts, List.reverse positional)
+      | arg :: tail ->
+        if arg == "--" then Ok (List.reverse opts, List.append (List.reverse positional) tail)
+        else if String.starts_with "--" arg then
+          let text := String.sub 2 (String.length arg - 2) arg in
+          let parts := match String.index_of "=" text with
+            | None -> (text, None)
+            | Some i -> (String.sub 0 i text, Some (String.sub (i + 1) (String.length text - i - 1) text)) in
+          match parts with | (name, supplied) ->
+            match List.find (fn (key, _) -> key == name) specs with
+              | None -> Err ("unknown option --" ^ name)
+              | Some (_, takes) -> if takes then match supplied with
+                  | Some value -> go tail ((name, Some value) :: opts) positional
+                  | None -> match tail with
+                    | [] -> Err ("missing argument for --" ^ name)
+                    | value :: more -> go more ((name, Some value) :: opts) positional
+                else match supplied with
+                  | Some _ -> Err ("flag takes no argument: --" ^ name)
+                  | None -> go tail ((name, None) :: opts) positional
+        else go tail opts (arg :: positional) in
+    go args [] []
+end
