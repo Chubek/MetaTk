@@ -2,6 +2,7 @@
 module metalib.d.HTTP;
 import metalib.d.Support;
 import core.sys.posix.dlfcn;
+import core.stdc.config : c_long;
 import std.string : toStringz, fromStringz, indexOf;
 
 enum size_t maxBody = 16 * 1024 * 1024, maxHeaders = 65536;
@@ -21,7 +22,7 @@ bool httpHeaderValue(string s)
 private struct Api
 {
     void* library;
-    extern(C) int function(long) globalInit;
+    extern(C) int function(c_long) globalInit;
     extern(C) void* function() init;
     extern(C) int function(void*, int, ...) setopt;
     extern(C) int function(void*) perform;
@@ -78,8 +79,12 @@ private extern(C) size_t headerCallback(char* data, size_t size, size_t count, v
     {
         auto line = data[0 .. n].idup;
         if (line.length >= 5 && line[0 .. 5] == "HTTP/") r.headers = null;
-        else if (auto p = line.indexOf(':'); p >= 0)
-            r.headers ~= tuple(ascii_map(line[0 .. p], false), trim_ws(line[p + 1 .. $]));
+        else
+        {
+            auto p = line.indexOf(':');
+            if (p >= 0)
+                r.headers ~= tuple(ascii_map(line[0 .. p], false), trim_ws(line[p + 1 .. $]));
+        }
         return n;
     }
     catch (Throwable) { return 0; }
@@ -120,7 +125,7 @@ private Value request(C c, string method, string url, Value headers, string body
     bool configured = api.setopt(easy, 10002, url.toStringz) == 0 && api.setopt(easy, 10036, method.toStringz) == 0
         && api.setopt(easy, 155, cast(c_long) timeout) == 0 && api.setopt(easy, 156, cast(c_long) timeout) == 0
         && api.setopt(easy, 99, 1L) == 0 && api.setopt(easy, 52, 0L) == 0 && api.setopt(easy, 181, 3L) == 0
-        && api.setopt(easy, 10177, "*") == 0 && api.setopt(easy, 20011, &bodyCallback) == 0
+        && api.setopt(easy, 10177, "*".ptr) == 0 && api.setopt(easy, 20011, &bodyCallback) == 0
         && api.setopt(easy, 10001, &response) == 0 && api.setopt(easy, 20079, &headerCallback) == 0
         && api.setopt(easy, 10029, &response) == 0 && api.setopt(easy, 20219, &progressCallback) == 0
         && api.setopt(easy, 10057, &response) == 0 && api.setopt(easy, 43, 0L) == 0;

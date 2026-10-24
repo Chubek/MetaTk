@@ -1,7 +1,7 @@
-// repl/metaml.cpp — the MetaML REPL (C++ dialect).
+// metaml-cli/metaml.cpp — the MetaML CLI (C++ dialect).
 //
 // A thin wrapper over dsltk::repl::Session (DSLtk.hpp) instantiated with the
-// metaml::ReplLanguage policy (MetaML.hpp). Mirrors repl/metaml.d exactly.
+// metaml::ReplLanguage policy (MetaML.hpp). Mirrors metaml-cli/metaml.d.
 //
 //   metaml [options] [file.ml ...]
 //
@@ -58,7 +58,8 @@ const char *usage_text
       "  --list-primitives print registered name, arity and type (TSV)\n"
       "  --disable CODE    disable a warning (e.g. M0307)\n"
       "  -e EXPR           evaluate EXPR as REPL input and exit\n"
-      "  -i                start the REPL after running files\n"
+      "  -i                start the REPL after files and expressions\n"
+      "  --                treat remaining arguments as file names\n"
       "  --version         print the version and exit\n";
 
 std::string
@@ -124,6 +125,11 @@ run (int argc, char **argv)
             }
           return argv[++i];
         };
+      if (a == "--")
+        {
+          while (++i < argc) opt.files.push_back (argv[i]);
+          break;
+        }
       if (a == "--no-tty")
         opt.no_tty = true;
       else if (a == "--no-history")
@@ -172,7 +178,7 @@ run (int argc, char **argv)
       auto parsed = metaml::parse (text.unwrap (), opt.dump_ast);
       std::cout << metaml::dump_ast (parsed.program) << "\n";
       for (auto &d : parsed.diagnostics)
-        std::cout << dsl::render_diagnostic (d, text.unwrap ());
+        std::cerr << dsl::render_diagnostic (d, text.unwrap ());
       return parsed.ok () ? 0 : 1;
     }
 
@@ -227,19 +233,20 @@ run (int argc, char **argv)
 
   metaml::ReplLanguage lang{ session };
   dsl::repl::Session<metaml::ReplLanguage> repl (lang, std::cout);
-  repl.set_prompts ("meaml> ", ".. > ");
+  repl.set_prompts ("metaml> ", ".. > ");
   metaml::install_repl_directives (repl, session);
 
-  if (!opt.exprs.empty ())
+  if (status == 0 && !opt.exprs.empty ())
     {
       for (auto &e : opt.exprs)
         {
           repl.feed_multiline (e);
           repl.finish ();
         }
-      return repl.error_count () ? 1 : status;
+      if (!opt.interactive_after)
+        return repl.error_count () ? 1 : status;
     }
-  if (!opt.files.empty () && !opt.interactive_after)
+  if ((!opt.files.empty () || !opt.exprs.empty ()) && !opt.interactive_after)
     return status;
 
   bool tty = !opt.no_tty;
@@ -269,9 +276,12 @@ run (int argc, char **argv)
         {
           watched_time = t;
           auto r = session.directive ("reload", "");
-          std::cout << "(reloaded " << last << ")\n" << r.text;
+          if (r.ok ()) std::cout << "(reloaded " << last << ")\n";
+          std::cout << r.text;
+          for (auto &w : r.warnings)
+            std::cerr << session.render (w);
           for (auto &d : r.errors)
-            std::cout << session.render (d);
+            std::cerr << session.render (d);
         }
     };
 
@@ -319,6 +329,16 @@ run (int argc, char **argv)
   return repl.error_count () ? 1 : status;
 }
 
+int guarded_run (int argc, char **argv)
+{
+  try { return run (argc, argv); }
+  catch (const std::exception &e)
+    {
+      std::cerr << "metaml: " << e.what () << '\n';
+      return 1;
+    }
+}
+
 } // namespace
 
 int
@@ -334,21 +354,27 @@ main (int argc, char **argv)
     int status;
   } args{ argc, argv, 0 };
   pthread_attr_t attr;
-  pthread_attr_init (&attr);
-  pthread_attr_setstacksize (&attr, static_cast<std::size_t> (1) << 30);
+  if (pthread_attr_init (&attr) != 0) return guarded_run (argc, argv);
+  if (pthread_attr_setstacksize (&attr, static_cast<std::size_t> (1) << 30) != 0)
+    {
+      pthread_attr_destroy (&attr);
+      return guarded_run (argc, argv);
+    }
   pthread_t th;
   auto entry = [] (void *p) -> void *
     {
       auto *a = static_cast<Args *> (p);
-      a->status = run (a->argc, a->argv);
+      a->status = guarded_run (a->argc, a->argv);
       return nullptr;
     };
-  if (pthread_create (&th, &attr, entry, &args) == 0)
+  int created = pthread_create (&th, &attr, entry, &args);
+  pthread_attr_destroy (&attr);
+  if (created == 0)
     {
       pthread_join (th, nullptr);
       std::cout << std::flush;
       return args.status;
     }
 #endif
-  return run (argc, argv);
+  return guarded_run (argc, argv);
 }

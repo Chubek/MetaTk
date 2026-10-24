@@ -1,4 +1,5 @@
 #include "MetaML.hpp"
+#include "metalib/cpp/Metalib.h"
 #include <fstream>
 #include <chrono>
 #include <stdexcept>
@@ -36,6 +37,10 @@ int main(int argc, char **argv)
   s.register_primitive("Host.inc", [](std::int64_t n) { return n + 2; });
   require(metaml::to_string(s.eval("saved 1")) == "2");
   require(metaml::to_string(s.eval("Host.inc 1")) == "3");
+  bool rejected = false;
+  try { s.install_primitive("Host.inc", "Int -> Int", 1, {}); }
+  catch (const std::invalid_argument &) { rejected = true; }
+  require(rejected && metaml::to_string(s.eval("Host.inc 1")) == "3");
   // Run the extensions without the optional host bundle as well.
   s.set_output([](std::string_view) {});
   require(s.load_file((std::filesystem::path(argv[1]).parent_path()
@@ -51,4 +56,29 @@ int main(int argc, char **argv)
   require(s.eval(source).is_ok());
   require(metaml::to_string(s.eval("retry")) == "42");
   std::filesystem::remove(file);
+
+  // A failed prelude must not replace the active library search directory.
+  const auto broken = file.string() + ".stdlib";
+  std::filesystem::create_directories(std::filesystem::path(broken) / "prelude");
+  { std::ofstream out(std::filesystem::path(broken) / "prelude/mod.ml");
+    out << "val broken := missing_name\n"; }
+  const auto original = s.stdlib_dir();
+  require(s.load_stdlib(broken).is_err());
+  require(s.stdlib_dir() == original && s.stdlib_loaded());
+  std::filesystem::remove_all(broken);
+  require(metaml::to_string(s.eval("1 + 2")) == "3");
+
+  // Composing bundles must preserve opaque types, live handles and callbacks.
+  metalib::install_foundation(s);
+  require(!s.find_primitive("JSON.parse") && !s.find_primitive("IO.flush"));
+  s.allow_all_primitives();
+  require(s.eval("buffer := Buffer.create ()").is_ok());
+  auto *create = s.find_primitive("Buffer.create");
+  metalib::install_data(s);
+  metalib::install_all(s);
+  auto names = s.primitive_names();
+  metalib::install_all(s);
+  require(names == s.primitive_names() && create == s.find_primitive("Buffer.create"));
+  require(s.eval("Buffer.add \"kept\" buffer").is_ok());
+  require(metaml::to_string(s.eval("Buffer.contents buffer")) == "\"kept\"");
 }

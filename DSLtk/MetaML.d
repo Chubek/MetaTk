@@ -6345,13 +6345,20 @@ final class Session
         if (!found.length)
             return R.from_err([make_diag("M0505",
                 "cannot locate metalib (set METAML_STDLIB to the metalib directory)", Span.init)]);
-        stdlib_dir_ = found;
+        auto previous_dir = stdlib_dir_;
+        bool loaded = false;
         bool q = checker_.quiet;
+        scope (exit)
+        {
+            checker_.quiet = q;
+            if (!loaded) stdlib_dir_ = previous_dir;
+        }
+        stdlib_dir_ = found;
         checker_.quiet = true;
         auto r = import_module("prelude", "");
-        checker_.quiet = q;
         if (!r.ok()) return R.from_err(r.errors);
         stdlib_loaded_ = true;
+        loaded = true;
         return R.from_ok(found);
     }
     alias loadStdlib = load_stdlib;
@@ -6524,9 +6531,9 @@ final class Session
     RunReport declare(string source, string file)
     {
         bool q = checker_.quiet;
+        scope (exit) checker_.quiet = q;
         checker_.quiet = true;
         auto r = run_source(source, file, RunMode.Quiet);
-        checker_.quiet = q;
         return r;
     }
 
@@ -6813,6 +6820,8 @@ private:
 
     void add_primitive(string name, string type, int arity, PrimFn fn, bool core_)
     {
+        if (!name.length || !type.length || fn is null)
+            throw new Exception("primitive requires a name, type and callback");
         auto p = new Primitive;
         p.name = name;
         p.type_src = type;
@@ -6828,6 +6837,12 @@ private:
         if (p.scheme !is null) return p.scheme;
         if (p.resolving) checker_.error("M0404", "primitive `" ~ p.name ~ "` has a recursive type", sp);
         p.resolving = true;
+        auto previous_level = checker_.level;
+        scope (exit)
+        {
+            p.resolving = false;
+            checker_.level = previous_level;
+        }
         auto te = parse_type_expr(p.type_src, "<primitive " ~ p.name ~ ">");
         if (te.is_err())
         {

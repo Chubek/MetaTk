@@ -19,15 +19,15 @@ void installIO(Session s)
     });
     prim(s, "IO.read_all", "Unit -> String", 1, delegate Value(C c, V a) {
         import std.stdio : stdin;
-        string result;
+        char[] result;
+        char[8192] buffer;
         while (true)
         {
-            auto l = stdin.readln();
-            if (l is null) break;
-            if (l.length && l[$ - 1] == '\n') l = l[0 .. $ - 1];
-            result ~= l ~ "\n";
+            auto chunk = stdin.rawRead(buffer[]);
+            if (!chunk.length) break;
+            result ~= chunk;
         }
-        return str(result);
+        return str(result.idup);
     });
     prim(s, "IO.read_lines", "Unit -> [String]", 1, delegate Value(C c, V a) {
         import std.stdio : stdin;
@@ -58,4 +58,3 @@ void installIO(Session s)
         return boolean(isatty(1) != 0);
     });
 }
-

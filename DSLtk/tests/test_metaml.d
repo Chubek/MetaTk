@@ -1,4 +1,5 @@
 import MetaML;
+import metalib.d.Metalib;
 import std.stdio : File;
 import std.file : tempDir, remove, isDir, exists;
 import std.path : buildPath;
@@ -32,6 +33,10 @@ void main(string[] args)
     s.register_primitive("Host.inc", (long n) => n + 2);
     assert(to_string(s.eval("saved 1")) == "2");
     assert(to_string(s.eval("Host.inc 1")) == "3");
+    bool rejected = false;
+    try s.install_primitive("Host.inc", "Int -> Int", 1, null);
+    catch (Exception) { rejected = true; }
+    assert(rejected && to_string(s.eval("Host.inc 1")) == "3");
     import std.path : dirName;
     s.set_output((string text) {});
     assert(s.load_file(buildPath(dirName(args[1]), "tests/integration/extensions.ml")).is_ok());
@@ -45,4 +50,28 @@ void main(string[] args)
     assert(s.eval(source).is_ok());
     assert(to_string(s.eval("retry")) == "42");
     remove(file);
+
+    import std.file : mkdirRecurse, rmdirRecurse;
+    auto broken = file ~ ".stdlib";
+    mkdirRecurse(buildPath(broken, "prelude"));
+    { auto f = File(buildPath(broken, "prelude/mod.ml"), "w");
+      f.writeln("val broken := missing_name"); }
+    auto original = s.stdlib_dir();
+    assert(s.load_stdlib(broken).is_err());
+    assert(s.stdlib_dir() == original && s.stdlib_loaded());
+    rmdirRecurse(broken);
+    assert(to_string(s.eval("1 + 2")) == "3");
+
+    installFoundation(s);
+    assert(s.find_primitive("JSON.parse") is null && s.find_primitive("IO.flush") is null);
+    s.allow_all_primitives();
+    assert(s.eval("buffer := Buffer.create ()").is_ok());
+    auto create = s.find_primitive("Buffer.create");
+    installData(s);
+    installAll(s);
+    auto names = s.primitive_names();
+    installAll(s);
+    assert(names == s.primitive_names() && create is s.find_primitive("Buffer.create"));
+    assert(s.eval("Buffer.add \"kept\" buffer").is_ok());
+    assert(to_string(s.eval("Buffer.contents buffer")) == "\"kept\"");
 }

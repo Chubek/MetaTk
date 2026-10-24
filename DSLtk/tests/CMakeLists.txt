@@ -14,7 +14,7 @@ option(DSLtk_TEST_D "Test the D module when a D compiler is available" ON)
 enable_language(C)
 find_package(Threads REQUIRED)
 if(NOT TARGET metaml-repl-cpp)
-    add_executable(metaml-repl-cpp ../repl/metaml.cpp)
+    add_executable(metaml-repl-cpp ../metaml-cli/metaml.cpp)
     target_link_libraries(metaml-repl-cpp PRIVATE DSLtk Threads::Threads)
 endif()
 add_executable(metaml_runtime_tests test_metaml.cpp)
@@ -31,6 +31,8 @@ set_target_properties(metaml_c_tests PROPERTIES C_STANDARD 99 C_STANDARD_REQUIRE
 add_test(NAME metaml_c_api COMMAND metaml_c_tests ${CMAKE_CURRENT_SOURCE_DIR}/../metalib)
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
+add_test(NAME metaml_cli COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/check_cli.py --binary $<TARGET_FILE:metaml-repl-cpp>)
 find_program(METAML_D_COMPILER NAMES ldc2 dmd gdc)
 if(METAML_D_COMPILER AND DSLtk_TEST_D)
     file(GLOB _metaml_d_modules CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../metalib/d/*.d)
@@ -43,7 +45,7 @@ if(METAML_D_COMPILER AND DSLtk_TEST_D)
     endforeach()
     foreach(_kind IN ITEMS repl tests)
         if(_kind STREQUAL repl)
-            set(_main ${CMAKE_CURRENT_SOURCE_DIR}/../repl/metaml.d)
+            set(_main ${CMAKE_CURRENT_SOURCE_DIR}/../metaml-cli/metaml.d)
             set(_bin ${CMAKE_CURRENT_BINARY_DIR}/metaml-repl-d)
         else()
             set(_main ${CMAKE_CURRENT_SOURCE_DIR}/test_metaml.d)
@@ -64,6 +66,9 @@ if(METAML_D_COMPILER AND DSLtk_TEST_D)
     endforeach()
     add_test(NAME metaml_runtime_d COMMAND ${CMAKE_CURRENT_BINARY_DIR}/metaml_runtime_d_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/../metalib)
+    add_test(NAME metaml_cli_d COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/check_cli.py
+        --binary ${CMAKE_CURRENT_BINARY_DIR}/metaml-repl-d)
     add_test(NAME metaml_parity COMMAND ${Python3_EXECUTABLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/parity_check.py
         --cpp $<TARGET_FILE:metaml-repl-cpp> --d ${CMAKE_CURRENT_BINARY_DIR}/metaml-repl-d)

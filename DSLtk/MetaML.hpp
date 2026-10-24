@@ -8266,14 +8266,28 @@ public:
     if (found.empty ())
       return R::from_err ({ detail::make_diag (
           "M0505", "cannot locate metalib (set METAML_STDLIB to the metalib directory)", {}) });
+    // Restore temporary configuration even if an embedding callback throws.
+    auto previous_dir = stdlib_dir_;
+    bool loaded = false;
+    struct Restore
+    {
+      Session &s;
+      std::string &directory;
+      bool &loaded;
+      bool quiet;
+      ~Restore ()
+      {
+        s.checker_.quiet = quiet;
+        if (!loaded) s.stdlib_dir_.swap (directory);
+      }
+    } restore{ *this, previous_dir, loaded, checker_.quiet };
     stdlib_dir_ = found;
-    bool q = checker_.quiet;
     checker_.quiet = true;
     auto r = import_module ("prelude", "");
-    checker_.quiet = q;
     if (!r.ok ())
       return R::from_err (r.errors);
     stdlib_loaded_ = true;
+    loaded = true;
     return R::from_ok (found);
   }
   const std::string &
@@ -8487,10 +8501,14 @@ public:
   RunReport
   declare (std::string_view source, const std::string &file)
   {
-    bool q = checker_.quiet;
+    struct RestoreQuiet
+    {
+      bool &value;
+      bool saved;
+      ~RestoreQuiet () { value = saved; }
+    } restore{ checker_.quiet, checker_.quiet };
     checker_.quiet = true;
     auto r = run_source (source, file, RunMode::Quiet);
-    checker_.quiet = q;
     return r;
   }
 
@@ -8934,6 +8952,8 @@ private:
   add_primitive (const std::string &name, const std::string &type, int arity, PrimFn fn,
                  bool core)
   {
+    if (name.empty () || type.empty () || !fn)
+      throw std::invalid_argument ("primitive requires a name, type and callback");
     auto p = std::make_unique<Primitive> ();
     p->name = name;
     p->type_src = type;
@@ -8958,6 +8978,13 @@ private:
     if (p->resolving)
       checker_.error ("M0404", "primitive `" + p->name + "` has a recursive type", sp);
     p->resolving = true;
+    struct RestoreResolution
+    {
+      Primitive &primitive;
+      int &level;
+      int saved;
+      ~RestoreResolution () { primitive.resolving = false; level = saved; }
+    } restore{ *p, checker_.level, checker_.level };
     auto te = parse_type_expr (p->type_src, "<primitive " + p->name + ">");
     if (te.is_err ())
       {

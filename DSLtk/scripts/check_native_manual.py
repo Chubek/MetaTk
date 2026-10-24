@@ -25,7 +25,7 @@ def main():
         for number, language, extension in [(41, "cpp", "cpp"), (42, "d", "d"), (43, "c", "c")]:
             if language == "d" and not args.d_compiler:
                 continue
-            chapter = next((ROOT / "MetaML-Manual").glob(f"{number}-*.md"))
+            chapter = next((ROOT / "metaml-manual").glob(f"{number}-*.md"))
             source = re.search(rf"^```{language}\n(.*?)^```", chapter.read_text(), re.M | re.S)[1]
             path = temp / f"example{number}.{extension}"
             path.write_text(source)

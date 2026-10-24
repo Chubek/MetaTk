@@ -38,6 +38,7 @@ include source-dependent details; clients should inspect codes and spans.
 | M0407 | evaluator | Explicit Core.error |
 | M0408 | evaluator | Global binding used before definition |
 | M0409 | host | Recoverable native primitive exception, with primitive name and message |
+| M0410 | runtime | Task evaluation was cancelled |
 | M0501 | modules | Unbound module path |
 | M0502 | modules | Signature/ascription mismatch or missing implementation |
 | M0503 | modules | Unknown or invalid functor |

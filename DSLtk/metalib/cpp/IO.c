@@ -16,9 +16,11 @@ install_IO (metaml::Session &s)
     return unit ();
   });
   prim (s, "IO.read_all", "Unit -> String", 1, [] (C &, V &) {
-    std::string out, line;
-    while (std::getline (std::cin, line))
-      out += line + "\n";
+    std::string out;
+    char buffer[8192];
+    while (std::cin.read (buffer, sizeof buffer) || std::cin.gcount ())
+      out.append (buffer, static_cast<std::size_t> (std::cin.gcount ()));
+    if (std::cin.bad ()) throw std::runtime_error ("cannot read standard input");
     return str (out);
   });
   prim (s, "IO.read_lines", "Unit -> [String]", 1, [] (C &, V &) {

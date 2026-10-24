@@ -22,7 +22,7 @@ if(METAML_BUILD_REPL OR METAML_BUILD_C_API)
     find_package(Threads REQUIRED)
 endif()
 if(METAML_BUILD_REPL)
-    add_executable(metaml-repl-cpp repl/metaml.cpp)
+    add_executable(metaml-repl-cpp metaml-cli/metaml.cpp)
     target_link_libraries(metaml-repl-cpp PRIVATE DSLtk Threads::Threads)
     install(TARGETS metaml-repl-cpp RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
@@ -64,7 +64,7 @@ install(
 install(DIRECTORY metalib/ DESTINATION share/metaml/stdlib/cpp)
 install(DIRECTORY metalib/ DESTINATION share/metaml/stdlib/d)
 install(DIRECTORY metalib/c metalib/cpp metalib/d DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/metalib)
-install(DIRECTORY MetaML-Manual/ DESTINATION share/doc/metaml OPTIONAL)
+install(DIRECTORY metaml-manual/ DESTINATION share/doc/metaml)
 
 if (DSLtk_BUILD_GENERATOR AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generator/DSLtk-ParserGenerator.d")
     find_program(DSLtk_D_COMPILER NAMES ldc2 dmd gdc

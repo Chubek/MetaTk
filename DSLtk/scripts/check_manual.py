@@ -11,7 +11,7 @@ def main():
     parser.add_argument("--cpp", required=True)
     parser.add_argument("--d")
     args = parser.parse_args()
-    directory = ROOT / "MetaML-Manual"
+    directory = ROOT / "metaml-manual"
     files = sorted(directory.glob("[0-9][0-9]-*.md"))
     failures = 0
     examples = 0

@@ -6,7 +6,7 @@ import re
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-MANUAL = ROOT / "MetaML-Manual"
+MANUAL = ROOT / "metaml-manual"
 API = re.compile(r"<!-- api:begin -->.*?<!-- api:end -->", re.S)
 NAV = re.compile(r"\n<!-- nav:begin -->.*?<!-- nav:end -->\n?", re.S)
 PORTABLE = {25: "int", 26: "float", 27: "string", 28: "list", 29: "option", 30: "result"}
