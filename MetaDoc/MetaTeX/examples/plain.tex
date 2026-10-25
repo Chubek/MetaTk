@@ -1,0 +1,13 @@
+% Plain MetaTeX (core does not require the LaTeX plugin).
+\def\name#1{Dear #1,}
+\name{reader}
+
+This is the plain TeX engine with groups, scoped macros,
+conditionals and basic mathematics: $x^2 + y^2 = z^2$.
+
+\ifnum 4 > 3
+The conditional is true.
+\else
+This text is skipped.
+\fi
+\bye

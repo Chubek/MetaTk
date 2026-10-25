@@ -1,0 +1,7 @@
+if(NOT TARGET metavect_scene)
+  add_library(metavect_scene STATIC Scene.cpp)
+  target_include_directories(metavect_scene PUBLIC "${CMAKE_CURRENT_LIST_DIR}/../include")
+  target_compile_features(metavect_scene PUBLIC cxx_std_17)
+  set_target_properties(metavect_scene PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  target_compile_options(metavect_scene PRIVATE -Wall -Wextra -Wpedantic)
+endif()

@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+here=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ -n "${METATEX_BINARY:-}" ]; then
+    binary=$METATEX_BINARY
+elif [ -x "$here/metatex" ]; then
+    binary=$here/metatex
+elif [ -x "$here/../build/metatex" ]; then
+    binary=$here/../build/metatex
+else
+    binary=metatex
+fi
+exec "$binary" --format plain "$@"

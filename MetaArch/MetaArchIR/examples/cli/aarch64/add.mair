@@ -1,5 +1,0 @@
-section .text
-global add2
-add2:
-encode add, rd=x0, rn=x0, rm=x1
-encode ret

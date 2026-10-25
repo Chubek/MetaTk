@@ -1,0 +1,14 @@
+\documentclass{article}
+\title{Modern Notes with NekoTeX}
+\begin{document}
+\maketitle
+\section{Introduction}
+NekoTeX adds semantic, reusable content elements on top of LaTeX.
+\note{A document can contain rich \textbf{notes}.}
+\callout[Important]{This is a labeled callout.}
+\tip{You can still use \emph{ordinary LaTeX} commands.}
+\codeblock[python]{def hello(): print("Hello from MetaTeX")}
+\exercise{Calculate $a^2+b^2$ for given values.}
+\separator
+The end.
+\end{document}

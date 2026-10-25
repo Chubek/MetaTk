@@ -1,0 +1,7 @@
+\def\hello#1{Hello, #1!}
+\hello{world}
+\mmlcommand{\up}[1]{String.upper arg1}
+\up{again}
+\textbf{multi
+line}
+:quit

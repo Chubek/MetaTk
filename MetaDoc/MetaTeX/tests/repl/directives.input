@@ -1,0 +1,10 @@
+:begin
+\def\word{once}
+\word
+:end
+:show
+:reset
+\textbf{ignored
+:abort
+New
+:quit

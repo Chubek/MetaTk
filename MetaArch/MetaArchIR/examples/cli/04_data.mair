@@ -1,6 +1,0 @@
-section .rodata
-global magic
-align 8
-magic:
-    quad 0x12345678
-    byte 1, 2, 3

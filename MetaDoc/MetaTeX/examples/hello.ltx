@@ -1,0 +1,25 @@
+\documentclass{article}
+\usepackage{amsmath,hyperref}
+\title{MetaTeX: a First Document}
+\author{MetaTeX Project}
+\date{2026}
+\newcommand{\greeting}[1]{Hello, \textbf{#1}!}
+\begin{document}
+\maketitle
+\tableofcontents
+\section{Introduction}\label{sec:intro}
+\greeting{typesetting} This page has \emph{emphasis}, equations, and references.
+An inline example is $E=mc^2$; a displayed one is
+\[\frac{1}{2}+\sqrt{x^2+y^2}=\alpha\]
+\subsection{Items}
+\begin{itemize}
+\item First bullet
+\item Second bullet references Section \ref{sec:intro}.
+\end{itemize}
+\begin{enumerate}
+\item A numbered item
+\item Another item
+\end{enumerate}
+\section{Conclusion}
+Visit \href{https://www.tug.org/}{the TeX Users Group}.
+\end{document}

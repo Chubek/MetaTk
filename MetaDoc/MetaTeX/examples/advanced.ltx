@@ -1,0 +1,16 @@
+\documentclass{article}
+\title{Environment and Page-break Example}
+\newcommand{\shout}[1]{\textbf{#1}}
+\newenvironment{important}{\textit{Important: }}{\par}
+\newtheorem{theorem}{Theorem}
+\begin{document}
+\maketitle
+\section{Macros}
+\shout{The macro engine supports nine positional arguments.}
+\begin{important}This environment was declared in source.\end{important}
+\begin{theorem}For any real $x$, $x^2 \geq 0$.\end{theorem}
+\begin{equation}\frac{a}{b}=c\end{equation}
+\newpage
+\section{Second page}
+\verb|\foo{literal}| can be used for simple code.
+\end{document}

@@ -1,0 +1,10 @@
+\mmlcommand{\greet}[1]{"Hello, " ^ String.upper arg1 ^ "!"}
+\greet{MetaML}
+\par
+\mmlcommandfile{\formula}{scripts/formula.mml}
+\formula
+\par
+\Extern{scripts/status.sh}
+\par
+\externcommand{\fromscript}[1][fd=3]{scripts/emit.py}
+\fromscript{A shebang-selected Python script}

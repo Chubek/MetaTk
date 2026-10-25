@@ -1,0 +1,8 @@
+metavect-scene 1 360 180;
+stroke 0.2 0.2 0.25; width 2;
+path M 30 10 L 30 150 L 345 150;
+stroke none; fill 0.25 0.5 0.85;
+rect 55 90 45 60;
+rect 130 60 45 90;
+rect 205 30 45 120;
+rect 280 45 45 105;
