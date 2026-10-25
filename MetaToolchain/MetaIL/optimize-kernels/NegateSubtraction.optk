@@ -1,0 +1,3 @@
+-- Signed-64 wraparound; pure guards preserve both effects and traps.
+local K = lkopt.optimizer.new "NegateSubtraction"
+K:rewrite { pattern = "neg(sub($x,$y))", replace = "sub($y,$x)", guard = "pure:x,y" }

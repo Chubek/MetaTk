@@ -1,0 +1,3 @@
+-- Signed-64 numeric rewrite; preserve wraparound, evaluation order, and traps.
+local K = lkopt.optimizer.new "NumericMaskedDivision40"
+K:rewrite { pattern = "div(band($x,1099511627775),1048576)", replace = "shr(band($x,1099511627775),20)", guard = "" }

@@ -1,0 +1,3 @@
+-- Signed-64 numeric rewrite; preserve wraparound, evaluation order, and traps.
+local K = lkopt.optimizer.new "NumericCompareComplementGE"
+K:rewrite { pattern = "ge(bnot($x),bnot($y))", replace = "le($x,$y)", guard = "" }

@@ -1,0 +1,3 @@
+-- Descriptive numeric analysis computed by MetaNum/numeric.hpp.
+local K = lkopt.optimizer.new "NumericLiteralsMedian"
+K:analysis { kind = "numeric-statistic", source = "Literals", statistic = "Median" }

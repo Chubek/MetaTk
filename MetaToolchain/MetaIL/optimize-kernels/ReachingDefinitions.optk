@@ -1,0 +1,3 @@
+-- Executable reaching-definitions analysis kernel.
+local K = lkopt.optimizer.new "ReachingDefinitions"
+K:analysis { kind = "reaching-definitions" }

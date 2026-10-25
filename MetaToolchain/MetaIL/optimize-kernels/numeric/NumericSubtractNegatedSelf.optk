@@ -1,0 +1,3 @@
+-- Signed-64 numeric rewrite; preserve wraparound, evaluation order, and traps.
+local K = lkopt.optimizer.new "NumericSubtractNegatedSelf"
+K:rewrite { pattern = "sub($x,neg($x))", replace = "shl($x,1)", guard = "pure:x" }

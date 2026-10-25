@@ -1,0 +1,3 @@
+-- Executable unreachable-blocks analysis kernel.
+local K = lkopt.optimizer.new "UnreachableBlocks"
+K:analysis { kind = "unreachable-blocks" }

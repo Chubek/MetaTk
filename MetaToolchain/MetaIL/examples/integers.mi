@@ -1,0 +1,7 @@
+module integers;
+fn main() {
+entry:
+  let min = -9223372036854775808;
+  let max = 9223372036854775807;
+  return add(min, -1);
+}

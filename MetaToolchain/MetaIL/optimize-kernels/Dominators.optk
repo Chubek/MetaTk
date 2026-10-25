@@ -1,0 +1,3 @@
+-- Executable dominators analysis kernel.
+local K = lkopt.optimizer.new "Dominators"
+K:analysis { kind = "dominators" }

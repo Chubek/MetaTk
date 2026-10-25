@@ -1,0 +1,3 @@
+-- Executable statement-count analysis kernel.
+local K = lkopt.optimizer.new "CountLetStatements"
+K:analysis { kind = "statement-count", statement = "let" }

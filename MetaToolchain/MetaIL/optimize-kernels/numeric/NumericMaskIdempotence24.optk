@@ -1,0 +1,3 @@
+-- Signed-64 numeric rewrite; preserve wraparound, evaluation order, and traps.
+local K = lkopt.optimizer.new "NumericMaskIdempotence24"
+K:rewrite { pattern = "band(band($x,16777215),16777215)", replace = "band($x,16777215)", guard = "" }

@@ -1,0 +1,3 @@
+-- Procedural CFG-aware optimization.
+local K = lkopt.optimizer.new "DeadAssignmentElimination"
+K:builtin "dead-assignments"

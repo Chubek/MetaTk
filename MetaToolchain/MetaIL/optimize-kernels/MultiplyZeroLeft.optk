@@ -1,0 +1,3 @@
+-- Signed-64 wraparound; pure guards preserve both effects and traps.
+local K = lkopt.optimizer.new "MultiplyZeroLeft"
+K:rewrite { pattern = "mul(0,$x)", replace = "0", guard = "pure:x" }

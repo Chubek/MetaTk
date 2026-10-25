@@ -1,0 +1,3 @@
+-- combines adjacent integer constants
+local K = lkopt.optimizer.new "XorConstantsNested"
+K:rewrite { pattern = "bxor(bxor($x,$a),$b)", replace = "bxor($x,bxor($a,$b))", guard = "const:a,b" }

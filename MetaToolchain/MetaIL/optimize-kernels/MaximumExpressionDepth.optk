@@ -1,0 +1,3 @@
+-- Executable maximum-expression-depth analysis kernel.
+local K = lkopt.optimizer.new "MaximumExpressionDepth"
+K:analysis { kind = "maximum-expression-depth" }

@@ -1,0 +1,3 @@
+-- Executable natural-loops analysis kernel.
+local K = lkopt.optimizer.new "NaturalLoops"
+K:analysis { kind = "natural-loops" }

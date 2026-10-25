@@ -1,0 +1,3 @@
+-- combines adjacent integer constants
+local K = lkopt.optimizer.new "AddConstantsRightNested"
+K:rewrite { pattern = "add(add($x,$a),$b)", replace = "add($x,add($a,$b))", guard = "const:a,b" }

@@ -1,0 +1,3 @@
+-- Signed-64 numeric rewrite; preserve wraparound, evaluation order, and traps.
+local K = lkopt.optimizer.new "NumericMaskedLeftShiftVanish48"
+K:rewrite { pattern = "band(shl($x,48),281474976710655)", replace = "0", guard = "pure:x" }

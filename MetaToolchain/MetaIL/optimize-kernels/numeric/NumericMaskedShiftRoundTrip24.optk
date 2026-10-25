@@ -1,0 +1,3 @@
+-- Signed-64 numeric rewrite; preserve wraparound, evaluation order, and traps.
+local K = lkopt.optimizer.new "NumericMaskedShiftRoundTrip24"
+K:rewrite { pattern = "shr(shl(band($x,16777215),1),1)", replace = "band($x,16777215)", guard = "" }

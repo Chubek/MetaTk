@@ -1,0 +1,3 @@
+-- replace multiplication by constant with shift
+local K = lkopt.optimizer.new "MultiplyByPowerOfTwoLeft02"
+K:rewrite { pattern = "mul(4,$x)", replace = "shl($x,2)", guard = "" }

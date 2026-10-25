@@ -1,0 +1,3 @@
+-- Signed-64 wraparound; pure guards preserve both effects and traps.
+local K = lkopt.optimizer.new "SubtractSelf"
+K:rewrite { pattern = "sub($x,$x)", replace = "0", guard = "pure:x" }

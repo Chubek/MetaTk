@@ -1,0 +1,17 @@
+module controlflow;
+fn main(flag) {
+entry:
+  let x = 1;
+  br flag, true_case, false_case;
+true_case:
+  let x = 2;
+  goto join;
+false_case:
+  let x = 3;
+  goto join;
+join:
+  let y = x + 0;
+  return y;
+dead:
+  return 999;
+}

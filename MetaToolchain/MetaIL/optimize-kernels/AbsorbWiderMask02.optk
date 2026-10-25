@@ -1,0 +1,3 @@
+-- drop subsumed upper mask
+local K = lkopt.optimizer.new "AbsorbWiderMask02"
+K:rewrite { pattern = "band(band($x,3),7)", replace = "band($x,3)", guard = "" }

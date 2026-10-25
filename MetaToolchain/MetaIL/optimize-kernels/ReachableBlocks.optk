@@ -1,0 +1,3 @@
+-- Executable reachable-blocks analysis kernel.
+local K = lkopt.optimizer.new "ReachableBlocks"
+K:analysis { kind = "reachable-blocks" }

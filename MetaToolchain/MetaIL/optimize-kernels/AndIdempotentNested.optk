@@ -1,0 +1,3 @@
+-- Signed-64 wraparound; pure guards preserve both effects and traps.
+local K = lkopt.optimizer.new "AndIdempotentNested"
+K:rewrite { pattern = "band(band($x,$y),$y)", replace = "band($x,$y)", guard = "pure:y" }

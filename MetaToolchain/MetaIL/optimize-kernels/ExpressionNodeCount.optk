@@ -1,0 +1,3 @@
+-- Executable node-count analysis kernel.
+local K = lkopt.optimizer.new "ExpressionNodeCount"
+K:analysis { kind = "node-count" }

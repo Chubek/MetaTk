@@ -1,0 +1,3 @@
+-- Executable liveness analysis kernel.
+local K = lkopt.optimizer.new "LiveVariables"
+K:analysis { kind = "liveness" }

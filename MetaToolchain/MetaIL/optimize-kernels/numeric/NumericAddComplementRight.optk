@@ -1,0 +1,3 @@
+-- Signed-64 numeric rewrite; preserve wraparound, evaluation order, and traps.
+local K = lkopt.optimizer.new "NumericAddComplementRight"
+K:rewrite { pattern = "add($x,bnot($x))", replace = "-1", guard = "pure:x" }

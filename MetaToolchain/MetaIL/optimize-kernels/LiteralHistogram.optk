@@ -1,0 +1,3 @@
+-- Executable literal-histogram analysis kernel.
+local K = lkopt.optimizer.new "LiteralHistogram"
+K:analysis { kind = "literal-histogram" }

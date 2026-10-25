@@ -1,0 +1,3 @@
+-- Executable loop-headers analysis kernel.
+local K = lkopt.optimizer.new "LoopHeaders"
+K:analysis { kind = "loop-headers" }

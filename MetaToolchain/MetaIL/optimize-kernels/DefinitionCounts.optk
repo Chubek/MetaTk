@@ -1,0 +1,3 @@
+-- Executable definitions analysis kernel.
+local K = lkopt.optimizer.new "DefinitionCounts"
+K:analysis { kind = "definitions" }

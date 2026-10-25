@@ -1,0 +1,3 @@
+-- Executable unused-definitions analysis kernel.
+local K = lkopt.optimizer.new "UnusedDefinitions"
+K:analysis { kind = "unused-definitions" }

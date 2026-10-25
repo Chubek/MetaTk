@@ -1,0 +1,3 @@
+-- Executable constant-branches analysis kernel.
+local K = lkopt.optimizer.new "ConstantBranches"
+K:analysis { kind = "constant-branches" }

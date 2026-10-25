@@ -1,0 +1,3 @@
+-- Executable call-graph analysis kernel.
+local K = lkopt.optimizer.new "CallGraph"
+K:analysis { kind = "call-graph" }

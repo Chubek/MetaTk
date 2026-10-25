@@ -1,0 +1,3 @@
+-- Signed-64 wraparound; pure guards preserve both effects and traps.
+local K = lkopt.optimizer.new "EqualitySameXor"
+K:rewrite { pattern = "eq(bxor($x,$c),bxor($y,$c))", replace = "eq($x,$y)", guard = "pure:c" }

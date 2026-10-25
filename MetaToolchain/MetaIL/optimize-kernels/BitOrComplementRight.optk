@@ -1,0 +1,3 @@
+-- Signed-64 wraparound; pure guards preserve both effects and traps.
+local K = lkopt.optimizer.new "BitOrComplementRight"
+K:rewrite { pattern = "bor($x,bnot($x))", replace = "-1", guard = "pure:x" }

@@ -1,0 +1,3 @@
+-- Executable block-def-use analysis kernel.
+local K = lkopt.optimizer.new "BlockDefUse"
+K:analysis { kind = "block-def-use" }

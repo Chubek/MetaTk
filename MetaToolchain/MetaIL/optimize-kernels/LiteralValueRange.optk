@@ -1,0 +1,3 @@
+-- Executable literal-range analysis kernel.
+local K = lkopt.optimizer.new "LiteralValueRange"
+K:analysis { kind = "literal-range" }

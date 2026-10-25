@@ -1,0 +1,3 @@
+-- Signed-64 numeric rewrite; preserve wraparound, evaluation order, and traps.
+local K = lkopt.optimizer.new "NumericMaskedModuloIdentity40"
+K:rewrite { pattern = "mod(band($x,1099511627775),1099511627776)", replace = "band($x,1099511627775)", guard = "" }

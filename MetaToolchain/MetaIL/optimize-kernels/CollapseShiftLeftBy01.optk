@@ -1,0 +1,3 @@
+-- remove redundant shift stage
+local K = lkopt.optimizer.new "CollapseShiftLeftBy01"
+K:rewrite { pattern = "shl(shl($x,1),1)", replace = "shl($x,2)", guard = "" }

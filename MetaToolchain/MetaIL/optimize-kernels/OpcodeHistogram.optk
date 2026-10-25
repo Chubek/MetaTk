@@ -1,0 +1,3 @@
+-- Executable opcode-histogram analysis kernel.
+local K = lkopt.optimizer.new "OpcodeHistogram"
+K:analysis { kind = "opcode-histogram" }

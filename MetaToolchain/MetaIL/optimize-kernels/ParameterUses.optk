@@ -1,0 +1,3 @@
+-- Executable parameter-uses analysis kernel.
+local K = lkopt.optimizer.new "ParameterUses"
+K:analysis { kind = "parameter-uses" }

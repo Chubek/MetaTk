@@ -1,0 +1,3 @@
+-- Signed-64 numeric rewrite; preserve wraparound, evaluation order, and traps.
+local K = lkopt.optimizer.new "NumericFactorSubtractLeft"
+K:rewrite { pattern = "sub(mul($c,$x),mul($c,$y))", replace = "mul($c,sub($x,$y))", guard = "pure:c" }

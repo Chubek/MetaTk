@@ -1,0 +1,3 @@
+-- Executable critical-edges analysis kernel.
+local K = lkopt.optimizer.new "CriticalEdges"
+K:analysis { kind = "critical-edges" }

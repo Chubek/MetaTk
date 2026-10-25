@@ -1,0 +1,3 @@
+-- Executable statement-histogram analysis kernel.
+local K = lkopt.optimizer.new "StatementHistogram"
+K:analysis { kind = "statement-histogram" }

@@ -1,0 +1,3 @@
+-- Executable expression-purity analysis kernel.
+local K = lkopt.optimizer.new "ExpressionPurity"
+K:analysis { kind = "expression-purity" }

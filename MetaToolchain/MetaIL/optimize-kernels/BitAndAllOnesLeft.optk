@@ -1,0 +1,3 @@
+-- Signed-64 wraparound; pure guards preserve both effects and traps.
+local K = lkopt.optimizer.new "BitAndAllOnesLeft"
+K:rewrite { pattern = "band(-1,$x)", replace = "$x", guard = "" }

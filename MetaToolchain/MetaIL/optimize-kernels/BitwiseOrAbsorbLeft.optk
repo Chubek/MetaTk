@@ -1,0 +1,3 @@
+-- Signed-64 wraparound; pure guards preserve both effects and traps.
+local K = lkopt.optimizer.new "BitwiseOrAbsorbLeft"
+K:rewrite { pattern = "bor(band($x,$y),$x)", replace = "$x", guard = "pure:x,y" }

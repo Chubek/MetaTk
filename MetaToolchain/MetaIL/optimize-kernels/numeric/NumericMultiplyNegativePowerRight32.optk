@@ -1,0 +1,3 @@
+-- Signed-64 numeric rewrite; preserve wraparound, evaluation order, and traps.
+local K = lkopt.optimizer.new "NumericMultiplyNegativePowerRight32"
+K:rewrite { pattern = "mul($x,-4294967296)", replace = "neg(shl($x,32))", guard = "" }

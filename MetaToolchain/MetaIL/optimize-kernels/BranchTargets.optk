@@ -1,0 +1,3 @@
+-- Executable branch-targets analysis kernel.
+local K = lkopt.optimizer.new "BranchTargets"
+K:analysis { kind = "branch-targets" }

@@ -1,0 +1,3 @@
+-- Signed-64 wraparound; pure guards preserve both effects and traps.
+local K = lkopt.optimizer.new "SelectNestedTrue"
+K:rewrite { pattern = "select($c,select($c,$a,$b),$b)", replace = "select($c,$a,$b)", guard = "pure:c" }

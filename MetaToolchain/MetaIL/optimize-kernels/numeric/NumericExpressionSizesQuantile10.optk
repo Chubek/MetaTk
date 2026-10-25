@@ -1,0 +1,3 @@
+-- Descriptive numeric analysis computed by MetaNum/numeric.hpp.
+local K = lkopt.optimizer.new "NumericExpressionSizesQuantile10"
+K:analysis { kind = "numeric-statistic", source = "ExpressionSizes", statistic = "Quantile10" }

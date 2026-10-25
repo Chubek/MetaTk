@@ -1,0 +1,3 @@
+-- Executable terminal-blocks analysis kernel.
+local K = lkopt.optimizer.new "TerminalBlocks"
+K:analysis { kind = "terminal-blocks" }

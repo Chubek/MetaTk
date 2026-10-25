@@ -1,0 +1,3 @@
+-- Executable expression-redundancy analysis kernel.
+local K = lkopt.optimizer.new "ExpressionRedundancy"
+K:analysis { kind = "expression-redundancy" }

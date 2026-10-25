@@ -1,0 +1,3 @@
+-- combines adjacent integer constants
+local K = lkopt.optimizer.new "OrConstantsNested"
+K:rewrite { pattern = "bor(bor($x,$a),$b)", replace = "bor($x,bor($a,$b))", guard = "const:a,b" }

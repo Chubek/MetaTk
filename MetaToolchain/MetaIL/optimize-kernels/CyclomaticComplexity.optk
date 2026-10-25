@@ -1,0 +1,3 @@
+-- Executable cyclomatic-complexity analysis kernel.
+local K = lkopt.optimizer.new "CyclomaticComplexity"
+K:analysis { kind = "cyclomatic-complexity" }

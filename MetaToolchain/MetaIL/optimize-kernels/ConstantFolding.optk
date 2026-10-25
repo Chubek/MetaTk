@@ -1,0 +1,3 @@
+-- Original Optikern kernel, now made executable.
+CF = lkopt.optimizer.new "ConstantFolding"
+CF:builtin "constant-folding"

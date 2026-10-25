@@ -1,0 +1,3 @@
+-- Signed-64 wraparound; pure guards preserve both effects and traps.
+local K = lkopt.optimizer.new "SelectFalseTrue"
+K:rewrite { pattern = "select($c,0,1)", replace = "eq($c,0)", guard = "" }

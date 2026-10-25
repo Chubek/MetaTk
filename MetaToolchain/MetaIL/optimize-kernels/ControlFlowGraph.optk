@@ -1,0 +1,3 @@
+-- Executable cfg analysis kernel.
+local K = lkopt.optimizer.new "ControlFlowGraph"
+K:analysis { kind = "cfg" }

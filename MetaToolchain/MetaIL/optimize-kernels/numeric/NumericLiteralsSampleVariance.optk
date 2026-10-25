@@ -1,0 +1,3 @@
+-- Descriptive numeric analysis computed by MetaNum/numeric.hpp.
+local K = lkopt.optimizer.new "NumericLiteralsSampleVariance"
+K:analysis { kind = "numeric-statistic", source = "Literals", statistic = "SampleVariance" }

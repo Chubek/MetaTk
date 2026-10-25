@@ -1,0 +1,3 @@
+-- Signed-64 numeric rewrite; preserve wraparound, evaluation order, and traps.
+local K = lkopt.optimizer.new "NumericDoubleAsShift"
+K:rewrite { pattern = "add($x,$x)", replace = "shl($x,1)", guard = "pure:x" }

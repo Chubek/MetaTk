@@ -1,0 +1,3 @@
+-- Signed-64 wraparound; pure guards preserve both effects and traps.
+local K = lkopt.optimizer.new "ZeroMinus"
+K:rewrite { pattern = "sub(0,$x)", replace = "neg($x)", guard = "" }

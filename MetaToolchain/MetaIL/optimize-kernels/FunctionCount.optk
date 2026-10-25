@@ -1,0 +1,3 @@
+-- Executable function-count analysis kernel.
+local K = lkopt.optimizer.new "FunctionCount"
+K:analysis { kind = "function-count" }

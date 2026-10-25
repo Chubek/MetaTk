@@ -1,0 +1,3 @@
+-- Signed-64 wraparound; pure guards preserve both effects and traps.
+local K = lkopt.optimizer.new "LogicalAndIdempotence"
+K:rewrite { pattern = "land($x,$x)", replace = "ne($x,0)", guard = "pure:x" }

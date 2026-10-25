@@ -1,0 +1,3 @@
+-- Signed-64 wraparound; pure guards preserve both effects and traps.
+local K = lkopt.optimizer.new "XorXorCancelLeft"
+K:rewrite { pattern = "bxor($y,bxor($x,$y))", replace = "$x", guard = "pure:y" }

@@ -1,0 +1,3 @@
+-- Signed-64 wraparound; pure guards preserve both effects and traps.
+local K = lkopt.optimizer.new "CompareDoubleBitNot"
+K:rewrite { pattern = "eq(bnot($x),bnot($y))", replace = "eq($x,$y)", guard = "" }

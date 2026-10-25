@@ -1,0 +1,3 @@
+-- combines adjacent integer constants
+local K = lkopt.optimizer.new "MultiplyConstantsLeftNested"
+K:rewrite { pattern = "mul($a,mul($x,$b))", replace = "mul($x,mul($a,$b))", guard = "const:a,b" }

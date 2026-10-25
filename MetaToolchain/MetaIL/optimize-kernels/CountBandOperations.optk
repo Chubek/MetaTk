@@ -1,0 +1,3 @@
+-- Executable operator-count analysis kernel.
+local K = lkopt.optimizer.new "CountBandOperations"
+K:analysis { kind = "operator-count", op = "band" }

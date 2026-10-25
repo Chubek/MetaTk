@@ -1,0 +1,3 @@
+-- Executable impure-call-sites analysis kernel.
+local K = lkopt.optimizer.new "ImpureCallSites"
+K:analysis { kind = "impure-call-sites" }

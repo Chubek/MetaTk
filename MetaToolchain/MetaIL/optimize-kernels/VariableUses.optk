@@ -1,0 +1,3 @@
+-- Executable variable-uses analysis kernel.
+local K = lkopt.optimizer.new "VariableUses"
+K:analysis { kind = "variable-uses" }

@@ -1,0 +1,13 @@
+module arithmetic;
+fn main(a, b) {
+entry:
+  let x = (a + 0);
+  let y = mul(x, 8);
+  let t = (y & -1);
+  let unused = add(7, 9);
+  br eq(b, 0), yes, no;
+yes:
+  return add(t, 0);
+no:
+  return (t * 1);
+}

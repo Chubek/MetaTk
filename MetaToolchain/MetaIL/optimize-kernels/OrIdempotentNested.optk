@@ -1,0 +1,3 @@
+-- Signed-64 wraparound; pure guards preserve both effects and traps.
+local K = lkopt.optimizer.new "OrIdempotentNested"
+K:rewrite { pattern = "bor(bor($x,$y),$y)", replace = "bor($x,$y)", guard = "pure:y" }
