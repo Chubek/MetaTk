@@ -1,0 +1,2152 @@
+# TeX Primitive Commands Reference
+# Format: command, category, signature, description, example
+
+- command: \count
+ category: Registers
+ signature: \count<8-bit number>
+ description: Accesses one of 256 integer registers.
+ example: |
+  \count0=5
+  \showthe\count0 % -> 5
+
+- command: \dimen
+ category: Registers
+ signature: \dimen<8-bit number>
+ description: Accesses one of 256 dimension registers.
+ example: |
+  \dimen0=2in
+  \showthe\dimen0 % -> 144.54pt
+
+- command: \skip
+ category: Registers
+ signature: \skip<8-bit number>
+ description: Accesses one of 256 glue registers.
+ example: |
+  \skip0=1pt plus 2pt minus 1pt
+  \showthe\skip0
+
+- command: \muskip
+ category: Registers
+ signature: \muskip<8-bit number>
+ description: Accesses one of 256 math glue registers (units in mu).
+ example: |
+  \muskip0=3mu plus 1mu
+  \showthe\muskip0
+
+- command: \toks
+ category: Registers
+ signature: \toks<8-bit number>
+ description: Accesses one of 256 token list registers.
+ example: |
+  \toks0={Hello World}
+  \showthe\toks0
+
+- command: \countdef
+ category: Registers
+ signature: \countdef\csname=<8-bit number>
+ description: Defines a control sequence as a permanent name for a count register.
+ example: |
+  \countdef\mycount=5
+  \mycount=10
+  \showthe\mycount
+
+- command: \dimendef
+ category: Registers
+ signature: \dimendef\csname=<8-bit number>
+ description: Defines a control sequence as a permanent name for a dimen register.
+ example: |
+  \dimendef\mydimen=5
+  \mydimen=1in
+
+- command: \skipdef
+ category: Registers
+ signature: \skipdef\csname=<8-bit number>
+ description: Defines a control sequence as a permanent name for a skip register.
+ example: |
+  \skipdef\myskip=5
+  \myskip=2pt plus 1pt
+
+- command: \muskipdef
+ category: Registers
+ signature: \muskipdef\csname=<8-bit number>
+ description: Defines a control sequence as a permanent name for a muskip register.
+ example: |
+  \muskipdef\mymu=5
+  \mymu=3mu
+
+- command: \toksdef
+ category: Registers
+ signature: \toksdef\csname=<8-bit number>
+ description: Defines a control sequence as a permanent name for a toks register.
+ example: |
+  \toksdef\mytoks=5
+  \mytoks={abc}
+
+- command: \chardef
+ category: Registers
+ signature: \chardef\csname=<8-bit number>
+ description: Defines a control sequence that always produces the given character code.
+ example: |
+  \chardef\bullet=127
+  \bullet
+
+- command: \mathchardef
+ category: Registers
+ signature: \mathchardef\csname=<15-bit number>
+ description: Defines a control sequence that always produces the given math character code.
+ example: |
+  \mathchardef\alpha="010B
+  $\alpha$
+
+- command: \advance
+ category: Registers
+ signature: "\\advance <register> by <amount>"
+ description: Adds a value to a count, dimen, skip, or muskip register.
+ example: |
+  \count0=5
+  \advance\count0 by 3
+  \showthe\count0 % -> 8
+
+- command: \multiply
+ category: Registers
+ signature: "\\multiply <register> by <integer>"
+ description: Multiplies a register's value by an integer.
+ example: |
+  \count0=5
+  \multiply\count0 by 3
+  \showthe\count0 % -> 15
+
+- command: \divide
+ category: Registers
+ signature: "\\divide <register> by <integer>"
+ description: Divides a register's value by an integer (integer division for count).
+ example: |
+  \count0=10
+  \divide\count0 by 3
+  \showthe\count0 % -> 3
+
+- command: \global
+ category: Registers
+ signature: "\\global<assignment>"
+ description: Makes the following assignment global rather than local to the current group.
+ example: |
+  {\global\count0=5}
+  \showthe\count0 % -> 5 (survives the group)
+
+- command: \globaldefs
+ category: Registers
+ signature: "\\globaldefs=<number>"
+ description: Integer parameter controlling whether all assignments become global (>0) or local (<0).
+ example: |
+  \globaldefs=1
+  {\count0=5}
+  \showthe\count0 % -> 5
+
+- command: \hbox
+ category: Boxes
+ signature: "\\hbox<spec>{<horizontal material>}"
+ description: Creates a horizontal box.
+ example: |
+  \hbox to 2in{Hello\hfil}
+
+- command: \vbox
+ category: Boxes
+ signature: "\\vbox<spec>{<vertical material>}"
+ description: Creates a vertical box, reference point at the baseline of the last box.
+ example: |
+  \vbox{\hbox{line1}\hbox{line2}}
+
+- command: \vtop
+ category: Boxes
+ signature: "\\vtop<spec>{<vertical material>}"
+ description: Like \vbox, but reference point is the baseline of the first box.
+ example: |
+  \vtop{\hbox{line1}\hbox{line2}}
+
+- command: \box
+ category: Boxes
+ signature: \box<8-bit number>
+ description: Retrieves and empties a box register.
+ example: |
+  \setbox0=\hbox{Hi}
+  \box0
+
+- command: \copy
+ category: Boxes
+ signature: \copy<8-bit number>
+ description: Retrieves a box register without emptying it.
+ example: |
+  \setbox0=\hbox{Hi}
+  \copy0 \copy0
+
+- command: \unbox
+ category: Boxes
+ signature: \unbox<8-bit number>
+ description: Unpacks a box register's contents into the current list, emptying it.
+ example: |
+  \setbox0=\hbox{A}
+  \unbox0
+
+- command: \unhbox
+ category: Boxes
+ signature: \unhbox<8-bit number>
+ description: Unpacks a horizontal box register's contents (must contain hbox).
+ example: |
+  \setbox0=\hbox{A}
+  \unhbox0
+
+- command: \unvbox
+ category: Boxes
+ signature: \unvbox<8-bit number>
+ description: Unpacks a vertical box register's contents (must contain vbox).
+ example: |
+  \setbox0=\vbox{\hbox{A}}
+  \unvbox0
+
+- command: \unhcopy
+ category: Boxes
+ signature: \unhcopy<8-bit number>
+ description: Like \unhbox but doesn't empty the register.
+ example: |
+  \setbox0=\hbox{A}
+  \unhcopy0
+
+- command: \unvcopy
+ category: Boxes
+ signature: \unvcopy<8-bit number>
+ description: Like \unvbox but doesn't empty the register.
+ example: |
+  \setbox0=\vbox{\hbox{A}}
+  \unvcopy0
+
+- command: \setbox
+ category: Boxes
+ signature: "\\setbox<8-bit number>=<box>"
+ description: Assigns a box to a box register.
+ example: |
+  \setbox0=\hbox{Hello}
+
+- command: \wd
+ category: Boxes
+ signature: \wd<8-bit number>
+ description: Gets or sets the width of a box register.
+ example: |
+  \setbox0=\hbox{Hi}
+  \wd0=1in
+  \showthe\wd0
+
+- command: \ht
+ category: Boxes
+ signature: \ht<8-bit number>
+ description: Gets or sets the height of a box register.
+ example: |
+  \setbox0=\hbox{Hi}
+  \ht0=10pt
+
+- command: \dp
+ category: Boxes
+ signature: \dp<8-bit number>
+ description: Gets or sets the depth of a box register.
+ example: |
+  \setbox0=\hbox{Hi}
+  \dp0=2pt
+
+- command: \vsplit
+ category: Boxes
+ signature: \vsplit<8-bit number> to <dimen>
+ description: Splits a vbox register at a good breakpoint into a specified height.
+ example: |
+  \setbox1=\vsplit0 to 3in
+
+- command: \lastbox
+ category: Boxes
+ signature: \lastbox
+ description: Removes and returns the last box from the current list.
+ example: |
+  \setbox0=\lastbox
+
+- command: \hfil
+ category: Boxes
+ signature: \hfil
+ description: Infinite horizontal glue (fil), stretchable, no shrink.
+ example: |
+  \hbox to 2in{A\hfil B}
+
+- command: \hfill
+ category: Boxes
+ signature: \hfill
+ description: Infinite horizontal glue (fill), stronger stretch than \hfil.
+ example: |
+  \hbox to 2in{A\hfill B}
+
+- command: \hfilneg
+ category: Boxes
+ signature: \hfilneg
+ description: Cancels a previous \hfil (negative fil glue).
+ example: |
+  \hbox{A\hfil\hfilneg B}
+
+- command: \hss
+ category: Boxes
+ signature: \hss
+ description: Infinite horizontal glue that can stretch or shrink infinitely.
+ example: |
+  \hbox to 1in{\hss X\hss}
+
+- command: \vfil
+ category: Boxes
+ signature: \vfil
+ description: Infinite vertical glue, stretchable, no shrink.
+ example: |
+  \vbox to 2in{A\vfil B}
+
+- command: \vfill
+ category: Boxes
+ signature: \vfill
+ description: Infinite vertical glue (fill), stronger than \vfil.
+ example: |
+  \vbox to 2in{A\vfill B}
+
+- command: \vfilneg
+ category: Boxes
+ signature: \vfilneg
+ description: Cancels a previous \vfil.
+ example: |
+  \vbox{A\vfil\vfilneg B}
+
+- command: \vss
+ category: Boxes
+ signature: \vss
+ description: Infinite vertical glue, stretch or shrink infinitely.
+ example: |
+  \vbox to 1in{\vss X\vss}
+
+- command: \hskip
+ category: Glue
+ signature: "\\hskip<glue>"
+ description: Inserts explicit horizontal glue.
+ example: |
+  A\hskip1cm B
+
+- command: \vskip
+ category: Glue
+ signature: "\\vskip<glue>"
+ description: Inserts explicit vertical glue.
+ example: |
+  \hbox{A}\vskip1cm\hbox{B}
+
+- command: \mskip
+ category: Glue
+ signature: "\\mskip<math glue>"
+ description: Inserts glue in math mode, measured in mu units.
+ example: |
+  $a\mskip18mu b$
+
+- command: \kern
+ category: Glue
+ signature: "\\kern<dimen>"
+ description: Inserts a fixed (non-stretchable) space.
+ example: |
+  A\kern5pt B
+
+- command: \mkern
+ category: Glue
+ signature: "\\mkern<math dimen>"
+ description: Inserts fixed math kern in mu units.
+ example: |
+  $a\mkern5mu b$
+
+- command: \penalty
+ category: Glue
+ signature: "\\penalty<number>"
+ description: Inserts a penalty node influencing line/page breaking.
+ example: |
+  Text\penalty-10000 more text
+
+- command: \unpenalty
+ category: Glue
+ signature: \unpenalty
+ description: Removes the last penalty from the current list.
+ example: |
+  \penalty100 \unpenalty
+
+- command: \spacefactor
+ category: Glue
+ signature: "\\spacefactor=<number>"
+ description: Gets/sets the current space factor affecting interword spacing.
+ example: |
+  \showthe\spacefactor
+
+- command: \xspaceskip
+ category: Glue
+ signature: "\\xspaceskip=<glue>"
+ description: Glue used for spaces when space factor >= 2000, if nonzero.
+ example: |
+  \xspaceskip=5pt plus 1pt
+
+- command: \spaceskip
+ category: Glue
+ signature: "\\spaceskip=<glue>"
+ description: Glue used for interword spaces, if nonzero (overrides font space).
+ example: |
+  \spaceskip=4pt plus 2pt minus 1pt
+
+- command: \char
+ category: Typesetting
+ signature: \char<8-bit number>
+ description: Typesets the character with the given code from the current font.
+ example: |
+  \char65 % A
+
+- command: \accent
+ category: Typesetting
+ signature: \accent<8-bit number><char>
+ description: Places an accent character over the following character.
+ example: |
+  \accent19 o % ő-like accent
+
+- command: \discretionary
+ category: Typesetting
+ signature: "\\discretionary{<pre>}{<post>}{<no-break>}"
+ description: Specifies an optional hyphenation point with alternate material.
+ example: |
+  diffi\discretionary{-}{}{}cult
+
+- command: \-
+ category: Typesetting
+ signature: \-
+ description: Shorthand discretionary hyphen.
+ example: |
+  hyphen\-ation
+
+- command: \hyphenation
+ category: Typesetting
+ signature: "\\hyphenation{<word-list>}"
+ description: Specifies exception hyphenation points for words.
+ example: |
+  \hyphenation{man-u-script}
+
+- command: \patterns
+ category: Typesetting
+ signature: "\\patterns{<pattern-list>}"
+ description: Defines hyphenation patterns (used inside \patterns for a language).
+ example: |
+  \patterns{1ab a1b}
+
+- command: \ital
+ category: Typesetting
+ signature: N/A (non-standard/rare)
+ description: Not a standard Plain TeX primitive; italic correction is done via \/.
+ example: |
+  \textit{word}\/ next
+
+- command: \noboundary
+ category: Typesetting
+ signature: \noboundary
+ description: Suppresses the implicit boundary character for ligatures/kerning.
+ example: |
+  x\noboundary y
+
+- command: \raise
+ category: Typesetting
+ signature: "\\raise<dimen><box>"
+ description: Raises a box by the given dimension.
+ example: |
+  \raise3pt\hbox{X}
+
+- command: \lower
+ category: Typesetting
+ signature: "\\lower<dimen><box>"
+ description: Lowers a box by the given dimension.
+ example: |
+  \lower3pt\hbox{X}
+
+- command: \moveleft
+ category: Typesetting
+ signature: "\\moveleft<dimen><box>"
+ description: Shifts a vertical-mode box to the left.
+ example: |
+  \moveleft2pt\vbox{\hbox{X}}
+
+- command: \moveright
+ category: Typesetting
+ signature: "\\moveright<dimen><box>"
+ description: Shifts a vertical-mode box to the right.
+ example: |
+  \moveright2pt\vbox{\hbox{X}}
+
+- command: \indent
+ category: Typesetting
+ signature: \indent
+ description: Starts a new paragraph with an indentation box.
+ example: |
+  \indent This paragraph is indented.
+
+- command: \noindent
+ category: Typesetting
+ signature: \noindent
+ description: Starts a new paragraph without indentation.
+ example: |
+  \noindent This paragraph is not indented.
+
+- command: \par
+ category: Typesetting
+ signature: \par
+ description: Ends the current paragraph.
+ example: |
+  First line.\par Second paragraph.
+
+- command: \endgraf
+ category: Typesetting
+ signature: \endgraf
+ description: Synonym for \par (used to avoid redefinition issues).
+ example: |
+  Text here.\endgraf
+
+- command: \hrule
+ category: Typesetting
+ signature: "\\hrule<spec>"
+ description: Inserts a horizontal rule (only valid in vertical mode).
+ example: |
+  \hrule height 1pt
+
+- command: \vrule
+ category: Typesetting
+ signature: "\\vrule<spec>"
+ description: Inserts a vertical rule (only valid in horizontal mode).
+ example: |
+  A\vrule width1pt B
+
+- command: \mathchar
+ category: Math
+ signature: \mathchar<15-bit number>
+ description: Inserts a math character by its class/family/position code.
+ example: |
+  $\mathchar"010B$
+
+- command: \mathaccent
+ category: Math
+ signature: "\\mathaccent<15-bit number><math field>"
+ description: Places a math accent over a math field.
+ example: |
+  $\mathaccent"7017 x$ % hat accent
+
+- command: \mathbin
+ category: Math
+ signature: "\\mathbin<math field>"
+ description: Treats a math field as a binary operator (spacing).
+ example: |
+  $a\mathbin{+}b$
+
+- command: \mathrel
+ category: Math
+ signature: "\\mathrel<math field>"
+ description: Treats a math field as a relation (spacing).
+ example: |
+  $a\mathrel{=}b$
+
+- command: \mathop
+ category: Math
+ signature: "\\mathop<math field>"
+ description: Treats a math field as a large operator.
+ example: |
+  $\mathop{\rm lim}\limits_{x\to0}$
+
+- command: \mathopen
+ category: Math
+ signature: "\\mathopen<math field>"
+ description: Treats a math field as an opening symbol.
+ example: |
+  $\mathopen( a \mathclose)$
+
+- command: \mathclose
+ category: Math
+ signature: "\\mathclose<math field>"
+ description: Treats a math field as a closing symbol.
+ example: |
+  $\mathopen( a \mathclose)$
+
+- command: \mathpunct
+ category: Math
+ signature: "\\mathpunct<math field>"
+ description: Treats a math field as punctuation.
+ example: |
+  $a\mathpunct, b$
+
+- command: \mathord
+ category: Math
+ signature: "\\mathord<math field>"
+ description: Treats a math field as an ordinary symbol (default spacing class).
+ example: |
+  $\mathord{x}$
+
+- command: \mathinner
+ category: Math
+ signature: "\\mathinner<math field>"
+ description: Treats a math field as an "inner" atom (e.g., fractions).
+ example: |
+  $\mathinner{\frac{1}{2}}$
+
+- command: \displaylimits
+ category: Math
+ signature: \displaylimits
+ description: Places limits above/below operator in display style, beside otherwise (default for many operators).
+ example: |
+  $\sum\displaylimits_{i=1}^n i$
+
+- command: \limits
+ category: Math
+ signature: \limits
+ description: Forces limits to be placed above/below an operator.
+ example: |
+  $\lim\limits_{x\to0} f(x)$
+
+- command: \nolimits
+ category: Math
+ signature: \nolimits
+ description: Forces limits to be placed beside an operator (subscript position).
+ example: |
+  $\sum\nolimits_{i=1}^n i$
+
+- command: \over
+ category: Math
+ signature: "<numerator>\\over<denominator>"
+ description: Creates a fraction (old-style TeX fraction syntax).
+ example: |
+  $1\over 2$
+
+- command: \atop
+ category: Math
+ signature: "<top>\\atop<bottom>"
+ description: Stacks two math fields without a fraction bar.
+ example: |
+  $a\atop b$
+
+- command: \above
+ category: Math
+ signature: "<top>\\above<dimen><bottom>"
+ description: Like \over but with an explicit rule thickness.
+ example: |
+  $a\above2pt b$
+
+- command: \overwithdelims
+ category: Math
+ signature: "<num>\\overwithdelims<delim1><delim2><denom>"
+ description: Fraction with specified left/right delimiters.
+ example: |
+  $a\overwithdelims() b$
+
+- command: \atopwithdelims
+ category: Math
+ signature: "<top>\\atopwithdelims<delim1><delim2><bottom>"
+ description: Stacked fields with specified delimiters, no rule.
+ example: |
+  $a\atopwithdelims[] b$
+
+- command: \abovewithdelims
+ category: Math
+ signature: "<top>\\abovewithdelims<delim1><delim2><dimen><bottom>"
+ description: Combination of \above with explicit delimiters.
+ example: |
+  $a\abovewithdelims()2pt b$
+
+- command: \left
+ category: Math
+ signature: "\\left<delimiter>...\\right<delimiter>"
+ description: Creates auto-sized left/right delimiters.
+ example: |
+  $\left(\frac{a}{b}\right)$
+
+- command: \right
+ category: Math
+ signature: "\\left<delimiter>...\\right<delimiter>"
+ description: Closes a \left delimiter pair, auto-sized.
+ example: |
+  $\left[x\right]$
+
+- command: \radical
+ category: Math
+ signature: "\\radical<27-bit number><math field>"
+ description: Draws a radical (root) sign with specified delimiter code.
+ example: |
+  $\radical"270370 x$
+
+- command: \delimiter
+ category: Math
+ signature: \delimiter<27-bit number>
+ description: Inserts a delimiter by its full 27-bit code.
+ example: |
+  $\delimiter"028300$
+
+- command: \displaystyle
+ category: Math
+ signature: \displaystyle
+ description: Switches to display math style within the current group.
+ example: |
+  $\displaystyle\sum_{i=1}^n i$
+
+- command: \textstyle
+ category: Math
+ signature: \textstyle
+ description: Switches to text math style.
+ example: |
+  $\textstyle\frac12$
+
+- command: \scriptstyle
+ category: Math
+ signature: \scriptstyle
+ description: Switches to script (subscript/superscript) style.
+ example: |
+  $x^{\scriptstyle y}$
+
+- command: \scriptscriptstyle
+ category: Math
+ signature: \scriptscriptstyle
+ description: Switches to script-script style (smallest).
+ example: |
+  $x^{y^{\scriptscriptstyle z}}$
+
+- command: \eqno
+ category: Math
+ signature: "$$...\\eqno<formula>$$"
+ description: Adds a right-aligned equation number in display math.
+ example: |
+  $$E=mc^2\eqno(1)$$
+
+- command: \leqno
+ category: Math
+ signature: "$$...\\leqno<formula>$$"
+ description: Adds a left-aligned equation number in display math.
+ example: |
+  $$E=mc^2\leqno(1)$$
+
+- command: \vcenter
+ category: Math
+ signature: "\\vcenter{<vertical material>}"
+ description: Creates a vbox centered on the math axis.
+ example: |
+  $\vcenter{\hbox{A}\hbox{B}}$
+
+- command: \if
+ category: Conditionals
+ signature: "\\if<token1><token2>...\\else...\\fi"
+ description: Tests if two tokens have the same character code.
+ example: |
+  \if ab \text{yes}\else \text{no}\fi
+
+- command: \ifcat
+ category: Conditionals
+ signature: "\\ifcat<token1><token2>...\\fi"
+ description: Tests if two tokens have the same category code.
+ example: |
+  \ifcat ab \text{same cat}\fi
+
+- command: \ifnum
+ category: Conditionals
+ signature: "\\ifnum<num1><rel><num2>...\\fi"
+ description: Compares two integers using <, =, or >.
+ example: |
+  \ifnum 3>2 \text{yes}\fi
+
+- command: \ifdim
+ category: Conditionals
+ signature: "\\ifdim<dimen1><rel><dimen2>...\\fi"
+ description: Compares two dimensions using <, =, or >.
+ example: |
+  \ifdim 1in>2cm \text{yes}\fi
+
+- command: \ifodd
+ category: Conditionals
+ signature: "\\ifodd<number>...\\fi"
+ description: True if the number is odd.
+ example: |
+  \ifodd 3 \text{odd}\fi
+
+- command: \ifvmode
+ category: Conditionals
+ signature: "\\ifvmode...\\fi"
+ description: True if currently in vertical mode.
+ example: |
+  \ifvmode \text{in vmode}\fi
+
+- command: \ifhmode
+ category: Conditionals
+ signature: "\\ifhmode...\\fi"
+ description: True if currently in horizontal mode.
+ example: |
+  \ifhmode \text{in hmode}\fi
+
+- command: \ifmmode
+ category: Conditionals
+ signature: "\\ifmmode...\\fi"
+ description: True if currently in math mode.
+ example: |
+  \ifmmode \text{in math}\fi
+
+- command: \ifinner
+ category: Conditionals
+ signature: "\\ifinner...\\fi"
+ description: True if currently in internal (restricted) mode.
+ example: |
+  \ifinner \text{inner mode}\fi
+
+- command: \ifvoid
+ category: Conditionals
+ signature: "\\ifvoid<8-bit number>...\\fi"
+ description: True if the specified box register is empty.
+ example: |
+  \ifvoid0 \text{empty}\fi
+
+- command: \ifhbox
+ category: Conditionals
+ signature: "\\ifhbox<8-bit number>...\\fi"
+ description: True if box register holds an hbox.
+ example: |
+  \ifhbox0 \text{is hbox}\fi
+
+- command: \ifvbox
+ category: Conditionals
+ signature: "\\ifvbox<8-bit number>...\\fi"
+ description: True if box register holds a vbox.
+ example: |
+  \ifvbox0 \text{is vbox}\fi
+
+- command: \ifx
+ category: Conditionals
+ signature: "\\ifx<token1><token2>...\\fi"
+ description: True if two tokens have identical meanings (current expansion).
+ example: |
+  \ifx\foo\bar \text{same}\fi
+
+- command: \ifeof
+ category: Conditionals
+ signature: "\\ifeof<stream number>...\\fi"
+ description: True if the input stream is at end-of-file.
+ example: |
+  \ifeof0 \text{done}\fi
+
+- command: \iftrue
+ category: Conditionals
+ signature: "\\iftrue...\\fi"
+ description: Always true.
+ example: |
+  \iftrue \text{always}\fi
+
+- command: \iffalse
+ category: Conditionals
+ signature: "\\iffalse...\\fi"
+ description: Always false.
+ example: |
+  \iffalse \text{never}\fi
+
+- command: \ifcase
+ category: Conditionals
+ signature: "\\ifcase<number> case0\\or case1\\or...\\else default\\fi"
+ description: Selects one of several cases based on an integer.
+ example: |
+  \ifcase2 zero\or one\or two\or three\fi % -> two
+
+- command: \else
+ category: Conditionals
+ signature: \else
+ description: Marks the alternative branch of a conditional.
+ example: |
+  \iftrue A\else B\fi
+
+- command: \fi
+ category: Conditionals
+ signature: \fi
+ description: Ends a conditional block.
+ example: |
+  \iftrue A\fi
+
+- command: \or
+ category: Conditionals
+ signature: \or
+ description: Separates cases in \ifcase.
+ example: |
+  \ifcase1 a\or b\or c\fi % -> b
+
+- command: \expandafter
+ category: Expansion
+ signature: "\\expandafter<token1><token2>"
+ description: Expands token2 once before reinserting token1.
+ example: |
+  \expandafter\def\csname foo\endcsname{bar}
+
+- command: \noexpand
+ category: Expansion
+ signature: \noexpand<token>
+ description: Prevents the next token from being expanded once.
+ example: |
+  \edef\x{\noexpand\foo}
+
+- command: \csname
+ category: Expansion
+ signature: "\\csname<char tokens>\\endcsname"
+ description: Builds a control sequence name from a string of characters.
+ example: |
+  \csname relax\endcsname
+
+- command: \endcsname
+ category: Expansion
+ signature: \endcsname
+ description: Terminates a \csname construct.
+ example: |
+  \csname foo\endcsname
+
+- command: \string
+ category: Expansion
+ signature: \string<token>
+ description: Converts a token to its string of character tokens (catcode 12, except spaces).
+ example: |
+  \message{\string\foo} % prints \foo
+
+- command: \number
+ category: Expansion
+ signature: \number<number>
+ description: Converts an internal integer to its decimal digit representation.
+ example: |
+  \message{\number123}
+
+- command: \romannumeral
+ category: Expansion
+ signature: \romannumeral<number>
+ description: Converts a number to lowercase Roman numerals.
+ example: |
+  \romannumeral1984 % -> mcmlxxxiv
+
+- command: \meaning
+ category: Expansion
+ signature: \meaning<token>
+ description: Produces a string describing the current meaning of a token.
+ example: |
+  \message{\meaning\def}
+
+- command: \jobname
+ category: Expansion
+ signature: \jobname
+ description: Expands to the name of the current job (usually the main file, no extension).
+ example: |
+  \message{\jobname}
+
+- command: \fontname
+ category: Expansion
+ signature: \fontname<font>
+ description: Expands to the external name of a font, plus scale if not natural size.
+ example: |
+  \message{\fontname\font}
+
+- command: \the
+ category: Expansion
+ signature: \the<internal quantity>
+ description: Produces the character tokens representing an internal value.
+ example: |
+  \count0=5
+  \message{\the\count0}
+
+- command: \let
+ category: Expansion
+ signature: "\\let<csname>=<token>"
+ description: Assigns the current meaning of a token to another control sequence.
+ example: |
+  \let\foo=\bar
+
+- command: \futurelet
+ category: Expansion
+ signature: "\\futurelet<csname><token1><token2>"
+ description: Assigns meaning based on lookahead, then reinserts tokens.
+ example: |
+  \futurelet\next\relax
+
+- command: \def
+ category: Expansion
+ signature: "\\def<csname><param text>{<replacement text>}"
+ description: Defines a macro (non-expandable during definition, local scope).
+ example: |
+  \def\greet#1{Hello, #1!}
+  \greet{World}
+
+- command: \edef
+ category: Expansion
+ signature: "\\edef<csname><param text>{<replacement text>}"
+ description: Like \def, but expands the replacement text at definition time.
+ example: |
+  \edef\x{\the\count0}
+
+- command: \gdef
+ category: Expansion
+ signature: "\\gdef<csname><param text>{<replacement text>}"
+ description: Globally defines a macro (equivalent to \global\def).
+ example: |
+  \gdef\foo{bar}
+
+- command: \xdef
+ category: Expansion
+ signature: "\\xdef<csname><param text>{<replacement text>}"
+ description: Globally defines a macro with expansion (equivalent to \global\edef).
+ example: |
+  \xdef\foo{\the\count0}
+
+- command: \long
+ category: Expansion
+ signature: "\\long\\def..."
+ description: Prefix allowing macro arguments to contain \par.
+ example: |
+  \long\def\foo#1{#1}
+
+- command: \outer
+ category: Expansion
+ signature: "\\outer\\def..."
+ description: Prefix restricting where a macro may be used (not inside arguments).
+ example: |
+  \outer\def\foo{bar}
+
+- command: \protected
+ category: Expansion
+ signature: "\\protected\\def..."
+ description: (e-TeX) Prevents expansion of the macro in \edef/\write contexts.
+ example: |
+  \protected\def\foo{bar}
+
+- command: \relax
+ category: Expansion
+ signature: \relax
+ description: Does nothing; often used to stop expansion or as a placeholder.
+ example: |
+  \let\x=\relax
+
+- command: \input
+ category: Input/Output
+ signature: "\\input <filename>"
+ description: Reads and processes another file as if inserted at this point.
+ example: |
+  \input macros.tex
+
+- command: \endinput
+ category: Input/Output
+ signature: \endinput
+ description: Stops reading the current file after the current line.
+ example: |
+  \endinput
+
+- command: \read
+ category: Input/Output
+ signature: "\\read<stream number> to <csname>"
+ description: Reads a line from an input stream into a macro.
+ example: |
+  \openin0=data.txt
+  \read0 to \line
+
+- command: \write
+ category: Input/Output
+ signature: "\\write<stream number>{<text>}"
+ description: Writes text to an output stream (or terminal/log).
+ example: |
+  \immediate\write16{Hello, log!}
+
+- command: \openin
+ category: Input/Output
+ signature: "\\openin<stream number>=<filename>"
+ description: Opens a file for reading.
+ example: |
+  \openin0=data.txt
+
+- command: \closein
+ category: Input/Output
+ signature: \closein<stream number>
+ description: Closes an input stream.
+ example: |
+  \closein0
+
+- command: \openout
+ category: Input/Output
+ signature: "\\openout<stream number>=<filename>"
+ description: Opens a file for writing.
+ example: |
+  \immediate\openout0=output.txt
+
+- command: \closeout
+ category: Input/Output
+ signature: \closeout<stream number>
+ description: Closes an output stream.
+ example: |
+  \immediate\closeout0
+
+- command: \immediate
+ category: Input/Output
+ signature: "\\immediate<\\write|\\openout|\\closeout>"
+ description: Executes I/O operations right away instead of at shipout.
+ example: |
+  \immediate\write16{Now}
+
+- command: \message
+ category: Input/Output
+ signature: "\\message{<text>}"
+ description: Writes text to the terminal and log file.
+ example: |
+  \message{Compiling section 2}
+
+- command: \errmessage
+ category: Input/Output
+ signature: "\\errmessage{<text>}"
+ description: Issues an error with the given text.
+ example: |
+  \errmessage{Something went wrong}
+
+- command: \show
+ category: Input/Output
+ signature: \show<token>
+ description: Displays the meaning of a token in the log/terminal.
+ example: |
+  \show\def
+
+- command: \showbox
+ category: Input/Output
+ signature: \showbox<8-bit number>
+ description: Displays the contents of a box register.
+ example: |
+  \showbox0
+
+- command: \showlists
+ category: Input/Output
+ signature: \showlists
+ description: Displays the current internal lists (contribution list, etc.).
+ example: |
+  \showlists
+
+- command: \showthe
+ category: Input/Output
+ signature: \showthe<internal quantity>
+ description: Displays the value of an internal quantity.
+ example: |
+  \showthe\count0
+
+- command: \output
+ category: Page/Output
+ signature: "\\output={<token list>}"
+ description: Token list executed to process each completed page.
+ example: |
+  \output={\shipout\box255}
+
+- command: \shipout
+ category: Page/Output
+ signature: \shipout<box>
+ description: Sends a box to the DVI/PDF output file.
+ example: |
+  \shipout\box0
+
+- command: \pagegoal
+ category: Page/Output
+ signature: "\\pagegoal=<dimen>"
+ description: Target height for the current page.
+ example: |
+  \showthe\pagegoal
+
+- command: \pagetotal
+ category: Page/Output
+ signature: "\\pagetotal=<dimen>"
+ description: Current accumulated height of material on the page.
+ example: |
+  \showthe\pagetotal
+
+- command: \pagestretch
+ category: Page/Output
+ signature: "\\pagestretch=<dimen>"
+ description: Normal stretchability accumulated on the current page.
+ example: |
+  \showthe\pagestretch
+
+- command: \pagefilstretch
+ category: Page/Output
+ signature: "\\pagefilstretch=<dimen>"
+ description: Fil stretchability accumulated on the current page.
+ example: |
+  \showthe\pagefilstretch
+
+- command: \pagefillstretch
+ category: Page/Output
+ signature: "\\pagefillstretch=<dimen>"
+ description: Fill stretchability accumulated on the current page.
+ example: |
+  \showthe\pagefillstretch
+
+- command: \pagefilllstretch
+ category: Page/Output
+ signature: "\\pagefilllstretch=<dimen>"
+ description: Filll stretchability accumulated on the current page.
+ example: |
+  \showthe\pagefilllstretch
+
+- command: \pageshrink
+ category: Page/Output
+ signature: "\\pageshrink=<dimen>"
+ description: Shrinkability accumulated on the current page.
+ example: |
+  \showthe\pageshrink
+
+- command: \pagedepth
+ category: Page/Output
+ signature: "\\pagedepth=<dimen>"
+ description: Depth of the current page so far.
+ example: |
+  \showthe\pagedepth
+
+- command: \topmark
+ category: Page/Output
+ signature: \topmark
+ description: The last \mark in effect at the top of the current page.
+ example: |
+  \topmark
+
+- command: \firstmark
+ category: Page/Output
+ signature: \firstmark
+ description: The first \mark that appears on the current page.
+ example: |
+  \firstmark
+
+- command: \botmark
+ category: Page/Output
+ signature: \botmark
+ description: The last \mark that appears on the current page.
+ example: |
+  \botmark
+
+- command: \splitfirstmark
+ category: Page/Output
+ signature: \splitfirstmark
+ description: First mark from the most recent \vsplit.
+ example: |
+  \splitfirstmark
+
+- command: \splitbotmark
+ category: Page/Output
+ signature: \splitbotmark
+ description: Last mark from the most recent \vsplit.
+ example: |
+  \splitbotmark
+
+- command: \mark
+ category: Page/Output
+ signature: "\\mark{<text>}"
+ description: Inserts a mark for use with running headers/footers.
+ example: |
+  \mark{Chapter 1}
+
+- command: \insert
+ category: Page/Output
+ signature: "\\insert<8-bit number>{<vertical material>}"
+ description: Deferred vertical material inserted onto the page (e.g., footnotes).
+ example: |
+  \insert100{\hbox{Footnote text}}
+
+- command: \floatingpenalty
+ category: Page/Output
+ signature: "\\floatingpenalty=<number>"
+ description: Penalty added if an insertion doesn't fit and must float to next page.
+ example: |
+  \floatingpenalty=0
+
+- command: \insertpenalties
+ category: Page/Output
+ signature: \insertpenalties
+ description: Total penalty cost of insertions being held over.
+ example: |
+  \showthe\insertpenalties
+
+- command: \supereject
+ category: Page/Output
+ signature: \supereject
+ description: Forces all pending insertions/pages out, ending the page immediately.
+ example: |
+  \supereject
+
+- command: \font
+ category: Font
+ signature: "\\font<csname>=<font name><at/scaled clause>"
+ description: Loads a font and associates it with a control sequence.
+ example: |
+  \font\bigrm=cmr10 at 20pt
+  \bigrm Big Text
+
+- command: \fontdimen
+ category: Font
+ signature: "\\fontdimen<number><font>"
+ description: Accesses a font's dimension parameters (e.g., space, xheight).
+ example: |
+  \fontdimen6\font
+
+- command: \hyphenchar
+ category: Font
+ signature: "\\hyphenchar<font>=<number>"
+ description: The character used for hyphenation in a font.
+ example: |
+  \hyphenchar\font=`\-
+
+- command: \skewchar
+ category: Font
+ signature: "\\skewchar<font>=<number>"
+ description: The character used for positioning accents in math.
+ example: |
+  \skewchar\font=-1
+
+- command: \nullfont
+ category: Font
+ signature: \nullfont
+ description: A font with no characters; TeX's default font.
+ example: |
+  \font\x=\nullfont
+
+- command: \textfont
+ category: Font
+ signature: "\\textfont<family>=<font>"
+ description: Sets the text-size font for a math family.
+ example: |
+  \textfont0=\tenrm
+
+- command: \scriptfont
+ category: Font
+ signature: "\\scriptfont<family>=<font>"
+ description: Sets the script-size font for a math family.
+ example: |
+  \scriptfont0=\sevenrm
+
+- command: \scriptscriptfont
+ category: Font
+ signature: "\\scriptscriptfont<family>=<font>"
+ description: Sets the scriptscript-size font for a math family.
+ example: |
+  \scriptscriptfont0=\fiverm
+
+- command: \tolerance
+ category: Parameters
+ signature: "\\tolerance=<number>"
+ description: Maximum allowed "badness" for line breaking.
+ example: |
+  \tolerance=9999
+
+- command: \pretolerance
+ category: Parameters
+ signature: "\\pretolerance=<number>"
+ description: Badness threshold tried before hyphenation is attempted.
+ example: |
+  \pretolerance=100
+
+- command: \hbadness
+ category: Parameters
+ signature: "\\hbadness=<number>"
+ description: Threshold badness for reporting overfull/underfull hboxes.
+ example: |
+  \hbadness=10000
+
+- command: \vbadness
+ category: Parameters
+ signature: "\\vbadness=<number>"
+ description: Threshold badness for reporting overfull/underfull vboxes.
+ example: |
+  \vbadness=10000
+
+- command: \hfuzz
+ category: Parameters
+ signature: "\\hfuzz=<dimen>"
+ description: Tolerance for overfull hboxes before a warning is issued.
+ example: |
+  \hfuzz=2pt
+
+- command: \vfuzz
+ category: Parameters
+ signature: "\\vfuzz=<dimen>"
+ description: Tolerance for overfull vboxes before a warning is issued.
+ example: |
+  \vfuzz=2pt
+
+- command: \parindent
+ category: Parameters
+ signature: "\\parindent=<dimen>"
+ description: Width of paragraph indentation.
+ example: |
+  \parindent=20pt
+
+- command: \parskip
+ category: Parameters
+ signature: "\\parskip=<glue>"
+ description: Extra vertical glue added before each paragraph.
+ example: |
+  \parskip=6pt plus 2pt
+
+- command: \baselineskip
+ category: Parameters
+ signature: "\\baselineskip=<glue>"
+ description: Desired distance between baselines of consecutive lines.
+ example: |
+  \baselineskip=14pt
+
+- command: \lineskip
+ category: Parameters
+ signature: "\\lineskip=<glue>"
+ description: Glue used between lines when \baselineskip isn't enough.
+ example: |
+  \lineskip=1pt
+
+- command: \lineskiplimit
+ category: Parameters
+ signature: "\\lineskiplimit=<dimen>"
+ description: Threshold below which \lineskip is used instead of \baselineskip.
+ example: |
+  \lineskiplimit=0pt
+
+- command: \leftskip
+ category: Parameters
+ signature: "\\leftskip=<glue>"
+ description: Glue added at the left of every line in a paragraph.
+ example: |
+  \leftskip=1cm
+
+- command: \rightskip
+ category: Parameters
+ signature: "\\rightskip=<glue>"
+ description: Glue added at the right of every line in a paragraph.
+ example: |
+  \rightskip=1cm plus 1fil
+
+- command: \parfillskip
+ category: Parameters
+ signature: "\\parfillskip=<glue>"
+ description: Glue added at the end of a paragraph's last line.
+ example: |
+  \parfillskip=0pt plus 1fil
+
+- command: \abovedisplayskip
+ category: Parameters
+ signature: "\\abovedisplayskip=<glue>"
+ description: Vertical glue above a long display formula.
+ example: |
+  \abovedisplayskip=12pt plus 3pt minus 9pt
+
+- command: \belowdisplayskip
+ category: Parameters
+ signature: "\\belowdisplayskip=<glue>"
+ description: Vertical glue below a long display formula.
+ example: |
+  \belowdisplayskip=12pt plus 3pt minus 9pt
+
+- command: \abovedisplayshortskip
+ category: Parameters
+ signature: "\\abovedisplayshortskip=<glue>"
+ description: Vertical glue above a short display formula.
+ example: |
+  \abovedisplayshortskip=0pt plus 3pt
+
+- command: \belowdisplayshortskip
+ category: Parameters
+ signature: "\\belowdisplayshortskip=<glue>"
+ description: Vertical glue below a short display formula.
+ example: |
+  \belowdisplayshortskip=7pt plus 3pt minus 4pt
+
+- command: \clubpenalty
+ category: Parameters
+ signature: "\\clubpenalty=<number>"
+ description: Penalty for a "club line" (first line of paragraph at bottom of page).
+ example: |
+  \clubpenalty=150
+
+- command: \widowpenalty
+ category: Parameters
+ signature: "\\widowpenalty=<number>"
+ description: Penalty for a "widow line" (last line of paragraph at top of page).
+ example: |
+  \widowpenalty=150
+
+- command: \interlinepenalty
+ category: Parameters
+ signature: "\\interlinepenalty=<number>"
+ description: Extra penalty for breaking between lines of a paragraph.
+ example: |
+  \interlinepenalty=0
+
+- command: \brokenpenalty
+ category: Parameters
+ signature: "\\brokenpenalty=<number>"
+ description: Extra penalty for breaking a page after a hyphenated line.
+ example: |
+  \brokenpenalty=100
+
+- command: \linepenalty
+ category: Parameters
+ signature: "\\linepenalty=<number>"
+ description: Base penalty added for each line break in a paragraph.
+ example: |
+  \linepenalty=10
+
+- command: \hyphenpenalty
+ category: Parameters
+ signature: "\\hyphenpenalty=<number>"
+ description: Penalty for breaking a line at a hyphen.
+ example: |
+  \hyphenpenalty=50
+
+- command: \exhyphenpenalty
+ category: Parameters
+ signature: "\\exhyphenpenalty=<number>"
+ description: Penalty for breaking at an explicit hyphen character.
+ example: |
+  \exhyphenpenalty=50
+
+- command: \binoppenalty
+ category: Parameters
+ signature: "\\binoppenalty=<number>"
+ description: Penalty for breaking a line at a binary operator in math.
+ example: |
+  \binoppenalty=700
+
+- command: \relpenalty
+ category: Parameters
+ signature: "\\relpenalty=<number>"
+ description: Penalty for breaking a line at a relation in math.
+ example: |
+  \relpenalty=500
+
+- command: \mag
+ category: Parameters
+ signature: "\\mag=<number>"
+ description: Global magnification factor for the document (1000 = 100%).
+ example: |
+  \mag=1200
+
+- command: \time
+ category: Parameters
+ signature: "\\time=<number>"
+ description: Current time in minutes since midnight (settable).
+ example: |
+  \showthe\time
+
+- command: \day
+ category: Parameters
+ signature: "\\day=<number>"
+ description: Current day of the month.
+ example: |
+  \showthe\day
+
+- command: \month
+ category: Parameters
+ signature: "\\month=<number>"
+ description: Current month number.
+ example: |
+  \showthe\month
+
+- command: \year
+ category: Parameters
+ signature: "\\year=<number>"
+ description: Current year.
+ example: |
+  \showthe\year
+
+- command: \maxdepth
+ category: Parameters
+ signature: "\\maxdepth=<dimen>"
+ description: Maximum depth allowed for the main vertical list (page).
+ example: |
+  \maxdepth=4pt
+
+- command: \splitmaxdepth
+ category: Parameters
+ signature: "\\splitmaxdepth=<dimen>"
+ description: Maximum depth allowed for boxes from \vsplit.
+ example: |
+  \splitmaxdepth=4pt
+
+- command: \boxmaxdepth
+ category: Parameters
+ signature: "\\boxmaxdepth=<dimen>"
+ description: Maximum depth allowed in an \hbox or \vbox.
+ example: |
+  \boxmaxdepth=\maxdimen
+
+- command: \delimiterfactor
+ category: Parameters
+ signature: "\\delimiterfactor=<number>"
+ description: Threshold percentage for how large delimiters must be.
+ example: |
+  \delimiterfactor=901
+
+- command: \delimitershortfall
+ category: Parameters
+ signature: "\\delimitershortfall=<dimen>"
+ description: Maximum allowed shortfall for delimiter size.
+ example: |
+  \delimitershortfall=5pt
+
+- command: \nulldelimiterspace
+ category: Parameters
+ signature: "\\nulldelimiterspace=<dimen>"
+ description: Width reserved for a null delimiter.
+ example: |
+  \nulldelimiterspace=1.2pt
+
+- command: \scriptspace
+ category: Parameters
+ signature: "\\scriptspace=<dimen>"
+ description: Extra space added after sub/superscripts.
+ example: |
+  \scriptspace=0.5pt
+
+- command: \mathsurround
+ category: Parameters
+ signature: "\\mathsurround=<dimen>"
+ description: Extra space inserted around inline math formulas.
+ example: |
+  \mathsurround=1pt
+
+- command: \looseness
+ category: Parameters
+ signature: "\\looseness=<number>"
+ description: Adjusts the number of lines in a paragraph (+1 = one more line).
+ example: |
+  \looseness=1
+
+- command: \hangindent
+ category: Parameters
+ signature: "\\hangindent=<dimen>"
+ description: Indentation for hanging paragraph lines.
+ example: |
+  \hangindent=2em
+
+- command: \hangafter
+ category: Parameters
+ signature: "\\hangafter=<number>"
+ description: Number of lines before hanging indentation begins.
+ example: |
+  \hangafter=1
+
+- command: \prevdepth
+ category: Parameters
+ signature: "\\prevdepth=<dimen>"
+ description: Depth of the last box added to the current vertical list.
+ example: |
+  \showthe\prevdepth
+
+- command: \prevgraf
+ category: Parameters
+ signature: "\\prevgraf=<number>"
+ description: Number of lines in the last paragraph contributed.
+ example: |
+  \showthe\prevgraf
+
+- command: \deadcycles
+ category: Parameters
+ signature: "\\deadcycles=<number>"
+ description: Count of \shipout calls since the last successful output.
+ example: |
+  \showthe\deadcycles
+
+- command: \maxdeadcycles
+ category: Parameters
+ signature: "\\maxdeadcycles=<number>"
+ description: Maximum allowed \deadcycles before TeX aborts the output routine.
+ example: |
+  \maxdeadcycles=25
+
+- command: \outputpenalty
+ category: Parameters
+ signature: "\\outputpenalty=<number>"
+ description: Penalty at the page break that invoked the output routine.
+ example: |
+  \showthe\outputpenalty
+
+- command: \language
+ category: Parameters
+ signature: "\\language=<number>"
+ description: Selects the current hyphenation language/pattern set.
+ example: |
+  \language=0
+
+- command: \lefthyphenmin
+ category: Parameters
+ signature: "\\lefthyphenmin=<number>"
+ description: Minimum characters before a hyphen from the start of a word.
+ example: |
+  \lefthyphenmin=2
+
+- command: \righthyphenmin
+ category: Parameters
+ signature: "\\righthyphenmin=<number>"
+ description: Minimum characters after a hyphen to the end of a word.
+ example: |
+  \righthyphenmin=3
+
+- command: \uchyph
+ category: Parameters
+ signature: "\\uchyph=<number>"
+ description: Whether words starting with an uppercase letter may be hyphenated.
+ example: |
+  \uchyph=0
+
+- command: \exhyphenchar
+ category: Parameters
+ signature: "\\exhyphenchar<font>=<number>"
+ description: Not standard; hyphenation at existing hyphens governed by \exhyphenpenalty (no per-font register in original TeX). Included as commonly referenced parameter.
+ example: |
+  % typically not directly set; see \hyphenchar
+
+- command: \newlinechar
+ category: Parameters
+ signature: "\\newlinechar=<number>"
+ description: Character code that, when written, starts a new line in \write.
+ example: |
+  \newlinechar=`\^^J
+
+- command: \endlinechar
+ category: Parameters
+ signature: "\\endlinechar=<number>"
+ description: Character code appended to each line read from a file (-1 to disable).
+ example: |
+  \endlinechar=13
+
+- command: \escapechar
+ category: Parameters
+ signature: "\\escapechar=<number>"
+ description: Character used to display control sequence names (default backslash).
+ example: |
+  \escapechar=`\\
+
+- command: \catcode
+ category: Parameters
+ signature: "\\catcode<number>=<0-15>"
+ description: Sets/gets the category code of a character.
+ example: |
+  \catcode`\~=13 % active character
+
+- command: \mathcode
+ category: Parameters
+ signature: "\\mathcode<number>=<15-bit number>"
+ description: Sets/gets the math class/family/position of a character.
+ example: |
+  \mathcode`\+="202B
+
+- command: \lccode
+ category: Parameters
+ signature: "\\lccode<number>=<8-bit number>"
+ description: Lowercase equivalent used by \lowercase.
+ example: |
+  \lccode`\A=`\a
+
+- command: \uccode
+ category: Parameters
+ signature: "\\uccode<number>=<8-bit number>"
+ description: Uppercase equivalent used by \uppercase.
+ example: |
+  \uccode`\a=`\A
+
+- command: \sfcode
+ category: Parameters
+ signature: "\\sfcode<number>=<number>"
+ description: Space factor code for a character (affects spacing after it).
+ example: |
+  \sfcode`\.=3000
+
+- command: \delcode
+ category: Parameters
+ signature: "\\delcode<number>=<27-bit number>"
+ description: Delimiter code for a character (used with \left/\right/\radical).
+ example: |
+  \delcode`\.=0
+
+- command: \begingroup
+ category: Miscellaneous
+ signature: \begingroup
+ description: Opens a group without entering a new mode (paired with \endgroup).
+ example: |
+  \begingroup\def\x{local}\endgroup
+
+- command: \endgroup
+ category: Miscellaneous
+ signature: \endgroup
+ description: Closes a group opened by \begingroup.
+ example: |
+  \begingroup...\endgroup
+
+- command: \bgroup
+ category: Miscellaneous
+ signature: \bgroup
+ description: A left brace as a control sequence (catcode 1).
+ example: |
+  \bgroup A\egroup
+
+- command: \egroup
+ category: Miscellaneous
+ signature: \egroup
+ description: A right brace as a control sequence (catcode 2).
+ example: |
+  \bgroup A\egroup
+
+- command: \aftergroup
+ category: Miscellaneous
+ signature: \aftergroup<token>
+ description: Saves a token to be inserted right after the current group ends.
+ example: |
+  {\aftergroup\relax}
+
+- command: \afterassignment
+ category: Miscellaneous
+ signature: \afterassignment<token>
+ description: Saves a token to be inserted right after the next assignment.
+ example: |
+  \afterassignment\relax\count0=5
+
+- command: \ignorespaces
+ category: Miscellaneous
+ signature: \ignorespaces
+ description: Skips any following spaces (useful after macro expansion).
+ example: |
+  \def\foo{a}\foo\ignorespaces b
+
+- command: \end
+ category: Miscellaneous
+ signature: \end
+ description: Ends the TeX job (after finishing the current page).
+ example: |
+  \end
+
+- command: \dump
+ category: Miscellaneous
+ signature: \dump
+ description: Ends INITEX processing and writes a format (.fmt) file.
+ example: |
+  \dump
+
+- command: \special
+ category: Miscellaneous
+ signature: "\\special{<text>}"
+ description: Passes device-specific instructions to the output driver.
+ example: |
+  \special{color rgb 1 0 0}
+
+- command: \tracingcommands
+ category: Tracing
+ signature: "\\tracingcommands=<number>"
+ description: If positive, logs each command as it's executed.
+ example: |
+  \tracingcommands=1
+
+- command: \tracingstats
+ category: Tracing
+ signature: "\\tracingstats=<number>"
+ description: If positive, reports memory usage statistics at \end.
+ example: |
+  \tracingstats=1
+
+- command: \tracingpages
+ category: Tracing
+ signature: "\\tracingpages=<number>"
+ description: If positive, logs page-breaking calculations.
+ example: |
+  \tracingpages=1
+
+- command: \tracingoutput
+ category: Tracing
+ signature: "\\tracingoutput=<number>"
+ description: If positive, shows box contents shipped out.
+ example: |
+  \tracingoutput=1
+
+- command: \tracinglostchars
+ category: Tracing
+ signature: "\\tracinglostchars=<number>"
+ description: If positive, reports characters not present in the current font.
+ example: |
+  \tracinglostchars=1
+
+- command: \tracingmacros
+ category: Tracing
+ signature: "\\tracingmacros=<number>"
+ description: If positive, logs macro expansions.
+ example: |
+  \tracingmacros=2
+
+- command: \tracingparagraphs
+ category: Tracing
+ signature: "\\tracingparagraphs=<number>"
+ description: If positive, logs the line-breaking algorithm's decisions.
+ example: |
+  \tracingparagraphs=1
+
+- command: \tracingrestores
+ category: Tracing
+ signature: "\\tracingrestores=<number>"
+ description: If positive, logs value restorations at end of groups.
+ example: |
+  \tracingrestores=1
+
+- command: \tracingonline
+ category: Tracing
+ signature: "\\tracingonline=<number>"
+ description: If positive, sends tracing output to the terminal as well as the log.
+ example: |
+  \tracingonline=1
+
+- command: \pausing
+ category: Tracing
+ signature: "\\pausing=<number>"
+ description: If positive, pauses after each line read from a file for interactive editing.
+ example: |
+  \pausing=1
+
+- command: \showboxbreadth
+ category: Tracing
+ signature: "\\showboxbreadth=<number>"
+ description: Max number of items per level shown by \showbox.
+ example: |
+  \showboxbreadth=10
+
+- command: \showboxdepth
+ category: Tracing
+ signature: "\\showboxdepth=<number>"
+ description: Max nesting depth shown by \showbox.
+ example: |
+  \showboxdepth=3
+
+- command: \errorcontextlines
+ category: Tracing
+ signature: "\\errorcontextlines=<number>"
+ description: Number of context lines shown when an error occurs.
+ example: |
+  \errorcontextlines=5
+
+- command: \errorstopmode
+ category: Tracing
+ signature: \errorstopmode
+ description: Interaction mode that stops and prompts on every error.
+ example: |
+  \errorstopmode
+
+- command: \scrollmode
+ category: Tracing
+ signature: \scrollmode
+ description: Interaction mode that scrolls past errors without stopping.
+ example: |
+  \scrollmode
+
+- command: \nonstopmode
+ category: Tracing
+ signature: \nonstopmode
+ description: Interaction mode with no terminal interaction; errors go to the log.
+ example: |
+  \nonstopmode
+
+- command: \batchmode
+  category: Parameters & Tracing
+  signature: \batchmode
+  description: Suppresses all terminal output and interaction; errors are logged to the transcript file only.
+  example: |
+   \batchmode
+
+- command: \nonstopmode
+  category: Parameters & Tracing
+  signature: \nonstopmode
+  description: Suppresses interactive prompts on error, but still prints messages to the terminal.
+  example: |
+   \nonstopmode
+
+- command: \scrollmode
+  category: Parameters & Tracing
+  signature: \scrollmode
+  description: On error, does not stop for input unless the error is one requiring a decision; scrolls through minor errors.
+  example: |
+   \scrollmode
+
+- command: \errorstopmode
+  category: Parameters & Tracing
+  signature: \errorstopmode
+  description: Default interactive mode; stops and prompts the user on every error.
+  example: |
+   \errorstopmode
+
+- command: \tracingonline
+  category: Parameters & Tracing
+  signature: \tracingonline=<number>
+  description: Controls whether tracing/diagnostic output is sent to the terminal (nonzero) or only to the log file (zero).
+  example: |
+   \tracingonline=1
+
+- command: \tracingcommands
+  category: Parameters & Tracing
+  signature: \tracingcommands=<number>
+  description: When positive, logs every command TeX executes; higher values increase verbosity.
+  example: |
+   \tracingcommands=2
+
+- command: \tracingmacros
+  category: Parameters & Tracing
+  signature: \tracingmacros=<number>
+  description: When positive, logs macro expansions including arguments.
+  example: |
+   \tracingmacros=1
+
+- command: \tracingoutput
+  category: Parameters & Tracing
+  signature: \tracingoutput=<number>
+  description: When positive, shows the contents of shipped-out boxes in the log.
+  example: |
+   \tracingoutput=1
+
+- command: \tracingstats
+  category: Parameters & Tracing
+  signature: \tracingstats=<number>
+  description: When positive, reports memory usage statistics at the end of the run.
+  example: |
+   \tracingstats=1
+
+- command: \tracingparagraphs
+  category: Parameters & Tracing
+  signature: \tracingparagraphs=<number>
+  description: When positive, logs line-breaking decisions during paragraph building.
+  example: |
+   \tracingparagraphs=1
+
+- command: \tracingpages
+  category: Parameters & Tracing
+  signature: \tracingpages=<number>
+  description: When positive, logs page-breaking decisions.
+  example: |
+   \tracingpages=1
+
+- command: \tracingrestores
+  category: Parameters & Tracing
+  signature: \tracingrestores=<number>
+  description: When positive, logs values restored at the end of a group.
+  example: |
+   \tracingrestores=1
+
+- command: \tracinglostchars
+  category: Parameters & Tracing
+  signature: \tracinglostchars=<number>
+  description: When positive, reports characters missing from the current font.
+  example: |
+   \tracinglostchars=1
+
+- command: \showbox
+  category: Parameters & Tracing
+  signature: \showbox<8-bit number>
+  description: Displays the contents of the specified box register in the log/terminal, then deletes nothing (diagnostic only).
+  example: |
+   \showbox0
+
+- command: \showboxbreadth
+  category: Parameters & Tracing
+  signature: \showboxbreadth=<number>
+  description: Limits how many items per level \showbox displays.
+  example: |
+   \showboxbreadth=5
+
+- command: \showboxdepth
+  category: Parameters & Tracing
+  signature: \showboxdepth=<number>
+  description: Limits how many levels deep \showbox displays nested boxes.
+  example: |
+   \showboxdepth=3
+
+- command: \showlists
+  category: Parameters & Tracing
+  signature: \showlists
+  description: Displays the current contents of all active internal lists (contribution list, page list, etc.).
+  example: |
+   \showlists
+
+- command: \show
+  category: Parameters & Tracing
+  signature: \show<token>
+  description: Prints the meaning of the given token to the terminal/log.
+  example: |
+   \show\foo
+
+- command: \showthe
+  category: Parameters & Tracing
+  signature: \showthe<internal quantity>
+  description: Prints the current value of an internal register or parameter.
+  example: |
+   \showthe\baselineskip
+
+- command: \errhelp
+  category: Parameters & Tracing
+  signature: \errhelp=<token list>
+  description: Sets a custom help text shown when \errmessage is triggered and the user asks for help.
+  example: |
+   \errhelp={Check your spacing.}
+
+- command: \errmessage
+  category: Parameters & Tracing
+  signature: \errmessage{<text>}
+  description: Issues a custom error message, halting for input in interactive modes.
+  example: |
+   \errmessage{Something went wrong}
+
+- command: \begingroup
+  category: Miscellaneous
+  signature: \begingroup ... \endgroup
+  description: Opens a semantic group without a corresponding character group; scoping boundary for assignments.
+  example: |
+   \begingroup
+    \def\x{local}
+   \endgroup
+
+- command: \endgroup
+  category: Miscellaneous
+  signature: \endgroup
+  description: Closes a group opened by \begingroup, restoring prior values of local assignments.
+  example: |
+   \begingroup\endgroup
+
+- command: \bgroup
+  category: Miscellaneous
+  signature: \bgroup
+  description: Equivalent to an explicit character-token group opener (catcode 1); often used for math or box grouping.
+  example: |
+   \bgroup x \egroup
+
+- command: \egroup
+  category: Miscellaneous
+  signature: \egroup
+  description: Closes a group opened by \bgroup (catcode 2 equivalent).
+  example: |
+   \bgroup x \egroup
+
+- command: \aftergroup
+  category: Miscellaneous
+  signature: \aftergroup<token>
+  description: Saves a token to be re-inserted into the input immediately after the current group ends.
+  example: |
+   \begingroup
+    \aftergroup\relax
+   \endgroup
+
+- command: \afterassignment
+  category: Miscellaneous
+  signature: \afterassignment<token>
+  description: Saves a token to be inserted immediately after the next assignment completes.
+  example: |
+   \afterassignment\relax
+   \count0=5
+
+- command: \special
+  category: Miscellaneous
+  signature: \special{<text>}
+  description: Passes literal text through to the DVI/PDF driver, unaffected by TeX's typesetting.
+  example: |
+   \special{papersize=210mm,297mm}
+
+- command: \end
+  category: Miscellaneous
+  signature: \end
+  description: Terminates the TeX run after finishing the current page and outputting any remaining material.
+  example: |
+   \end
+
+- command: \dump
+  category: Miscellaneous
+  signature: \dump
+  description: Ends processing and writes a format file (.fmt), used when building custom TeX formats.
+  example: |
+   \dump
+
