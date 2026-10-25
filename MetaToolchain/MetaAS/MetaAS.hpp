@@ -10,6 +10,13 @@
 #include <vector>
 
 namespace metaas {
+namespace detail {
+inline const char *cstring(const std::string &value) {
+    if (value.find('\0') != std::string::npos)
+        throw std::invalid_argument("embedded NUL in MetaAS string argument");
+    return value.c_str();
+}
+} // namespace detail
 inline MetaASOptions options() { MetaASOptions o; metaas_options_init(&o); return o; }
 struct Error : std::runtime_error {
     MetaASError detail;
@@ -29,7 +36,8 @@ public:
     }
 };
 /* Move-only owner. Callbacks are owned by the wrapper and follow it on move.
- * Methods throw Error on C API failure, or std::bad_alloc. Views borrow Results.
+ * Methods throw Error on C API failure, invalid_argument for embedded NULs or
+ * empty callbacks, logic_error for moved-from use, or bad_alloc. Views borrow Results.
  * Same exclusion/reentry rules as the C API; no executable is spawned for builtin. */
 class Assembler {
 public:
@@ -56,20 +64,32 @@ public:
         if (!assembler_) throw Error(error);
     }
     Assembler(Assembler &&) noexcept = default;
-    Assembler &operator=(Assembler &&) noexcept = default;
-    Assembler &include(const std::string &p) { check(metaas_add_include(assembler_.get(), p.c_str())); return *this; }
-    Assembler &lua(const std::string &p) { check(metaas_add_lua(assembler_.get(), p.c_str())); return *this; }
-    Assembler &plugin(const std::string &p) { check(metaas_add_plugin(assembler_.get(), p.c_str())); return *this; }
-    Assembler &define(const std::string &name, int64_t value) { check(metaas_define(assembler_.get(), name.c_str(), value)); return *this; }
+    Assembler &operator=(Assembler &&other) noexcept {
+        if (this != &other) {
+            // Destroy the old handle before destroying its callback captures.
+            assembler_.reset();
+            callbacks_ = std::move(other.callbacks_);
+            assembler_ = std::move(other.assembler_);
+        }
+        return *this;
+    }
+    Assembler &include(const std::string &p) { check(metaas_add_include(assembler_.get(), detail::cstring(p))); return *this; }
+    Assembler &lua(const std::string &p) { check(metaas_add_lua(assembler_.get(), detail::cstring(p))); return *this; }
+    Assembler &plugin(const std::string &p) { check(metaas_add_plugin(assembler_.get(), detail::cstring(p))); return *this; }
+    Assembler &assembler_argument(const std::string &argument) {
+        check(metaas_add_assembler_argument(assembler_.get(), detail::cstring(argument))); return *this;
+    }
+    Assembler &define(const std::string &name, int64_t value) { check(metaas_define(assembler_.get(), detail::cstring(name), value)); return *this; }
     Assembler &directive(const std::string &name, Directive callback) {
         if (!callback) throw std::invalid_argument("empty directive callback");
+        detail::cstring(name);
         callbacks_.push_back(std::make_unique<Directive>(std::move(callback)));
-        auto rc = metaas_register_directive(assembler_.get(), name.c_str(), invoke, callbacks_.back().get());
+        auto rc = metaas_register_directive(assembler_.get(), detail::cstring(name), invoke, callbacks_.back().get());
         if (rc != METAAS_OK) { callbacks_.pop_back(); check(rc); }
         return *this;
     }
     Result compile(std::string_view source, const std::string &file = "<memory>") {
-        auto *r = metaas_compile(assembler_.get(), source.data(), source.size(), file.c_str());
+        auto *r = metaas_compile(assembler_.get(), source.data(), source.size(), detail::cstring(file));
         if (!r) check(METAAS_ERROR);
         return Result(r);
     }

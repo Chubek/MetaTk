@@ -92,3 +92,101 @@ Headers install under `include/metaarch/MetaAS`, libraries under the configured
 library directory. For direct static linking, use the C++ linker with `metaas`,
 `archas`, `metaarch_dsl`, `metaarch`, their configured codec/Lua libraries and the
 platform dynamic-loader library. CMake propagates these dependencies automatically.
+
+## Native C++20 DSL
+
+Include `<MetaAS/MetaAS-DSL.hpp>` and link `MetaAS::dsl`. This header builds on
+`DSLtk.hpp` (selected by `ARCHDB_DSLTK_DIR`); DSLtk supplies pipeline stages, the
+CRTP feature mixin and compile-time string parameters. It adds no runtime library.
+The existing C ABI and `MetaAS.hpp` remain usable without including DSLtk.
+
+```cpp
+#include <MetaAS/MetaAS-DSL.hpp>
+
+using namespace metaas::dsl;
+auto options = metaas::options();
+options.target = "amd64";
+options.backend = METAAS_BUILTIN;
+options.format = METAAS_HEX;
+metaas::Assembler assembler(options);
+
+auto program = Program{}
+    | section(".text") | global("answer") | label("answer")
+    | encode("movimm", {arg<"dst">(reg("rax")), arg<"imm">(imm(42))})
+    | encode("ret");
+auto output = program | compile(assembler, "answer.cpp");
+// output.text() == "48b82a00000000000000c3\n"
+```
+
+The equivalent fluent API is `program.section(...).global(...).label(...)`
+followed by `program.encode(...)` and `program.compile(assembler)`. Encoder and
+register names come from the chosen architecture database. The same program can
+be compiled against multiple targets when they expose compatible encoders.
+`arg("name", value)` is the runtime-name equivalent of `arg<"name">(value)`.
+
+| API | Contract |
+| --- | --- |
+| `reg(name)` | Owns a validated physical-register identifier; resolved by the compiler. |
+| `imm(value)` | Accepts integral values fitting signed 64 bits; rejects bool and floating point. |
+| `symbol(name, addend)` | An owned relocation reference with a signed addend. |
+| `encode(name, bindings)` | Uses low-level encoder constraints; parameter names are explicit. |
+| `form(index, bindings)` | Also checks declared form operand constraints; binding order follows form operands. |
+| `section`, `global`, `label` | Validated identifiers; section names start with a dot; duplicate labels fail. |
+| `align(bytes)` | Power of two, from 1 through 65536, in bytes. |
+| `data(Width, {values...})` | Byte/word/long_/quad target-endian integers, with width checks. |
+| `bytes(span)`, `ascii(string_view)` | Literal byte data; empty inputs do nothing. No terminator is added. |
+| `source()`, `size()`, `empty()`, `clear()` | Inspect generated source/statement count or reset the program. |
+
+For example, RISC-V form 11 accepts
+`form(11, {arg("rd", reg("x10")), arg("rs1", reg("x10")), arg("imm", imm(-1))})`.
+Form indices belong to the selected specification, not to a stable instruction
+numbering API. Symbol bindings currently require `encode`, because the underlying
+form API does not accept symbolic inputs. Use JSON or object output to retain
+relocations; flat byte/hex output rejects unresolved relocations.
+
+`data` accepts signed minima through unsigned maxima for 8/16/32-bit fields;
+quad values are signed `int64_t`. Use `bytes` for other 64-bit bit patterns.
+`ascii` emits numeric byte directives, so quotes, newlines, NUL, invalid UTF-8,
+comment markers and Lua template delimiters remain literal data. Integer rendering
+is locale-independent. Arbitrary native assembly, macros, Lua and custom directive
+invocations remain available through `assembler.compile(source, file)`.
+
+Programs own all their input text. Copies are independent; moving leaves the
+source program empty and reusable. Fluent operations validate before appending;
+failed operations leave the program unchanged. Pipeline stages own their names
+and bindings and can be reused. Passing an lvalue program to a stage copies it;
+passing an rvalue moves it. The terminal `compile(assembler)` stage **borrows** the
+assembler, which must outlive its invocations. Output retains MetaAS result
+ownership and survives assembler destruction.
+
+`Program({max_source_bytes, max_statements})` bounds generated source (default
+16 MiB / 1,000,000 statements). These builder limits are separate from the
+assembler's source, output and expansion limits. One generated line is one
+statement; diagnostics use the supplied filename and generated line/column.
+Identifiers and bindings are validated during construction, while target-specific
+registers, form ranges and encoders are checked during compilation.
+
+Builder misuse throws `std::invalid_argument`, range failures throw
+`std::out_of_range`, and resource limits throw `std::length_error`. Compilation
+throws `metaas::Error` with the existing diagnostic record. Allocation can throw
+`std::bad_alloc`. Const program reads permit concurrency; mutations and operations
+on an assembler require caller synchronization.
+
+The ownership wrapper also provides `Assembler::assembler_argument`, rejects
+embedded NULs in its string setters and diagnostic filename, and destroys the old
+assembler before releasing callback captures on move assignment. C option strings
+remain ordinary NUL-terminated strings. A moved-from assembler rejects operations
+with `std::logic_error`.
+
+Build and run the standalone example and tests from the MetaToolchain root:
+
+```sh
+cmake -S . -B build -DARCHDB_BUILD_METAAS=ON \
+  -DARCHDB_DSLTK_DIR=/mnt/nvme/metatk/DSLtk
+cmake --build build --parallel 4
+ctest --test-dir build --output-on-failure -R 'metaas_dsl|embedding|archas'
+```
+
+CMake installs the new header and DSLtk beside the existing MetaAS include tree.
+`MetaAS::dsl` is an in-tree CMake target, like the existing `MetaAS::metaas`;
+installed consumers currently use the documented direct-link dependencies.
