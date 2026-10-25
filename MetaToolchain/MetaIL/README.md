@@ -52,6 +52,13 @@ auto text = context.emit(optimized.module);
 auto imported = context.parse(text);       // Text and native DSL interoperate.
 ```
 
+The native DSL also supports const DSLtk visitors, simultaneous variable
+substitution, and checked DSLtk rule sets through `metail::rewrite` and
+`metail::rewrite_expressions`. Rewrites validate intermediate results, enforce
+pass/application budgets, and return independent values with change counts.
+See [DSLtk integration](manual/22-dsltk-integration.md) for the API and semantic
+requirements on custom rules.
+
 The [40-chapter manual](manual/README.md) covers all three interfaces, ownership,
 semantics, analyses, kernels, deployment, and complete examples.
 `KernelRegistry.hpp` offers validated `.optk` declarations

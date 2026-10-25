@@ -1,5 +1,62 @@
 # Numeric integration verification
 
+## Checked DSLtk integration follow-up
+
+The native API now uses DSLtk visitors and rewrite sets in addition to AST
+builders. It provides const visitation, simultaneous variable substitution,
+checked expression rewriting, and module-wide expression rewriting with an
+application budget shared across statements. Intermediate replacements and
+completed passes are validated. Imported leaves with hidden children and operator
+tags containing embedded NULs are rejected.
+
+The pre-change baseline passed 14/14 tests in 4.42 seconds. The suite now has 16
+CTest cases, including 1,680 native rewrite comparisons through the existing Lua
+signed-64 evaluator. Cases cover boundary values, deterministic random values,
+wraparound, division/shift traps, selected branches, and ordered calls. The
+parser-disabled test also exercises the new native APIs. All 230 existing
+Optikern rewrites still fire and verify across 183,473 cases (2,470 effect/trap
+cases); all 321 generated kernels remain reproducible.
+
+Final verification (all compiler configurations use warnings as errors):
+
+| Configuration | Result | Time |
+|---|---:|---:|
+| GCC 16 Release | 16/16 | 4.56 s |
+| Clang 22 Release | 16/16 | 4.64 s |
+| GCC ASan + UBSan | 16/16 | 14.12 s |
+| Clang ASan + UBSan | 16/16 | 13.31 s |
+
+Regression tests cover identity rules, empty rule sets, cycles, application and
+pass exhaustion, malformed intermediate replacements, aggregate depth/node
+limits, metadata isolation, simultaneous/cyclic substitution, visitor order,
+module input immutability, and the shared application budget. Custom native
+rules remain responsible for semantic correctness; the adapter checks structure
+and bounded convergence, not arbitrary C++ callback behavior.
+
+An installed-package consumer built with `find_package(MetaIL CONFIG REQUIRED)`
+passed the new native regression test using the installed headers, library, and
+runtime. Its emitted corpus also passed the Lua semantic checker through the
+installed CLI.
+
+Reproduce the primary checks:
+
+```sh
+cmake -S . -B build
+cmake --build build
+ctest --test-dir build --output-on-failure
+build/metail verify
+python3 tools/generate_kernels.py --check
+```
+
+For strict builds, use separate trees with `-DCMAKE_BUILD_TYPE=Release` and both
+`CMAKE_C_FLAGS` and `CMAKE_CXX_FLAGS` set to
+`-Wall -Wextra -Wpedantic -Werror`. For sanitizer builds, use `Debug` and append
+`-fsanitize=address,undefined -fno-omit-frame-pointer` to both flags. Select Clang
+with `-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++`. LeakSanitizer needs an
+environment that permits process inspection: the sandbox's ptrace restrictions
+caused its initial run to fail, so sanitizer CTest runs used approved execution
+outside that sandbox, with leak checking enabled.
+
 ## Structured IR, DSLtk, and manual follow-up
 
 The structured API adds C descriptor construction/export, DSLtk-backed C++20

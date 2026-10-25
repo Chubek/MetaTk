@@ -37,6 +37,20 @@ and loops execute while constructing the IR; use `branch`/`jump` for IR control
 flow. The C++20 requirement applies to `MetaIL.hpp` and `KernelRegistry.hpp`; the
 C API remains C11. Existing text-based Context overloads remain supported.
 
+`Expr::visit(visitor, order)` runs a DSLtk visitor over const AST nodes.
+`Expr::substitute(bindings)` returns a simultaneous variable substitution.
+`metail::rewrite(expr, rules, limits)` returns a `RewriteResult` containing
+`expression`, `passes`, and `applications`. `metail::rewrite_expressions` applies
+the same rules to all module expressions and returns `ModuleRewriteResult`
+containing `module`, `expressions`, `passes`, and `applications`.
+These operations own their results and leave inputs unchanged, with no Lua
+context required. `RewriteLimits` defaults to 100 passes per expression and
+10,000 applications (shared across a module). Malformed replacement trees and
+budget exhaustion throw `metail::Error`; callback exceptions propagate.
+The checks enforce structure and termination bounds, not semantic equivalence.
+See the [DSLtk chapter](../manual/22-dsltk-integration.md) for traversal order,
+convergence, substitution, and effect/trap obligations.
+
 ## Build and consume
 
 The C11 implementation in `MetaIL.c` embeds the genuine Lua 5.4 runtime and calls

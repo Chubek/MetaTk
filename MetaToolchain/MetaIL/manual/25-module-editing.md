@@ -31,4 +31,11 @@ The const `Expr::ast()` view prevents silently bypassing expression validation.
 To transform a tree yourself, copy its AST, modify the copy using DSLtk, then
 reconstruct it with `Expr::from_ast` before replacing the expression.
 
+For a batch of DSLtk rules, `metail::rewrite_expressions(module, rules)` returns
+an independent module plus expression/pass/application counts. It visits every
+statement with an expression, including `let`, `eval`, `assume`, branches, and
+returns. Its application budget covers the whole module. If a rule fails, the
+input module remains unchanged. Validate the resulting module with
+`context.check(result.module)` to catch unbound variables introduced by a rule.
+
 [Contents](README.md) · [Next: Interoperability](26-interoperability.md)

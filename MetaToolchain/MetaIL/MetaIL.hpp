@@ -2,15 +2,23 @@
 #define METAIL_HPP
 #include "MetaIL.h"
 #include <DSLtk.hpp>
+#include <algorithm>
 #include <charconv>
 #include <concepts>
+#include <cstdint>
 #include <deque>
 #include <fstream>
+#include <limits>
+#include <map>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <tuple>
 #include <utility>
+#include <vector>
 
 namespace metail {
 class Error : public std::runtime_error {
@@ -33,6 +41,8 @@ class Expr : public ::dsl::DSL<Expr, ::dsl::AST> {
     ::dsl::ASTNode tree_;
     static void validate(const ::dsl::ASTNode &n, unsigned depth, std::size_t &count) {
         if (depth>256 || ++count>200000) throw Error("expression exceeds IR limits");
+        if (n.is_leaf() && n.size()) throw Error("expression leaf has children");
+        if (n.tag().find('\0')!=std::string_view::npos) throw Error("embedded NUL in expression tag");
         if (n.tag()=="int" && n.is_leaf()) {
             std::int64_t value=0;
             const auto &s=n.value();auto result=std::from_chars(s.data(),s.data()+s.size(),value);
@@ -41,7 +51,7 @@ class Expr : public ::dsl::DSL<Expr, ::dsl::AST> {
             detail::identifier(n.value());
             if (n.value()=="true" || n.value()=="false") throw Error("reserved variable name");
         } else if (n.tag()=="call" && !n.is_leaf()) {
-            if (!n.size() || n.child(0).tag()!="callee" || !n.child(0).is_leaf()) throw Error("call requires a callee leaf");
+            if (!n.size() || n.child(0).tag()!="callee" || !n.child(0).is_leaf() || n.child(0).size()) throw Error("call requires a callee leaf");
             const auto &name=n.child(0).value();detail::identifier(name);
             if (metail_operator_arity(name.c_str())>=0 || name=="true" || name=="false") throw Error("reserved call name");
             for (std::size_t i=1;i<n.size();++i) validate(n.child(i),depth+1,count);
@@ -79,6 +89,22 @@ public:
     const ::dsl::ASTNode &ast() const noexcept { return tree_; }
     bool same_as(const Expr &other) const { return tree_==other.tree_; }
     std::string dump() const { return tree_.dump(); } // DSLtk S-expression debug view.
+    // DSLtk visitors receive const nodes, including the call's callee metadata.
+    // References passed to callbacks are borrowed for the duration of this call.
+    template<class Visitor>
+    void visit(Visitor &visitor, ::dsl::VisitOrder order=::dsl::VisitOrder::Preorder) const {
+        visitor.walk(tree_,order);
+    }
+    // Simultaneous syntactic substitution: inserted trees are not visited again.
+    // This is not a semantics-preserving optimization (effects may be duplicated).
+    Expr substitute(const std::map<std::string,Expr> &bindings) const {
+        for (const auto &[name,value]:bindings) { (void)value;detail::identifier(name); }
+        auto rules=::dsl::rewrite_set(::dsl::rule<"substitute-variable">(
+            [&](const auto &n) { return n.tag()=="var" && bindings.contains(n.value()); },
+            [&](const auto &n) { return bindings.at(n.value()).ast(); }));
+        rules.max_iterations=1;
+        return from_ast(rules.apply(tree_));
+    }
 #define METAIL_BINARY_OPERATOR(symbol, tag) \
     friend Expr operator symbol(const Expr &a, const Expr &b) { return Expr(make_node<tag>(a.tree_,b.tree_)); }
     METAIL_BINARY_OPERATOR(+, "add")
@@ -111,6 +137,54 @@ inline Expr select(const Expr &condition, const Expr &yes, const Expr &no) {
 // Named logical builders avoid suggesting C++ short-circuit evaluation.
 inline Expr land(const Expr &a, const Expr &b) { return Expr::operation("land",{a,b}); }
 inline Expr lor(const Expr &a, const Expr &b) { return Expr::operation("lor",{a,b}); }
+
+struct RewriteLimits {
+    std::size_t max_passes=100; // Per expression; must be positive.
+    std::size_t max_applications=10000;
+};
+struct RewriteResult {
+    Expr expression;
+    std::size_t passes; // Includes the final pass that proves convergence.
+    std::size_t applications; // Structural changes, not identity matches.
+};
+
+// Checked, owning DSLtk rewrite result. Rules run bottom-up in declaration order.
+// Every replacement and completed pass is validated. No partial result escapes
+// on failure; callbacks' external side effects cannot be rolled back. Rules must
+// preserve signed-64 arithmetic, evaluation order, effects and traps themselves.
+// The explicit limits here supersede RewriteSet::max_iterations.
+template<class... Rules>
+RewriteResult rewrite(const Expr &input, const ::dsl::RewriteSet<Rules...> &rules,
+                      RewriteLimits limits={}) {
+    if (!limits.max_passes) throw Error("rewrite pass limit must be positive");
+    std::size_t applications=0;
+    auto checked=[&](const auto &rule) {
+        return ::dsl::rule<"checked-metail-rule">(
+            [](const auto &n) { return n.tag()!="callee"; },
+            [&](const ::dsl::ASTNode &n) {
+                auto replacement=rule.try_apply(n);
+                if (!replacement) return n;
+                try {
+                    auto valid=Expr::from_ast(std::move(*replacement));
+                    if (valid.ast()==n) return n;
+                    if (applications==limits.max_applications) throw Error("rewrite application limit exceeded");
+                    ++applications;
+                    return valid.ast();
+                } catch (const Error &error) {
+                    throw Error("rewrite rule "+std::string(rule.name)+": "+error.what());
+                }
+            });
+    };
+    auto guarded=std::apply([&](const auto &...rule) { return ::dsl::rewrite_set(checked(rule)...); },rules.rules);
+    guarded.max_iterations=1;
+    Expr current=input;
+    for (std::size_t pass=0;pass<limits.max_passes;++pass) {
+        const auto before=applications;
+        current=Expr::from_ast(guarded.apply(current.ast()));
+        if (applications==before) return {std::move(current),pass+1,applications};
+    }
+    throw Error("rewrite pass limit exceeded before convergence");
+}
 
 struct Statement {
     metail_stmt_kind kind;
@@ -150,6 +224,32 @@ struct Module {
     }
 };
 struct ModuleOptimizationResult { Module module; std::string stats; };
+
+struct ModuleRewriteResult {
+    Module module;
+    std::size_t expressions=0, passes=0, applications=0;
+};
+// Rewrites all expression-bearing statements in an independent module copy.
+// The application budget is shared by the entire module. Names, control flow
+// and bindings are unchanged; Context::check still validates the whole program.
+template<class... Rules>
+ModuleRewriteResult rewrite_expressions(const Module &input,
+        const ::dsl::RewriteSet<Rules...> &rules, RewriteLimits limits={}) {
+    if (!limits.max_passes) throw Error("rewrite pass limit must be positive");
+    ModuleRewriteResult result{input};
+    for (auto &function:result.module.functions) {
+        for (auto &statement:function.statements) {
+            if (!statement.expr) continue;
+            auto rewritten=rewrite(*statement.expr,rules,
+                {limits.max_passes,limits.max_applications-result.applications});
+            statement.expr=std::move(rewritten.expression);
+            ++result.expressions;
+            result.passes+=rewritten.passes;
+            result.applications+=rewritten.applications;
+        }
+    }
+    return result;
+}
 
 namespace detail {
 // Descriptors borrow strings from the value model for one protected C call.

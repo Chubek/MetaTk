@@ -74,6 +74,9 @@ add_test(NAME structured-c COMMAND metail_test_structured ${CMAKE_CURRENT_SOURCE
 add_executable(metail_test_native_dsl tests/test_native_dsl.cpp)
 target_link_libraries(metail_test_native_dsl PRIVATE MetaIL::MetaIL)
 add_test(NAME native-dsl COMMAND metail_test_native_dsl ${CMAKE_CURRENT_SOURCE_DIR})
+add_executable(metail_test_dsl_rewrite tests/test_dsl_rewrite.cpp)
+target_link_libraries(metail_test_dsl_rewrite PRIVATE MetaIL::MetaIL)
+add_test(NAME dsl-rewrite COMMAND metail_test_dsl_rewrite ${CMAKE_CURRENT_SOURCE_DIR})
 option(METAIL_BUILD_EXAMPLES "Build C++ API examples" ON)
 if(METAIL_BUILD_EXAMPLES)
   foreach(example controlflow gcd kernels native_dsl)
@@ -84,7 +87,10 @@ if(METAIL_BUILD_EXAMPLES)
 endif()
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
 add_test(NAME parser-free-ir COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/parser_free.py
-  $<TARGET_FILE:metail_test_structured> $<TARGET_FILE:metail_test_native_dsl>)
+  $<TARGET_FILE:metail_test_structured> $<TARGET_FILE:metail_test_native_dsl> $<TARGET_FILE:metail_test_dsl_rewrite>)
+add_test(NAME dsl-rewrite-semantics COMMAND ${Python3_EXECUTABLE}
+  ${CMAKE_CURRENT_SOURCE_DIR}/tests/dsl_semantics.py
+  $<TARGET_FILE:metail_test_dsl_rewrite> $<TARGET_FILE:metail>)
 add_test(NAME integration COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/run.sh $<TARGET_FILE:metail>)
 add_test(NAME numeric-binding COMMAND metail lua ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_numeric.lua $<TARGET_FILE:metanum_native>)
 add_test(NAME runtime-hardening COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/runtime_tests.py $<TARGET_FILE:metail>)
