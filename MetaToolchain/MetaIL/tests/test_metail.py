@@ -26,13 +26,47 @@ assert len({k['name'] for k in all_kernels['kernels']}) == 321
 assert sum(k['kind'] == 'analysis' for k in all_kernels['kernels']) == 84
 assert sum(k['kind'] == 'rewrite' for k in all_kernels['kernels']) == 230
 assert sum(k['kind'] == 'builtin' for k in all_kernels['kernels']) == 7
-assert len(list((root/'optimize-kernels/numeric').glob('*.optk'))) == 120
+names=[k['name'] for k in all_kernels['kernels']]
+assert names == sorted(names)
+for kernel in all_kernels['kernels']:
+    assert Path(kernel['path']).is_file(),kernel
+    assert kernel['kind'] in kernel['tags'],kernel
+    assert kernel['uses'] and kernel['keywords'],kernel
+numeric=json.loads(run('kernels','--tag','NUMERIC','--tag','statistics','--kind','analysis','--json'))
+assert numeric['count']==24
+strength=json.loads(run('kernels','--search','multiply power','--tag','strength-reduction',
+                        '--use','shifts','--kind','rewrite','--json'))
+assert strength['count']>0
+for kernel in strength['kernels']:
+    assert 'strength-reduction' in kernel['tags']
+assert not run('kernels','--tag','no-such-tag','--paths')
+assert json.loads(run('kernels','--tag','no-such-tag','--json'))=={'count':0,'kernels':[]}
+exact=run('kernels','--search','AddZeroRight','--source')
+assert 'add($x,0)' in exact and 'AddZeroRight.optk' in exact
+assert len(run('kernels','--search','AddZeroRight','--paths').splitlines())==1
+for args in [('kernels','--json','--paths'),('kernels','--search'),('kernels','--kind','unknown'),
+             ('kernels','--out','unused'),('verify','extra')]:
+    run(*args,ok=False)
+# Numeric kernels live alongside the base declarations in the committed layout.
+assert len(list((root/'optimize-kernels').glob('Numeric*.optk'))) == 120
 assert 'selftest ok' in run('selftest')
 assert 'verified 230 rewrites' in run('verify')
 assert 'valid MetaIL' in run('check',root/'examples/arithmetic.mi')
 emitted = run('emit',root/'examples/arithmetic.mi')
 scratch = '/tmp/opencode' if Path('/tmp/opencode').is_dir() else None
 with tempfile.TemporaryDirectory(prefix='metail-',dir=scratch) as d:
+    custom=Path(d)/'custom kernels';custom.mkdir()
+    (custom/'custom.optk').write_text('''local K = lkopt.optimizer.new "ProjectIdentity"
+K:rewrite { pattern = "add($x,0)", replace = "$x" }
+K:metadata { keywords = {"widgets"}, tags = {"project"}, uses = {"reduce widget cost"} }
+''')
+    selected=json.loads(run('kernels','--kernel-dir',custom,'--search','widgets','--tag','project',
+                            '--use','reduce cost','--json'))
+    assert selected['count']==1 and selected['kernels'][0]['name']=='ProjectIdentity'
+    custom_input=Path(d)/'custom.mi';custom_input.write_text('fn f(x) { return x+0; }')
+    assert 'return x;' in run('optimize',custom_input,'--kernel-dir',custom,'--passes','ProjectIdentity')
+    for passes in ('',',','AddZeroRight,',',AddZeroRight','AddZeroRight,,ConstantFolding'):
+        run('optimize',custom_input,'--passes',passes,ok=False)
     fn=Path(d)/'roundtrip.mi';fn.write_text(emitted)
     assert 'valid MetaIL' in run('check',fn)
     optimized = run('optimize',fn)

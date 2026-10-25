@@ -220,7 +220,7 @@ for width in (8,16,24,32,40,48):
 
 assert len(rewrites)==96
 for name,pat,repl,guard,_ in rewrites:
- emit(root/'numeric'/(name+'.optk'),
+ emit(root/(name+'.optk'),
   '-- Signed-64 numeric rewrite; preserve wraparound, evaluation order, and traps.\n'
   f'local K = lkopt.optimizer.new "{name}"\n'
   f'K:rewrite {{ pattern = "{pat}", replace = "{repl}", guard = "{guard}" }}\n')
@@ -231,7 +231,7 @@ for source in ('Literals','ExpressionSizes'):
   name=f'Numeric{source}{statistic}'
   assert name not in used
   used.add(name)
-  emit(root/'numeric'/(name+'.optk'),
+  emit(root/(name+'.optk'),
    '-- Descriptive numeric analysis computed by MetaNum/numeric.hpp.\n'
    f'local K = lkopt.optimizer.new "{name}"\n'
    f'K:analysis {{ kind = "numeric-statistic", source = "{source}", statistic = "{statistic}" }}\n')

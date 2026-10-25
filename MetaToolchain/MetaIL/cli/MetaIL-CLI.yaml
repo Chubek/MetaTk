@@ -1,0 +1,53 @@
+# Command contract for the metail executable; implemented by cli/metail.c and
+# lua/metail/cli.lua. Option names below are literal command-line spellings.
+name: metail
+summary: Parse, analyze and optimize scalar signed-64 MetaIL programs
+runtime: Lua 5.4
+environment:
+  METAIL_HOME: Runtime root containing lua/ and optimize-kernels/
+exit_codes:
+  0: Success (including a kernel search with no matches)
+  1: Invalid input, options, I/O or runtime execution failure
+  2: Invalid native entry arguments or runtime initialization failure
+commands:
+  help:
+    aliases: [--help, -h]
+  check:
+    positional: [program.mi]
+  emit:
+    positional: [program.mi]
+    options:
+      --out: Output path; dash means stdout
+  kernels:
+    options:
+      --search: All whitespace-separated literal keywords, case-insensitive
+      --tag: Exact tag, case-insensitive; repeat to require multiple tags
+      --use: All whitespace-separated terms in use-case descriptions
+      --kind: analysis, rewrite or builtin
+      --kernel-dir: Additional directory of validated .optk declarations
+      --json: Print metadata and match count as JSON
+      --paths: Print matching .optk file paths, one per line
+      --source: Print matching .optk contents with path comments
+    mutually_exclusive: [--json, --paths, --source]
+    ordering: Kernel name, ascending
+  optimize:
+    positional: [program.mi]
+    options:
+      --passes: all (default) or comma-separated transformation names
+      --repeat: Integer from 1 to 12; default 2
+      --out: Output path; dash means stdout
+      --stats: JSON change-count output path
+      --kernel-dir: Additional directory of validated .optk declarations
+  analyze:
+    positional: [program.mi]
+    options:
+      --passes: all (default) or comma-separated analysis names
+      --out: JSON output path; dash means stdout
+      --kernel-dir: Additional directory of validated .optk declarations
+  selftest:
+    summary: Smoke-test parsing, emission and kernel inventory
+  verify:
+    summary: Require every declarative rewrite to fire and preserve boundary/effect/trap semantics
+  lua:
+    positional: [script.lua]
+    summary: Run a Lua script with native MetaIL and MetaNum bindings; trailing arguments are in arg

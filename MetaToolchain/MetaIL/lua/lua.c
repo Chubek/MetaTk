@@ -18,12 +18,16 @@ static int root_is_valid(const char *base) {
     int n = snprintf(path, sizeof path, "%s/lua/metail/cli.lua", base);
     return n > 0 && (size_t)n < sizeof path && is_file(path);
 }
-static int find_root(const char *argv0, char *out, size_t size) {
+int metail_find_root(const char *argv0, const char *home, char *out, size_t size) {
+    if (home) {
+        if (strlen(home)>=size || !root_is_valid(home)) return 0;
+        memcpy(out,home,strlen(home)+1); return 1;
+    }
     const char *env = getenv("METAIL_HOME");
-    if (env && root_is_valid(env)) { snprintf(out,size,"%s",env); return 1; }
+    if (env) return metail_find_root(argv0,env,out,size);
     if (root_is_valid(".")) { snprintf(out,size,"."); return 1; }
     /* Compiled build and installed binaries: ../ relative to exe. */
-    const char *slash = strrchr(argv0, '/');
+    const char *slash = argv0 ? strrchr(argv0, '/') : NULL;
     if (slash) {
         size_t n = (size_t)(slash - argv0);
         if (n + 4 < size) {
@@ -37,6 +41,11 @@ static int find_root(const char *argv0, char *out, size_t size) {
             if (root_is_valid(out)) return 1;
         }
     }
+#ifdef METAIL_INSTALL_ROOT
+    if (strlen(METAIL_INSTALL_ROOT)<size && root_is_valid(METAIL_INSTALL_ROOT)) {
+        snprintf(out,size,"%s",METAIL_INSTALL_ROOT); return 1;
+    }
+#endif
 #ifdef METAIL_SOURCE_ROOT
     if (root_is_valid(METAIL_SOURCE_ROOT)) { snprintf(out,size,"%s",METAIL_SOURCE_ROOT); return 1; }
 #endif
@@ -44,7 +53,7 @@ static int find_root(const char *argv0, char *out, size_t size) {
 }
 int metail_lua_main(int argc, char **argv) {
     char root[PATH_MAX], entry[PATH_MAX];
-    if (!find_root(argv[0], root, sizeof root)) {
+    if (!metail_find_root(argv[0], NULL, root, sizeof root)) {
         fputs("metail: cannot locate lua/metail/cli.lua (set METAIL_HOME)\n", stderr);
         return 2;
     }
@@ -73,4 +82,3 @@ int metail_lua_main(int argc, char **argv) {
     lua_close(L);
     return ok && code>=0 && code<=255 ? (int)code : 0;
 }
-int main(int argc, char **argv) { return metail_lua_main(argc,argv); }

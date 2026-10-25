@@ -58,8 +58,8 @@ for upstream GSL/ISL/PPL APIs, not executable bindings to those libraries.
 
 ## The 120 added kernels
 
-All are generated in `optimize-kernels/numeric/`. The directory name follows the
-existing project layout. Select each by its registered name via `--passes`.
+All are generated as `optimize-kernels/Numeric*.optk`, alongside the base kernels.
+Select each by its registered name via `--passes`.
 
 ### 24 MetaNum-backed analyses
 

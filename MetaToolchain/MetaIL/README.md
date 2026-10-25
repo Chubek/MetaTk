@@ -2,7 +2,7 @@
 
 MetaIL is a **scaffolded compiler IR and text language** driven by executable **Optikern Lua 5.4 analysis and rewriting kernels**. The upload contained only four empty files and one kernel declaration; this tree fills those files and adds a C host, parser, AST, CFG analyses, transformations, CLI, tests, examples, documentation, and generated kernel definitions.
 
-**Kernel inventory:** 321 `.optk` files: the original `ConstantFolding.optk`, 200 base kernels, and **120 numeric kernels** in `optimize-kernels/numeric/`. Totals: 84 analyses, 230 expression rewrites, and 7 procedural optimizations. The numeric additions comprise 96 signed-64 rewrites and 24 analyses backed by MetaNum's executable statistics APIs. `metail verify` checks every rewrite for boundary-value, effect, and trap equivalence and requires every rule to fire.
+**Kernel inventory:** 321 `.optk` files: the original `ConstantFolding.optk`, 200 base kernels, and **120 numeric kernels** named `optimize-kernels/Numeric*.optk`. Totals: 84 analyses, 230 expression rewrites, and 7 procedural optimizations. The numeric additions comprise 96 signed-64 rewrites and 24 analyses backed by MetaNum's executable statistics APIs. `metail verify` checks every rewrite for boundary-value, effect, and trap equivalence and requires every rule to fire.
 
 ## Build and test
 
@@ -33,6 +33,54 @@ The `lua/lua_compat.h` file contains only the subset of the public Lua 5.4 ABI d
 ```
 
 By default, `optimize` runs all transformations in up to two rounds, with a final constant-fold, branch, dead-assignment and unreachable-block cleanup in each round. `analyze` runs all analyzers or selected analyzers, outputting stable JSON. The interpreter looks for `METAIL_HOME`, the source directory, an installed share directory, or the configured build source root.
+
+## C/C++ API and kernel discovery
+
+`MetaIL.h` exposes independent runtime contexts, validation, emission, optimization,
+analysis, and kernel metadata. `MetaIL.hpp` supplies the move-only C++17
+`metail::Context` wrapper. `KernelRegistry.hpp` offers validated `.optk` declarations
+by keywords, tags, and use case, returning paths or reading file contents on demand:
+
+```cpp
+#include <KernelRegistry.hpp>
+
+metail::Context context; // Or pass an explicit runtime root.
+metail::KernelRegistry registry(context);
+metail::KernelQuery query;
+query.keywords = "multiply power";
+query.tags = {"strength-reduction"};
+query.use = "shifts";
+query.kind = "rewrite";
+
+auto files = registry.request(query); // Kernel metadata plus .optk contents.
+auto passes = registry.passes(registry.search(query));
+auto result = context.optimize("fn scale(x) { return x * 8; }", passes);
+// result.source contains the rewritten MetaIL; result.stats contains JSON.
+```
+
+Search combines all filters with AND and returns results sorted by kernel name.
+Keywords/use-case terms are case-insensitive literal substrings; tags match exactly
+(case-insensitive). Empty queries return all kernels; unmatched queries return an
+empty list. Registries own their metadata and can outlive their originating context.
+Built-in tags include `analysis`, `rewrite`, `builtin`, `signed-64`, `scalar`,
+`numeric`, `statistics`, `metanum`, `strength-reduction`, `control-flow`, and `dataflow`.
+
+```sh
+build/metail kernels --search 'multiply power' --tag strength-reduction --use shifts --paths
+build/metail kernels --tag numeric --tag statistics --kind analysis --json
+build/metail kernels --search AddZeroRight --source
+build/metail_example_controlflow
+build/metail_example_gcd
+build/metail_example_kernels
+```
+
+CMake consumers use `add_subdirectory(...)` or, after installation,
+`find_package(MetaIL CONFIG REQUIRED)` and link `MetaIL::MetaIL`. The static library
+includes the C++ MetaNum binding, so enable CXX in CMake consumers (even when their
+application source is C), or use a C++ linker when linking manually. Runtime Lua
+files and kernels must remain available. See [docs/API.md](docs/API.md) for ownership,
+custom metadata, installation, and a C example. The CLI contract is recorded in
+[`cli/MetaIL-CLI.yaml`](cli/MetaIL-CLI.yaml).
 
 ## MetaIL syntax
 

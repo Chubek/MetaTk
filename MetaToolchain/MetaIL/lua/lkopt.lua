@@ -15,6 +15,26 @@ end
 function M.optimizer.new(name)
   check(name)
   local k={name=name,kind=nil}
+  function k:metadata(cfg)
+    assert(type(cfg)=='table','metadata requires a table')
+    for key,value in pairs(cfg) do
+      assert(key=='description' or key=='keywords' or key=='tags' or key=='uses','unknown metadata key '..tostring(key))
+      if key=='description' then
+        assert(type(value)=='string' and not value:find('%z'),'description must be a string without NUL')
+      else
+        assert(type(value)=='table',key..' must be a string list')
+        local count=0
+        for i,item in pairs(value) do
+          count=count+1
+          assert(math.type(i)=='integer' and i>=1 and i<=#value,'metadata must be a dense list')
+          assert(type(item)=='string' and item:match('%S') and not item:find('[%z\r\n]'),
+            'metadata items must be nonempty single-line strings')
+        end
+        assert(count==#value,'metadata must be a dense list')
+      end
+    end
+    self.meta=ir.copy(cfg);return self
+  end
   function k:rewrite(cfg)
     assert(not self.kind,'kernel kind already declared')
     assert(type(cfg)=='table' and type(cfg.pattern)=='string' and type(cfg.replace)=='string', 'rewrite requires pattern and replace')
@@ -58,6 +78,7 @@ function M.load(path)
     assert(#M.order==before+1,'must register exactly one kernel')
     local k=M.registered[M.order[#M.order]]
     assert(k.kind~=nil,'must declare :rewrite, :analysis, or :builtin')
+    k.path=path
     return k
   end)
   if not ok then
