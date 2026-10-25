@@ -5,6 +5,51 @@ local operators = {
   neg=1,bnot=1,lnot=1,select=3,
 }
 M.operators=operators
+-- Shared structural checks for parser-built and native-built programs.
+function M.validate(program)
+  local count=0
+  local function item()
+    count=count+1;assert(count<=200000,'IR item limit exceeded')
+  end
+  local function identifier(name)
+    assert(type(name)=='string' and name:match('^[A-Za-z_][A-Za-z0-9_]*$'),'invalid IR identifier: '..tostring(name))
+  end
+  local function expr(n,depth)
+    item();assert(depth<=256,'IR expression depth limit exceeded')
+    assert(type(n)=='table','expression must be a table')
+    if n.tag=='int' then assert(math.type(n.value)=='integer','literal must be signed-64 integer')
+    elseif n.tag=='var' then
+      identifier(n.name);assert(n.name~='true' and n.name~='false','boolean literal names cannot be variables')
+    elseif n.tag=='op' or n.tag=='call' then
+      assert(type(n.args)=='table','expression arguments required')
+      if n.tag=='op' then assert(operators[n.op] and #n.args==operators[n.op],'invalid operator or arity')
+      else
+        identifier(n.name)
+        assert(not operators[n.name] and n.name~='true' and n.name~='false','reserved call name: '..n.name)
+      end
+      for _,arg in ipairs(n.args) do expr(arg,depth+1) end
+    else error('invalid expression tag: '..tostring(n.tag)) end
+  end
+  assert(type(program)=='table' and type(program.functions)=='table' and #program.functions>0,'module requires at least one function')
+  if program.module then identifier(program.module) end
+  for _,f in ipairs(program.functions) do
+    item();identifier(f.name)
+    for _,p in ipairs(f.params) do item();identifier(p) end
+    for _,s in ipairs(f.statements) do
+      item()
+      if s.kind=='let' then identifier(s.name);expr(s.expr,1)
+      elseif s.kind=='return' or s.kind=='eval' or s.kind=='assume' then expr(s.expr,1)
+      elseif s.kind=='label' then
+        identifier(s.name)
+        assert(not ({let=true,['return']=true,eval=true,assume=true,['goto']=true,br=true})[s.name],
+          'reserved label name: '..s.name)
+      elseif s.kind=='goto' then identifier(s.target)
+      elseif s.kind=='br' then expr(s.expr,1);identifier(s.yes);identifier(s.no)
+      else error('invalid statement kind: '..tostring(s.kind)) end
+    end
+  end
+  return program
+end
 function M.copy(n)
   if type(n)~='table' then return n end
   local t={}; for k,v in pairs(n) do t[k]=M.copy(v) end; return t

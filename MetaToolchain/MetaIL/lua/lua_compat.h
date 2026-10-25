@@ -37,6 +37,7 @@ int lua_getfield(lua_State *L, int idx, const char *key);
 void lua_pushlightuserdata(lua_State *L, void *p);
 void *lua_touserdata(lua_State *L, int idx);
 int lua_gettop(lua_State *L);
+int lua_checkstack(lua_State *L, int n);
 void lua_settop(lua_State *L, int idx);
 lua_Number lua_tonumberx(lua_State *L, int idx, int *isnum);
 int lua_toboolean(lua_State *L, int idx);

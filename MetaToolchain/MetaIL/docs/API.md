@@ -1,5 +1,42 @@
 # Native API and kernel registry
 
+## Structured IR and the C++ native DSL
+
+The complete guide is the [40-chapter manual](../manual/README.md). `MetaIL.h` now
+provides `metail_expr`, `metail_stmt`, `metail_function`, and `metail_module`
+descriptors. `metail_module_check`, `metail_module_emit`, `metail_module_analyze`,
+and `metail_module_optimize` transfer these structures directly to canonical Lua IR
+tables; they do not generate or parse MetaIL text. `metail_parse` imports textual
+DSL into an owned descriptor tree. Parse/optimization results are independently
+owned, inspectable snapshots freed with `metail_module_free`; caller-built inputs
+are borrowed and never modified.
+
+`MetaIL.hpp` uses the real `DSLtk.hpp` AST facility and requires **C++20**. Configure
+`DSLTK_ROOT` to the directory containing that header (workspace default
+`../../DSLtk`). Installation includes the selected DSLtk header with its embedded
+notices. Build `Expr` values with `var`, integer literals, arithmetic/bitwise/
+comparison operators, `call`, `select`, `land`, and `lor`. Functions have fluent
+`let`, `ret`, `eval`, `assume`, `label`, `jump`, and `branch` methods. Modules and
+functions expose their own value-owned vectors for programmatic inspection/editing.
+
+```cpp
+metail::Module module("demo");
+auto x = metail::var("x");
+module.function("scale", {"x"}).ret((x + 0) * 8);
+metail::Context context;
+auto result = context.optimize(module); // result.module and result.stats
+auto text = context.emit(result.module);
+auto parsed = context.parse(text);
+parsed.functions[0].statements.back().expr = metail::integer(42);
+```
+
+`Expr::ast()` exposes a const DSLtk AST; `Expr::from_ast` accepts validated DSLtk
+trees. Comparison operators build IR expressions, not host booleans; use
+`same_as` for structural equality. Expressions have no bool conversion. C++ `if`
+and loops execute while constructing the IR; use `branch`/`jump` for IR control
+flow. The C++20 requirement applies to `MetaIL.hpp` and `KernelRegistry.hpp`; the
+C API remains C11. Existing text-based Context overloads remain supported.
+
 ## Build and consume
 
 The C11 implementation in `MetaIL.c` embeds the genuine Lua 5.4 runtime and calls
@@ -18,7 +55,7 @@ Use `-DCMAKE_PREFIX_PATH=/your/install/prefix` for an installed package, or use
 `add_subdirectory(/path/to/MetaIL metail-build)` instead of `find_package`.
 Headers are installed under `include/metail`, the library under the configured
 library directory, and runtime data under `share/metail`. The exported target
-propagates the header path, C++17 requirement, and native link dependencies.
+propagates the header path, C++20 requirement, and native link dependencies.
 
 Runtime lookup accepts an explicit home path, then `METAIL_HOME`, the current
 directory, configured install root, and configured source root. Explicit paths and

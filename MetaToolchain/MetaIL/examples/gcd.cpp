@@ -6,23 +6,17 @@ int main() {
         metail::Context context;
         // Euclid's loop for nonnegative inputs. This example emits/analyzes IR;
         // it does not claim to compile or execute native code.
-        const std::string source=R"(module euclid;
-fn gcd(a, b) {
-entry:
-  goto loop;
-loop:
-  br b != 0, step, done;
-step:
-  let remainder = a % b;
-  let a = b;
-  let b = remainder;
-  goto loop;
-done:
-  return a + 0;
-})";
-        const auto result=context.optimize(source,"AddZeroRight,ConstantFolding");
-        std::cout<<result.source;
-        std::cout<<context.analyze(result.source,"NaturalLoops,LiveVariables");
+        auto a=metail::var("a"),b=metail::var("b");
+        metail::Module module("euclid");
+        module.function("gcd",{"a","b"})
+            .label("entry").jump("loop")
+            .label("loop").branch(b!=0,"step","done")
+            .label("step").let("remainder",a%b).let("a",b)
+            .let("b",metail::var("remainder")).jump("loop")
+            .label("done").ret(a+0);
+        const auto result=context.optimize(module,"AddZeroRight,ConstantFolding");
+        std::cout<<context.emit(result.module);
+        std::cout<<context.analyze(result.module,"NaturalLoops,LiveVariables");
         std::cout<<result.stats;
         return 0;
     } catch (const std::exception &error) {

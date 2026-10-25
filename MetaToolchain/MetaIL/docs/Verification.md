@@ -1,5 +1,32 @@
 # Numeric integration verification
 
+## Structured IR, DSLtk, and manual follow-up
+
+The structured API adds C descriptor construction/export, DSLtk-backed C++20
+expressions, editable module/function values, and a fourth executable example.
+The default suite now has **14 tests**. In addition to the previous tests,
+`structured-c` and `native-dsl` cover direct IR operations and ownership, while
+`parser-free-ir` disables the textual program parser and verifies that native-built
+programs still validate, optimize, analyze, and emit.
+
+The same 14 tests passed under GCC Release (4.40 s), Clang Release (4.75 s),
+GCC ASan/UBSan (13.09 s), and Clang ASan/UBSan (12.82 s). The alternate compiler
+and sanitizer configurations used `-Wall -Wextra -Wpedantic -Werror`.
+Regression cases include cyclic descriptors, incorrect arities, invalid names,
+cross-context result ownership, input immutability, all expression operators,
+DSLtk AST import, unsigned literal overflow, and effect/trap preservation.
+
+The [manual](../manual/README.md) contains 40 numbered chapters (approximately
+8,100 words). Chapter numbering and all local links were checked. Examples cover
+both textual and native construction. `DSLTK_ROOT` selects the actual workspace
+header; CMake propagates C++20 and installs that header for package consumers.
+Installed C and C++ consumers exercised parsing, direct structured operations,
+and DSLtk node construction against both static and shared packages. The shared
+configuration passed all 10 non-example tests, and its installed CLI passed the
+321-kernel selftest from outside the source directory. Rewrite verification still
+passes all 230 rules across 183,473 signed-64 cases (2,470 effect/trap cases), and
+the generator check confirms all 321 kernel files.
+
 ## Native API and registry follow-up
 
 The native API/registry work adds C and C++ API tests and three executable C++

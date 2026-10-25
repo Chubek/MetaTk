@@ -14,6 +14,7 @@ function M.ensure_kernels()
   end
 end
 function M.validate(program)
+  ir.validate(program)
   local seen={}
   for _,f in ipairs(program.functions) do
     assert(not seen[f.name],'duplicate fn '..f.name);seen[f.name]=true
@@ -47,7 +48,7 @@ function M.passes(filter,kind)
   end
   return result
 end
-function M.optimize_program(p,filter,rounds)
+function M.optimize_ir(p,filter,rounds)
   assert(math.type(rounds)=='integer' and rounds>=1 and rounds<=12,'--repeat must be 1..12')
   local choices=M.passes(filter,'transform')
   local stats={}
@@ -66,7 +67,11 @@ function M.optimize_program(p,filter,rounds)
     if changes==0 then break end
   end
   M.validate(p)
-  return ir.emit(p),json.encode({kernel_changes=stats})..'\n'
+  return p,json.encode({kernel_changes=stats})..'\n'
+end
+function M.optimize_program(p,filter,rounds)
+  local result,stats=M.optimize_ir(p,filter,rounds)
+  return ir.emit(result),stats
 end
 function M.analyze_program(p,filter)
   local results={}
@@ -77,6 +82,10 @@ function M.check(source,name) M.parse(source,name) end
 function M.emit(source,name) return ir.emit(M.parse(source,name)) end
 function M.optimize(source,name,filter,rounds) return M.optimize_program(M.parse(source,name),filter,rounds) end
 function M.analyze(source,name,filter) return M.analyze_program(M.parse(source,name),filter) end
+function M.module_check(p) M.validate(p) end
+function M.module_emit(p) return ir.emit(M.validate(p)) end
+function M.module_analyze(p,filter) return M.analyze_program(M.validate(p),filter) end
+function M.module_optimize(p,filter,rounds) return M.optimize_ir(M.validate(p),filter,rounds) end
 function M.load_kernels(directory) M.ensure_kernels();lkopt.load_directory(directory) end
 function M.kernel_count() M.ensure_kernels();return #lkopt.order end
 function M.kernel_info(index)

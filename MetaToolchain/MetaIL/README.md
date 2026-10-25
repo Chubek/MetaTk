@@ -6,7 +6,7 @@ MetaIL is a **scaffolded compiler IR and text language** driven by executable **
 
 ## Build and test
 
-Install **Lua 5.4** (real upstream Lua runtime, as a shared library), C11 and C++17 toolchains, CMake, and Python 3 for tests. MetaNum headers default to `../../MetaNum`; override with `-DMETANUM_ROOT=/path/to/MetaNum`. The archive deliberately **does not vendor Lua itself**. On Debian/Ubuntu, `liblua5.4-dev` supplies the required shared library.
+Install **Lua 5.4** (real upstream Lua runtime, as a shared library), C11 and C++20 toolchains, CMake, and Python 3 for tests. MetaNum headers default to `../../MetaNum`; override with `-DMETANUM_ROOT=/path/to/MetaNum`. DSLtk defaults to `../../DSLtk` (the workspace's `/mnt/nvme/metatk/DSLtk/DSLtk.hpp`); override with `-DDSLTK_ROOT=/path/to/DSLtk`. The archive deliberately **does not vendor Lua itself**. On Debian/Ubuntu, `liblua5.4-dev` supplies the required shared library.
 
 ```sh
 cmake -S . -B build
@@ -36,9 +36,25 @@ By default, `optimize` runs all transformations in up to two rounds, with a fina
 
 ## C/C++ API and kernel discovery
 
-`MetaIL.h` exposes independent runtime contexts, validation, emission, optimization,
-analysis, and kernel metadata. `MetaIL.hpp` supplies the move-only C++17
-`metail::Context` wrapper. `KernelRegistry.hpp` offers validated `.optk` declarations
+`MetaIL.h` exposes structured expression, statement, function, and module descriptors,
+direct IR validation/emission/optimization/analysis, textual parsing, and kernel metadata.
+`MetaIL.hpp` supplies a C++20 DSL backed by **DSLtk AST nodes**, editable `Module` and
+`Function` values, and the move-only `metail::Context` runtime wrapper:
+
+```cpp
+#include <MetaIL.hpp>
+metail::Context context;
+auto x = metail::var("x");
+metail::Module module("demo");
+module.function("scale", {"x"}).ret((x + 0) * 8);
+auto optimized = context.optimize(module); // Structured IR in and out; no text parser.
+auto text = context.emit(optimized.module);
+auto imported = context.parse(text);       // Text and native DSL interoperate.
+```
+
+The [40-chapter manual](manual/README.md) covers all three interfaces, ownership,
+semantics, analyses, kernels, deployment, and complete examples.
+`KernelRegistry.hpp` offers validated `.optk` declarations
 by keywords, tags, and use case, returning paths or reading file contents on demand:
 
 ```cpp

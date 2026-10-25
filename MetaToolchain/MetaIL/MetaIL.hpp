@@ -1,6 +1,10 @@
 #ifndef METAIL_HPP
 #define METAIL_HPP
 #include "MetaIL.h"
+#include <DSLtk.hpp>
+#include <charconv>
+#include <concepts>
+#include <deque>
 #include <fstream>
 #include <memory>
 #include <sstream>
@@ -13,6 +17,211 @@ class Error : public std::runtime_error {
 public:
     explicit Error(const std::string &message) : std::runtime_error(message) {}
 };
+
+namespace detail {
+inline void identifier(const std::string &name) {
+    const auto first=[](char c) { return (c>='a' && c<='z') || (c>='A' && c<='Z') || c=='_'; };
+    if (name.empty() || !first(name.front()) || std::any_of(name.begin()+1,name.end(),[&](char c) {
+        return !first(c) && !(c>='0' && c<='9');
+    })) throw Error("invalid IR identifier: "+name);
+}
+}
+
+// DSLtk is the actual expression representation. Overloaded operators build
+// trees; they never evaluate host arithmetic or assemble MetaIL source strings.
+class Expr : public ::dsl::DSL<Expr, ::dsl::AST> {
+    ::dsl::ASTNode tree_;
+    static void validate(const ::dsl::ASTNode &n, unsigned depth, std::size_t &count) {
+        if (depth>256 || ++count>200000) throw Error("expression exceeds IR limits");
+        if (n.tag()=="int" && n.is_leaf()) {
+            std::int64_t value=0;
+            const auto &s=n.value();auto result=std::from_chars(s.data(),s.data()+s.size(),value);
+            if (result.ec!=std::errc{} || result.ptr!=s.data()+s.size()) throw Error("invalid signed-64 literal");
+        } else if (n.tag()=="var" && n.is_leaf()) {
+            detail::identifier(n.value());
+            if (n.value()=="true" || n.value()=="false") throw Error("reserved variable name");
+        } else if (n.tag()=="call" && !n.is_leaf()) {
+            if (!n.size() || n.child(0).tag()!="callee" || !n.child(0).is_leaf()) throw Error("call requires a callee leaf");
+            const auto &name=n.child(0).value();detail::identifier(name);
+            if (metail_operator_arity(name.c_str())>=0 || name=="true" || name=="false") throw Error("reserved call name");
+            for (std::size_t i=1;i<n.size();++i) validate(n.child(i),depth+1,count);
+        } else {
+            const auto op=std::string(n.tag());int arity=metail_operator_arity(op.c_str());
+            if (n.is_leaf() || arity<0 || n.size()!=static_cast<std::size_t>(arity)) throw Error("invalid expression operator/arity");
+            for (const auto &child:n.children()) validate(child,depth+1,count);
+        }
+    }
+    explicit Expr(::dsl::ASTNode tree) : tree_(std::move(tree)) {
+        std::size_t count=0;validate(tree_,1,count);
+    }
+public:
+    template<std::integral I> Expr(I value) {
+        if constexpr (std::numeric_limits<I>::digits>63) {
+            if (value>static_cast<I>(INT64_MAX)) throw Error("integer outside signed-64 range");
+            if constexpr (std::numeric_limits<I>::is_signed)
+                if (value<static_cast<I>(INT64_MIN)) throw Error("integer outside signed-64 range");
+        }
+        const auto text=std::to_string(static_cast<std::int64_t>(value));
+        tree_=make_leaf<"int">(std::string_view(text));
+    }
+    static Expr variable(const std::string &name) { return Expr(make_leaf<"var">(std::string_view(name))); }
+    static Expr call(const std::string &name, const std::vector<Expr> &args={}) {
+        std::vector<::dsl::ASTNode> children{make_leaf<"callee">(std::string_view(name))};
+        for (const auto &arg:args) children.push_back(arg.tree_);
+        return Expr(::dsl::ASTNode("call",std::move(children)));
+    }
+    static Expr operation(const std::string &op, const std::vector<Expr> &args) {
+        std::vector<::dsl::ASTNode> children;
+        for (const auto &arg:args) children.push_back(arg.tree_);
+        return Expr(::dsl::ASTNode(op,std::move(children)));
+    }
+    static Expr from_ast(::dsl::ASTNode tree) { return Expr(std::move(tree)); }
+    const ::dsl::ASTNode &ast() const noexcept { return tree_; }
+    bool same_as(const Expr &other) const { return tree_==other.tree_; }
+    std::string dump() const { return tree_.dump(); } // DSLtk S-expression debug view.
+#define METAIL_BINARY_OPERATOR(symbol, tag) \
+    friend Expr operator symbol(const Expr &a, const Expr &b) { return Expr(make_node<tag>(a.tree_,b.tree_)); }
+    METAIL_BINARY_OPERATOR(+, "add")
+    METAIL_BINARY_OPERATOR(-, "sub")
+    METAIL_BINARY_OPERATOR(*, "mul")
+    METAIL_BINARY_OPERATOR(/, "div")
+    METAIL_BINARY_OPERATOR(%, "mod")
+    METAIL_BINARY_OPERATOR(&, "band")
+    METAIL_BINARY_OPERATOR(|, "bor")
+    METAIL_BINARY_OPERATOR(^, "bxor")
+    METAIL_BINARY_OPERATOR(<<, "shl")
+    METAIL_BINARY_OPERATOR(>>, "shr")
+    METAIL_BINARY_OPERATOR(==, "eq")
+    METAIL_BINARY_OPERATOR(!=, "ne")
+    METAIL_BINARY_OPERATOR(<, "lt")
+    METAIL_BINARY_OPERATOR(<=, "le")
+    METAIL_BINARY_OPERATOR(>, "gt")
+    METAIL_BINARY_OPERATOR(>=, "ge")
+#undef METAIL_BINARY_OPERATOR
+    friend Expr operator-(const Expr &a) { return Expr(make_node<"neg">(a.tree_)); }
+    friend Expr operator~(const Expr &a) { return Expr(make_node<"bnot">(a.tree_)); }
+    friend Expr operator!(const Expr &a) { return Expr(make_node<"lnot">(a.tree_)); }
+};
+inline Expr var(const std::string &name) { return Expr::variable(name); }
+inline Expr integer(std::int64_t value) { return Expr(value); }
+inline Expr call(const std::string &name, const std::vector<Expr> &args={}) { return Expr::call(name,args); }
+inline Expr select(const Expr &condition, const Expr &yes, const Expr &no) {
+    return Expr::from_ast(::dsl::node<"select">(condition.ast(),yes.ast(),no.ast()));
+}
+// Named logical builders avoid suggesting C++ short-circuit evaluation.
+inline Expr land(const Expr &a, const Expr &b) { return Expr::operation("land",{a,b}); }
+inline Expr lor(const Expr &a, const Expr &b) { return Expr::operation("lor",{a,b}); }
+
+struct Statement {
+    metail_stmt_kind kind;
+    std::string name;
+    std::optional<Expr> expr;
+    std::string target, yes, no;
+};
+struct Function {
+    std::string name;
+    std::vector<std::string> params;
+    std::vector<Statement> statements;
+    explicit Function(std::string name_, std::vector<std::string> params_={})
+        : name(std::move(name_)),params(std::move(params_)) { detail::identifier(name); }
+    Function &append(Statement statement) { statements.push_back(std::move(statement));return *this; }
+    Function &let(std::string name_, Expr expr) {
+        return append({METAIL_LET,std::move(name_),std::move(expr),{},{},{}});
+    }
+    Function &ret(Expr expr) { return append({METAIL_RETURN,{},std::move(expr),{},{},{}}); }
+    Function &eval(Expr expr) { return append({METAIL_EVAL,{},std::move(expr),{},{},{}}); }
+    Function &assume(Expr expr) { return append({METAIL_ASSUME,{},std::move(expr),{},{},{}}); }
+    Function &label(std::string name_) { return append({METAIL_LABEL,std::move(name_),{},{},{},{}}); }
+    Function &jump(std::string target) { return append({METAIL_GOTO,{},{},std::move(target),{},{}}); }
+    Function &branch(Expr expr, std::string yes, std::string no) {
+        return append({METAIL_BRANCH,{},std::move(expr),{},std::move(yes),std::move(no)});
+    }
+};
+struct Module {
+    std::optional<std::string> name;
+    std::vector<Function> functions;
+    explicit Module(std::string name_={}) {
+        if (!name_.empty()) { detail::identifier(name_);name=std::move(name_); }
+    }
+    Module &add(Function function) { functions.push_back(std::move(function));return *this; }
+    // Reference remains valid until functions is reallocated, as with std::vector.
+    Function &function(std::string name_, std::vector<std::string> params={}) {
+        functions.emplace_back(std::move(name_),std::move(params));return functions.back();
+    }
+};
+struct ModuleOptimizationResult { Module module; std::string stats; };
+
+namespace detail {
+// Descriptors borrow strings from the value model for one protected C call.
+class NativeModule {
+    std::deque<metail_expr> exprs_;
+    std::deque<std::vector<const metail_expr *>> args_;
+    std::vector<std::vector<const char *>> params_;
+    std::vector<std::vector<metail_stmt>> statements_;
+    std::vector<metail_function> functions_;
+    static const char *cstring(const std::string &s) {
+        if (s.find('\0')!=std::string::npos) throw Error("embedded NUL in IR string");
+        return s.c_str();
+    }
+    const metail_expr *lower(const ::dsl::ASTNode &n) {
+        exprs_.push_back({});auto &e=exprs_.back();
+        if (n.tag()=="int") {
+            e.kind=METAIL_INT;const auto &s=n.value();
+            std::from_chars(s.data(),s.data()+s.size(),e.value);
+        } else if (n.tag()=="var") { e.kind=METAIL_VAR;e.name=n.value().c_str(); }
+        else {
+            const bool is_call=n.tag()=="call";
+            e.kind=is_call ? METAIL_CALL : METAIL_OP;
+            if (is_call) e.name=n.child(0).value().c_str();else e.op=n.tag().data();
+            args_.emplace_back();auto &args=args_.back();
+            for (std::size_t i=is_call ? 1 : 0;i<n.size();++i) args.push_back(lower(n.child(i)));
+            e.args=args.data();e.arg_count=args.size();
+        }
+        return &e;
+    }
+public:
+    metail_module value{};
+    explicit NativeModule(const Module &module) {
+        value.name=module.name ? cstring(*module.name) : nullptr;
+        params_.resize(module.functions.size());statements_.resize(module.functions.size());
+        functions_.reserve(module.functions.size());
+        for (std::size_t i=0;i<module.functions.size();++i) {
+            const auto &f=module.functions[i];
+            for (const auto &p:f.params) params_[i].push_back(cstring(p));
+            for (const auto &s:f.statements) {
+                statements_[i].push_back({s.kind,cstring(s.name),s.expr ? lower(s.expr->ast()) : nullptr,
+                    cstring(s.target),cstring(s.yes),cstring(s.no)});
+            }
+            functions_.push_back({cstring(f.name),params_[i].data(),params_[i].size(),
+                statements_[i].data(),statements_[i].size()});
+        }
+        value.functions=functions_.data();value.function_count=functions_.size();
+    }
+    NativeModule(const NativeModule &)=delete;
+    NativeModule &operator=(const NativeModule &)=delete;
+};
+inline Expr from_native(const metail_expr &e) {
+    if (e.kind==METAIL_INT) return Expr(e.value);
+    if (e.kind==METAIL_VAR) return var(e.name);
+    std::vector<Expr> args;
+    for (std::size_t i=0;i<e.arg_count;++i) args.push_back(from_native(*e.args[i]));
+    return e.kind==METAIL_CALL ? call(e.name,args) : Expr::operation(e.op,args);
+}
+inline Module from_native(const metail_module &m) {
+    Module result(m.name ? m.name : "");
+    for (std::size_t i=0;i<m.function_count;++i) {
+        const auto &f=m.functions[i];Function function(f.name);
+        for (std::size_t j=0;j<f.param_count;++j) function.params.emplace_back(f.params[j]);
+        for (std::size_t j=0;j<f.statement_count;++j) {
+            const auto &s=f.statements[j];
+            function.append({s.kind,s.name ? s.name : "",s.expr ? std::optional<Expr>(from_native(*s.expr)) : std::nullopt,
+                s.target ? s.target : "",s.yes ? s.yes : "",s.no ? s.no : ""});
+        }
+        result.add(std::move(function));
+    }
+    return result;
+}
+} // namespace detail
 
 struct OptimizationResult {
     std::string source;
@@ -47,6 +256,32 @@ public:
     Context(const Context &) = delete;
     Context &operator=(const Context &) = delete;
     metail_context *native_handle() const { return get(); } // Borrowed; do not destroy.
+
+    Module parse(const std::string &source, const std::string &name="<memory>") const {
+        metail_module *output=nullptr;
+        auto status=metail_parse(get(),cstring(source),cstring(name),&output);
+        std::unique_ptr<metail_module,decltype(&metail_module_free)> owned(output,metail_module_free);
+        check_status(status);return detail::from_native(*owned);
+    }
+    void check(const Module &module) const {
+        detail::NativeModule native(module);check_status(metail_module_check(get(),&native.value));
+    }
+    std::string emit(const Module &module) const {
+        detail::NativeModule native(module);char *output=nullptr;
+        auto status=metail_module_emit(get(),&native.value,&output);
+        String owned(output,metail_free);check_status(status);return owned.get();
+    }
+    std::string analyze(const Module &module, const std::string &passes="all") const {
+        detail::NativeModule native(module);char *output=nullptr;
+        auto status=metail_module_analyze(get(),&native.value,cstring(passes),&output);
+        String owned(output,metail_free);check_status(status);return owned.get();
+    }
+    ModuleOptimizationResult optimize(const Module &module, const std::string &passes="all", int rounds=2) const {
+        detail::NativeModule native(module);metail_module *output=nullptr;char *stats=nullptr;
+        auto status=metail_module_optimize(get(),&native.value,cstring(passes),rounds,&output,&stats);
+        std::unique_ptr<metail_module,decltype(&metail_module_free)> owned(output,metail_module_free);
+        String counts(stats,metail_free);check_status(status);return {detail::from_native(*owned),counts.get()};
+    }
 
     void check(const std::string &source, const std::string &name="<memory>") const {
         check_status(metail_check(get(),cstring(source),cstring(name)));
