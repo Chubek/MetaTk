@@ -11,6 +11,9 @@ downloads dependencies. See `cmake/Dependencies.cmake` for configurable paths.
   `411199d712003195966b380bb4f5dcd2d63f4733`. The missing checkout was populated
   for this integration; its upstream `LICENSE` is retained.
 - `third_party/replxx`: interactive editing, completion and history (BSD-3-Clause).
+- `DSLtk/DSLtk.hpp`: workspace header-only C++20 DSL toolkit, used by the public
+  `MetaTeX.hpp` API for native pipeline composition. `METATEX_DSLTK_DIR` selects
+  its location; the header is installed with the public MetaTeX headers.
 - `DSLtk/MetaML.hpp` and `DSLtk/metalib`: MetaML runtime and all implemented
   host/language libraries. If a workspace-root `MetaML.hpp` exists it is preferred;
   `METATEX_METAML_DIR` explicitly selects the matching header/library tree.
@@ -23,7 +26,8 @@ downloads dependencies. See `cmake/Dependencies.cmake` for configurable paths.
 - Testing: CTest (bundled with CMake); Python 3 for extended tests if found.
 
 Path overrides: `METATEX_THIRD_PARTY_DIR`, `METATEX_DYNALO_DIR`,
-`METATEX_REPLXX_DIR`, `METATEX_METAML_DIR`, and `METATEX_METAVECT_SOURCE_DIR`.
+`METATEX_REPLXX_DIR`, `METATEX_DSLTK_DIR`, `METATEX_METAML_DIR`, and
+`METATEX_METAVECT_SOURCE_DIR`.
 
 ## Library integration roadmap
 

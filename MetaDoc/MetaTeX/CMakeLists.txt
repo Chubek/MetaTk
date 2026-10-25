@@ -13,6 +13,8 @@ add_library(metatex_core SHARED
     core/Lexer.cpp core/Engine.cpp core/IO.cpp core/Math.cpp core/Scripting.cpp core/External.cpp core/MetaML.cpp
     device/HTML.cpp device/PDF.cpp device/JSON.cpp device/CairoPango.cpp)
 target_include_directories(metatex_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(metatex_core SYSTEM PUBLIC $<BUILD_INTERFACE:${METATEX_DSLTK_DIR}>)
+target_compile_features(metatex_core PUBLIC cxx_std_20)
 target_link_libraries(metatex_core PUBLIC metavect_scene)
 target_link_libraries(metatex_core PRIVATE metatex_metaml)
 target_compile_options(metatex_core PRIVATE -Wall -Wextra -Wpedantic)
@@ -46,6 +48,13 @@ set_target_properties(metatex PROPERTIES
 set_target_properties(metatex_core metatex_latex metatex_nekotex metatex_metavect PROPERTIES
     INSTALL_RPATH "$ORIGIN")
 if(BUILD_TESTING AND METATEX_BUILD_TESTS)
+    add_executable(metatex_cpp_api_tests tests/cpp_api.cpp)
+    target_link_libraries(metatex_cpp_api_tests PRIVATE metatex_core)
+    add_test(NAME cpp-api-dsl COMMAND metatex_cpp_api_tests "${CMAKE_CURRENT_BINARY_DIR}/cpp-api-fixtures")
+    set_tests_properties(cpp-api-dsl PROPERTIES TIMEOUT 30)
+    add_executable(metatex_cpp_example examples/native.cpp)
+    target_link_libraries(metatex_cpp_example PRIVATE metatex_core)
+    add_test(NAME cpp-native-example COMMAND metatex_cpp_example)
     add_executable(metatex_tests tests/tests.cpp)
     target_link_libraries(metatex_tests PRIVATE metatex_core)
     target_compile_options(metatex_tests PRIVATE -UNDEBUG)
@@ -89,3 +98,4 @@ install(TARGETS metatex_core metatex_latex metatex_nekotex metatex_metavect LIBR
 install(TARGETS metavect_scene ARCHIVE DESTINATION lib/metatex)
 install(FILES "${METATEX_METAVECT_SOURCE_DIR}/include/MetaVect-Scene.h" "${METATEX_METAVECT_SOURCE_DIR}/include/MetaVect-Scene.hpp" DESTINATION include)
 install(DIRECTORY include/ DESTINATION include)
+install(FILES "${METATEX_DSLTK_DIR}/DSLtk.hpp" DESTINATION include)

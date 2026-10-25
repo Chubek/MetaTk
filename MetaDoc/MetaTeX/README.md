@@ -15,7 +15,7 @@ this as a drop-in replacement for TeX Live or production publishing.
 ## Build
 
 On Linux with CMake >= 3.18 and a C++20 compiler, using the workspace's dynalo,
-replxx, MetaML/metalib and cpp-httplib sources, plus SQLite3/NNG development
+replxx, DSLtk, MetaML/metalib and cpp-httplib sources, plus SQLite3/NNG development
 libraries (see [dependencies](docs/DEPENDENCIES.md)):
 
 ```sh
@@ -126,12 +126,28 @@ catalogue. It is *not* a proof that the listed primitives are implemented.
 ## Direct use of the library
 
 ```cpp
-#include "MetaTeX.h"
+#include "MetaTeX.hpp"
 metatex::Engine engine;
 metatex::Document d = engine.compile("Hello, $x^2$.");
 std::string html = metatex::renderHTML(d);
 std::string json = metatex::renderJSON(d);
 ```
+
+Build documents directly with the C++ API and DSLtk-powered native DSL:
+
+```cpp
+using namespace metatex::cpp;
+auto doc = document(
+    heading(1, "Results"),
+    paragraph("Hello, ", bold("MetaTeX"), ". Formula: ", math("x^2"))
+) | title("Native C++ report");
+auto html = doc | renderAs(metatex::OutputFormat::HTML);
+```
+
+Link `metatex_core`; its CMake target supplies the include paths and C++20
+requirement. `DocumentBuilder` supports imperative construction and dynamic
+content. See the [C++ API guide](docs/CPP_API.md) and
+[`examples/native.cpp`](examples/native.cpp).
 
 See `docs/ARCHITECTURE.md`, `docs/COMPATIBILITY.md`, and `AGENTS.md` for
 implementation constraints, extension contracts, and future tasks.
