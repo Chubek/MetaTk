@@ -1,0 +1,31 @@
+# GPPX driver configuration -- accepted subset of YAML, not full YAML.
+# Activate with: gppx --config driver/config.yaml examples/demo.gppx
+# Top-level keys configure the engine; processing follows command-line order.
+profile: c
+strict: true
+max_depth: 64
+max_includes: 64
+max_output: 16777216
+
+# Override built-in syntax with explicit symbols or a different profile.
+# syntax:
+#   directive: '%'
+#   macro_style: mustache
+#   expand_strings: false
+
+# Every mapping entry defines a persistent object-like macro.
+# defines:
+#   PROJECT: GPPX
+#   MAJOR: '1'
+
+include_paths:
+  - ../examples/include
+
+# The plugin directory contains compiled, native shared objects.
+# Plugins execute native code; never load untrusted packages.
+# plugins:
+#   - ../build/plugins/gppx_webber.so
+
+# Generic engine options may also be grouped under `options:`.
+# options:
+#   strict: true

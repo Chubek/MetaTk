@@ -1,0 +1,4 @@
+@define TITLE GPPX Templates
+@define TARGET Everyone
+<h1>{{TITLE}}</h1>
+<p>Hello, {{TARGET}}!</p>
