@@ -1,0 +1,114 @@
+.lua
+book.chapter(39, "DSLtk.hpp: codecs, streams, preprocessing, and grammars")
+.endlua
+.sh 2 "Protocols separate policy from transport"
+.pp
+Serializer and Deserializer adapt a user backend rather than prescribe a
+wire format. A backend supplies serialize(value, output) and a typed
+deserialize operation. The adapters borrow the backend and preserve its
+return and error conventions. This lets a language tool use the same
+interface for a binary cache, textual fixture, or application-owned transport
+without pretending that every format shares one universal representation.
+.pp
+Abstract IO similarly borrows a backend with read and write operations on
+byte buffers. Short transfers are valid. Read_exact and write_all loop until
+their requested transfer completes, rejecting premature EOF, invalid counts,
+or a write that makes no progress. Optional seek and tell operations exist
+when the backend supports them. The caller must keep borrowed backends alive
+and define how external resources are opened and closed.
+.sh 2 "Binary streams make encoding choices explicit"
+.pp
+BinaryStream owns bytes and a cursor. Read consumes a requested interval;
+write appends; integer operations take an explicit byte order. Load and save
+connect the stream to abstract IO, with a size bound for loading. This is
+the native substrate used by MetaML's Buffer module. Owning a byte buffer
+does not automatically validate the protocol encoded in those bytes: widths,
+magic values, checksums, and length relationships remain domain invariants.
+.lua
+book.algorithm("Decode a bounded binary record", {
+    "Read and validate the fixed header before allocating payload storage.",
+    "Decode lengths with explicit integer widths and byte order.",
+    "Check arithmetic and the application size limit.",
+    "Read exactly the declared payload length, handling short transfers.",
+    "Validate payload structure and checksum if the format requires them.",
+    "Publish a domain value only after every invariant holds."
+})
+.endlua
+.pp
+StaticRegex compiles a Thompson NFA at host compilation time and matches
+bytes at runtime, including zero and high-bit bytes. Supported syntax includes
+classes, alternation, grouping, repetition, anchors, and documented escapes.
+There are no capture groups, backreferences, or arbitrary PCRE extensions.
+Matches checks the whole input, prefix returns the longest match at a
+position, and search chooses the earliest matching position with its longest
+match. BinaryStream token consumption rejects empty matches.
+.sh 2 "Preprocessing is source transformation"
+.pp
+Preprocessor supports object and function macros, balanced arguments,
+recursive-expansion suppression, line continuation, includes, and conditional
+blocks. It respects strings, character literals, and C-style comments.
+Conditional expressions support a documented subset including defined,
+comparisons, boolean operators, and integer constants. This is a DSL
+preprocessor, not a complete implementation of the C or C++ preprocessor.
+Token pasting, stringification, and variadic macros are not implied.
+.pp
+An include callback supplies source for a path, and a script callback
+supplies generated source for a named language. Generated script output is
+macro-expanded. Expansion and include depths are bounded. This callback
+architecture keeps filesystem and scripting policy in the embedding host,
+where resource ownership belongs. A source transformer should also preserve
+or reconstruct provenance if diagnostics must refer to the original input.
+.sh 2 "Optional Lua and the book's Lua are separate integrations"
+.pp
+The optional native Lua bridge uses DSLTK_ENABLE_LUA in C++ with appropriate
+headers and linkage. D selects its corresponding DSLtkLua version flag.
+The host owns the Lua state and assigns a script hook; each directive returns
+a string, and the bridge restores the Lua stack after success or failure.
+This facility is distinct from luaROFF, the separate document preprocessor
+used to publish this book.
+.pp
+Both illustrate the same architectural idea: an embedded language generates
+input for another stage through a well-defined boundary. Neither makes
+generated text correct automatically. Validate generated grammar, source,
+or markup at the next stage and retain errors from the generator. The
+book build explicitly checks luaROFF diagnostics because its current
+preprocessor can report some Lua failures without a failing exit status.
+.sh 2 "Explicit CFGs support a different parsing model"
+.pp
+CFG has named nonterminals, token terminals, and productions. Its Earley
+parser handles left recursion, epsilon productions, and unordered alternatives.
+The user's lexer supplies tokens. A successful parse returns an AST for
+the first discovered derivation of an ambiguous grammar; failure includes
+a farthest token position and expected terminals. Returning one tree does
+not prove the grammar has only one derivation.
+.lua
+book.code("text", [=[(grammar
+  (start Expr)
+  (rule Expr (Expr "+" Term) (Term))
+  (rule Term ("number")))]=], "DSLtk's S-expression grammar notation")
+.endlua
+.pp
+Quoted right-hand symbols denote token terminals and unquoted symbols denote
+nonterminals. Each list is an alternative, with an empty list expressing
+epsilon. Sexpr_grammar loads and validates that notation. Native CFGSymbol
+and CFGRule values or template production helpers offer another construction
+route. Production names become AST tags and terminals become token leaves,
+so semantic visitors must account for that actual output vocabulary.
+.sh 2 "Select interfaces by invariants"
+.pp
+These facilities fit together but should not be flattened into one giant
+frontend. A lexer establishes token boundaries, a CFG establishes syntactic
+structure, a visitor checks domain invariants, and a serializer defines an
+external representation. Preprocessing may alter source before lexing but
+must not conceal errors. Binary transport may deliver bytes but cannot
+prove their grammar. Clear boundaries make each subsystem replaceable and
+its failures understandable.
+.sh 2 "Sources and further work"
+.pp
+Read the serialization, IO, StaticRegex, BinaryStream, Preprocessor, and CFG
+sections of DSLtk.hpp and DSLtk.d. The toolkit manual chapters on codecs,
+preprocessing, and context-free grammars provide paired native examples.
+Design a small cache format for validated expression trees, then specify
+its load limit, byte order, version marker, and decoding failures. Separately
+design a left-recursive grammar and explain why its Earley parsing contract
+cannot simply be assumed for an ordinary recursive-descent combinator.

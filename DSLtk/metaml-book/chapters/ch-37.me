@@ -1,0 +1,126 @@
+.lua
+book.chapter(37, "DSLtk.hpp: trees, visitors, and rewriting")
+.endlua
+.sh 2 "Tagged trees provide a reusable vocabulary"
+.pp
+ASTNode is the toolkit's runtime tree representation. Leaf and node helpers
+use compile-time tag strings while storing runtime payloads and children.
+Dump produces a readable structural representation useful in tests and
+diagnostics. This generic AST is distinct from both MetaML's internal
+language-specific expression objects and a C++ expression-template DSL.
+Select the representation whose invariants match the pass you are writing.
+.lua
+book.code("cpp", [=[#include "DSLtk.hpp"
+#include <cassert>
+int main() {
+    auto tree = dsl::node<"add">(
+        dsl::leaf<"num">(2), dsl::leaf<"num">(3));
+    assert(tree.dump() == "(add (num 2) (num 3))");
+    auto schema = dsl::ast_schema<"add">(dsl::ast_schema<"num">());
+    int total = 0;
+    auto visitor = dsl::compile_visitor(schema,
+        dsl::on<"add">([](const dsl::ASTNode&) {}),
+        dsl::on<"num">([&](const dsl::ASTNode& n) {
+            total += std::stoi(n.value());
+        }));
+    visitor.walk(tree);
+    assert(total == 5);
+}]=], "A complete schema-checked native visitor")
+.endlua
+.pp
+The example counts numeric leaf payloads; it is not a general addition
+interpreter. In particular, accepting an add tag does not establish binary
+arity or numeric typing of every descendant. A semantic pass must validate
+those properties separately. This distinction prevents a convenient generic
+visitor mechanism from being mistaken for a full type system for the
+language represented by the tree.
+.sh 2 "Schemas check tag coverage"
+.pp
+Derive_visitor can discover accepted tags from a runtime schema tree.
+Compile_visitor can check a static vocabulary during host compilation using
+ast_schema. Every schema tag needs a handler. A visited tag outside the
+schema is rejected. The schema establishes tag coverage, not exact child
+counts or payload constraints; its example values do not define a complete
+grammar. State this scope clearly when exposing visitor builders to users.
+.lua
+book.code("d-fragment", [=[import std.conv : to;
+enum schema = node!"add"(leaf!"num"(0));
+int total;
+auto visitor = compile_visitor!schema(
+    on!"add"((ref ASTNode n) {}),
+    on!"num"((ref ASTNode n) { total += to!int(n.value()); }));
+auto tree = node!"add"(leaf!"num"(2), leaf!"num"(3));
+visitor.walk(tree);
+assert(total == 5);]=], "D validates a compile-time schema through CTFE")
+.endlua
+.pp
+Handlers can receive a node alone or a compile-time ASTTag followed by the
+node. The tag permits specialization while payloads remain runtime values.
+This is template-generated dispatch, not runtime JIT compilation. D uses
+its own compile-time evaluation and template facilities to express the
+corresponding contract. The native mechanisms differ while the accepted
+tree vocabulary and handler behavior can agree.
+.sh 2 "Dispatch and traversal are separate operations"
+.pp
+Visit dispatches one node; walk traverses a tree in preorder or postorder.
+Preorder sees the parent first, while postorder sees children first. Mutable
+handlers can affect the structure being traversed, so choose an order and
+mutation policy deliberately. If a callback inserts children, decide whether
+those children should be visited now, on another pass, or not at all.
+Unspecified expectations here produce difficult rewrite bugs.
+.pp
+Const C++ handlers are a useful default for analyses. They communicate that
+a pass collects information without changing syntax. A separate transformation
+can return a new tree when immutable-style reasoning is preferable. In D,
+public visitor operations use ref ASTNode, so the implementation must retain
+the intended read-only discipline when mutation is not part of the pass.
+Host syntax alone does not establish semantic purity.
+.sh 2 "Rewriting needs a strategy and a stopping rule"
+.pp
+The toolkit offers tagged AST rewrite rules and separate first-order term
+rewriting facilities. A rule identifies a matching shape and constructs a
+replacement. A set of rules is not automatically terminating or confluent.
+Rule order, traversal order, and repeated application policy determine which
+result is obtained when several rules match. Document those choices rather
+than describing every rewrite collection as an optimizer that finds a
+unique normal form.
+.lua
+book.algorithm("Review a tree rewrite", {
+    "State the accepted node shape and payload constraints.",
+    "Check whether replacement duplicates, erases, or reorders children.",
+    "Establish that those changes preserve the source language's effects.",
+    "Choose preorder or postorder according to required child information.",
+    "Bound repeated application or prove a decreasing measure.",
+    "Test semantic preservation and the intended structural change."
+})
+.endlua
+.pp
+For constant folding, use the source language's arithmetic rather than
+accidentally inheriting unchecked native signed overflow. For algebraic
+simplification, consider exceptional values and effects: replacing x times
+zero with zero can erase the evaluation of x. An AST rewrite library
+provides traversal and replacement machinery; the language designer remains
+responsible for whether a proposed identity is valid in the chosen semantics.
+.sh 2 "Annotations and persistence"
+.pp
+Source spans, inferred types, and binding identities often need to survive
+transformation. Generic tags and text do not automatically encode them.
+Choose an annotation strategy and define how a replacement receives source
+provenance. Copying the parent's span can be useful for a folded literal,
+while merging unrelated spans may require a richer diagnostic model.
+Treat this as part of the pass contract rather than an afterthought.
+.pp
+Persistent trees and mutable trees have different lifetime and invalidation
+rules. Native references into a child collection may become invalid after
+mutation. A path of child indices can become stale after insertion even
+when the underlying storage remains valid. Analyses retained across passes
+should therefore use explicit versioning or stable identities rather than
+assuming a pointer or index always denotes the same semantic object.
+.sh 2 "Sources and further work"
+.pp
+Read ASTNode, ASTSchema, derive_visitor, compile_visitor, and rewrite facilities
+in DSLtk.hpp with their D counterparts. The toolkit manual's visitor chapter
+and examples/08-ast-creation.cpp through the rewrite examples provide native
+entry points. Add a validator enforcing binary add nodes, then a separate
+folding pass. Test an unknown tag, incorrect arity, and a valid nested tree,
+explaining which layer rejects each malformed input.

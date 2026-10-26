@@ -1,0 +1,109 @@
+.lua
+book.chapter(34, "Capabilities and runtime architecture")
+.endlua
+.sh 2 "Installation and authority are independent"
+.pp
+A host module installer adds declarations and primitive implementations.
+The primitive allowlist decides which non-core operations may be invoked.
+It accepts exact names, module patterns, and a global wildcard. Trusted
+register_primitive grants the registered name, while install_primitive is
+designed for libraries that require a later permission decision. This
+separation lets an application compose available libraries without granting
+every capability merely because a header was included.
+.pp
+Design permissions around the task a script performs. A formatting rule may
+need only a pure string helper, while a build script may deliberately need
+source loading. Granting an entire module is convenient but broader than
+granting one operation. Record the policy alongside the application version
+so a script failure after an upgrade can be diagnosed as a capability change
+rather than mistaken for a parser or type-system regression.
+.lua
+book.algorithm("Construct a task-specific runtime", {
+    "Create a fresh Session owned by one execution context.",
+    "Install the host modules required by the task.",
+    "Grant exact primitive names or intentional module patterns.",
+    "Load a known standard-library tree and check diagnostics.",
+    "Configure output routing and recursion limits.",
+    "Execute requests through the owner and retain structured results."
+})
+.endlua
+.sh 2 "An allowlist is not process isolation"
+.pp
+Core IO, source imports, native allocation, and unbounded computation remain
+relevant even when the non-core allowlist is empty. Frontend.eval creates
+another language session but can still execute core effects. A recursion
+limit does not stop an infinite tail-recursive loop, and a small expression
+can request substantial memory. These observations describe concrete runtime
+boundaries; they are not reasons to confuse ordinary script errors with
+operating-system enforcement.
+.pp
+When executing hostile programs, place the interpreter in a separate process
+with appropriate time, memory, filesystem, and communication restrictions.
+The parent process can terminate a worker that exceeds its budget without
+requiring a cooperative callback from every evaluator operation. Define a
+protocol that separates source, configuration, returned values, output, and
+diagnostics. A worker restart also provides a clear way to discard partially
+mutated language state after a failed request.
+.sh 2 "Choose a session ownership model"
+.pp
+One owner per session is the simplest concurrency contract. A desktop
+application can send requests to a dedicated worker; a batch service can
+create a session per job; a trusted interactive workbench can retain one
+session for the user's entire conversation. These models differ in startup
+cost, retained definitions, and recovery semantics. Choose intentionally
+rather than sharing one mutable session because it happens to be globally
+accessible from host code.
+.lua
+book.uml({
+    {id="H", name="Host coordinator", members={"request queue", "result publication"}},
+    {id="W", name="Worker owner", members={"one Session", "explicit library policy"}},
+    {id="R", name="Resources", members={"buffers; tables", "output sink"}}
+}, {{"H", "W", "submits"}, {"W", "R", "uses"}},
+    "Session ownership separates coordination from evaluation")
+.endlua
+.pp
+Handle-local mutexes protect individual native resources, not the entire
+session. Several operations on a table are not one transaction unless a
+specific primitive provides that atomic contract. Output callbacks may run
+while the runtime holds its output mutex, so synchronous re-entry can
+deadlock. Forward notifications to the coordinator instead of recursively
+asking the same worker to evaluate from inside a callback.
+.sh 2 "Define failure publication"
+.pp
+An evaluation can print and mutate resources before producing a diagnostic.
+The interpreter clears bookkeeping such as depth and observable stack state,
+but does not undo earlier external effects. A host can buffer output and
+publish it only on success, yet that policy cannot undo a native operation
+that already modified an external system. Place irreversible actions behind
+explicit application-level protocols when atomic publication is required.
+.pp
+For repeatable jobs, separate planning from execution. Let a script construct
+a declarative plan using immutable data, validate the plan in the host, and
+then execute it through a controlled interface. This makes retries and
+auditing easier because the program's proposed work is inspectable before
+effects occur. It also provides a stable boundary for testing without
+performing the real external action on every test run.
+.sh 2 "Package the runtime as a coherent unit"
+.pp
+Ship interpreter headers or binaries with a known compatible library tree.
+Use explicit paths in deployed applications rather than relying on the
+working directory. Preserve relative native include and D module layouts.
+The portable host bundle excludes separately opted-in platform services;
+inspect installers and build options before promising a service across both
+dialects. An existing filename alone does not establish implementation,
+dependency availability, or parity.
+.pp
+Test from an installed prefix as well as from the source checkout. This
+catches missing library data, accidental relative includes, and executable
+path assumptions. A useful smoke test creates a fresh session, loads the
+installed prelude, exercises one permitted operation, rejects one denied
+operation, and successfully evaluates another expression afterwards. Those
+observations cover packaging, capability enforcement, and recovery together.
+.sh 2 "Sources and further work"
+.pp
+Read the primitive permission checks, Session limits, and module installers
+in both dialects. Compare the CLI's intentionally permissive setup with
+a narrow embedded client. Design two deployment profiles: a trusted local
+workbench and an isolated batch worker. State their ownership model, library
+path, output policy, resource budgets, and retry behavior. Explain which
+guarantees come from MetaML and which require the host or operating system.

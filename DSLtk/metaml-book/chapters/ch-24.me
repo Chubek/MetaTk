@@ -1,0 +1,123 @@
+.lua
+book.chapter(24, "IO, buffers, and mutable tables")
+.endlua
+.sh 2 "Effects have an explicit boundary"
+.pp
+IO prints strings, reads lines, and exposes simple inspection helpers. The
+prelude's print and println both print a line; IO.print writes without adding
+a newline. Core.show renders a value as notation, so printing a string through
+show differs from printing its bytes directly. IO.read_line takes unit and
+returns Option String, using None at end of input. That interface distinguishes
+an empty line from the absence of another line.
+.lua
+book.code("metaml", [=[IO.print "answer="
+IO.println (Int.to_string 42)
+Test.equal "printing returns unit" (IO.print "") ()
+Test.equal "inspection quotes strings" (Core.show "x") "\"x\""]=],
+    "Output bytes and inspected values")
+.endlua
+.pp
+An embedding can redirect ordinary output with Session.set_output. The
+callback receives bytes, not structured diagnostics. Keep it fast and
+non-reentrant: the runtime serializes output with a mutex, and recursively
+evaluating or printing through the same session can deadlock. Queueing output
+to an application event loop is often preferable to performing synchronous
+user-interface work inside the callback. Error-stream output and input need
+their own integration policy.
+.sh 2 "A buffer is a resource, not an immutable string"
+.pp
+Buffer provides a mutable byte accumulator backed by DSLtk's binary stream.
+Create starts empty; of_string creates independent storage initialized with
+bytes. Add, add_line, and add_byte append content. Integer writers choose
+explicit byte orders and retain the requested low bits. They are binary
+encoders, not checked arithmetic operations that reject every out-of-range
+signed number. Specify width and byte order as part of a format's contract.
+.lua
+book.code("metaml", [=[buffer := Buffer.of_string "A\0"
+Buffer.add_u16le 258 buffer
+Test.equal "encoded bytes" (Buffer.hex buffer) "41000201"
+Test.equal "checked slice" (Buffer.sub 1 2 buffer) (Some "\0\u{02}")
+snapshot := Buffer.contents buffer
+Buffer.truncate 2 buffer
+Buffer.add "Z" buffer
+Test.equal "new contents" (Buffer.contents buffer) "A\0Z"
+Test.equal "old snapshot" (String.length snapshot) 4]=],
+    "Mutable assembly with immutable snapshots")
+.endlua
+.pp
+Contents returns a snapshot string. Sub returns None for invalid bounds,
+including negative positions, rather than silently clamping as String.sub
+does. Truncate only shrinks or preserves size; it does not grow storage with
+zero padding. Clear empties the buffer and resets stream position. These
+differences are intentional and worth testing when adapting code between
+immutable strings and mutable binary assembly.
+.sh 2 "Tables provide deterministic dynamic keys"
+.pp
+Table is a mutable string-keyed map. A particular table should hold one
+consistent value type. Of_list accepts pairs and lets later duplicate keys
+replace earlier ones. Get returns Option, set inserts or replaces, and remove
+is harmless for an absent key. Enumeration uses sorted-key order in both
+host dialects, giving deterministic output independent of the native map
+implementation chosen underneath the API.
+.lua
+book.code("metaml", [=[table := Table.of_list [("b", 2), ("a", 1)]
+copy := Table.clone table
+Test.check "insert new" (Table.set_if_absent "c" 3 table)
+Test.check "retain old" (not (Table.set_if_absent "a" 9 table))
+Test.equal "ordered values" (Table.values table) [1, 2, 3]
+Table.remove "a" table
+Test.equal "clone retains entries" (Table.to_list copy) [("a", 1), ("b", 2)]
+Test.equal "missing key" (Table.get "a" table) None]=],
+    "Mutation, ordering, and cloning")
+.endlua
+.pp
+Clone copies the map structure, not every referenced resource recursively.
+Immutable values can remain shared safely, while a nested buffer or table
+handle still identifies the same underlying resource. Copying a MetaML Value
+likewise does not imply a deep copy of native storage. If a client requires
+an independent object graph, define a domain-specific deep-copy operation or
+serialize and reconstruct according to an explicit schema.
+.sh 2 "Locks do not make sessions concurrent"
+.pp
+Buffer and Table operations lock their individual handles. Set_if_absent
+combines lookup and insertion under one lock, unlike a separate has followed
+by set. This gives an atomic operation on one resource, not an atomic
+transaction across several resources. A Session is not generally safe for
+concurrent evaluation. Serialize session access even when some of the values
+it contains happen to have handle-local synchronization.
+.pp
+The current language lacks a general value restriction for mutable handles.
+Do not exploit a generalized Table value as storage for unrelated types at
+different instantiations. Keep use homogeneous and expose narrow wrappers
+when a table represents a domain service. For example, a symbol table can
+offer insert_symbol and find_symbol rather than exposing arbitrary set
+operations to every caller. Such an interface records the intended invariant.
+.sh 2 "Plan construction and publication"
+.pp
+A useful pattern builds a mutable resource locally, validates its contents,
+then publishes an immutable snapshot. A serializer can accumulate bytes in
+a buffer and return contents; a report builder can populate a temporary
+table and return a deterministic list of entries. This separates efficient
+construction from a stable result and reduces how many clients need to
+reason about mutation, aliasing, and operation order.
+.lua
+book.algorithm("Build and publish a binary result", {
+    "Validate sizes and field values before encoding.",
+    "Allocate a private buffer.",
+    "Write each field using its specified width and byte order.",
+    "Check application invariants such as total length.",
+    "Return an immutable contents snapshot to the caller."
+})
+.endlua
+.sh 2 "Sources and further work"
+.pp
+Ownership diagrams are useful here: draw bindings as references and resources
+as separate boxes. Copying a reference and cloning a container then become
+visibly different operations, especially when one container holds another handle.
+.pp
+Read metalib/io/mod.ml and the Buffer, Table, and IO host modules in both
+dialects. Design a small binary header with a magic string and two integer
+fields, then assert its exact hexadecimal encoding. Add a decoder that checks
+length before slicing. For tables, test duplicate input keys and a clone
+containing a nested buffer; explain which level of the resulting structure
+is independent and which remains shared.

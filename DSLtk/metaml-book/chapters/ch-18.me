@@ -1,0 +1,131 @@
+.lua
+book.chapter(18, "Functors and reusable architecture")
+.endlua
+.sh 2 "Parameterize a family of related operations"
+.pp
+A functor accepts a module matching a signature and produces a module.
+It is useful when an algorithm depends on a type together with several
+operations on that type. Passing one callback is often enough for a local
+sort, but a reusable package of ordering, lookup, and rendering operations
+may need all clients to agree on the same abstract element type. A functor
+makes that collection of dependencies explicit.
+.lua
+book.code("metaml", [=[module type SHOWABLE := sig
+  type t
+  val show : t -> String
+end
+module Show_int : SHOWABLE := struct
+  type t = Int
+  val show := Int.to_string
+end
+module Label (X : SHOWABLE) := struct
+  val render x := "value=" ^ X.show x
+end
+module Int_label := Label(Show_int)
+Test.equal "module parameter" (Int_label.render 42) "value=42"]=],
+    "A rendering functor")
+.endlua
+.pp
+The parameter X is a module, not an ordinary record value. The body can use
+the operations admitted by SHOWABLE and the associated type X.t. It should
+not rely on extra implementation details of Show_int. The application
+Label(Show_int) occurs in module syntax and is bound to a module name before
+its values are used. It is not a value-level function suitable for List.map.
+.sh 2 "Associated types keep dependencies coherent"
+.pp
+Suppose a collection implementation needs equality and rendering for one
+element type. Two unrelated callbacks could accidentally be configured with
+different expectations unless their value-level types happen to express the
+relationship clearly. A module signature can group type t, equal, and show,
+so the relationship is part of one argument contract. The functor's returned
+operations then share that same type consistently.
+.lua
+book.code("metaml", [=[module type ELEMENT := sig
+  type t
+  val equal : t -> t -> Bool
+  val show : t -> String
+end
+module Integer_element : ELEMENT := struct
+  type t = Int
+  val equal a b := a == b
+  val show := Int.to_string
+end
+module Collection (E : ELEMENT) := struct
+  val contains item xs := List.any (fn x -> E.equal item x) xs
+  val render xs := xs |> List.map E.show |> String.join ","
+end
+module Integers := Collection(Integer_element)
+Test.check "membership" (Integers.contains 2 [1, 2, 3])
+Test.equal "shared element interface" (Integers.render [1, 2, 3]) "1,2,3"]=],
+    "A module argument couples a type with its operations")
+.endlua
+.pp
+This example remains simple enough that higher-order functions would also
+work. Its purpose is to expose the architectural boundary. In a larger tool,
+an element module might also supply hashing, stable ordering, source
+rendering, and validation. A signature can require those operations to agree
+on one type while the functor builds several related data-processing
+functions around them.
+.sh 2 "Choose the smallest useful abstraction"
+.pp
+Use a higher-order function when one operation and its input types are all
+the algorithm needs. List.sort_by is clearer than a one-use module functor
+whose sole purpose is to pass a comparator. Use a functor when the returned
+module exposes a coherent family of operations or owns types related to the
+argument module. The distinction is about dependency structure, not about
+which mechanism appears more sophisticated.
+.lua
+book.uml({
+    {id="E", name="ELEMENT", members={"type t", "equal; show"}},
+    {id="F", name="Collection(E)", members={"contains", "render"}},
+    {id="C", name="Client", members={"uses one element identity"}}
+}, {{"E", "F", "parameter"}, {"F", "C", "exports"}},
+    "Functor dependencies are part of the module interface")
+.endlua
+.pp
+A result signature can restrict what the functor returns. This is useful
+when the implementation contains helper modules or representation types that
+clients should not observe. Apply the same abstraction discipline as for an
+ordinary structure: expose the relationships clients need and hide accidental
+details. A functor is not an excuse to export an entire implementation scope
+merely because it is generated from a parameter.
+.sh 2 "Type identity is not representation equality"
+.pp
+Opaque abstract types retain public identities. Two modules may both use Int
+internally without promising that their public types are interchangeable.
+Fresh module applications and sealing therefore require care when sharing
+values between instances. If an equality is part of the API, expose a
+manifest alias or an explicit conversion. Do not infer it from the source
+representation you happened to see while debugging.
+.pp
+For compiler architecture, this distinction can be beneficial. A parsed-name
+type and a resolved-symbol type may both be represented by strings or
+integers, yet mixing them would be a bug. Separate identities make the stage
+boundary visible. A conversion operation can carry validation or lookup,
+while an accidental raw cast would bypass that work. Types become a way to
+express the pipeline's trust transitions.
+.sh 2 "Initialization still has a runtime story"
+.pp
+Functor application does not make module bodies pure or eager. A result can
+capture its argument module and initialize lazily when forced. Effects in
+either the argument or result module can therefore occur at first use rather
+than at the apparent textual application site. Keep initialization mostly
+pure and make effectful startup explicit if clients need predictable timing.
+Parameterization and initialization are orthogonal design questions.
+.pp
+Test a functor with more than one implementation of its parameter signature.
+This exposes hidden assumptions that a single concrete implementation can
+mask. For example, use a renderer with a visibly different format or an
+equality relation that deliberately ignores an annotation. Then verify the
+returned operations use the supplied contract rather than a hard-coded
+comparison or display routine. Such tests validate the abstraction rather
+than only its first instantiation.
+.sh 2 "Sources and further work"
+.pp
+Inspect functor parsing, module-argument checking, and runtime application in
+both MetaML implementations. Extend the Collection example with a second
+element module for strings, then compare it with passing callbacks directly
+to standalone functions. Design a signature for a symbol service containing
+an abstract symbol type, interning, and rendering. Explain which returned
+operations must share that symbol identity and therefore benefit from being
+constructed together by one functor application.

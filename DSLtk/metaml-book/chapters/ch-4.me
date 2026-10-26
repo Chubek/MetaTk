@@ -1,0 +1,121 @@
+.lua
+book.chapter(4, "Values, arithmetic, and evaluation")
+.endlua
+.sh 2 "Primitive values are already typed"
+.pp
+The primitive types are Unit, Bool, Int, Float, and String. Unit has the single
+value (), useful when an operation needs an explicit argument but no input
+information, or when its effect is the interesting result. Bool has true and
+false. Int is signed 64-bit two's-complement arithmetic; Float is binary64.
+String stores immutable bytes. Later chapters add tuples, lists, records,
+constructors, functions, and opaque host values to this initial vocabulary.
+.pp
+Do not confuse unit with an empty list or an absent value. The empty list has
+an element type that can be instantiated at use; None is an Option constructor
+representing absence; unit is a successful value containing no further
+information. These choices communicate different contracts. A printer returns
+unit because it performed an effect, while an indexed lookup returns Option
+because a requested element might not exist.
+.sh 2 "Integers obey a bounded arithmetic model"
+.pp
+Ordinary integer addition, subtraction, multiplication, and negation wrap.
+This is a language-level rule implemented consistently across the hosts, not
+permission for a C++ embedding callback to perform undefined signed overflow.
+When the mathematical result is required, checked library operations return
+Option. An absent result then means that the signed 64-bit interval could not
+represent the answer. Parsing a literal outside that interval is instead a
+source diagnostic; it does not wrap into another literal value.
+.lua
+book.code("metaml", [=[Test.equal "integer division" (7 / 3) 2
+Test.equal "truncates toward zero" ((~7) / 3) (~2)
+Test.equal "signed remainder" ((~7) % 3) (~1)
+Test.equal "wrap at boundary" (Int.max_value + 1) Int.min_value
+Test.equal "checked boundary" (Int.checked_add Int.max_value 1) None
+Test.equal "checked success" (Int.checked_mul 6 7) (Some 42)]=], "Arithmetic contracts at ordinary and boundary values")
+book.code("metaml-error:M0402", [=[1 / 0]=], "Integer division by zero is a diagnostic")
+.endlua
+.pp
+Division truncates toward zero, which differs from mathematical floor for a
+negative quotient. The remainder follows the dividend's sign in the familiar
+truncating convention. If an algorithm requires a nonnegative modular residue,
+state and implement that requirement explicitly. The most negative integer
+also has no positive counterpart in the same signed range, so applying abs
+does not magically turn bounded integers into mathematical integers.
+.sh 2 "Floating point is an approximation with explicit boundaries"
+.pp
+Binary64 can represent many useful values exactly, but most decimal fractions
+are approximations. Conversion from a sufficiently large integer can lose
+precision even though the integer itself fits in Int. Use Float.of_int to make
+that boundary visible. Arithmetic constraints do not imply unrestricted
+automatic coercion between every numeric type. A mixed representation should
+be a deliberate design choice, especially at a host or file-format boundary.
+.lua
+book.code("metaml", [=[average a b := (Float.of_int a + Float.of_int b) / 2.0
+Test.equal "explicit conversion" (average 3 4) 3.5
+Test.check "finite" (Float.is_finite (average 3 4))
+Test.check "NaN is unordered" (not (Float.nan == Float.nan))
+Test.equal "truncate" (Float.truncate 3.9) 3]=], "Conversions and classification")
+.endlua
+.pp
+NaN is unequal to itself. Infinity and negative zero are meaningful values as
+well, and canonical rendering preserves relevant distinctions. A comparison
+helper is not automatically a mathematically useful total ordering on values
+containing NaN. For numerical tests, prefer a domain-appropriate tolerance
+unless exact equality is part of the contract. For identifiers, money, and
+array sizes, do not select floating point merely because decimal text is
+convenient to display.
+.sh 2 "Evaluation order determines effects"
+.pp
+Function arguments are eager: their expressions are evaluated before the
+function body receives values. A conditional evaluates its condition and then
+only the selected branch. Boolean conjunction and disjunction short-circuit.
+These are different mechanisms. Passing an expensive fallback to an ordinary
+helper evaluates that fallback even when the helper eventually ignores it;
+putting it in the unselected branch of a conditional does not.
+.lua
+book.code("metaml", [=[safe_divide x y := if y == 0 then None else Some (x / y)
+Test.equal "avoided division" (safe_divide 7 0) None
+Test.equal "selected division" (safe_divide 7 2) (Some 3)
+Test.equal "short conjunction" (false && (1 / 0 == 0)) false
+Test.equal "short disjunction" (true || (1 / 0 == 0)) true]=], "Selection controls which expressions run")
+book.algorithm("Evaluate an ordinary call", {
+    "Evaluate the function expression to a callable value.",
+    "Evaluate each argument expression in evaluator order.",
+    "Bind the resulting values to the callable's parameters.",
+    "If insufficient arguments are supplied, return a partial application.",
+    "Otherwise evaluate the body in its captured environment."
+})
+.endlua
+.pp
+A closure captures an environment so its body can run later. That does not
+mean it memoizes the result or delays all input expressions. This distinction
+is central to the library chapters: Option.map delays its callback body until
+there is a value to map, but evaluating the callback expression itself is still
+ordinary eager evaluation. Similarly, constructing a list evaluates its
+elements rather than creating a lazy sequence of promised computations.
+.sh 2 "Equality, ordering, and display"
+.pp
+Compound values compare structurally where supported. Lists compare elements,
+tuples compare components, records include their labels and values, and
+constructors include their tags and arguments. Functions cannot be compared
+meaningfully by the generic operations and can cause a runtime diagnostic.
+Opaque host resources generally have identity semantics rather than a deep
+comparison of external state. A type that contains such a value inherits those
+limitations when a generic comparison reaches it.
+.pp
+Core.show returns canonical inspection text. A string appears quoted, a
+function appears as a function marker, and a constructor displays its name.
+That makes show excellent for debugging but unsuitable as a universal storage
+format. A persistent protocol needs an explicit schema and a defined decoder.
+The distinction becomes particularly important when a value contains an
+abstract type, a mutable handle, or an integer that a downstream JSON consumer
+would convert to an imprecise floating number.
+.sh 2 "Sources and further work"
+.pp
+The Value representation, evaluator arithmetic branches, and to_string in
+MetaML.hpp define the core behavior; metalib/int and metalib/float provide
+named interfaces. Test the boundary between wrapping and checked arithmetic by
+adding one to the maximum integer. Then write a division function returning a
+Result with an informative error. Explain why an eager default argument cannot
+replace its conditional when computing that default would itself divide by
+zero. The explanation should refer to evaluation, not just to types.

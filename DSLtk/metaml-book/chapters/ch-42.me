@@ -1,0 +1,121 @@
+.lua
+book.chapter(42, "Reference, glossary, and publishing the book")
+.endlua
+.sh 2 "A compact language map"
+.pp
+Definitions use :=, separate signatures use ::, and inline val annotations
+use a single colon. Functions use named formals or numbered tacit references;
+sections bind numbered hash holes locally. Application is usually written
+with whitespace. A value pipeline uses |>, forward composition uses >>,
+and backward composition uses <<. Types guide the supported interpretation
+of juxtaposition, so explicit composition remains useful when readability
+would otherwise depend on an obscure inference decision.
+.lua
+book.grammar("Selected surface forms", {
+    {"definition", 'name parameters* ":=" expression'},
+    {"signature", 'name "::" type'},
+    {"lambda", '"fn" parameters+ "->" expression'},
+    {"local", '"let" ["rec"] binding "in" expression'},
+    {"match", '"match" expression "with" branches'},
+    {"structure", '"module" Name ":=" "struct" items "end"'},
+    {"sealed", '"module" Name ":>" Signature ":=" structure_body'}
+})
+.endlua
+.pp
+This is a reading aid, not a replacement for the parser. Parenthesization,
+operator precedence, layout boundaries, pattern syntax, and module paths
+require the fuller explanations in the language chapters. Keep separate
+definitions at column one and indent continuations. Ordinary evaluation is
+eager; modules initialize lazily. Strings count bytes unless a specifically
+UTF-8-aware operation says otherwise. Integer operations wrap unless a
+checked API returns failure instead.
+.sh 2 "Terminology worth keeping precise"
+.pp
+A dialect is one host implementation, C++ or D. A binding associates a name
+with a value-producing definition. A closure pairs code with a captured
+environment. A section is an expression elaborated into a function through
+local holes. A row is the extensible portion of a record type. A signature
+describes a module interface; ascription checks it; opaque sealing hides
+representation details and restricts visibility. A functor maps a module
+argument to a module result.
+.pp
+An AST records abstract syntax; a concrete syntax representation may also
+retain trivia needed for editing. A visitor interprets or transforms nodes
+through systematic dispatch. A rewrite replaces a matching structure.
+Normalization seeks a state with no applicable rule. Equality saturation
+retains equivalent alternatives until no further change or a limit occurs.
+Extraction selects a representative. These operations are related but
+should not be used as interchangeable names for "optimizing a tree."
+.sh 2 "Find authoritative contracts"
+.pp
+MetaML.hpp and MetaML.d contain the language implementations. Portable module
+signatures live in metalib directories containing mod.ml. Host installers
+and implementations live under metalib/cpp and metalib/d. The genuine C ABI
+is metalib/c/MetaML.h. DSLtk.hpp and DSLtk.d define the toolkit; native
+examples and tests show its supported interfaces. The compact metaml-manual
+provides additional signature lookup alongside this book's longer explanations.
+.pp
+Prefer implementation and executable fixtures when an older design sketch
+describes behavior that has changed. In particular, do not infer lazy
+ordinary evaluation, C++17 compatibility, automatic prelude loading in every
+native session, or implementation of every named platform service from an
+old overview. Record the source revision used when documenting behavior.
+A useful reference tells readers how to verify a claim, not merely where
+the claim was first written.
+.sh 2 "The publication pipeline"
+.pp
+This book is authored in the me macro language with embedded Lua blocks.
+Build.sh invokes the bundled luaROFF preprocessor, whose executable is pplua,
+then groff with pic, tbl, and eqn support. Custom rofflets under
+luaROFF/rofflets implement code highlighting, graphs, pseudocode, grammars,
+equations, notes, symbols, and UML-style diagrams. Graphs are native vector
+drawings in PDF, with readable textual counterparts in the text edition.
+.lua
+book.code("sh", [=[metaml-book/build.sh --build-luaroff --format all --check
+metaml-book/build.sh --no-build-luaroff --format pdf
+metaml-book/build.sh --pplua /opt/bin/pplua --format txt
+metaml-book/build.sh --install-luaroff --prefix "$HOME/.local" --format pdf]=],
+    "Build locally, reuse a binary, or install luaROFF explicitly")
+.endlua
+.pp
+Auto mode uses an explicitly selected executable, an existing local build,
+or an installed pplua before compiling the bundled source if necessary.
+Installation is optional and never requires the book renderer to use the
+installed copy: the local build remains usable, including with staged
+installation through DESTDIR. LuaROFF compilation requires CMake, C++17,
+Lua 5.4 headers and libraries, and bundled sol2; the MetaML interpreter
+checked by the book separately requires C++20.
+.sh 2 "Authoring and checking"
+.pp
+Each chapter declares its number and exact title through book.chapter.
+The shared Lua driver verifies order and completeness. Code listings use
+book.code with an explicit language and a Lua long string. Complete MetaML
+listings contain assertions and run in fresh processes. Expected-error
+listings name a diagnostic code. Native fragments and pseudocode are labelled
+so readers do not mistake illustrative structure for a complete executable.
+.pp
+The structural checker inventories all 42 chapters, validates substantial
+prose and required sections, and records source hashes in a manifest.
+Executable checking runs the MetaML listings and rofflet smoke tests.
+The renderer treats preprocessor and groff diagnostics as build failures
+and publishes artifacts only after successful rendering. These checks do
+not replace editorial review, but they prevent missing chapters, broken
+examples, and silently failed Lua generation from masquerading as a
+finished volume.
+.sh 2 "Maintain examples as interfaces evolve"
+.pp
+When a public API changes, update the explanation, successful examples,
+failure cases, and any affected source references together. Keep standalone
+listings independent rather than relying on definitions hidden in earlier
+chapters. Use deterministic fixtures and avoid interactive prompts in code
+intended for batch execution. Regenerate both PDF and text so improvements
+to diagrams or notation remain accessible in both editions.
+.sh 2 "Sources and further work"
+.pp
+Read metaml-book/README.md, build.sh, macros/book.lua, scripts/check_book.py,
+and luaROFF/rofflets/README.md for the publishing implementation. Extend one
+chapter with a new checked example and a diagram, then rebuild every output
+format. As a final project, extend chapter 31 into a named-expression
+language with source-aware errors and a sealed public interface. The book's
+central method remains the same: establish explicit representations,
+preserve their invariants, and test the boundaries between them.

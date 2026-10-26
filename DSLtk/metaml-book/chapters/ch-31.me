@@ -1,0 +1,155 @@
+.lua
+book.chapter(31, "A complete expression-language toolchain")
+.endlua
+.sh 2 "Define a small language completely"
+.pp
+We now build a complete toolchain for a prefix arithmetic language. Inputs
+are integer atoms or parenthesized add and mul forms with exactly two operands.
+The tool parses text, validates structure and numeric range, lowers to an
+expression ADT, evaluates, folds constants, and emits canonical source.
+Prefix syntax keeps the example focused on representation boundaries rather
+than operator precedence. Nothing is delegated to Frontend.eval: our language
+has its own explicitly implemented semantics.
+.lua
+book.grammar("The case-study input language", {
+    {"expression", 'integer | "(add" expression expression ")"'},
+    {"expression", '"(mul" expression expression ")"'}
+})
+book.chain({"Source bytes", "SExpr syntax", "Validated Expr", "Folded Expr", "Canonical source"},
+    "The case study establishes an invariant at each boundary")
+.endlua
+.pp
+Arithmetic uses MetaML's wrapping Int operations. There are no variables,
+effects, division, or user-defined functions in the input language. These
+restrictions matter to optimization: evaluating both children and folding
+their arithmetic preserves the specified semantics. If effects or exceptions
+were later introduced, apparently simple algebraic rewrites could change
+observable behavior. An optimizer's correctness argument always depends on
+the language it transforms.
+.sh 2 "Parse flexible syntax, then validate a stronger model"
+.pp
+SExpr.parse_one handles balanced structure and atom boundaries. It can accept
+many expressions outside our language, so a lowering function checks tags,
+arity, and numeric conversion. The Expr ADT then guarantees that every Add
+and Mul has exactly two expression children and every Lit contains a valid
+Int. Later semantic passes need not repeatedly check arbitrary child lists.
+This division makes failures precise and successful passes simpler.
+.pp
+The following listing is self-contained. Result.map2 combines the two
+recursive lowering results. Its arguments are eager, so both operands are
+lowered before map2 chooses a result; when both fail, the first error is
+preferred. That is an intentional bounded example policy, not a claim that
+the compiler stops all work immediately after the first malformed child.
+A larger implementation could use and_then for strict short-circuiting.
+.lua
+book.code("metaml", [=[type Expr := | Lit Int | Add Expr Expr | Mul Expr Expr
+
+lower syntax := match syntax with
+  | Atom text -> Int.from_string text |> Result.from_option "invalid integer"
+      |> Result.map Lit
+  | SList [Atom "add", a, b] -> Result.map2 Add (lower a) (lower b)
+  | SList [Atom "mul", a, b] -> Result.map2 Mul (lower a) (lower b)
+  | _ -> Err "expected an integer or a binary add/mul form"
+
+parse source := SExpr.parse_one source |> Result.and_then lower
+
+evaluate expr := match expr with
+  | Lit n -> n
+  | Add a b -> evaluate a + evaluate b
+  | Mul a b -> evaluate a * evaluate b
+
+fold expr := match expr with
+  | Lit n -> Lit n
+  | Add a b ->
+      let left := fold a in
+      let right := fold b in
+      (match (left, right) with
+        | (Lit x, Lit y) -> Lit (x + y)
+        | _ -> Add left right)
+  | Mul a b ->
+      let left := fold a in
+      let right := fold b in
+      (match (left, right) with
+        | (Lit x, Lit y) -> Lit (x * y)
+        | _ -> Mul left right)
+
+emit expr := match expr with
+  | Lit n -> Int.to_string n
+  | Add a b -> "(add " ^ emit a ^ " " ^ emit b ^ ")"
+  | Mul a b -> "(mul " ^ emit a ^ " " ^ emit b ^ ")"
+
+compile source := parse source |> Result.map (fold >> emit)
+source := "(add 2 (mul 3 4))"
+tree := Result.unwrap (parse source)
+Test.equal "interpret" (evaluate tree) 14
+Test.equal "compile" (compile source) (Ok "14")
+Test.equal "preserve semantics" (evaluate (fold tree)) (evaluate tree)
+Test.equal "round trip" (parse (emit tree)) (Ok tree)
+Test.equal "wrong arity" (compile "(add 1)")
+  (Err "expected an integer or a binary add/mul form")
+Test.equal "unknown operation" (compile "(sub 3 2)")
+  (Err "expected an integer or a binary add/mul form")
+Test.equal "bad integer" (compile "(add x 1)") (Err "invalid integer")
+Test.check "unbalanced source" (Result.is_err (compile "(add 1 2"))
+samples := ["0", "(add 1 2)", "(mul (add 1 2) (add 3 4))"]
+Test.check "semantic preservation over corpus"
+  (List.all (fn text ->
+    let expr := Result.unwrap (parse text) in
+    evaluate (fold expr) == evaluate expr) samples)]=],
+    "A complete parser, validator, evaluator, optimizer, and emitter")
+.endlua
+.sh 2 "Explain the optimization"
+.pp
+Fold transforms children before their parent. Once both child results are
+literals, it evaluates the corresponding operation and constructs one Lit.
+Because this language has only closed arithmetic expressions, every valid
+finite input eventually becomes a literal. The fallback branches preserve
+structure and make the intended extension point visible if variables are
+added later. They are not evidence that variables already exist in this
+version of the language.
+.pp
+The preservation argument is structural induction. A literal's value is
+unchanged. Assuming folding preserves each child, replacing their Add or
+Mul with the same wrapping operation on their values preserves the parent.
+Thus the entire tree's value is preserved. This argument does not rely on
+floating-point associativity or an unbounded integer model. Keeping the
+arithmetic contract explicit makes the proof match the executable program.
+.sh 2 "Test relationships between stages"
+.pp
+The tests cover more than a final answer. Parsing emitted syntax reconstructs
+the original domain tree. Evaluating a folded tree equals evaluating its
+input. Compilation rejects malformed arities, unknown operators, bad numeric
+atoms, and unbalanced input. These properties exercise different boundaries:
+syntax parsing, semantic lowering, transformation, and output reconstruction.
+A single successful arithmetic example could not establish all of them.
+.pp
+Canonical emission uses decimal integer text and explicit prefix delimiters.
+It intentionally discards whitespace and the original integer spelling.
+The round-trip contract is tree equality, not byte equality with the user's
+source. A source editor would need to preserve trivia and spans separately.
+The current error strings likewise identify a category but not a precise
+source range; adding annotated syntax is the next step for an editor-quality
+diagnostic experience.
+.sh 2 "Extend one contract at a time"
+.pp
+Adding variables requires a Var constructor, an environment, unknown-name
+errors, and a revised evaluator result type. Constant folding would then
+retain nonconstant subtrees. Adding division requires explicit zero and
+overflow behavior. Adding effects invalidates rewrites that erase or duplicate
+operands. Adding infix syntax changes the frontend while the validated ADT
+can remain stable. These are separate changes, each with its own tests.
+.pp
+For production use, bound input size and nesting and choose an execution
+budget appropriate to the application. This example uses ordinary recursive
+tree functions, so very deep input consumes host resources. A tail-recursive
+worklist can replace some traversals, but output size and retained tree memory
+remain real costs. Resource behavior belongs in a toolchain's contract
+alongside accepted syntax and semantic correctness.
+.sh 2 "Sources and further work"
+.pp
+The implementation combines SExpr, Result, List, and the language's own ADTs
+and recursion. Compare it with the generic AST visitor chapter and the native
+rewriting facilities later in the book. Extend the compiler with variables,
+then test that folding preserves evaluation under several environments.
+Retain the existing malformed-input tests so extending the language does
+not accidentally weaken the validation boundary that subsequent passes rely on.

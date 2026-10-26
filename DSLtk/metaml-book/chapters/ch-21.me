@@ -1,0 +1,122 @@
+.lua
+book.chapter(21, "Core and the numeric libraries")
+.endlua
+.sh 2 "The prelude is a convenient vocabulary"
+.pp
+The prelude loads portable library modules and opens Core. Common helpers such
+as map, filter, fold, sum, and length become convenient unqualified names.
+Qualified names remain preferable when documenting a library interface because
+they identify the owner of an operation. In particular, concat in the prelude
+joins strings, while List.concat flattens a list of lists. Similar names do
+not imply identical types or behavior.
+.pp
+Core contains small functional adapters that help align interfaces without
+changing the underlying computation. Identity returns its argument, const
+retains the first argument, and flip reverses the first two arguments of a
+curried function. Curry and uncurry adapt pair-taking and curried interfaces.
+These helpers are useful when they clarify a library connection; a dense
+expression of adapters can be less readable than a short named lambda.
+.lua
+book.code("metaml", [=[Test.equal "identity" (Core.id "x") "x"
+Test.equal "constant" (Core.const 3 "ignored") 3
+Test.equal "flipped subtraction" (Core.flip (fn x y -> x - y) 2 9) 7
+Test.equal "prelude traversal" ([1, 2, 3] |> map (* 2) |> sum) 12
+Test.equal "string concatenation" (concat ["Meta", "ML"]) "MetaML"]=],
+    "Core adapters and prelude conveniences")
+.endlua
+.sh 2 "Choose an arithmetic contract"
+.pp
+Int exposes named arithmetic, comparison, bounds, conversion, bit operations,
+and number-theory helpers. Its t alias is the built-in integer type. Ordinary
+operations wrap in the signed 64-bit representation. Checked addition,
+subtraction, and multiplication instead return None when the mathematical
+answer cannot be represented. For allocation sizes and input counts, checked
+arithmetic usually expresses the desired contract more accurately than wraparound.
+.lua
+book.code("metaml", [=[Test.equal "checked product" (Int.checked_mul 6 7) (Some 42)
+Test.equal "asymmetric bound" (Int.checked_mul Int.min_value (~1)) None
+Test.equal "boundary subtraction" (Int.checked_sub Int.min_value 0) (Some Int.min_value)
+Test.equal "greatest common divisor" (Int.gcd 84 30) 6
+Test.equal "parse hexadecimal" (Int.from_string "0xff") (Some 255)
+Test.equal "reject partial input" (Int.from_string "12x") None]=],
+    "Integer operations with explicit boundary behavior")
+.endlua
+.pp
+The minimum integer has no positive counterpart in the signed range. Its
+absolute value therefore remains the minimum integer under wrapping behavior.
+Related extreme cases affect gcd and lcm: these functions do not introduce
+arbitrary-precision arithmetic. Pow requires a nonnegative exponent. Shift
+counts are masked to six bits, so a shift distance is interpreted modulo 64.
+Document these details when implementing binary formats or numeric protocols.
+.pp
+Int.from_string accepts supported signs, bases, and separators but rejects
+whitespace, incomplete parses, malformed separators, and out-of-range values.
+Its Option result is appropriate for external input. A source literal is
+handled by the lexer instead, and malformed syntax becomes a diagnostic.
+Do not confuse a conversion function's recoverable result with the error
+behavior of an invalid token embedded directly in a program.
+.sh 2 "Floating operations retain IEEE distinctions"
+.pp
+Float provides elementary functions, rounding, classification, constants,
+and conversion. Floor, ceil, and round return Float values. Truncate and
+to_int return integers, saturating at the integer limits and mapping NaN to
+zero. This defined boundary differs from assuming an arbitrary native cast
+will behave usefully for every floating value. Explicit conversion is
+particularly important in host callbacks and interchange formats.
+.lua
+book.code("metaml", [=[Test.equal "exact square root" (Float.sqrt 9.0) 3.0
+Test.equal "rounding operations"
+  (Float.floor 2.9, Float.ceil 2.1, Float.round 2.5) (2.0, 3.0, 3.0)
+Test.check "infinity classification" (Float.is_infinite Float.infinity)
+Test.check "NaN classification" (Float.is_nan Float.nan)
+Test.equal "empty conversion" (Float.from_string "") None]=],
+    "Rounding, classification, and fallible conversion")
+.endlua
+.pp
+Float.from_string returns Option, whereas of_string reports a runtime failure
+on invalid input. Numeric interpretation uses the host conversion machinery;
+it is not a strict JSON-number validator. Float.to_string seeks a short
+round-tripping representation and preserves negative zero. Special values
+render as nan, inf, or -inf. Such strings are useful MetaML inspection text
+but are not automatically valid in every external numeric format.
+.sh 2 "Numerical tests should express the intended accuracy"
+.pp
+Exact equality is appropriate for exactly representable arithmetic or a
+specified exact round trip. Approximate algorithms need a tolerance related
+to their domain. An absolute tolerance handles values near zero, while a
+relative tolerance scales with magnitude. Combining both is often useful.
+The chosen bound should follow the algorithm's accuracy requirements rather
+than an arbitrary number copied from an unrelated test.
+.lua
+book.code("metaml", [=[close actual expected :=
+  Float.abs (actual - expected) <=
+    0.000000001 * Float.max 1.0 (Float.abs expected)
+Test.check "approximate decimal arithmetic" (close (0.1 + 0.2) 0.3)
+Test.check "reject meaningful difference" (not (close 1.0 1.1))]=],
+    "A combined absolute and relative comparison for finite values")
+.endlua
+.pp
+The comparison deliberately assumes finite inputs. NaNs and infinities need
+separate classification if they belong to the application's domain. A
+three-way comparator is not a substitute for an accuracy policy, and sorting
+NaN-containing values does not create a meaningful mathematical order.
+Elementary functions can also differ at the last bit across platform math
+libraries, so portability claims should distinguish same-host dialect parity
+from universal bit-identical numerical results.
+.sh 2 "Rendering and hashing are not serialization"
+.pp
+Core.show renders values for inspection, including quotes around strings and
+a marker for functions. Core.hash hashes a rendered representation rather
+than defining a durable, schema-independent object identity. Core.equal and
+compare are structural operations with runtime restrictions on functions and
+opaque resources. For long-lived caches or public data formats, choose a
+canonical serialization and version its schema before hashing the bytes.
+.sh 2 "Sources and further work"
+.pp
+Read metalib/core/mod.ml, metalib/int/mod.ml, metalib/float/mod.ml, and their
+runtime primitives. Write a checked rectangular allocation-size calculator
+that rejects negative dimensions before multiplying. Then write a floating
+mean that returns None on an empty list. Explain why checking emptiness is a
+domain decision, checked multiplication is a representation decision, and a
+tolerance is an accuracy decision. Keeping those questions separate makes
+numeric interfaces much easier to review.

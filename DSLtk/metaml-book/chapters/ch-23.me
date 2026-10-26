@@ -1,0 +1,123 @@
+.lua
+book.chapter(23, "Option and Result pipelines")
+.endlua
+.sh 2 "Choose how much failure information to retain"
+.pp
+Option represents absence with None or presence with Some value. Result
+represents success with Ok value or failure with Err error. Both are ordinary
+algebraic values. Their constructors exist before loading the portable
+library, while the convenient combinators come from metalib. Choose Option
+when absence needs no explanation, such as a missing index. Choose Result
+when a caller needs to distinguish malformed input, unsupported data, and
+other meaningful categories of failure.
+.pp
+An error payload need not be a string. A domain-specific ADT can preserve
+structured context until the user-interface boundary renders it. Converting
+every failure immediately into a sentence makes later classification harder.
+Conversely, introducing a large error hierarchy for an optional lookup can
+obscure a simple contract. The return type should carry the information that
+clients need to make their next decision.
+.lua
+book.code("metaml", [=[positive text :=
+  Int.from_string text
+  |> Result.from_option "not an integer"
+  |> Result.and_then (fn n -> if n > 0 then Ok n else Err "not positive")
+Test.equal "success" (positive "12") (Ok 12)
+Test.equal "syntax failure" (positive "bad") (Err "not an integer")
+Test.equal "domain failure" (positive "0") (Err "not positive")]=],
+    "Preserve failure through a validation pipeline")
+.endlua
+.sh 2 "Map transforms a payload; bind changes the computation"
+.pp
+Option.map applies a pure transformation to a present payload and preserves
+None. Option.flat_map accepts a transformation that already returns Option,
+avoiding a nested Option. Option.bind is the data-first counterpart. Result.map
+transforms successes, map_err transforms errors, and and_then chains a
+fallible computation. Read the types before choosing: mapping a fallible
+function deliberately creates a nested wrapper, while chaining removes one
+layer by propagating failure.
+.lua
+book.code("metaml", [=[Test.equal "map presence" (Some 20 |> Option.map (+ 1)) (Some 21)
+Test.equal "map absence" (None |> Option.map (+ 1)) None
+Test.equal "chain lookup" (Some [10, 20] |> Option.flat_map (List.nth 1)) (Some 20)
+Test.equal "map error" (Err 404 |> Result.map_err Int.to_string) (Err "404")
+Test.equal "flatten" (Result.flatten (Ok (Ok 7))) (Ok 7)]=],
+    "Operations distinguish transformation from sequencing")
+.endlua
+.pp
+Pipeline-friendly argument order usually places the container last. Some
+conveniences use another order: Option.get_or takes the option before its
+default, while with_default takes the default first. Result.get_or is also
+data-first. Do not infer an argument convention merely from a familiar name
+in another language. Qualified names and signatures help keep a chain readable
+when several related libraries use similar vocabulary.
+.sh 2 "Collecting successful computations"
+.pp
+Sequence converts a list of wrapped values into a wrapped list. Traverse
+applies a fallible function while collecting its results. Both preserve
+successful input order, and empty input succeeds with an empty list. Option
+traversal stops at the first None; Result traversal stops at the first Err
+and returns that error. This is short-circuit validation rather than an
+accumulator of every problem in the input.
+.lua
+book.code("metaml", [=[Test.equal "option sequence" (Option.sequence [Some 1, Some 2]) (Some [1, 2])
+Test.equal "empty result sequence" (Result.sequence []) (Ok [])
+Test.equal "first error" (Result.sequence [Ok 1, Err "first", Err "second"])
+  (Err "first")
+Test.equal "parse all" (Option.traverse Int.from_string ["1", "2"]) (Some [1, 2])
+Test.equal "stop on absence" (Option.traverse Int.from_string ["1", "bad", "3"]) None]=],
+    "Collection traversal makes failure policy explicit")
+.endlua
+.pp
+If every error must be reported, map a validator over the whole input and
+partition or fold the results yourself. If invalid entries should be dropped,
+filter_map or a constructor-pattern comprehension expresses that different
+policy. None of these strategies is universally correct. A batch compiler
+often wants several diagnostics, while a dependent configuration pipeline
+cannot meaningfully continue until an earlier field has been validated.
+.sh 2 "Eagerness still applies"
+.pp
+The arguments to get_or, with_default, or_else, and map2 are evaluated before
+the helper runs. A present option does not prevent an expensive default
+argument from being constructed. Likewise, Result.map2 cannot prevent the
+work that produces its second argument. To delay that work, put it inside a
+match branch or an and_then callback. Short-circuiting belongs to the callback
+invocation contract, not to every expression appearing near a wrapper.
+.lua
+book.algorithm("Traverse with first-error semantics", {
+    "Start with an empty reversed result list.",
+    "For each input in source order:",
+    {1, "Invoke the validator exactly when this input is reached."},
+    {1, "If it returns Err, return that error immediately."},
+    {1, "Otherwise prepend its payload to the accumulator."},
+    "Reverse the accumulator and return Ok with the resulting list."
+})
+.endlua
+.pp
+Unwrap and get are escape hatches for established invariants. Result.unwrap
+and Option.get abort on failure rather than offering recovery. Use them after
+a test has explicitly established success, or inside an abstraction whose
+construction proves the invariant. Sprinkling unwrap through a parser defeats
+the purpose of modelling ordinary failure as data and makes error context
+harder to retain.
+.sh 2 "Sources and further work"
+.pp
+When translating between wrappers, account for information loss explicitly.
+Option.to_result supplies an error payload for absence; Result.to_option
+discards an existing error. The latter can be appropriate for a best-effort
+search, but it is a poor default at a user-input boundary where the explanation
+will be needed later. Nested wrappers can also be meaningful: Result (Option
+value) error distinguishes a successful lookup that found nothing from a
+lookup operation that failed. Flattening that distinction without a domain
+reason can make recovery behavior impossible to implement correctly.
+.pp
+Keep these distinctions in API documentation as well as tests. A caller should
+know whether None means missing data, invalid data, or an intentionally filtered
+result before deciding to substitute a default.
+.pp
+Read metalib/option/mod.ml and metalib/result/mod.ml for the precise public
+signatures and traversal order. Write two validators for a list of counts:
+one that stops at the first invalid count, and one that reports every invalid
+position. Test empty input and two consecutive failures. Explain which work
+each version performs after the first failure, and why neither version should
+silently discard an error unless its public contract explicitly says so.

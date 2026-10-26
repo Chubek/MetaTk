@@ -1,0 +1,126 @@
+.lua
+book.chapter(10, "Local definitions and recursion")
+.endlua
+.sh 2 "Let introduces a local reasoning boundary"
+.pp
+A let expression names an intermediate computation for a following body
+introduced by in. It is an expression, so its entire result can become an
+argument, a branch value, or another binding's right-hand side. Local names
+reduce repetition and make invariants explicit without exporting helpers to
+every caller. Their scope is the following body, not the remainder of an
+unrelated top-level file.
+.lua
+book.code("metaml", [=[distance_squared x y :=
+  let xx := x * x in
+  let yy := y * y in
+  xx + yy
+Test.equal "local calculations" (distance_squared 3 4) 25
+Test.equal "let is an expression" (10 + (let x := 4 in x * 2)) 18]=],
+    "Naming intermediate values")
+.endlua
+.pp
+The nesting can be read from top to bottom: compute xx, then yy, then the
+body. Because evaluation is eager, moving an effectful expression into an
+earlier let can change when its effect happens. For pure arithmetic the
+refactoring mainly improves readability. For output or mutable handles,
+review evaluation order as part of the change. A local name is not an implicit
+promise or a request for memoization beyond evaluating that binding normally.
+.sh 2 "Recursion states a smaller problem"
+.pp
+Use let rec when a local function refers to itself. Top-level function
+definitions also support recursion through checked binding cells. A recursive
+algorithm needs a base case and a progress argument: what makes the next call
+closer to termination? For a list it may be the remaining tail; for a numeric
+loop it may be a nonnegative counter that decreases. Types alone do not prove
+that progress or termination holds.
+.lua
+book.code("metaml", [=[sum_to n :=
+  let rec loop k acc :=
+    if k <= 0 then acc else loop (k - 1) (acc + k)
+  in loop n 0
+Test.equal "base case" (sum_to 0) 0
+Test.equal "recursive sum" (sum_to 100) 5050
+Test.equal "nonpositive contract" (sum_to (~2)) 0]=], "A local accumulator loop")
+.endlua
+.pp
+The example defines its behavior for nonpositive input explicitly. Another API
+might return an error for negative input instead. Neither choice follows
+automatically from using recursion. State the contract before discussing the
+implementation. This habit is particularly useful in compiler passes, where
+an empty child list may be valid for a leaf but invalid for a binary operator.
+The base case belongs to the domain model, not just to the host call stack.
+.sh 2 "Tail position changes the resource model"
+.pp
+A call is in tail position when its result becomes the surrounding function's
+result without further work. In the loop above, the recursive call is the
+complete else branch. By contrast, 1 + recurse rest must wait for the recursive
+result and then perform addition. The evaluator optimizes supported tail calls
+by replacing its active expression and environment instead of growing the
+native call stack. Accumulator-style traversals exploit that behavior.
+.lua
+book.algorithm("Tail-recursive summation", {
+    "Initialize remaining to n and accumulator to zero.",
+    "While remaining is positive:",
+    {1, "Add remaining to accumulator."},
+    {1, "Decrease remaining by one."},
+    "Return accumulator.",
+    "Invariant: accumulator plus the unprocessed sum equals the requested sum."
+})
+.endlua
+.pp
+The invariant explains correctness independently of the recursive syntax.
+After each step, one term moves from the remaining work into the accumulator.
+When no work remains, the accumulator is the answer. This is a stronger
+explanation than saying "the function calls itself until zero," because it
+states what is preserved. For bounded integers, also specify whether the
+invariant is about mathematical sums or the language's wrapping arithmetic.
+.sh 2 "Persistent accumulators"
+.pp
+Building a list often uses a reversed accumulator. Prepending is cheap, while
+appending one element at the end repeatedly can traverse a growing prefix.
+Reverse once after the traversal to recover source order. This pattern appears
+throughout functional libraries because it combines an explicit progress
+measure with predictable allocation behavior. It also avoids constructing a
+chain of deferred work that must be completed after recursive calls return.
+.lua
+book.code("metaml", [=[squares xs :=
+  let rec loop rest acc := match rest with
+    | [] -> List.reverse acc
+    | x :: tail -> loop tail ((x * x) :: acc)
+  in loop xs []
+Test.equal "empty traversal" (squares []) []
+Test.equal "preserved order" (squares [3, 1, 2]) [9, 1, 4]]=],
+    "A reversed accumulator preserves a linear construction strategy")
+.endlua
+.pp
+Do not confuse tail recursion with constant total memory. The result list
+still occupies space, captured environments can retain values, and native
+library operations can allocate their own structures. Tail-call handling
+removes a particular source of stack growth; it does not erase the cost of
+the data being processed or produced. For a tree traversal, recursive visits
+to multiple children may also require explicit work stacks to avoid deep
+native recursion.
+.sh 2 "Depth limits are not execution budgets"
+.pp
+An embedding can set a maximum recursion depth. This helps bound supported
+non-tail recursive evaluation, but an infinite tail-recursive loop can run
+without crossing that depth. A small source expression can also request a
+large allocation through a library operation. A runtime intended for
+untrusted programs needs external time and memory controls in addition to
+language-level limits. Chapter 34 explains that deployment architecture.
+.pp
+The supplied command-line wrapper uses a larger stack on supported POSIX
+systems for some workloads. An application's worker thread may have a very
+different stack policy. Do not conclude from a successful CLI experiment that
+an arbitrary deeply recursive embedding will behave identically at the
+resource boundary. Test representative nesting and collection sizes in the
+actual host environment, and document limits as part of the public interface.
+.sh 2 "Sources and further work"
+.pp
+Inspect the evaluator's tail-call loop, Session.set_max_depth, and the
+recursive helpers in metalib/list/mod.ml. Implement factorial in direct and
+accumulator form, then compare traces for small inputs. Add a checked
+multiplication variant returning Option and explain where it must stop on
+overflow. Finally, state a loop invariant for a list reversal. An invariant
+that describes both processed and unprocessed data is useful evidence of
+correctness before any performance measurement begins.

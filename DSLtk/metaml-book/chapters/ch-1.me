@@ -1,0 +1,121 @@
+.lua
+book.chapter(1, "A language for building languages")
+.endlua
+.sh 2 "What MetaML gives you"
+.pp
+Meta-programming begins when a program manipulates another program's structure:
+reading expressions, representing declarations, checking types, reorganizing
+trees, or generating an output language. A useful meta-language must make those
+structures pleasant to express without making their invariants invisible.
+MetaML combines an ML-style functional core with algebraic data, inferred types,
+modules, and a library of language-construction tools. You can start with small
+transformations and grow them into a compiler pipeline embedded in an application.
+.pp
+The language has two host implementations. C++ clients include MetaML.hpp; D
+clients import MetaML. Both accept the same intended language and share the
+portable library sources under metalib. The host implementation is called a
+dialect here; selecting it does not select a different syntax for your scripts.
+The C interface is an adapter over the C++ interpreter, rather than a third
+language implementation. The surrounding DSLtk toolkit supplies reusable
+infrastructure for languages other than MetaML as well.
+.pp
+The book's title uses meta-programming in this practical sense. This MetaML does
+not provide the quotation, escape, and run operators associated with some staged
+languages with the same name. Instead, programs work with explicit data types,
+generic AST values, parser libraries, and host interfaces. Being explicit about
+the representation is valuable: it lets you decide what constitutes a valid
+tree, which information a transformation preserves, and when evaluation occurs.
+.sh 2 "One computation, several styles"
+.pp
+Named functions are a good starting point. A definition uses :=, application
+uses whitespace, and a list pipeline passes data from left to right. The
+following complete program computes the sum of three squares. Test.equal makes
+the intended result executable rather than relying on an informal comment.
+.lua
+book.code("metaml", [=[square x := x * x
+answer := [1, 2, 3] |> List.map square |> List.sum
+Test.equal "sum of squares" answer 14]=], "A first complete program")
+.endlua
+.pp
+A tacit function refers to numbered formal parameters. A section captures holes
+in an operator expression. Composition combines functions before supplying their
+input. These mechanisms describe ordinary typed functions; they do not create
+three incompatible kinds of values. Prefer whichever notation exposes the
+information a reader needs at that point. A short arithmetic helper is a good
+place for numbered parameters; a substantial decision procedure usually needs
+descriptive names.
+.lua
+book.code("metaml", [=[square := $1 * $1
+increment := (+ 1)
+transform := square >> increment
+Test.equal "composed function" (transform 4) 17
+Test.equal "explicit pipeline" (4 |> square |> increment) 17]=], "Tacit, sectional, and compositional forms")
+.endlua
+.pp
+Modules provide a different scale of composition. A structure groups types and
+values, a signature states an interface, and a functor builds a module from
+another module. Together these let a library hide a representation while
+retaining static guarantees about the operations clients can perform. They are
+especially useful when several passes must agree on an abstract symbol or node
+type. Chapters 16 through 18 develop that architectural level carefully.
+.sh 2 "The route from source to result"
+.pp
+An interpreter does more than substitute names in text. It first recognizes
+tokens, builds language-specific syntax, checks relationships between types,
+then evaluates the checked program. A source span connects a failure at any of
+these stages back to the original input. Treat this separation as a debugging
+method: a malformed token, an invalid pattern, and a denied host operation need
+different remedies even if they occur on the same source line.
+.lua
+book.chain({"Source text", "Tokens and syntax", "Checked program", "Values and effects"},
+    "The interpreter's conceptual stages")
+.endlua
+.pp
+Ordinary evaluation is eager. Calling a function evaluates its arguments before
+executing the body. A closure delays its body until application, but does not
+automatically delay its arguments. Module bodies initialize lazily when their
+runtime values are first needed. Keeping these two statements separate avoids a
+common mistake: assuming that a functional language must evaluate every
+expression lazily. Effects such as printing make the difference observable.
+.sh 2 "A working vocabulary for the journey"
+.pp
+A value is a result such as an integer, a record, or a function. An expression
+computes a value. A binding associates a name with a value-producing definition.
+A type constrains which operations fit together. An AST is a structured
+representation of source rather than its original character sequence. A visitor
+systematically interprets or transforms a tree. A primitive is a host operation
+registered at the language boundary. These terms recur because a language tool
+often has all of them at once, at different levels.
+.pp
+For example, an expression-language compiler written in MetaML has its own
+expression values, while MetaML itself also has an internal expression AST.
+The generic Ast supplied by ASTBuilder is another representation again. Do not
+assume that a generic node tagged "add" is automatically a checked MetaML
+addition. Your tool must assign the meaning. Chapter 31 demonstrates this
+distinction by parsing a small input language, translating to a typed domain
+model, simplifying it, evaluating it, and emitting another representation.
+.sh 2 "How to use this book"
+.pp
+Read the first twenty chapters sequentially if ML-family languages are new to
+you. If you already know functional programming, pay particular attention to
+tacit parameters, typed juxtaposition, source layout, module initialization,
+and the distinction between ordinary errors and Result values. Library chapters
+then build toward the complete toolchain. The embedding chapters explain
+lifetime and permission boundaries, and six dedicated chapters examine DSLtk.hpp
+at the C++ level with corresponding D viewpoints.
+.pp
+Every complete MetaML listing is independent. Run it with the supplied CLI and
+an explicit standard-library directory; the next chapter gives the commands.
+The book checker starts fresh processes so definitions cannot accidentally leak
+from earlier examples. Listings labelled pseudocode describe algorithms rather
+than claiming runnable syntax. Descriptive EBNF excerpts explain selected forms
+without pretending to replace the implementation's complete parser.
+.sh 2 "Sources and further work"
+.pp
+Start with MetaML.hpp, MetaML.d, metalib/prelude/mod.ml, and
+metaml-cli/metaml.cpp. The compact metaml-manual directory is useful for
+signature lookup alongside this longer treatment. As an exercise, change the
+first program to sum only even squares and state its expected result before
+running it. Then express the element transformation in named and tacit form.
+The important observation is that notation changes while the function's input,
+output, and testable contract remain the same.

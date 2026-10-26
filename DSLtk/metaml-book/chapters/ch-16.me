@@ -1,0 +1,128 @@
+.lua
+book.chapter(16, "Structures and module initialization")
+.endlua
+.sh 2 "Group related meanings"
+.pp
+A structure groups values, types, and nested modules under one module name.
+The syntax module Name := struct ... end creates that grouping. Qualified
+paths such as Counter.bump let clients identify an operation's owner without
+opening every name into the surrounding scope. Modules are especially useful
+when a type and several functions jointly define an abstraction, as happens
+with syntax trees, symbol tables, and compiler passes.
+.lua
+book.code("metaml", [=[module Counter := struct
+  type t = { n : Int }
+  val zero := { n = 0 }
+  val bump c := { n = c.n + 1 }
+  val get c := c.n
+end
+Test.equal "qualified operations" (Counter.get (Counter.bump Counter.zero)) 1
+Test.equal "persistent state" (Counter.get Counter.zero) 0]=], "A small structure with a type and its operations")
+.endlua
+.pp
+The example's type alias exposes the record representation. A client can
+understand exactly what t means, but this also makes the representation part
+of the public relationship between types. The next chapter shows how a
+signature and opaque sealing can hide that detail. First understand the
+unrestricted structure: abstraction adds a boundary to an existing grouping;
+it does not turn a module into an unrelated runtime object system.
+.sh 2 "Open and include have different audiences"
+.pp
+Open brings accessible members into the current scope for unqualified use.
+Include, inside a structure, also re-exports the included members through that
+structure. This distinction is about who can see the names afterwards. Open
+is convenient for a local implementation; include builds a larger public
+interface from an existing one. Broad use of either can make it difficult to
+tell where a short name originated.
+.lua
+book.code("metaml", [=[module Arithmetic := struct
+  val twice x := x + x
+end
+module Extended := struct
+  include Arithmetic
+  val four_times x := twice (twice x)
+end
+open Arithmetic
+Test.equal "opened use" (twice 21) 42
+Test.equal "reexported member" (Extended.twice 3) 6
+Test.equal "extended operation" (Extended.four_times 3) 12]=],
+    "Local visibility and public re-export")
+.endlua
+.pp
+Prefer qualified paths at library boundaries and in examples where several
+modules have similar operations. Map, parse, render, and get are common names
+whose meanings depend strongly on their owners. A small local open can reduce
+noise in a focused algorithm, but a file-wide collection of opens can make
+maintenance harder. Name resolution should reveal dependencies rather than
+turn them into a puzzle about declaration order.
+.sh 2 "Modules are not just records"
+.pp
+Records hold value fields. Modules also organize type declarations, signatures,
+and nested module relationships. A module alias or functor application belongs
+to the modular language, not to ordinary function application on a record.
+This is why a module can carry an abstract type whose identity constrains
+several operations together. A record of callbacks cannot always express the
+same associated-type relationship at the value level.
+.pp
+Nested modules provide a useful namespace hierarchy. A language tool might
+have Syntax, Check, and Emit modules, each exposing values appropriate to its
+stage. Keep the hierarchy meaningful rather than mirroring every source
+directory mechanically. The type flow between stages is often a better guide:
+syntax enters checking, checked syntax enters emission, and diagnostics retain
+source information throughout.
+.lua
+book.graph({
+    {id="S", label="Syntax module", x=0, y=0},
+    {id="C", label="Check module", x=2.3, y=0},
+    {id="E", label="Emit module", x=4.6, y=0}
+}, {{"S", "C"}, {"C", "E"}}, "Module boundaries can follow representation boundaries")
+.endlua
+.sh 2 "Initialization is lazy"
+.pp
+Module bodies initialize on first access that forces their runtime value,
+normally once per module object. This differs from ordinary eager expression
+evaluation. Defining a module does not necessarily execute every value body
+inside it immediately. Accessing a member can therefore be the event that
+causes its initialization effects. A module whose body prints or allocates
+a mutable resource has observable initialization timing.
+.lua
+book.algorithm("Conceptual lazy module forcing", {
+    "If the module already has an initialized value, return it.",
+    "Otherwise begin evaluating the module body in its captured environment.",
+    "Make completed members available according to initialization progress.",
+    "If a cyclic access requests an unavailable member, report a failure.",
+    "On success, retain the module value for subsequent accesses."
+})
+.endlua
+.pp
+Lazy initialization can support useful dependency arrangements, but it does
+not promise arbitrary cyclic initializers will succeed. If one member needs
+another member that has not yet been established, the cycle still lacks a
+value from which to proceed. Separate shared interfaces from effectful
+initialization, and avoid using laziness as a substitute for a clear
+dependency graph. The graph library later provides tools for finding cycles
+and grouping mutually dependent definitions.
+.sh 2 "Make initialization boring"
+.pp
+Pure module bodies are easier to reload, test, and embed. A body can define
+functions and immutable configuration without performing an external action.
+An explicit start or run function then marks the point where effects begin.
+If initialization fails after an earlier external effect, a retry does not
+roll that effect back. Idempotence must be designed at the application level
+when repeated initialization attempts are possible.
+.pp
+The same principle applies to host-module installers. Installing declarations
+and granting permission to call primitives are distinct operations. A module
+path being recognized by the checker does not necessarily imply the associated
+host operation is allowed at runtime. The embedding chapters explain this
+boundary in detail. For now, distinguish source-module visibility, runtime
+module initialization, and primitive capability checks as separate mechanisms.
+.sh 2 "Sources and further work"
+.pp
+Read module parsing, checked module scopes, and lazy module values in the two
+runtime files. The portable library structures provide examples of deliberate
+namespace design. Build a Report module containing a pure render function
+and a separate print function, then use it from two clients with qualified
+paths. Add an include-based convenience module and explain which names become
+part of its public interface. Review whether any initialization effect would
+surprise a client merely asking for a type or member name.

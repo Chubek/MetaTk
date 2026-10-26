@@ -1,0 +1,113 @@
+.lua
+book.chapter(40, "DSLtk.hpp: the reusable REPL")
+.endlua
+.sh 2 "A shell should not own language semantics"
+.pp
+The generic dsl::repl::Session template owns interactive mechanics: buffering
+physical lines, recognizing directives at form boundaries, history,
+completion, prompts, and the last submission outcome. A Language policy
+supplies parsing, evaluation, value formatting, and diagnostic formatting.
+MetaML's ReplLanguage is one such policy. Another DSL can reuse the shell
+without teaching DSLtk about MetaML's constructors, module syntax, or type
+inference rules.
+.pp
+This division is valuable for testing. A language parser can be exercised
+without a terminal, and a shell can be tested using a small policy without
+the whole MetaML runtime. Terminal-specific features such as Readline and
+file-change checks belong in the thin CLI wrapper. The generic session
+provides the reusable interaction model, while the application chooses how
+physical input and output reach it.
+.sh 2 "Incomplete is a distinct state"
+.pp
+ParseResult distinguishes Ok, Err, and Incomplete. An incomplete result asks
+the shell to retain buffered input and request another line. An error
+reports a completed failure. At end of input, finish converts a pending
+incomplete form into an error rather than waiting forever. Treating an
+unterminated string as success with an empty program would lose both the
+user's input and the opportunity to provide a useful diagnostic.
+.lua
+book.graph({
+    {id="I", label="Input buffer", x=0, y=0},
+    {id="P", label="Policy parse", x=2.3, y=0},
+    {id="E", label="Evaluate / report", x=4.6, y=0},
+    {id="M", label="Read more", x=2.3, y=-1.2}
+}, {{"I", "P"}, {"P", "E", "complete"}, {"P", "M", "incomplete"}, {"M", "I"}},
+    "Incomplete input preserves the submission buffer")
+.endlua
+.pp
+The public Outcome adds Quit to Ok, Err, and Incomplete. Feed accepts one
+physical line; feed_multiline accepts a chunk; result reports the latest
+outcome; pending and buffer expose continuation state. Reset clears the
+pending buffer. This shell reset is not necessarily a reset of the language's
+bindings or external resources: the policy and registered directives define
+those larger operations.
+.sh 2 "The language policy is the integration seam"
+.lua
+book.code("cpp-fragment", [=[// Given a language policy object named language:
+dsl::repl::Session shell(language);
+shell.feed("first physical line");
+if (shell.result() == dsl::repl::Outcome::Incomplete) {
+    shell.feed("continuation");
+}
+shell.finish();]=], "Native shell control flow with an application-provided policy")
+.endlua
+.pp
+The fragment intentionally does not invent a concrete policy: the required
+program and value types depend on the language being embedded. Inspect
+MetaML's ReplLanguage for a complete integration and the template's submission
+routine for the exact callable contract. The D implementation follows the
+same separation through its generic Session template and native policy
+methods, with module-level rather than C++ namespace-qualified names.
+.pp
+Keep policy methods deterministic where their output becomes a transcript.
+Formatting should not accidentally depend on native map iteration or pointer
+addresses. A type query must not execute the expression merely to discover
+its type. A trace command deliberately evaluates and should state its
+bounded-output policy. Separating these operations helps both interactive
+users and automated golden tests understand what a command observes.
+.sh 2 "Directives have a boundary"
+.pp
+The shell recognizes directives at the start of a form when the buffer is
+empty. While collecting incomplete input, reset and quit provide escape
+routes. Registered directives associate a name, help text, and callback.
+MetaML adds language-specific commands such as type, ast, trace, load,
+reload, and stack. Their semantics belong to the language policy or wrapper,
+not to a hard-coded MetaML branch in the generic toolkit.
+.pp
+Do not confuse directives with section holes or source comments. A numbered
+hash inside an expression belongs to language syntax, while a top-level
+named hash can invoke a shell command. The lexer and shell must agree on
+where those roles apply. Tests should include multiline input containing
+hash-related syntax so directive dispatch does not accidentally consume
+ordinary program text in the middle of a form.
+.sh 2 "History and completion are host services"
+.pp
+The generic shell stores history and accepts completion callbacks; the CLI
+connects them to terminal libraries and filesystem paths. Completion can
+query identifiers, module members, and directive names, but should avoid
+executing user code just to propose candidates. A host application may
+replace the terminal entirely with an editor widget or network protocol
+while retaining the same language-policy boundary.
+.pp
+MetaML's CLI disables prompts for piped input and offers no-history and
+no-tty controls for automation. Its file-change check occurs while processing
+later input rather than through a continuously running watcher. These are
+wrapper behaviors and should be documented where users choose the executable.
+An embedded generic shell does not automatically inherit every filesystem
+or terminal policy of the supplied CLI.
+.sh 2 "Test transitions, not only final values"
+.pp
+A REPL regression should cover entering Incomplete, completing the form,
+recovering from Err, resetting pending input, and quitting. End-of-file with
+an unfinished form deserves its own case. Golden transcripts test prompts,
+formatting, and diagnostics; native policy tests can inspect outcomes directly.
+The two approaches complement each other because a correct evaluated value
+does not prove that buffering or prompt selection behaved correctly.
+.sh 2 "Sources and further work"
+.pp
+Read namespace repl in DSLtk.hpp, the mirrored D subsystem, ReplLanguage in
+MetaML.hpp, and metaml-cli/metaml.cpp. Trace one incomplete submission from
+feed through parsing to a continuation prompt. Then design a tiny calculator
+policy and list which methods it must supply. Explain which changes belong
+to that policy, which belong to the generic shell, and which belong only
+to a terminal wrapper.

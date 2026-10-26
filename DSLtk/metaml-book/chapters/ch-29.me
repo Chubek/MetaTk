@@ -1,0 +1,115 @@
+.lua
+book.chapter(29, "Parser combinators in MetaML")
+.endlua
+.sh 2 "Parsers are typed values"
+.pp
+Parsec exposes opaque Parser values parameterized by the result they produce.
+A string parser returns String, a sequence can return a tuple, and a mapped
+parser can return a domain constructor. This makes grammar assembly ordinary
+typed programming. Combinators express sequencing, alternatives, repetition,
+and semantic conversion without requiring a separate grammar-action language.
+The host module must be installed and permitted in an embedding before its
+parser handles can be used.
+.lua
+book.code("metaml", [=[words := Parsec.sep_by (Parsec.regex "[a-z]+") (Parsec.char ",")
+Test.equal "separated words" (Parsec.run words "a,bc") (Ok ["a", "bc"])
+Test.equal "empty list" (Parsec.run words "") (Ok [])
+Test.equal "prefix interface" (Parsec.run_prefix (Parsec.string "ab") "abc")
+  (Ok ("ab", "c"))
+Test.check "complete interface" (Result.is_err (Parsec.run (Parsec.string "ab") "abc"))]=],
+    "Complete parsing and prefix parsing are distinct contracts")
+.endlua
+.pp
+Run requires complete consumption. Run_prefix returns the remaining suffix
+alongside the parsed value. Choose explicitly: a command protocol may parse
+one frame at a time, while a configuration parser should reject unexplained
+trailing input. It is a common integration error to test only valid input,
+then discover that the production caller accidentally selected the prefix
+interface and ignored the remainder.
+.sh 2 "Sequence retains the results you need"
+.pp
+Seq returns a pair of parsed results. Left and right sequence two parsers
+while keeping only the selected side. Between keeps the middle result and
+discards delimiters. These operations let a grammar recognize punctuation
+without forcing every semantic handler to remove punctuation manually.
+Token handles a convenient whitespace convention, while spaces provides an
+explicit whitespace parser. Keep that convention consistent across the grammar.
+.lua
+book.code("metaml", [=[name := Parsec.regex "[a-z]+"
+wrapped := Parsec.between (Parsec.char "(") (Parsec.char ")") name
+Test.equal "discard delimiters" (Parsec.run wrapped "(abc)") (Ok "abc")
+pair := Parsec.seq (Parsec.string "ab") (Parsec.string "cd")
+Test.equal "retain both" (Parsec.run pair "abcd") (Ok ("ab", "cd"))
+number := Parsec.map Int.from_string (Parsec.regex "[0-9]+")
+Test.equal "mapped result" (Parsec.run number "42") (Ok (Some 42))]=],
+    "Parser structure and semantic result structure")
+.endlua
+.pp
+The last parser returns an Option inside Result because lexical recognition
+and integer conversion are separate operations. That nesting is honest:
+matching digits does not prove representability as a signed integer. A
+larger parser can use bind to turn conversion failure into parser failure,
+or preserve a separate validation stage. Avoid Option.get merely to make
+the apparent result type shorter when malformed numeric input is expected.
+.sh 2 "Alternatives and diagnostics"
+.pp
+Alt chooses between parsers and choice accepts a list of alternatives. Parser
+failures backtrack in this MetaML host interface, with error reporting tracking
+a furthest failure position. Label associates a useful expectation with an
+operation. These contracts should not be confused with the native DSLtk
+combinator core's committed-failure rules, discussed in chapter 36. Related
+interfaces can deliberately expose different control over backtracking.
+.pp
+Order alternatives from the intended grammar, then test shared prefixes.
+Repeated backtracking across long common prefixes can multiply work even
+when the grammar looks short. Factoring a common prefix often improves both
+performance and diagnostics because the parser makes the shared decision
+once. Error labels should describe a language construct, such as an operand,
+rather than expose an implementation detail such as a particular helper name.
+.sh 2 "Repetition must make progress"
+.pp
+Many permits zero or more results; many1 requires at least one. Optional
+wraps a possible result, and sep_by handles delimiter-separated sequences.
+Never repeat a parser that can succeed without consuming input. A safe
+implementation detects nonprogress, but the grammar is still suspect: there
+is no finite number of empty successes determined by the source. Review
+nullable parsers before putting them beneath a repetition combinator.
+.lua
+book.algorithm("Safe repetition", {
+    "Save the cursor position before attempting the element parser.",
+    "If the element fails according to the repetition contract, stop or propagate.",
+    "If it succeeds without advancing, report nonprogress.",
+    "Otherwise append its value and attempt the next element.",
+    "Return results in source order."
+})
+.endlua
+.pp
+This rule also applies indirectly. A parser built from optional or pure may
+succeed empty even though its name suggests a meaningful element. Track
+nullability as a property of grammar components, not just of primitive
+parsers. Empty input, a trailing separator, and an empty delimited group
+are important tests because they exercise these boundaries without requiring
+a large generated corpus.
+.sh 2 "Recursive construction needs laziness"
+.pp
+Parsec.lazy accepts a function that supplies a parser later. This breaks
+recursive parser construction: building a parenthesized expression parser
+must not immediately build itself forever before any source is read.
+Construction laziness is different from allowing direct left recursion
+during parsing. A recursive-descent grammar must consume input before
+re-entering the same recursive path or use a different parsing strategy.
+.pp
+Separate parsing, lowering, validation, and execution when their failure
+models differ. A parser can produce a generic tree or a lightweight syntax
+ADT, a validator can resolve names and check arities, and an evaluator can
+operate on established invariants. This arrangement yields smaller semantic
+callbacks and more useful tests than embedding every domain action inside
+backtracking parser functions, where an attempted branch might run repeatedly.
+.sh 2 "Sources and further work"
+.pp
+Read metalib/cpp/Parsec.h and its implementation fragment, plus the D mirror.
+Construct a parser for parenthesized comma-separated identifiers and specify
+whether an empty group is legal. Test trailing commas, missing closing
+delimiters, and extra suffixes. Then add integer payloads with explicit
+range validation. Explain which failures arise from syntax, which arise
+from numeric representation, and which parser components can accept empty input.

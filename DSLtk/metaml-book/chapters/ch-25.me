@@ -1,0 +1,118 @@
+.lua
+book.chapter(25, "Structured data and interchange")
+.endlua
+.sh 2 "Parsing is not schema validation"
+.pp
+The JSON module represents data with a Json ADT: JNull, JBool, JNum, JStr,
+JArr, and JObj. Parse returns Result Json String. A successful parse proves
+that the input belongs to the parser's accepted syntax, not that it contains
+the fields and value ranges required by your application. Keep decoding into
+a domain model as a separate step so syntax errors and schema errors retain
+distinct explanations.
+.lua
+book.code("metaml", [=[parsed := JSON.parse "{\"name\":\"Ada\",\"scores\":[1,2]}"
+Test.check "valid JSON" (Result.is_ok parsed)
+value := Result.unwrap parsed
+Test.equal "object field" (JSON.get "name" value) (Some (JStr "Ada"))
+Test.equal "nested element"
+  (JSON.get "scores" value |> Option.flat_map (JSON.at 1)) (Some (JNum 2.0))
+Test.equal "compact output" (JSON.render (JArr [JBool true, JNull])) "[true,null]"]=],
+    "Parse, inspect, and render a structured value")
+.endlua
+.pp
+Object members are represented as lists of pairs. Get and at return None
+when the requested operation does not apply or the requested member is
+absent. Match directly on constructors when you need to distinguish a wrong
+shape from a missing field. A decoder can then report "expected an array"
+rather than collapsing every failure into "not found." Such distinctions
+become valuable when configuration files contain several nested structures.
+.sh 2 "Numbers and round trips"
+.pp
+JNum stores Float. Large integer tokens can therefore lose precision beyond
+binary64's exact integer range. Encode identifiers as strings when exact
+64-bit values must survive interchange. Render and pretty normalize output;
+they do not preserve original whitespace, numeric spelling, or comments.
+JSON.of_value is a convenience conversion, not a universal reversible
+serialization of functions, abstract values, and foreign resources.
+.pp
+A stable protocol needs a versioned schema and explicit encoders. Decide
+whether unknown fields are tolerated, how missing fields receive defaults,
+and whether duplicate keys are rejected or normalized. Test decoding and
+encoding separately as well as together. A round-trip test alone can allow
+a matching bug in both directions to conceal an incorrect external format.
+Include known byte-level fixtures from the protocol contract.
+.sh 2 "Configuration formats share a data model"
+.pp
+TOML and YAML use the Json representation so common configuration consumers
+can share validation code. Their in-tree parsers support practical subsets;
+do not infer exhaustive standard conformance from the module names. Special
+features such as aliases, tags, or source-preserving editing require explicit
+support in the implementation and fixtures. TOML rendering returns Result
+because not every Json value has a supported TOML representation.
+.lua
+book.code("metaml", [=[Test.equal "TOML value"
+  (TOML.parse "answer = 42\n" |> Result.map (JSON.get "answer"))
+  (Ok (Some (JNum 42.0)))
+Test.equal "YAML value"
+  (YAML.parse "name: demo\n" |> Result.map (JSON.get "name"))
+  (Ok (Some (JStr "demo")))]=], "Different syntaxes can feed one validation layer")
+.endlua
+.pp
+Normalized rendering is appropriate for generated configuration, but not
+automatically for an editor that must retain user comments and formatting.
+An editor generally needs a concrete syntax representation with trivia and
+source spans. This is the same distinction encountered in language tools:
+an abstract tree preserves meaning relevant to computation, while a
+source-preserving tree retains additional information relevant to editing.
+.sh 2 "S-expressions are a compact tree notation"
+.pp
+SExpr uses Atom String and SList containing child expressions. Parse accepts
+multiple top-level expressions; parse_one requires one. Quoted atoms preserve
+boundaries when text contains spaces or punctuation. This makes the format
+useful for small intermediate languages, rewrite rules, and readable fixtures.
+It does not assign semantics to a head atom: an expression beginning with add
+means addition only because your application defines that interpretation.
+.lua
+book.code("metaml", [=[Test.equal "nested structure" (SExpr.parse_one "(a (b c))")
+  (Ok (SList [Atom "a", SList [Atom "b", Atom "c"]]))
+Test.check "reject malformed structure" (Result.is_err (SExpr.parse_one "(a"))]=],
+    "Tree notation before semantic interpretation")
+.endlua
+.pp
+ASTBuilder converts between its generic tree representation and S-expressions,
+with validation of the expected shape. Handle the conversion Result rather
+than assuming every syntactically valid S-expression is a valid AST. A
+compiler can use several successive validation boundaries: bytes to
+S-expression, S-expression to generic syntax, and generic syntax to a domain
+ADT. Each boundary establishes a stronger invariant for subsequent passes.
+.sh 2 "Hashes and URI encodings operate on bytes"
+.pp
+Hash offers FNV-1a, DJB2, CRC32, SHA-256, and helpers for combining or displaying
+integer hashes. Choose the algorithm according to the purpose: a checksum,
+a hash-table key, and a content digest have different requirements. Hash.value
+uses displayed values and should not become a schema-independent persistent
+identifier. Canonicalize the intended byte representation before hashing when
+reproducible content identity matters.
+.lua
+book.code("metaml", [=[Test.equal "CRC fixture" (Hash.crc32 "123456789") 3421780262
+Test.equal "FNV fixture" (Hash.hex (Hash.fnv1a "hello")) "a430d84680aabd0b"
+Test.equal "component encoding" (URI.encode "a b/") "a%20b%2F"
+Test.equal "invalid escape" (URI.decode "%zz") None
+Test.equal "repeated query keys" (URI.query_params "x=a+b&x=two")
+  [("x", "a b"), ("x", "two")]]=], "Byte-oriented utility contracts")
+.endlua
+.pp
+URI parsing returns a structured record through Option. Query decoding treats
+plus as space and preserves repeated keys as pairs. Component encoding is
+different from encoding an entire URI with its structural separators. The
+compact URI representation does not preserve every lexical distinction and
+is not a complete browser URL engine. Apply the application's own rules
+before treating decoded paths as filesystem locations or accepted origins.
+.sh 2 "Sources and further work"
+.pp
+Read the JSON, TOML, YAML, SExpr, Hash, and URI host modules and their tests.
+Write a configuration decoder that requires a string name and a nonnegative
+integer count, distinguishing absent fields from wrong types. Decide how it
+handles fractional JNum values. Then define a canonical serialized form for
+that validated configuration and hash it, testing that irrelevant input
+whitespace changes do not alter the resulting content identity.

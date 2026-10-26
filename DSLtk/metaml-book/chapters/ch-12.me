@@ -1,0 +1,122 @@
+.lua
+book.chapter(12, "Comprehensions and collection algorithms")
+.endlua
+.sh 2 "Comprehensions expose a search space"
+.pp
+A comprehension combines an output expression, generators, and optional
+guards. It eagerly constructs a list. The notation is especially useful when
+the result is naturally described by selecting combinations from finite
+inputs. A generator binds its pattern for later generators, guards, and the
+output expression. Source order determines nesting, so the final generator
+varies fastest in a Cartesian product.
+.lua
+book.code("metaml", [=[squares := [x * x for x <- List.range 0 6 if x % 2 == 0]
+pairs := [(x, y) for x <- [1, 2], y <- [10, 20]]
+Test.equal "guarded output" squares [0, 4, 16]
+Test.equal "nested order" pairs [(1, 10), (1, 20), (2, 10), (2, 20)]
+present := [x for Some x <- [Some 1, None, Some 3]]
+Test.equal "pattern selection" present [1, 3]]=], "Generators, guards, and pattern filtering")
+.endlua
+.pp
+A generator pattern that does not match an element skips that element. This
+differs from a failed function-parameter pattern, which reports a diagnostic.
+The behavior is useful for selecting Some values, but it can hide discarded
+errors if used casually with Results. Decide whether the application should
+drop failures, stop at the first failure, or collect all failures before
+choosing a comprehension as its main control structure.
+.sh 2 "Translate notation into loops"
+.pp
+The nested-loop model predicts order and size. Two generators over lists of
+lengths m and n can produce m times n results. A guard can reduce the output
+but may still require examining the combinations that reach it. An earlier
+generator's bindings can influence a later generator's source. This is more
+expressive than simply zipping independent lists, and it can also allocate
+far more than a reader expects from a short expression.
+.lua
+book.algorithm("Evaluate a two-generator comprehension", {
+    "For each value x in the first source, in order:",
+    {1, "Match the first generator pattern; skip mismatches."},
+    {1, "Evaluate the second source in the environment containing x."},
+    {1, "For each value y in that source, in order:"},
+    {2, "Match the second pattern and evaluate applicable guards."},
+    {2, "On success, evaluate the output expression and append its value."},
+    "Return the accumulated list in encounter order."
+})
+.endlua
+.pp
+Keep generator and guard expressions pure when order is not part of the
+intended public contract. An effectful guard turns a set-like description into
+an ordered procedure with visible intermediate work. Sometimes that is exactly
+what you need, but an explicit traversal then communicates the behavior more
+clearly. A comprehension is not a promise of deferred or parallel evaluation.
+.sh 2 "Map, filter, and folds"
+.pp
+List.map preserves one output position for each input position. Filter keeps
+only elements satisfying a predicate. Filter_map combines optional production
+with selection, and flat_map produces and concatenates zero or more outputs
+per input. These operations differ in cardinality, which is often the most
+important property when reviewing a transformation. A compiler pass that
+must preserve declaration count should not silently use a dropping traversal.
+.lua
+book.code("metaml", [=[xs := [1, 2, 3, 4]
+Test.equal "map" (List.map (* 2) xs) [2, 4, 6, 8]
+Test.equal "filter" (List.filter (fn x -> x % 2 == 0) xs) [2, 4]
+Test.equal "fold left" (List.fold_left (fn acc x -> acc - x) 0 [1, 2, 3]) (~6)
+Test.equal "scan includes seed" (List.scan (+) 0 [1, 2, 3]) [0, 1, 3, 6]
+Test.equal "empty scan" (List.scan (+) 0 []) [0]]=], "Traversal shape and accumulator order")
+.endlua
+.pp
+A fold summarizes a list into an accumulator. The argument order of fold_left
+is function, initial accumulator, list. Fold_right uses function, list,
+initial accumulator. With noncommutative operations, direction and callback
+argument order change the answer. A scan records intermediate accumulator
+states and includes the seed, so its output has one more element than its
+input. These details are contracts, not incidental implementation choices.
+.sh 2 "Prefixes, searches, and partitions"
+.pp
+Take_while and drop_while describe a prefix boundary; filter examines the whole
+input. Span returns both the longest satisfying prefix and the remaining
+suffix. Partition also returns two lists, but groups every element according
+to the predicate while preserving relative order within each group. Confusing
+these operations is a common source of parsers that accidentally accept data
+after the first invalid token.
+.lua
+book.code("metaml", [=[Test.equal "prefix boundary" (List.span (< 3) [1, 2, 3, 1]) ([1, 2], [3, 1])
+Test.equal "whole partition" (List.partition (< 3) [1, 2, 3, 1]) ([1, 2, 1], [3])
+Test.equal "first index" (List.find_index (> 2) [1, 3, 4]) (Some 1)
+Test.equal "zip truncates" (List.zip_with (+) [1, 2] [10]) [11]
+Test.equal "split count" (List.split_at 2 [1, 2, 3]) ([1, 2], [3])]=],
+    "Similar names, different traversal contracts")
+.endlua
+.pp
+Any, all, and find short-circuit. A callback after the decisive element is
+not invoked. Partition, by contrast, examines the whole input. This distinction
+affects both cost and effects. Prefer these semantic operations over writing
+a full fold that computes unnecessary work, but do not assume an arbitrary
+fold can short-circuit merely because its accumulator already contains the
+final logical answer.
+.sh 2 "Sorting and collection recipes"
+.pp
+Sorting is stable. List.sort_by expects a negative, zero, or positive comparator
+result. Equal keys retain input order, which is useful when a second ordering
+criterion is already encoded by the source sequence. The comparator must be
+consistent; NaN-dependent comparisons and state-changing callbacks undermine
+the intended ordering. Project records onto stable domain keys when that is
+the equality the application actually needs.
+.pp
+The host List module adds windows, chunks, grouping, transpose, rotation,
+seeded shuffle, and comparator-based extrema. Install it only when those
+extensions are needed in an embedding. Windows can multiply the number of
+stored elements, while uniq may be quadratic because it performs structural
+membership checks. The shortest source expression is not always the best
+algorithm for a large collection. Measure on representative element sizes,
+including the cost of callbacks and comparisons.
+.sh 2 "Sources and further work"
+.pp
+The portable contracts are in metalib/list/mod.ml; host extensions are in
+metalib/cpp/List.h and its D counterpart. Build a small dependency report by
+grouping edge pairs by their source node. First use comprehensions, then a
+fold, and compare traversal counts. Add a test where a matching element occurs
+after a failing prefix to distinguish span from partition. That single case
+often exposes an incorrect mental model more effectively than many ordinary
+sorted inputs.

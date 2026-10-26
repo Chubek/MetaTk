@@ -1,0 +1,126 @@
+.lua
+book.chapter(11, "Tuples, lists, and persistent data")
+.endlua
+.sh 2 "Products and sequences solve different problems"
+.pp
+A tuple holds a fixed number of components whose types may differ. A list
+holds a variable number of elements with one element type. These are different
+contracts even when a particular list happens to contain exactly two values.
+A point represented as an integer pair guarantees two coordinates; a list of
+points permits any number of such pairs. Choose the representation according
+to which dimensions are fixed by the domain and which vary with the input.
+.lua
+book.code("metaml", [=[swap_pair (x, y) := (y, x)
+distance_squared (x, y) := x * x + y * y
+point := (3, 4)
+Test.equal "tuple shape" (swap_pair point) (4, 3)
+Test.equal "tuple computation" (distance_squared point) 25
+Test.equal "list of products" (List.map distance_squared [(3, 4), (1, 2)]) [25, 5]]=],
+    "A product inside a sequence")
+.endlua
+.pp
+Parentheses also group expressions, so (x) is just x. Unit () is a distinct
+primitive value, not a one-element tuple. Tuple patterns unpack values in a
+function parameter or match branch. Core.fst and Core.snd are convenient for
+pairs, but descriptive patterns usually read better than repeated projections
+through a deeply nested product. Records become attractive when positions
+would otherwise need extensive comments to explain their roles.
+.sh 2 "Curried and tupled interfaces"
+.pp
+A pair-taking function and a curried two-argument function are not the same
+interface. Core.curry converts the former to the latter, while Core.uncurry
+goes in the other direction. These adapters are useful when a library produces
+pairs but your existing operation is curried. They preserve the computation
+while making the input structure explicit to the type checker.
+.lua
+book.code("metaml", [=[pair_sum (x, y) := x + y
+curried := Core.curry pair_sum
+tupled := Core.uncurry curried
+Test.equal "curry" (curried 20 22) 42
+Test.equal "uncurry" (tupled (10, 5)) 15
+Test.equal "map pairs" (List.map tupled [(1, 2), (3, 4)]) [3, 7]]=],
+    "Adapt a function to a collection's element shape")
+.endlua
+.pp
+Remember that f(x, y) is supported as a multiargument call. Whitespace
+application to an explicit tuple, as in tupled (10, 5), is clearer when
+documenting a product-taking function. A public API should not require its
+reader to guess whether a comma describes call arguments or a value whose
+shape belongs to the domain model.
+.sh 2 "Lists share tails"
+.pp
+The empty list is [], a literal uses brackets and commas, and x :: xs
+constructs a head with tail xs. Lists are immutable singly linked sequences.
+Constructing a new head can share the old tail because no language operation
+mutates its cells. Two lists can therefore have different prefixes and the
+same suffix without copying the entire suffix. This is the central advantage
+of persistent data for functional transformations.
+.lua
+book.code("metaml", [=[tail := [2, 3]
+first := 1 :: tail
+other := 9 :: tail
+Test.equal "first prefix" first [1, 2, 3]
+Test.equal "second prefix" other [9, 2, 3]
+Test.equal "unchanged tail" tail [2, 3]
+Test.equal "concatenation" (first @ [4, 5]) [1, 2, 3, 4, 5]]=],
+    "Persistent construction and concatenation")
+book.graph({
+    {id="A", label="first: 1", x=0, y=0.7},
+    {id="B", label="other: 9", x=0, y=-0.7},
+    {id="T", label="shared tail: [2, 3]", x=2.7, y=0}
+}, {{"A", "T"}, {"B", "T"}}, "Two prefixes can share one immutable tail")
+.endlua
+.pp
+Concatenation with @ must preserve the left sequence before reaching the right
+one, so repeatedly appending singleton lists to a growing result is expensive.
+Use cons with a reversed accumulator and reverse once, or use a standard
+traversal that already follows an appropriate strategy. Sharing does not make
+all operations constant-time. Indexed access still walks a linked sequence,
+and retaining a small prefix may retain the reachable suffix as well.
+.sh 2 "Ranges have two contracts"
+.pp
+The library function List.range start stop is half-open: it includes start
+and excludes stop. The syntax [start .. stop] is inclusive. Both return empty
+lists for descending bounds. This distinction is easy to overlook when
+rewriting an algorithm, and it produces classic off-by-one errors. Use the
+library form for index intervals and spell out the endpoint convention in
+public documentation.
+.lua
+book.code("metaml", [=[Test.equal "half-open" (List.range 2 5) [2, 3, 4]
+Test.equal "inclusive" [2 .. 5] [2, 3, 4, 5]
+Test.equal "empty interval" (List.range 5 5) []
+Test.equal "descending" (List.range 5 2) []
+Test.equal "safe head" (List.head []) None
+Test.equal "safe index" (List.nth 1 [10, 20, 30]) (Some 20)]=],
+    "Endpoints and optional queries")
+.endlua
+.pp
+Oversized ascending range requests produce an invalid-operation diagnostic;
+the implementation checks distances without signed-overflow arithmetic.
+That guard does not mean every representable request is affordable in your
+application. Materialized ranges allocate lists. When a loop can carry a
+counter instead, there is no need to allocate all indices merely to consume
+them immediately.
+.sh 2 "Choose the right access pattern"
+.pp
+List.head, tail, last, and nth use Option for absent results. A nonempty value
+must still be unpacked before using its payload. Repeated nth calls in a loop
+can turn a simple traversal into quadratic work. Prefer a recursive cons
+pattern, List.map, List.fold_left, or List.enumerate depending on whether you
+need transformation, aggregation, or indices alongside elements. The operation
+should match the representation rather than simulate an array API badly.
+.pp
+Structural equality works when the elements themselves are comparable. A list
+of functions is a legal value but not generally a legal target for generic
+comparison at runtime. A list of foreign handles compares identities rather
+than recursively examining external resources. If the application needs
+semantic equality, define a projection or comparator that states which parts
+of the domain matter.
+.sh 2 "Sources and further work"
+.pp
+Read metalib/list/mod.ml and the runtime's list construction and traversal
+helpers. Implement zip by matching two lists and stopping at the shorter one,
+then compare it with List.zip on empty and unequal-length inputs. Estimate the
+cost of an algorithm that calls nth for every index. Finally, rewrite a loop
+that repeatedly appends one element so that it uses a reversed accumulator;
+verify both result order and the empty-input case.

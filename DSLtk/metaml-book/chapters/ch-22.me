@@ -1,0 +1,121 @@
+.lua
+book.chapter(22, "Strings, bytes, and Unicode")
+.endlua
+.sh 2 "The representation is a byte sequence"
+.pp
+MetaML strings contain immutable bytes. Lengths and ordinary indices count
+bytes, not Unicode characters. A Unicode scalar escape in source is encoded
+as UTF-8, but that does not change the representation's indexing model.
+This makes strings useful for binary protocols as well as text. It also
+means that an operation safe for ASCII can split a multibyte encoding when
+applied indiscriminately to international text.
+.lua
+book.code("metaml", [=[Test.equal "ASCII byte count" (String.length "abc") 3
+Test.equal "UTF-8 byte count" (String.length "\u{e9}") 2
+Test.equal "embedded zero byte" (String.to_codes "A\0B") [65, 0, 66]
+Test.equal "byte reconstruction" (String.of_codes [65, 66]) "AB"]=],
+    "Strings are binary-safe values")
+.endlua
+.pp
+Separate three notions when designing a text interface: bytes in an encoding,
+Unicode scalar values, and user-perceived characters or grapheme clusters.
+A combining sequence can contain several scalars while appearing as one
+character. A UTF-8-aware scalar counter therefore still does not determine
+cursor movement or display width in a sophisticated editor. Choose the unit
+that your algorithm actually needs and name it in the API.
+.sh 2 "Slicing and searching have explicit boundaries"
+.pp
+String.sub takes a start offset, a length, and the source, clamping to the
+valid byte interval. String.get returns Option for a single indexed byte.
+Index_of returns an optional byte offset. These contracts differ: clamping
+is convenient for previews, while an optional result can preserve evidence
+that a requested position did not exist. A validator should not silently
+replace checked indexing with clamped slicing if absence matters.
+.lua
+book.code("metaml", [=[Test.equal "clamped suffix" (String.sub 1 99 "abcd") "bcd"
+Test.equal "missing byte" (String.get 99 "abcd") None
+Test.equal "found byte offset" (String.index_of "bc" "abcd") (Some 1)
+Test.equal "absent substring" (String.index_of "xy" "abcd") None
+Test.equal "prefix check" (String.starts_with "ab" "abcd") true]=],
+    "Byte-oriented access and search")
+.endlua
+.pp
+A source span expressed in bytes can be efficient and unambiguous inside a
+parser, but a user interface may need to translate it to line and display
+column. Do that translation at the presentation boundary while retaining the
+original byte position. Replacing byte offsets with loosely defined character
+counts throughout a compiler can make slicing, diagnostics, and incremental
+editing disagree about the same source location.
+.sh 2 "Splitting preserves information"
+.pp
+String.split with a nonempty separator preserves empty fields. This is
+important for delimited data: a missing middle field and a missing trailing
+field can carry meaning. Splitting on an empty separator produces bytes.
+String.join combines fields with a separator between adjacent elements.
+These operations do not implement CSV quoting, escape processing, or a
+general record format; use a parser when separators may occur inside fields.
+.lua
+book.code("metaml", [=[fields := String.split "," "a,,b,"
+Test.equal "empty fields retained" fields ["a", "", "b", ""]
+Test.equal "simple round trip" (String.join "," fields) "a,,b,"
+Test.equal "nonoverlapping replacement" (String.replace "aa" "x" "aaaa") "xx"
+Test.equal "empty search leaves input" (String.replace "" "x" "abc") "abc"
+Test.equal "nonpositive repeat" (String.repeat 0 "abc") ""]=],
+    "Delimited fields and replacement rules")
+.endlua
+.pp
+Replace operates on nonoverlapping matches. Repeat returns an empty string
+for nonpositive counts or empty input, and rejects oversized nonempty output
+with an invalid-operation diagnostic. Repeatedly concatenating growing
+immutable strings can copy substantial prefixes. For many fragments, collect
+them and join once, or use Buffer when mutable binary assembly is the desired
+interface. The representation should match the construction pattern.
+.sh 2 "Use the UTF-8 helpers deliberately"
+.pp
+The installed String host module adds utf8_valid, utf8_length, utf8_chars,
+codepoints, and of_codepoints. Validate arbitrary bytes before treating them
+as encoded text. The portable byte operations remain useful and retain their
+original contracts even after the host extension is installed. An embedding
+must both install the relevant host module and permit its non-core primitives
+before relying on those added operations.
+.lua
+book.code("metaml", [=[text := "a\u{e9}"
+Test.check "valid UTF-8" (String.utf8_valid text)
+Test.equal "scalar count" (String.utf8_length text) 2
+Test.equal "scalar strings" (String.utf8_chars text) ["a", "\u{e9}"]
+Test.equal "scalar numbers" (String.codepoints text) [97, 233]
+Test.equal "scalar round trip" (String.of_codepoints [97, 233]) text
+Test.check "invalid byte sequence" (not (String.utf8_valid (String.of_codes [255])))]=],
+    "Validation and scalar-oriented operations")
+.endlua
+.pp
+Upper, lower, and basic trimming are ASCII-oriented, not a complete Unicode
+normalization or case-folding service. Byte reversal can corrupt UTF-8.
+Even reversing scalar strings does not necessarily preserve grapheme clusters.
+For identifiers in a language you design, specify whether spelling is ASCII,
+arbitrary UTF-8, normalized Unicode, or something else. A parser cannot infer
+that policy merely from the host string representation.
+.sh 2 "Escaping depends on the destination"
+.pp
+A MetaML string literal, JSON string, URI component, shell argument, and roff
+line each have different escaping rules. Escaping for one does not make text
+safe or correct for another. Keep the destination encoder close to the output
+boundary, and preserve unescaped domain values internally. The book's own
+rofflets illustrate this principle by escaping listing bytes before emitting
+roff, rather than expecting code examples to contain typesetter escapes.
+.pp
+Round-trip tests are useful but must state what is preserved. A parser and
+renderer may preserve semantic values while normalizing whitespace and escape
+spelling. A source editor needs stronger fidelity, including comments and
+trivia. Choose tests that reflect the intended product: byte identity for a
+binary codec, scalar identity for a Unicode conversion, or semantic identity
+for normalized structured data.
+.sh 2 "Sources and further work"
+.pp
+Read metalib/string/mod.ml and metalib/cpp/String.h with its D mirror.
+Construct a string containing ASCII, a multibyte scalar, and an embedded zero,
+then compare byte length, scalar length, and slices. Write a delimiter parser
+that rejects empty fields instead of silently dropping them. Finally, explain
+why URI encoding an entire URL is different from encoding one query value;
+both operations involve strings, but the destination grammar assigns different
+roles to punctuation.

@@ -1,0 +1,123 @@
+.lua
+book.chapter(15, "Algebraic data and domain models")
+.endlua
+.sh 2 "A sum of named alternatives"
+.pp
+An algebraic data type declares a finite family of constructors. Each
+constructor names a case and carries its own argument types. This expresses
+alternatives directly: a shape can be a circle with one radius or a rectangle
+with two dimensions. A record with optional radius, width, and height would
+also admit meaningless combinations. Constructors let the representation rule
+out those combinations before the interpreter of the model is written.
+.lua
+book.code("metaml", [=[type Shape := | Circle Float | Rectangle Float Float
+area shape := match shape with
+  | Circle r -> 3.141592653589793 * r * r
+  | Rectangle w h -> w * h
+Test.equal "rectangle payload" (area (Rectangle 3.0 4.0)) 12.0
+Test.equal "circle boundary" (area (Circle 0.0)) 0.0]=], "Constructors encode alternative shapes")
+.endlua
+.pp
+Use a leading vertical bar to make an ADT declaration unambiguous, especially
+when one constructor might otherwise resemble a type alias. Constructor names
+begin uppercase. Until enough arguments are supplied, a constructor behaves
+as a curried function. Once saturated, it produces a value carrying its tag
+and payloads. Patterns recover those payloads without exposing mutable
+representation fields or requiring a string comparison against a tag name.
+.sh 2 "Parameterized types express reusable structure"
+.pp
+A type parameter abstracts over the payload while retaining the container's
+shape. Box 'a can contain any one chosen type, and a function unboxing it
+preserves that relationship. Option and Result are built-in examples: Option
+distinguishes absence from a present value, and Result distinguishes success
+from a payload-bearing error. Their constructors exist in a fresh session;
+the convenience functions arrive with the portable library.
+.lua
+book.code("metaml", [=[type Box 'a := | Box 'a
+unbox (Box value) := value
+Test.equal "generic payload" (unbox (Box "message")) "message"
+Test.equal "different instantiation" (unbox (Box 42)) 42
+type Validation := | Accepted Int | Rejected String
+validate n := if n >= 0 then Accepted n else Rejected "negative count"
+Test.equal "explicit state" (validate (~1)) (Rejected "negative count")]=],
+    "Reusable containers and domain-specific outcomes")
+.endlua
+.pp
+An ADT is a stronger interface than a collection of magic strings. A misspelled
+constructor is a name error, while a misspelled status string might travel
+through several layers before a consumer notices it. Payload types also make
+illegal combinations harder to express. Accepted carries the validated
+integer, so a consumer does not need to look elsewhere for a possibly unrelated
+number after testing a status flag.
+.sh 2 "Recursive data models recursive syntax"
+.pp
+Expression trees are a natural use of recursive ADTs. A literal contains an
+integer; an addition contains two expressions; a multiplication contains two
+expressions. The recursive type describes finite syntax trees, and a recursive
+interpreter follows the same structure. This is the bridge from ordinary
+functional programming to meta-programming: the program's input is another
+program represented as a typed value.
+.lua
+book.code("metaml", [=[type Expr := | Lit Int | Add Expr Expr | Mul Expr Expr
+evaluate expr := match expr with
+  | Lit n -> n
+  | Add a b -> evaluate a + evaluate b
+  | Mul a b -> evaluate a * evaluate b
+tree := Add (Lit 2) (Mul (Lit 3) (Lit 4))
+Test.equal "tree interpretation" (evaluate tree) 14]=], "An expression language as an algebraic data type")
+book.graph({
+    {id="A", label="Add", x=0, y=0},
+    {id="L", label="Lit 2", x=-1.3, y=-1.1},
+    {id="M", label="Mul", x=1.3, y=-1.1},
+    {id="X", label="Lit 3", x=0.2, y=-2.2},
+    {id="Y", label="Lit 4", x=2.4, y=-2.2}
+}, {{"A", "L"}, {"A", "M"}, {"M", "X"}, {"M", "Y"}},
+    "The tree preserves precedence structurally")
+.endlua
+.pp
+Once the tree exists, precedence is no longer an ambiguity: multiplication is
+the right child of addition. A parser's job includes constructing this shape
+from text. A pretty-printer's job includes emitting enough parentheses to
+preserve the shape's meaning. An optimizer's job includes changing the shape
+without changing the specified semantics. Giving each stage a clear input
+and output representation makes those responsibilities testable independently.
+.sh 2 "Interpretations share structure, not purpose"
+.pp
+The same Expr can support evaluation, rendering, free-variable analysis,
+constant folding, or code generation. Each interpretation visits the
+constructors according to its own result type. A renderer returns String; an
+evaluator returns Int or Result; an analyzer may return a set-like list of
+names. This reuse is one reason algebraic data models are effective for
+language tools. The syntax does not need to be reparsed for every analysis.
+.pp
+A generic Ast is more flexible about tags, but weaker about domain invariants.
+An ADT restricts the possible cases statically, while a generic node can have
+an arbitrary tag and number of children. A practical architecture parses
+into a generic tree, validates and lowers it into a domain ADT, then performs
+semantic passes on the stronger representation. Chapter 31 follows exactly
+that pattern rather than letting unchecked child indexing spread throughout
+the compiler.
+.sh 2 "Representation is not an interchange format"
+.pp
+Constructor values have structural equality and ordering where their payloads
+support it. Incidental constructor ordering should not become a durable
+business ranking or file-format rule. Core.show is convenient inspection
+notation, but adding a constructor or renaming a type should not silently
+change a public protocol. Write explicit encoders and decoders when values
+cross process, storage, or version boundaries.
+.pp
+Signatures can hide an implementation type while exposing operations that
+construct and inspect it. This lets a module retain the benefits of an ADT
+internally without promising every constructor to clients. Hiding a
+representation is especially valuable when invariants extend beyond shape,
+such as a nonnegative count or a normalized expression. A constructor's type
+alone cannot establish every semantic property of its payload.
+.sh 2 "Sources and further work"
+.pp
+Read datatype declarations and constructor typing in the runtime, then inspect
+the built-in Option and Result definitions and ASTBuilder's Ast declaration.
+Extend the expression model with subtraction and add both evaluation and
+rendering cases. Test that nested subtraction prints with enough parentheses.
+Then add a validation boundary for a domain-specific constructor whose payload
+must be positive. Explain which invariant is guaranteed by the ADT's shape
+and which must be checked by the constructor function.

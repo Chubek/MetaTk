@@ -1,0 +1,125 @@
+.lua
+book.chapter(5, "Bindings, scope, and program units")
+.endlua
+.sh 2 "Definitions describe relationships"
+.pp
+A binding associates a name with an expression's value. The clearest definition
+marker is :=. The parser also accepts = in definition contexts, but using :=
+consistently makes a binding visually different from a record field or a
+comparison. A val prefix is useful inside structures and when attaching an
+inline type annotation. Parameters written between a function name and its
+definition marker turn the right-hand expression into a function body.
+.lua
+book.code("metaml", [=[base := 40
+add :: Int -> Int -> Int
+add x y := x + y
+val answer : Int := add base 2
+Test.equal "annotated binding" answer 42]=], "Value, function, signature, and inline annotation")
+.endlua
+.pp
+The separate signature uses a double colon; the inline val annotation uses a
+single colon. These are not interchangeable decorations. The signature states
+the contract for a named definition, while the annotation constrains the value
+being bound at that location. A useful signature documents the domain of an
+operation rather than merely restating a type the reader could infer from a
+literal. Public functions and module boundaries benefit most from that clarity.
+.sh 2 "Immutability and shadowing"
+.pp
+Language bindings are immutable. Introducing another binding with the same
+spelling shadows or redefines a name in a later scope; it is not assignment to
+a mutable variable. Local bindings make the difference especially clear. The
+outer value remains available after a nested expression introduces its own
+name. Immutable data can still contain a foreign handle whose referenced
+resource changes, so binding immutability and resource immutability must be
+discussed separately.
+.lua
+book.code("metaml", [=[factor := 10
+scaled := let factor := 3 in factor * 7
+Test.equal "local shadow" scaled 21
+Test.equal "outer binding" factor 10
+make_adder amount := fn value -> amount + value
+add_ten := make_adder factor
+Test.equal "captured input" (add_ten 2) 12]=], "Scope and captured values")
+.endlua
+.pp
+The interpreter resolves checked top-level references through binding cells.
+Existing functions retain the references annotated during checking rather
+than promising that every later REPL redefinition dynamically changes old
+closures. That behavior is useful for stable lexical reasoning. It also means
+that interactive redefinition is not a general dependency-rebuilding system.
+If you want a computation to use new inputs, pass them explicitly or rebuild
+the relevant functions in a fresh session.
+.sh 2 "Scope is a design tool"
+.pp
+Keep a helper local when its meaning depends on one algorithm's invariant.
+Promote it to a module member when it has an independent contract that other
+code should share. Export it through a signature only when clients ought to
+depend on that contract. This progression prevents accidental public APIs:
+names that happened to be convenient during implementation should not all
+become promises to downstream users.
+.pp
+A name also carries explanatory information. An expression such as item_count
+communicates a role that a placeholder cannot. Tacit notation remains valuable
+for short functions, but it does not remove the need for meaningful module and
+function names. In a compiler pass, names such as free_variables, emit_term,
+and check_operand explain relationships between stages. A collection of short
+helpers with opaque names can be harder to understand than one well-structured
+named definition.
+.sh 2 "Programs are processed in checked units"
+.pp
+A submitted file is not a database transaction. The session parses and checks
+program units, then executes successful work. If a later unit fails, earlier
+successful definitions or external effects may remain. An import can read
+another file, a primitive can mutate a table, and printing can already have
+written bytes. Recovery restores interpreter bookkeeping where appropriate;
+it cannot erase bytes from an external stream or undo arbitrary native code.
+.lua
+book.algorithm("Reason about a multi-unit submission", {
+    "Read and classify each source unit.",
+    "Check the unit's bindings and type relationships.",
+    "Execute accepted work and retain its definitions.",
+    "On a later error, report the failing span.",
+    "Do not infer rollback of prior definitions or external effects.",
+    "For a clean experiment, create a fresh session and run the corrected source."
+})
+.endlua
+.pp
+This matters when writing reloadable modules. Prefer top-level definitions
+that build pure values and functions. Put file output, mutation, and host
+interaction behind explicit entry functions. A development driver can then
+reload definitions without also repeating a deployment action. A test can
+construct the same module in a new process without depending on a previous
+attempt having partially succeeded.
+.sh 2 "Signatures and generalization"
+.pp
+MetaML has rank-one polymorphism. A general identity binding can be instantiated
+at an integer use and a string use in the same program. That does not mean
+every function parameter is itself universally quantified at every use.
+Separate the polymorphism of a bound value from the type of one argument
+supplied to another function. The type-inference chapter develops this
+distinction through instantiation and unification rather than treating type
+variables as untyped runtime boxes.
+.lua
+book.code("metaml", [=[identity :: 'a -> 'a
+identity x := x
+Test.equal "two instantiations" (identity 7, identity "seven") (7, "seven")
+apply f x := f x
+Test.equal "one application" (apply identity true) true]=], "A polymorphic binding used at different types")
+.endlua
+.pp
+Explicit signatures are also useful for typed concatenation. The same
+juxtaposition syntax can represent application or supported composition, and
+the checker uses types to choose. An annotation narrows the intended relation
+before runtime. When a definition becomes difficult to explain without
+referring to a hidden inference decision, consider using an explicit pipeline
+or composition operator as well as a signature. Readability is part of the
+interface, not merely an aesthetic preference after the program works.
+.sh 2 "Sources and further work"
+.pp
+Inspect binding elaboration and Session evaluation in MetaML.hpp, then compare
+the corresponding routines in MetaML.d. The language's own standard-library
+modules demonstrate the progression from private helpers to sealed public
+interfaces. As an exercise, write a pure function that builds a report string
+and a separate function that prints it. Explain how this separation changes
+the consequences of reloading a file. Then add an explicit type to the report
+builder and check it at the prompt without printing anything.

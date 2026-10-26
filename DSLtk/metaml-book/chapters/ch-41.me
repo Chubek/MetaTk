@@ -1,0 +1,113 @@
+.lua
+book.chapter(41, "Testing, parity, and performance engineering")
+.endlua
+.sh 2 "Different tests establish different claims"
+.pp
+A successful example establishes one observable result. A regression test
+guards a known failure mode. A property test checks a relationship across
+many inputs. A parity test compares host implementations. A packaging test
+checks installed artifacts rather than source-tree assumptions. These claims
+overlap, but none substitutes for every other kind of evidence. Choose tests
+according to the contract changed rather than simply maximizing the number
+of assertions in a file.
+.pp
+For language work, distinguish acceptance, inferred types, AST structure,
+evaluation, output, and diagnostics. Two dialects can print the same final
+number while disagreeing about an intermediate AST or an error path. A
+parser change may need both successful and rejected inputs. A native handle
+change may need ownership and same-session recovery tests. Make the intended
+claim visible in the test's name and observations.
+.sh 2 "Dialect parity is observable equivalence"
+.pp
+The repository's parity checker runs shared MetaML sources through C++ and
+D executables and compares observable behavior, including AST and trace
+modes where requested. Native layouts and allocation strategies may differ.
+Primitive names, type signatures, results, ordering, and failure codes must
+remain compatible at the language boundary. A new operation implemented in
+only one dialect should not be advertised as part of the portable surface.
+.lua
+book.code("sh", [=[python3 scripts/run_tests.py --cpp build/metaml-repl-cpp --d build/metaml-repl-d
+python3 scripts/parity_check.py --cpp build/metaml-repl-cpp --d build/metaml-repl-d --trace
+python3 metaml-book/scripts/check_book.py --metaml build/metaml-repl-cpp \
+  --pplua metaml-book/build/luaroff/pplua]=], "Language, parity, and book checks use explicit executables")
+.endlua
+.pp
+A missing D compiler means D checks are unavailable, not that parity has
+been proved. Report exactly which checks ran. When diagnosing a divergence,
+minimize the source while preserving the difference, then compare stages
+to find where behavior separates. A small counterexample is more useful
+than a large application that only reports different final output without
+revealing whether the cause is lexing, inference, or a host primitive.
+.sh 2 "Properties outlive implementation details"
+.pp
+Round-trip serialization, rewrite semantic preservation, stable sorting,
+and traversal order are strong candidates for property-style tests. For
+bounded integers, formulate arithmetic properties using the language's
+actual wrapping or checked contract. For floating values, account for NaN,
+infinity, and approximation. A mathematical identity that ignores the
+representation can incorrectly label a correct implementation as broken.
+.lua
+book.code("metaml", [=[samples := [[], [1], [1, 2, 3], [3, 1, 3, 2]]
+Test.check "reverse involution"
+  (List.all (fn xs -> List.reverse (List.reverse xs) == xs) samples)
+Test.check "sort idempotence"
+  (List.all (fn xs -> List.sort (List.sort xs) == List.sort xs) samples)
+Test.check "map preserves length"
+  (List.all (fn xs -> List.length (List.map (+ 1) xs) == List.length xs) samples)]=],
+    "Small deterministic property corpora")
+.endlua
+.pp
+The finite corpus does not prove the properties universally, but it makes
+their intended meaning executable and supplies useful regression witnesses.
+Generated tests can expand coverage with a fixed seed for reproducibility.
+Keep generated programs within a chosen resource budget so a failing test
+does not merely hang the suite. Shrinking a failure to a minimal example
+often teaches more than increasing the number of random cases.
+.sh 2 "Measure the actual representation costs"
+.pp
+List indexing is linear, repeated append can be quadratic, and a pipeline
+can allocate intermediate collections. Tree recursion can consume stack,
+while shared graph unfolding can expand dramatically. Tail-call optimization
+addresses a particular stack-growth pattern, not every allocation in the
+program. Benchmark representative input sizes and shapes, including empty,
+skewed, and deeply nested cases, before changing a clear implementation
+into a more complicated one.
+.pp
+Separate startup, library loading, parsing, checking, and evaluation when
+measuring. A benchmark that creates a new session for every tiny arithmetic
+operation mostly measures setup. A long-lived benchmark can accidentally
+benefit from import caches or retained bindings. State the lifecycle used
+and include warm and cold measurements when both matter to the deployed
+application. Keep output disabled or controlled if printing would dominate.
+.sh 2 "Determinism simplifies diagnosis"
+.pp
+Stable key order, deterministic graph traversal, and normalized rendering
+make test failures easier to compare. Normalize externally unordered inputs
+before relying on reproducible output. Avoid embedding timestamps, pointer
+addresses, or uncontrolled random seeds in golden artifacts. For numerical
+libraries, distinguish same-host dialect agreement from cross-platform
+bitwise identity; native mathematical libraries can differ at the final bit.
+.lua
+book.algorithm("Investigate a performance regression", {
+    "Reproduce with a fixed source, library revision, and input corpus.",
+    "Separate setup, frontend, evaluation, and output costs.",
+    "Measure scaling over several input sizes.",
+    "Identify repeated traversal, allocation, or conversion at a boundary.",
+    "Change the responsible algorithm and preserve semantic tests.",
+    "Remeasure the same workload and report both gains and remaining costs."
+})
+.endlua
+.sh 2 "Sources and further work"
+.pp
+Preserve benchmark inputs alongside results. A reported speedup without the
+source, library revision, lifecycle, and input shape is difficult to reproduce
+and may measure a different task. Correctness fixtures should continue to
+run independently of timing so a faster wrong answer cannot pass as an
+engineering improvement.
+.pp
+Read scripts/run_tests.py, scripts/parity_check.py, tests, and the book's
+checker. Add a regression for a malformed placeholder and a successful
+same-session evaluation afterwards. Compare repeated nth traversal with a
+single fold on increasing list sizes. Explain what each test or measurement
+establishes, and avoid reporting skipped dialect checks or unmeasured
+complexity improvements as completed evidence.

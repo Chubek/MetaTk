@@ -1,0 +1,130 @@
+.lua
+book.chapter(32, "Embedding MetaML in C++")
+.endlua
+.sh 2 "The host owns the session"
+.pp
+The C++ interpreter is header-only and requires C++20 through DSLtk.hpp.
+Include MetaML.hpp, construct metaml::Session, load a chosen library tree,
+and inspect every returned Result. A successful eval yields a metaml::Value;
+a failed eval yields diagnostics. The host controls session lifetime,
+source selection, output routing, primitive installation, and synchronization.
+Embedding is therefore more than replacing a shell command with a function
+call: it establishes a native ownership and capability boundary.
+.lua
+book.code("cpp", [=[#include "MetaML.hpp"
+#include <iostream>
+int main(int argc, char** argv) {
+    metaml::Session session;
+    auto loaded = session.load_stdlib(argc > 1 ? argv[1] : "metalib");
+    if (loaded.is_err()) {
+        for (const auto& d : loaded.unwrap_err())
+            std::cerr << session.render(d);
+        return 1;
+    }
+    auto result = session.eval("List.sum [10, 20, 12]");
+    if (result.is_err()) {
+        for (const auto& d : result.unwrap_err())
+            std::cerr << session.render(d);
+        return 1;
+    }
+    std::cout << metaml::to_string(result.unwrap()) << '\n';
+}]=], "A complete C++ embedding client")
+book.code("sh", [=[c++ -std=c++20 -O0 -pthread -I. embedding.cpp -o embedding
+./embedding metalib]=], "Compile the preceding listing from the DSLtk directory")
+.endlua
+.pp
+The D counterpart appears in the next chapter and follows the same language
+contract. C++ memory management is not a language-visible difference in
+MetaML syntax. Avoid sharing native representation assumptions across the
+dialect boundary; compare evaluated values, diagnostics, and AST behavior
+instead. The optional C ABI is separately compiled but does not remove the
+header-only property of this direct C++ interface.
+.sh 2 "Register trusted native operations"
+.pp
+Typed register_primitive derives a language type from supported native
+signatures. Integers, floating values, booleans, strings, optionals, vectors,
+pairs, and selected Result types have conversion support. Registration
+explicitly trusts the primitive and grants its exact name. Keep native
+arithmetic safe: MetaML's wrapping rules do not make overflowing signed C++
+arithmetic defined inside an arbitrary user callback.
+.lua
+book.code("cpp-fragment", [=[session.register_primitive("Host.describe", [](std::int64_t n) {
+    return std::string("count=") + std::to_string(n);
+});
+auto answer = session.eval("Host.describe 42");]=], "Typed registration in an existing C++ session")
+book.code("d-fragment", [=[session.register_primitive("Host.describe", (long n) {
+    import std.conv : to;
+    return "count=" ~ to!string(n);
+});
+auto answer = session.eval("Host.describe 42");]=], "The corresponding D registration")
+.endlua
+.pp
+The low-level overload accepts a language type source, arity, and PrimFn.
+It is appropriate for callbacks into MetaML, custom Value manipulation,
+and opaque resources. The advertised type and arity are a promise the
+implementation must honor. Validate native conversions and retain useful
+primitive names in diagnostics rather than allowing accidental casts to
+silently reinterpret data at the boundary.
+.sh 2 "Install libraries without granting everything"
+.pp
+Metalib.h exposes install_all and smaller installation layers. Installers
+establish declarations and primitive implementations but do not automatically
+grant non-core capabilities. Configure an allowlist afterwards. Install before
+loading the standard library when host modules introduce types or constructors
+that source wrappers need. A developer CLI's permissive bundle is a useful
+workbench default, not a required embedding policy.
+.lua
+book.code("cpp-fragment", [=[// Also include "metalib/cpp/Metalib.h".
+metalib::install_all(session);
+session.set_primitive_allowlist({"Hash.*", "Buffer.*"});
+auto loaded = session.load_stdlib("metalib");]=], "Installation and permission are separate operations")
+book.code("d-fragment", [=[// Also import metalib.d.Metalib.
+installAll(session);
+session.set_primitive_allowlist(["Hash.*", "Buffer.*"]);
+auto loaded = session.load_stdlib("metalib");]=], "The corresponding D installation policy")
+.endlua
+.pp
+Prefer exact names when a script needs only one operation, or module patterns
+when the whole module is intentionally available. Core operations and source
+imports have their own behavior, so an empty non-core allowlist is not a
+complete isolation boundary. Chapter 34 explains how to combine a deliberate
+runtime surface with process-level controls when the application requires
+stronger limits on execution or external access.
+.sh 2 "Retained values have lifetimes"
+.pp
+Global retrieves a bound value, and call applies a function Value from native
+code. Keep the Session alive while using values associated with its closures,
+primitives, and internal machinery. Re-registering a primitive preserves old
+callable objects' lifetime inside the session, but does not make those values
+independent of the session. A native cache of functions therefore needs an
+explicit owner, invalidation policy, and synchronization strategy.
+.pp
+Do not evaluate one Session concurrently from unrelated threads. Handle-local
+locks in buffers or tables do not serialize the type environment, module
+initialization, or evaluator state. A straightforward host design gives each
+worker its own session or funnels requests through one owner. Output callbacks
+should avoid re-entering that owner synchronously, especially while the
+runtime's output mutex is held.
+.sh 2 "Preserve structured errors"
+.pp
+Recoverable standard exceptions thrown by invoked native primitives become
+M0409 diagnostics. Language errors retain their language codes. This lets a
+host present an ordinary callback failure without exposing internal exception
+types to scripts, but it cannot recover from undefined behavior or native
+process faults. Check eval, load, and call results before unwrapping and
+retain source text long enough to render useful diagnostics.
+.pp
+For service integration, separate returned values from output bytes and
+diagnostics. A script can print before ultimately failing, so success status
+alone does not describe everything that happened. A host may buffer output
+until completion for presentation, but that is an application policy rather
+than interpreter rollback. Document whether partially produced output is
+discarded, published, or attached to the error report.
+.sh 2 "Sources and further work"
+.pp
+Read Session, primitive registration templates, PrimContext, and Value in
+MetaML.hpp, then inspect metalib/cpp/Metalib.h. Compile the complete client
+and add a trusted string-producing primitive with boundary-value tests.
+Next retain a function returned by global and call it while its Session
+remains alive. Draw the lifetime relationship explicitly before putting
+that function into an asynchronous host task or cache.

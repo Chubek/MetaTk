@@ -1,0 +1,129 @@
+.lua
+book.chapter(33, "Embedding in D and through the C ABI")
+.endlua
+.sh 2 "D follows the same language contract"
+.pp
+The D implementation is imported as MetaML and constructs Session with new.
+Native allocation and delegate conventions differ from C++, but the accepted
+MetaML source and observable results should agree. Both snake_case methods
+and several camelCase aliases exist; this book uses the shared snake_case
+style where possible. Explicitly load the library tree and inspect Results
+just as in the C++ client rather than assuming the prelude has been loaded
+by constructing a native object.
+.lua
+book.code("d", [=[import MetaML;
+import std.stdio : writeln, stderr;
+int main(string[] args) {
+    auto session = new Session;
+    auto loaded = session.load_stdlib(args.length > 1 ? args[1] : "metalib");
+    if (loaded.is_err()) {
+        foreach (d; loaded.unwrap_err()) stderr.write(session.render(d));
+        return 1;
+    }
+    auto result = session.eval("List.sum [10, 20, 12]");
+    if (result.is_err()) {
+        foreach (d; result.unwrap_err()) stderr.write(session.render(d));
+        return 1;
+    }
+    writeln(to_string(result.unwrap()));
+    return 0;
+}]=], "The D counterpart of the complete C++ client")
+book.code("sh", [=[ldc2 -i -I. embedding.d -of=embedding-d
+./embedding-d metalib]=], "LDC compiles imported modules with -i")
+.endlua
+.pp
+Typed registration supports D numeric types, bool, string, Nullable, arrays,
+tuples, and Value according to the implementation's conversion traits.
+Low-level callbacks receive PrimContext and a Value array. Recoverable D
+Exceptions become M0409 when invoked through the primitive boundary, while
+language MetaError diagnostics preserve their original code. Defects and
+process faults are not ordinary recoverable script input.
+.sh 2 "Garbage collection does not erase ownership"
+.pp
+Garbage collection simplifies retention of language objects, but native
+resources still need explicit lifetime rules. A handle can own a file,
+buffer, or library-specific object whose cleanup policy is not adequately
+described by "some memory is reachable." Closures can retain environments,
+and callbacks can retain host delegates. Review cycles and resource cleanup
+when embedding in a long-running application rather than a short command-line
+process.
+.pp
+Install the portable host bundle through metalib.d.Metalib and installAll,
+then configure the same allowlist used by the corresponding C++ application.
+Parity testing should compare primitive names, types, values, errors, output,
+and canonical syntax results. It should not compare native object layouts
+or assume identical allocation counts. Keep dialect-specific conveniences
+below the language boundary so a portable script does not depend on its host.
+.sh 2 "The C adapter is a different native boundary"
+.pp
+The genuine C99 interface lives in metalib/c/MetaML.h and is backed by a
+separately compiled C++20 adapter. Link the metaml-c target and the C++
+runtime. The .c files under metalib/cpp are unrelated included C++ fragments;
+they must not be compiled as C. A C client receives an opaque session pointer,
+status codes, and owned text results instead of native C++ Value objects.
+.lua
+book.code("c", [=[#include "metalib/c/MetaML.h"
+#include <stdio.h>
+#include <string.h>
+int main(void) {
+    metaml_c_session *session = NULL;
+    metaml_text text = {0};
+    const char *source = "List.sum [10, 20, 12]";
+    int status = 1;
+    if (metaml_session_create(&session) != METAML_OK) return 1;
+    if (metaml_c_load_stdlib(session, "metalib") != METAML_OK) goto done;
+    if (metaml_c_eval(session, source, strlen(source), &text) != METAML_OK)
+        goto done;
+    fwrite(text.data, 1, text.size, stdout);
+    status = 0;
+done:
+    if (status) fputs(metaml_last_error(session), stderr);
+    metaml_text_free(&text);
+    metaml_session_destroy(session);
+    return status;
+}]=], "A complete C99 client with explicit ownership")
+.endlua
+.sh 2 "Owned bytes and borrowed diagnostics"
+.pp
+Initialize metaml_text to zero, release it with metaml_text_free, and free
+the previous result before reusing the structure as an output argument.
+The adapter owns the allocation convention; using an unrelated allocator's
+free function is not the contract. Size excludes the terminating NUL, while
+embedded zero bytes remain valid content. Use counted output such as fwrite
+rather than assuming every result is ordinary zero-terminated text.
+.pp
+Metaml_last_error returns borrowed diagnostic text valid until the next
+mutating operation or session destruction. Copy it if another subsystem must
+retain it. Failed output-producing calls clear the output structure. Status
+codes distinguish invalid arguments, language failures, and host failures.
+No C++ exception crosses the ABI. These ownership and failure rules should
+be tested from a translation unit compiled as C, not merely from C++ code
+that happens to include the C header.
+.sh 2 "Separate evaluated values from captured output"
+.pp
+Metaml_c_eval returns canonical MetaML notation. A string result therefore
+includes the language's quoting and escaping rather than raw payload bytes.
+Metaml_output copies captured ordinary output and can clear it after a
+successful copy. Error-stream output and input retain process-stream behavior.
+Type_of checks without evaluation, which is useful when a client needs a
+type query without deliberately running the script's effects.
+.pp
+Fresh C sessions contain core primitives. Install the portable host bundle
+with metaml_install_metalib and grant selected names through
+metaml_allow_primitives. Installation does not grant access. The initial
+adapter has no C callback-registration API; applications needing that level
+of extension should use a C++ integration layer. The metaml_c_session type
+also must not be confused with session pointers from the older optional
+CBridge interface; their ABIs are distinct.
+.sh 2 "Sources and further work"
+.pp
+Keep an ownership table in the host binding: sessions are destroyed, result
+buffers are freed, and borrowed diagnostic pointers are copied when retained.
+This small inventory prevents many integration errors before testing begins.
+.pp
+Read MetaML.d, metalib/d/Metalib.d, metalib/c/MetaML.h, and MetaML.cpp in the
+C adapter directory. Compile both complete clients where toolchains are
+available. For C, test an error followed by a successful call and free every
+owned result along both paths. Add a binary-output case containing a zero
+byte, then explain why strlen is appropriate for the fixed source literal
+in the example but not for arbitrary returned output.

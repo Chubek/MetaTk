@@ -1,0 +1,122 @@
+.lua
+book.chapter(27, "Abstract syntax trees and visitors")
+.endlua
+.sh 2 "Generic syntax is an explicit data model"
+.pp
+ASTBuilder exposes Ast with Leaf tag text and Node tag children. Tags identify
+syntactic roles; text carries leaf payloads; children preserve structural
+order. This is a generic tree for languages you build, not a mutable view of
+the interpreter's checked MetaML expressions. A node tagged add receives
+meaning only from your parser, validator, and interpreter. It does not acquire
+integer typing automatically because MetaML itself supports addition.
+.lua
+book.code("metaml", [=[tree := Node "add" [Leaf "num" "1", Leaf "num" "2"]
+Test.equal "node count" (ASTBuilder.size tree) 3
+Test.equal "inspection" (ASTBuilder.dump tree) "(add (num 1) (num 2))"
+Test.equal "child tags" (List.map ASTBuilder.tag (ASTBuilder.children tree)) ["num", "num"]
+Test.equal "leaf payload" (ASTBuilder.text (Leaf "num" "7")) (Some "7")]=],
+    "Construct and inspect a generic tree")
+.endlua
+.pp
+ASTBuilder supplies size, depth, tag, text, children, searches, rebuilding,
+parsing, and S-expression conversion. Handle conversion errors explicitly.
+Generic syntax can contain unexpected tags or arities even when the enclosing
+MetaML program type-checks. Establish a validation boundary before semantic
+passes assume that every addition has exactly two children or every numeric
+leaf contains a valid integer.
+.sh 2 "Traversal order is an algorithmic choice"
+.pp
+Preorder visits a parent before its descendants, postorder visits children
+before their parent, and breadth-first traversal visits by increasing depth.
+Preorder suits inherited context such as entering a scope. Postorder suits
+synthesized results such as evaluating operands before an operator. Breadth
+first is useful for level-oriented inspection. Choose the order from the
+information a callback needs rather than from whichever function name is
+shortest.
+.lua
+book.code("metaml", [=[tree := Node "add" [Leaf "num" "1", Node "neg" [Leaf "num" "2"]]
+Test.equal "preorder" (List.map ASTBuilder.tag (WalkAST.preorder tree))
+  ["add", "num", "neg", "num"]
+Test.equal "postorder" (List.map ASTBuilder.tag (WalkAST.postorder tree))
+  ["num", "num", "neg", "add"]
+Test.equal "breadth first" (List.map ASTBuilder.tag (WalkAST.breadth_first tree))
+  ["add", "num", "neg", "num"]]=], "Order determines when information is available")
+.endlua
+.pp
+WalkVisitor adds effect-oriented traversal, depth callbacks, enter/leave hooks,
+and child-index paths. A path is a list of zero-based indices from the root.
+At_path returns Option for checked navigation. Such paths are locations in
+one tree shape, not permanent identities: inserting or removing a child can
+invalidate saved paths. Use stable domain identifiers when an editor or
+analysis must retain identity across shape-changing rewrites.
+.sh 2 "A fold replaces syntax with meaning"
+.pp
+VisitorBuilder.make constructs a folding visitor from a leaf handler and a
+node handler. The node handler receives already-computed child results.
+This abstracts the recursion while leaving semantic interpretation in user
+code. A counting visitor, an evaluator, and a renderer can share traversal
+structure but produce different result types. The fold is especially useful
+when every node's result depends only on its own tag and child results.
+.lua
+book.code("metaml", [=[tree := Node "sum" [Leaf "num" "1", Leaf "num" "2"]
+evaluate := VisitorBuilder.make
+  (fn _ text -> Int.from_string text |> Option.with_default 0)
+  (fn _ children -> List.sum children)
+Test.equal "folded result" (evaluate tree) 3
+Test.equal "tag counts" (VisitorBuilder.count_tags tree) [("num", 2), ("sum", 1)]
+Test.equal "path lookup" (WalkVisitor.at_path [1] tree) (Some (Leaf "num" "2"))]=],
+    "A simple fold over a deliberately restricted tree vocabulary")
+.endlua
+.pp
+The example defaults malformed leaf text to zero solely because its tiny
+input vocabulary is controlled. A real compiler should return Result from
+validation or interpretation rather than silently assign semantics to bad
+syntax. Likewise, ignoring every node tag is appropriate for a generic count
+but not for an arithmetic interpreter. A reusable traversal does not absolve
+the semantic handler from checking its domain.
+.sh 2 "Rewrite direction controls available information"
+.pp
+Bottom-up mapping transforms children before presenting the rebuilt parent
+to the callback. Constant folding naturally follows this order: children
+that were expressions may now be literals. Top-down mapping transforms a
+node before visiting the resulting descendants, useful when a parent rewrite
+establishes context or changes the structure to inspect. Document whether
+newly introduced nodes are traversed and whether another pass is required
+to reach the desired normal form.
+.lua
+book.algorithm("Bottom-up constant folding", {
+    "Recursively transform each child in source order.",
+    "Rebuild the current node from those transformed children.",
+    "If the node is a recognized operator with literal operands:",
+    {1, "Compute using the source language's arithmetic contract."},
+    {1, "Replace the operator with a literal carrying the result."},
+    "Otherwise preserve the rebuilt node."
+})
+.endlua
+.pp
+WalkAST.rewrite uses an optional replacement: None means retain the node,
+not delete it. Deletion changes a parent's child collection and needs a
+separate representation of that intent. Distinguish one traversal from
+repeated normalization; applying a rewrite once does not prove no rule can
+match the result. If repeatedly applying rules, establish termination or
+use an explicit step budget and report whether the budget was exhausted.
+.sh 2 "Preserve the information your clients need"
+.pp
+A generic tree's text and tag fields do not automatically retain comments,
+source spans, inferred types, or binding identities. Decide which annotations
+belong in your domain representation and how transformations preserve them.
+A renderer that only needs semantic structure can discard trivia; an editor
+cannot. An optimizer may regard source locations as irrelevant to equality
+while still needing them to explain an error after transformation.
+.sh 2 "Sources and further work"
+.pp
+Treat each pass as a contract over trees. State its accepted vocabulary,
+preserved annotations, output invariants, and failure representation before
+choosing whether to implement it with a fold, a walk, or a rewrite callback.
+.pp
+Read ASTBuilder, WalkAST, WalkVisitor, and VisitorBuilder in metalib/cpp and
+their D mirrors. Construct a malformed binary operator and write a validator
+that rejects its arity before evaluation. Then implement bottom-up folding
+and test that interpretation is preserved for nested expressions. Include
+a tree whose saved child path becomes stale after a rewrite, and explain
+why structural location and semantic identity require different mechanisms.

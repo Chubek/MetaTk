@@ -1,0 +1,119 @@
+.lua
+book.chapter(36, "DSLtk.hpp: sources, parsers, and diagnostics")
+.endlua
+.sh 2 "A parser cursor borrows source"
+.pp
+The native combinator core uses ParsecInput, ExpectedResult, and Parser.
+ParsecInput holds a string_view source and a byte position. Peek inspects
+the next byte, consume advances, eof distinguishes actual exhaustion, and
+get_span returns the source interval consumed since a saved position.
+Because string_view does not own storage, the source must remain alive
+through parsing and through any retained views derived from it.
+.pp
+Peek uses a zero-byte sentinel at end of input, so call eof when a real
+embedded zero must be distinguished from exhaustion. This is a general
+systems-programming lesson: a convenient sentinel is not an adequate
+binary-input contract by itself. The separate BinaryStream facility later
+in the book provides an explicitly byte-oriented interface for binary work.
+Choose deliberately rather than treating every parser cursor as interchangeable.
+.sh 2 "Parsers return values and structured failures"
+.lua
+book.code("cpp", [=[#include "DSLtk.hpp"
+#include <cassert>
+int main() {
+    auto parser = dsl::ch('a') & dsl::ch('b');
+    auto result = dsl::run_parser(parser, "ab");
+    assert(result.value.has_value());
+    auto bad = dsl::run_parser(parser, "ax");
+    assert(!bad.value.has_value());
+}]=], "A complete native parser composition")
+book.code("d-fragment", [=[auto parser = ch('a') & ch('b');
+auto result = run_parser(parser, "ab");]=], "The corresponding D combinator shape")
+.endlua
+.pp
+A custom native parser can be built with dsl::parser around a callable taking
+ParsecInput by reference and returning ExpectedResult of its value type.
+Success carries a value; failure carries a position, failure kind, and
+expected labels. This makes failure composition explicit rather than
+requiring every ordinary mismatch to throw a native exception. Keep source
+positions in one consistent byte coordinate system throughout the parse.
+.sh 2 "Commitment is part of the native grammar contract"
+.pp
+ParseFailureKind distinguishes soft and committed failures. An alternative
+can restore the cursor and try another branch after a soft failure. A
+committed failure prevents that fallback. Sequence promotes a later soft
+failure when earlier work consumed input, preserving the fact that the
+grammar has already entered a construct. Optional and repetition must also
+respect commitment rather than swallowing a malformed partially consumed item.
+.pp
+This behavior differs from simply assuming every failed parser backtracks
+unconditionally. It also differs from the convenient MetaML Parsec wrapper
+described earlier. When porting a grammar between interfaces, test shared
+prefixes and partially recognized constructs. A missing closing delimiter
+after a valid opening delimiter often deserves a committed error rather
+than a fallback that pretends the entire construct was absent.
+.lua
+book.algorithm("Alternative with commitment", {
+    "Save the initial cursor.",
+    "Try the first parser.",
+    "On success, return its value.",
+    "On committed failure, propagate its error.",
+    "On soft failure, restore the cursor and try the next alternative.",
+    "Merge competing failure expectations at the furthest position."
+})
+.endlua
+.sh 2 "Diagnostics should retain the best evidence"
+.pp
+ParseError records the furthest useful position and expected labels.
+When failures occur at different positions, the farther one is generally
+more informative. At the same position, merge labels while preserving
+deterministic order and removing duplicates. A language-level diagnostic can
+then connect the parser's expectation to a named source span and an
+actionable message. Avoid reporting only whichever speculative branch happened
+to fail last.
+.pp
+The generic Diagnostic and Span facilities are reusable across languages.
+MetaML assigns its own M-prefixed codes and language-specific messages while
+using shared source-location infrastructure. A toolkit must not embed
+MetaML-specific grammar assumptions merely because MetaML is one consumer.
+Conversely, a language should not duplicate a generic location or diagnostic
+mechanism when the reusable layer can express the needed contract cleanly.
+.sh 2 "Distinguish parser families"
+.pp
+DSLtk includes ordinary combinators, PEG-oriented facilities, static byte
+regexes, and an explicit CFG parser. These solve different problems.
+Ordered-choice grammars, longest-match tokenization, and context-free
+derivation do not share identical ambiguity or recursion rules. Identify
+which subsystem an example uses before applying advice about left recursion,
+commitment, or full-input matching. A common header does not imply a single
+universal parser execution model.
+.pp
+For a language frontend, establish separate contracts for lexing, parsing,
+and semantic validation. Tokenization can recognize a digit sequence without
+proving numeric range. Parsing can establish a declaration's shape without
+resolving its references. Semantic validation can reject an otherwise valid
+tree. Retaining spans across those stages makes the eventual error useful
+without forcing the lexer to perform every later analysis prematurely.
+.sh 2 "Resource and recovery tests"
+.pp
+Test malformed prefixes, repeated optional constructs, and deeply nested
+input. A repeated parser must either consume input or terminate according
+to its contract; repeated empty success cannot define useful progress.
+Backtracking can multiply work, and recursion can consume stack even when
+the source is short. Measure actual parser behavior rather than inferring
+linear complexity merely from a compositional API.
+.pp
+Also test cursor restoration. A soft failure that leaves a cursor advanced
+can corrupt the next alternative, producing a misleading later error.
+A parser returning a view into a temporary string can appear correct until
+the next allocation overwrites the storage. These native lifetime and
+state invariants deserve targeted tests because a successful parse on one
+literal does not exercise them.
+.sh 2 "Sources and further work"
+.pp
+Read ParsecInput, ParseError, merge_error, Parser, and run_parser in DSLtk.hpp,
+plus examples/05-parser-basics.cpp and the parser composition examples.
+Compare the D definitions in DSLtk.d. Build two alternatives with a shared
+prefix and observe where commitment should occur. Then write a custom
+identifier parser that retains a span, documenting who owns the source
+storage and how long the returned view remains valid.

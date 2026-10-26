@@ -1,0 +1,134 @@
+.lua
+book.chapter(28, "Lexers and grammar bridges")
+.endlua
+.sh 2 "Separate lexical decisions from grammar decisions"
+.pp
+A lexer groups characters into tokens; a parser groups tokens into syntax.
+FlexBridge exposes ordered longest-match tokenization inside MetaML, while
+YACCBridge accepts supported grammar descriptions and produces generic Ast
+values. These are in-process library facilities backed by DSLtk, not shell
+invocations of external flex and yacc programs. Their names indicate the
+kind of interface, not complete compatibility with every feature of those
+external tools.
+.lua
+book.code("metaml", [=[rules := [("num", "[0-9]+"), ("_ws", "[ \t\n]+")]
+Test.equal "tokens" (FlexBridge.tokenize rules "12 34")
+  (Ok [("num", "12"), ("num", "34")])
+Test.check "unrecognized byte" (Result.is_err (FlexBridge.tokenize rules "12?"))
+Test.equal "prefix match" (FlexBridge.match_prefix "[0-9]+" "123x") (Some "123")]=],
+    "Token categories and skipped whitespace")
+.endlua
+.pp
+Rules whose names begin with underscore are skipped. Keep whitespace rules
+explicit so the accepted input language is visible. A lexical error should
+report where no rule matched rather than silently dropping unknown bytes.
+For source tools, use span-producing tokenization when positions matter.
+Discarding lexeme locations early makes later grammar and semantic errors
+harder to connect to the user's source.
+.sh 2 "Longest match and tie order"
+.pp
+The longest matching rule wins. Earlier rules break ties. This combination
+supports a keyword rule before an identifier rule: an exact keyword wins
+the equal-length tie, while a longer identifier beginning with that keyword
+remains an identifier. Reversing the rules can change the token kind without
+changing the lexeme bytes. Rule order is therefore part of a lexer contract,
+not a formatting detail that can be sorted alphabetically.
+.lua
+book.code("metaml", [=[rules := [("if", "if"), ("id", "[a-z]+"), ("_ws", " +")]
+Test.equal "keyword tie and longer identifier"
+  (FlexBridge.tokenize rules "if iffy")
+  (Ok [("if", "if"), ("id", "iffy")])]=], "Priority applies only after match length")
+.endlua
+.pp
+The supported pattern language includes character classes, simple quantifiers,
+escapes, and negative lookahead. It is not unrestricted PCRE. Validate
+patterns supplied as configuration before using them in a tokenization
+pipeline. Avoid rules that can accept empty input: tokenization requires
+progress, and an empty token cannot advance the source cursor. Whitespace
+and comment rules need the same progress discipline as ordinary tokens.
+.sh 2 "Grammar descriptions establish structure"
+.pp
+YACCBridge supports productions, alternatives, quoted terminals, and the
+tested token conventions of its grammar reader. Check validates a grammar
+and returns information through Result; literals inspects its terminals.
+Parse consumes source text, while parse_tokens accepts token pairs supplied
+by a lexer. Keep semantic actions in a later AST visitor rather than
+assuming an arbitrary yacc action language executes inside the grammar.
+.lua
+book.grammar("An arithmetic grammar design", {
+    {"Expr", 'Term { "+" Term }'},
+    {"Term", 'Atom { "*" Atom }'},
+    {"Atom", 'number | "(" Expr ")"'}
+})
+.endlua
+.pp
+The descriptive grammar separates precedence levels. Multiplication is
+recognized inside Term before addition combines terms into Expr. A recursive
+grammar can express this structure in several equivalent ways, but the
+resulting AST shape may differ. Inspect actual parse output before writing
+a lowering pass. Do not infer child order from a diagram alone when the
+parser retains punctuation tokens or introduces production-name nodes.
+.sh 2 "Left recursion and ambiguity"
+.lua
+book.code("metaml", [=[grammar := "expr : expr \"+\" term | term ;\n"
+  ^ "term : term \"*\" atom | atom ;\n"
+  ^ "atom : NUM | ID | \"(\" expr \")\" ;\n"
+Test.equal "grammar vocabulary" (YACCBridge.check grammar)
+  (Ok ["expr", "term", "atom"])
+Test.check "nested arithmetic"
+  (Result.is_ok (YACCBridge.parse grammar "1 + 2 * (x + 3)"))
+Test.check "missing operand"
+  (Result.is_err (YACCBridge.parse grammar "1 + * 2"))
+Test.check "token input"
+  (Result.is_ok (YACCBridge.parse_tokens grammar
+    [("NUM", "7"), ("OP", "*"), ("ID", "k")]))]=],
+    "An executable bridge grammar with source and token entry points")
+.endlua
+.pp
+The bridge supports tested left-recursive grammar forms through its underlying
+grammar machinery. That does not mean every parser facility in DSLtk has
+the same recursion behavior: ordinary recursive-descent combinators can loop
+on direct left recursion. Choose a grammar formulation suited to the parser
+being used. When changing the parsing backend, review recursion, alternative
+ordering, and error behavior rather than copying a grammar blindly.
+.pp
+Ambiguity occurs when an input has more than one derivation. A parser returning
+one tree has not proved the grammar unambiguous. For arithmetic, encode
+precedence and associativity deliberately, then test expressions that expose
+them. Addition-only examples cannot distinguish left from right association;
+subtraction and division can. A grammar test should challenge the structural
+decision it claims to establish.
+.lua
+book.algorithm("Build a lexer-to-tree boundary", {
+    "Validate lexical rules and the grammar description.",
+    "Tokenize source while preserving token kinds, lexemes, and positions.",
+    "Reject unrecognized input before grammar interpretation.",
+    "Parse the token sequence and inspect the produced tree vocabulary.",
+    "Lower that vocabulary into a domain model with checked arities.",
+    "Attach source context to failures at each boundary."
+})
+.endlua
+.sh 2 "Test failure as carefully as acceptance"
+.pp
+A useful lexer suite covers ties, longer matches, skipped input, unsupported
+characters, and end-of-input boundaries. A grammar suite covers missing
+operands, extra tokens, nesting, and precedence. Verify full consumption when
+the public operation promises a complete program. A parser that accepts a
+valid prefix and ignores trailing garbage is unsuitable for configuration
+validation unless prefix parsing is explicitly the intended interface.
+.pp
+Keep lexical and semantic numeric validation distinct. A token matching
+digits may still exceed the Int range. Likewise, an identifier token may
+refer to an unknown variable. The lexer should not silently assign a default
+numeric value or resolve names merely because it can recognize their
+spelling. Each stage establishes the invariant needed by the next, retaining
+enough context to explain why a later requirement failed.
+.sh 2 "Sources and further work"
+.pp
+Read metalib/cpp/FlexBridge.h and YACCBridge.h, their included implementation
+fragments, and the corresponding D modules. Locate the bridge fixtures in
+tests before relying on a particular grammar extension. Design a lexer with
+one keyword, identifiers, integers, and whitespace. Test a keyword prefix
+inside a longer identifier. Then sketch a precedence grammar and list the
+tree shapes its lowering pass must recognize, including punctuation and
+error cases.

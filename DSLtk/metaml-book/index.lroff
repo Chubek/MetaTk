@@ -1,0 +1,36 @@
+.\" This file is followed by chapters/ch-1.me through ch-42.me by build.sh.
+.sp 1.5i
+.ce 1
+.sz 28
+MetaML:
+.sp 0.3i
+.sz 17
+.ce 2
+A Meta-Language for
+Meta-Programming
+.sz 10
+.sp 0.6i
+.ce 2
+A practical language guide and implementation companion
+with DSLtk.hpp, worked programs, and language-building tools
+.sp 0.8i
+.pp
+This book describes the MetaML implementation supplied with this repository.
+It develops the functional, tacit, concatenative, and modular styles together,
+then uses them to build language tools and embed an interpreter.
+The final part explains the C++20 toolkit beneath those tools.
+.pp
+Read complete listings as independent programs unless their caption says
+otherwise. MetaML listings use the standard library and the portable host
+bundle supplied by the command-line executable. Pseudocode, descriptive
+grammars, shell commands, and native-language fragments are labelled separately.
+The companion checker runs each complete MetaML listing in a fresh process.
+.pp
+The book distinguishes implementation behavior from older design sketches.
+In particular, ordinary evaluation is eager, strings are byte sequences,
+module initialization is lazy, and the current C++ dependency requires C++20.
+This repository's MetaML is an embeddable ML dialect; the name does not imply
+the quotation and staging operators of other languages also called MetaML.
+.lua
+book.contents()
+.endlua

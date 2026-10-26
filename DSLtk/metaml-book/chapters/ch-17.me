@@ -1,0 +1,137 @@
+.lua
+book.chapter(17, "Signatures and abstraction")
+.endlua
+.sh 2 "A signature states the public contract"
+.pp
+A module signature lists the types and values a structure must provide.
+Define a named signature with module type Name := sig ... end. Value
+specifications use val name : type. An abstract type declaration omits a
+representation, while a manifest alias deliberately exposes an equality.
+These choices determine what clients may assume, not just how much
+documentation appears beside an implementation.
+.lua
+book.code("metaml", [=[module type COUNTER := sig
+  type t
+  val zero : t
+  val bump : t -> t
+  val get : t -> Int
+end
+module Hidden_counter :> COUNTER := struct
+  type t = Int
+  val zero := 0
+  val bump n := n + 1
+  val get n := n
+  val implementation_detail := 99
+end
+Test.equal "abstract client" (Hidden_counter.get
+  (Hidden_counter.bump Hidden_counter.zero)) 1]=], "An opaque counter interface")
+.endlua
+.pp
+The client can obtain a counter, increment it, and inspect its numeric value.
+It cannot rely on the hidden representation being Int or on the private
+implementation_detail member. That freedom lets the module later use a
+record, a constructor, or another representation while preserving the
+documented operations. An interface is valuable precisely because it limits
+which implementation facts become dependencies.
+.sh 2 "Transparent and opaque ascription"
+.pp
+A single colon introduces transparent ascription. The :> spelling seals
+opaquely. Both check compatibility with the signature. In the current
+checker, transparent ascription retains the implementation scope; it should
+not be used as a promise to hide extra members. Opaque sealing restricts the
+visible surface and gives abstract types a public identity independent of
+their implementation representation.
+.pp
+This difference is easy to miss if every example happens to use only the
+declared members. Test abstraction with a negative client as well as a
+successful one. A counter library is not properly protected merely because
+Counter.get works; a client that tries to pass an arbitrary integer where
+Counter.t is required should also be rejected under an opaque interface.
+The negative test checks the boundary that makes future changes safe.
+.lua
+book.code("metaml-error:M0502", [=[module type REQUIRED := sig
+  val count : Int
+end
+module Missing :> REQUIRED := struct
+  val other := 1
+end]=], "A missing required member violates the signature")
+.endlua
+.sh 2 "Abstract identity versus exposed equality"
+.pp
+An abstract type says that clients know there is a type but do not know its
+representation. A manifest specification such as type t = Int intentionally
+shares the integer type. Use the latter when callers must interoperate
+directly with integers; use the former when operations should preserve a
+module-owned invariant. Neither choice is universally better. The right
+choice follows the intended client behavior.
+.pp
+Consider a validated count. Exposing Int allows any integer to be passed,
+including a negative one. Hiding the representation and exposing a checked
+constructor can ensure that ordinary clients only receive valid values.
+The signature must then expose enough observations and transformations to
+make the abstraction useful. An opaque type with no way to construct or
+inspect values is technically hidden but rarely a productive API.
+.lua
+book.code("metaml", [=[module type COUNT := sig
+  type t
+  val make : Int -> Option t
+  val value : t -> Int
+end
+module Count :> COUNT := struct
+  type t = Int
+  val make n := if n < 0 then None else Some n
+  val value n := n
+end
+Test.equal "reject invalid" (Count.make (~1) |> Option.map Count.value) None
+Test.equal "accept valid" (Count.make 7 |> Option.map Count.value) (Some 7)]=],
+    "A checked constructor establishes a semantic invariant")
+.endlua
+.sh 2 "Polymorphism is part of compatibility"
+.pp
+A matching value name is not enough. The implementation's type must satisfy
+the specification, including type-constructor arguments and polymorphism.
+A function specialized to Int cannot stand in for a promised identity over
+every type. Conversely, a sufficiently general implementation can often
+serve a narrower advertised contract. Think of the signature as the set of
+calls clients are entitled to make, and check that the implementation can
+honor all of them.
+.lua
+book.algorithm("Review a module interface", {
+    "List the values clients need and the type relationships between them.",
+    "Choose which type equalities are public and which are abstract.",
+    "Check every required member against its full specified type.",
+    "Seal the implementation when private members must remain inaccessible.",
+    "Test a legitimate client and an attempted representation leak.",
+    "Keep implementation helpers outside the public signature."
+})
+.endlua
+.pp
+The standard library uses sealed modules to keep helper definitions private.
+An accumulator loop, a host primitive wrapper, or an internal conversion can
+change without expanding the public surface. This also makes generated API
+reference material more useful: a signature is a curated contract rather
+than a dump of every temporary name in the source file. When documenting a
+new library, explain the invariants behind the types as well as the types.
+.sh 2 "Abstraction across multiple implementations"
+.pp
+A signature can support several implementations, such as a simple list-based
+collection and a specialized native-backed collection. Clients should depend
+on specified behavior, including ordering and failure semantics, rather than
+only on function types. Two modules can have identical type signatures but
+disagree about duplicate handling, stable enumeration, or error conditions.
+Those semantic differences must be tested and documented separately.
+.pp
+This observation also applies to MetaML's C++ and D dialects. Their native
+representations differ, but the language-facing contracts must agree. A
+signature helps describe that boundary; parity tests verify observable
+behavior across it. Abstraction therefore supports portability without
+pretending that one type declaration proves every implementation property.
+.sh 2 "Sources and further work"
+.pp
+Read signature parsing, module compatibility checks, and opaque type identity
+handling in MetaML.hpp and MetaML.d. Study the sealed interfaces in
+metalib/option/mod.ml and metalib/list/mod.ml. Design a nonempty-list module
+with a checked constructor, head, and conversion back to a list. Decide
+whether tail should return another nonempty value or an ordinary list, and
+explain that choice through its type. Include a rejected construction case
+alongside successful clients.

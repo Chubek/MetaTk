@@ -1,0 +1,120 @@
+.lua
+book.chapter(19, "Imports, library discovery, and project layout")
+.endlua
+.sh 2 "A source import extends a session"
+.pp
+The form import "spec" loads a source unit into the current session. Resolution
+tries the specification as a file, with an .ml suffix, and as a directory
+containing mod.ml. This convention supports both single-file helpers and
+module directories with adjacent tests. Import is a language operation with
+evaluation consequences; it is not a textual include that merely pastes
+characters before parsing.
+.lua
+book.code("metaml", [=[import "list"
+Test.equal "imported traversal" (List.map (+ 1) [1, 2]) [2, 3]
+Test.check "loader can resolve" (Option.is_some (Loader.resolve "list"))]=],
+    "Import a standard-library source module")
+.endlua
+.pp
+Search bases include the importing file's directory, the working directory,
+embedding-configured search paths, and the selected standard-library
+directory. A relative import should therefore be understood relative to its
+loading context, not only to the shell command that eventually started the
+interpreter. For a reproducible application, prefer a known project layout
+and explicitly configured library paths over accidental working-directory
+behavior.
+.sh 2 "Successful imports are cached"
+.pp
+The loader tracks canonical paths so a successfully imported file normally
+executes once. Different relative spellings that identify the same canonical
+file should not create independent module universes. A path is inserted while
+loading to prevent unbounded recursive import expansion. This breaks infinite
+loading loops, but does not make cyclic imports equivalent to fully available
+mutually recursive modules with all values initialized.
+.lua
+book.algorithm("Import a source unit", {
+    "Resolve the specification against the available search bases.",
+    "Canonicalize the selected file path.",
+    "If already successfully loaded or currently loading, avoid recursive reload.",
+    "Record the path and evaluate the source in the session.",
+    "On success, retain the import-cache entry.",
+    "On failure, remove the failed entry so a corrected file can be retried."
+})
+.endlua
+.pp
+Retryable loading is not transactional loading. Definitions and external
+effects from earlier successful units of a failing file can remain. A retry
+can therefore repeat some work even though the failed path was removed from
+the cache. Organize source modules so loading defines pure interfaces and
+functions, while a separate entry point performs effects. That architecture
+reduces the number of partially completed actions a caller must reason about.
+.sh 2 "Select the standard library deliberately"
+.pp
+Session.load_stdlib locates a tree containing prelude/mod.ml. Discovery can
+consult METAML_STDLIB, a dialect-specific location under METAML_PREFIX,
+paths relative to the executable, a configured default, and a working-directory
+metalib fallback. Passing an explicit directory is the simplest reproducible
+choice for examples and embedded deployments. The CLI does this when given
+--stdlib, and the book checker always supplies the repository's library tree.
+.lua
+book.code("sh", [=[build/metaml-repl-cpp --stdlib /opt/myapp/metalib program.ml
+METAML_STDLIB=/opt/myapp/metalib build/metaml-repl-cpp program.ml
+# Inspect the interpreter's registered primitive boundary.
+build/metaml-repl-cpp --stdlib metalib --list-primitives]=],
+    "Explicit library selection and inspection")
+.endlua
+.pp
+A fresh native Session does not silently execute external prelude files.
+The host must request loading and check the result. This matters when an
+application has no useful current directory or when installation is relocated.
+Package the interpreter and library revision together. A source wrapper can
+refer to a host primitive that is absent from an older executable, so copying
+only new .ml files is not always a compatible upgrade.
+.sh 2 "Separate portable source from native modules"
+.pp
+The portable metalib directories contain MetaML source used by both dialects.
+Host modules under metalib/cpp and metalib/d add capabilities such as buffers,
+structured-data parsers, graphs, and frontend tooling. Installing those host
+modules establishes declarations and primitive implementations; it does not
+grant permission to invoke every non-core primitive. Embeddings must choose
+an allowlist separately. The developer CLI intentionally permits its installed
+bundle for interactive work.
+.pp
+The files ending in .c under metalib/cpp are included C++ implementation
+fragments, not C translation units. The genuine C-compatible interface lives
+under metalib/c. Keep that distinction in build scripts and package manifests.
+Likewise, a filename for a platform service is not proof that it belongs to
+the portable bundle. Inspect its installer, dependencies, and mirrored
+implementation before advertising it as available to every client.
+.sh 2 "A practical project arrangement"
+.pp
+A small language tool can use a root entry file, a syntax module, a validation
+module, an emission module, and fixtures. Put shared interfaces in a place
+that does not depend on effectful startup. Arrange imports so the entry point
+owns initialization order rather than each library importing the executable
+driver. This makes a module independently testable and helps graph analysis
+identify genuine cycles instead of artifacts of a tangled startup sequence.
+.lua
+book.code("text", [=[tool/
+  main.ml          -- orchestration and explicit effects
+  syntax/mod.ml    -- data model and constructors
+  check/mod.ml     -- validation
+  emit/mod.ml      -- rendering
+  tests/           -- independent fixture programs]=], "A suggested application layout, not required directories")
+.endlua
+.pp
+Use #load and #reload for deliberate interactive re-execution of a selected
+file. Use import for stable dependency loading. The distinction is important
+when a source edit appears to have no effect: an already imported path may
+still be cached, while a reload intentionally runs again. A fresh session
+is often the clearest way to verify a module's actual installation behavior
+after changing its dependencies or public signature.
+.sh 2 "Sources and further work"
+.pp
+Read the import resolver, Session.load_stdlib, and the Loader host module in
+both dialects. CMakeLists.txt documents the installed standard-library paths
+for this checkout. Create a two-module project with one shared type interface,
+run it from a different working directory using explicit paths, and verify
+that behavior is unchanged. Then introduce a failing imported unit and reason
+about which earlier effects could remain after the error; design the entry
+point so those effects are explicit and repeatable.

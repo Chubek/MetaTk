@@ -1,0 +1,122 @@
+.lua
+book.chapter(30, "Introspection and language tooling")
+.endlua
+.sh 2 "Expose stages without conflating them"
+.pp
+Frontend wraps tokenization, parsing, type inference, type formatting, and
+isolated evaluation. These operations support editors, teaching tools, and
+small language services written in MetaML itself. A token query is different
+from a parse query, and type checking is different from evaluation. Keeping
+the stage explicit allows a client to ask a useful question without causing
+unnecessary execution or discarding a more precise earlier diagnostic.
+.lua
+book.code("metaml", [=[Test.equal "inference query" (Frontend.type_of "fn x -> x + 1")
+  (Ok "Int -> Int")
+Test.equal "nested evaluation" (Frontend.eval "double x := x * 2\ndouble 21")
+  (Ok "42")
+Test.check "parse failure is data" (Result.is_err (Frontend.parse_expr "("))]=],
+    "Language stages as callable services")
+.endlua
+.pp
+Frontend.eval uses a fresh nested session with core primitives. It does not
+clone the caller's definitions, standard-library bindings, or installed host
+modules. Output is forwarded to the calling session. A definition made in
+the nested program does not become a parent binding. This is isolation of
+language state, not proof of purity or process-level security: core effects
+can still occur when the nested program executes.
+.sh 2 "Textual type operations are useful tools"
+.pp
+Type.normalize gives consistent variable naming, equal compares normalized
+structure, unify computes a compatible type or error, and instance_of tests
+a directional relationship. Arity counts function arguments in the parsed
+type. These operations are useful for teaching unification, comparing
+signatures, and building lightweight interface reports. Unknown names are
+not automatically accepted as existing session type constructors in every
+tooling context; inspect the operation's actual environment contract.
+.lua
+book.code("metaml", [=[Test.equal "unify function types"
+  (Type.unify "'a -> Int" "String -> 'b") (Ok "String -> Int")
+Test.check "renamed variables" (Type.equal "'a -> 'a" "'b -> 'b")
+Test.equal "curried arity" (Type.arity "Int -> String -> Bool") (Ok 2)
+Test.check "incompatible types" (Result.is_err (Type.unify "Int" "String"))]=],
+    "Type relationships can be inspected without evaluating a program")
+.endlua
+.pp
+Equality and instantiation are different questions. Two type schemes can
+have the same normalized structure, while a concrete type can be an instance
+of a more general scheme without being equal to it. An editor suggesting
+candidate functions must choose the relationship appropriate to the task.
+Simply comparing printed type strings can confuse irrelevant variable names
+with genuine structural differences.
+.sh 2 "Module introspection respects visibility"
+.pp
+Module provides queries for known modules, members, submodules, types,
+signatures, and member types. It reports the checked visibility surface;
+it is not a mechanism for recovering a sealed representation. Some host
+primitive namespaces are registered paths rather than ordinary source
+structures, so the primitive registry and source-module registry need not
+have identical membership. A discovery tool should label which registry
+each item came from.
+.lua
+book.code("metaml", [=[Test.check "portable source module" (Module.exists "List")
+Test.check "member listing" (Option.is_some (Module.members "List"))
+Test.check "member type" (Option.is_some (Module.member_type "List" "map"))
+Test.check "missing module" (not (Module.exists "Definitely_missing"))]=],
+    "Queries over the caller's checked module environment")
+.endlua
+.pp
+Introspection can generate documentation, completion candidates, and migration
+reports. It cannot replace behavioral documentation. A function type does
+not tell you whether sorting is stable, whether traversal stops at the first
+error, or whether a returned handle shares storage. Combine discovered
+signatures with authored contracts and executable examples. This book follows
+that principle rather than presenting a raw registry dump as a complete guide.
+.sh 2 "Loading is an effectful tooling operation"
+.pp
+Loader inspects search paths, resolves specifications, lists loaded files,
+and explicitly loads source into the caller's session. Resolve is a query;
+load mutates the environment and can execute effects. Grant Loader capabilities
+only when source loading is part of the intended tool. A resolved path also
+does not guarantee that the file's contents remain unchanged before a later
+load; reproducible tooling should control its source snapshot.
+.lua
+book.code("metaml", [=[Test.check "standard source resolution" (Option.is_some (Loader.resolve "list"))
+Test.check "unknown source" (Option.is_none (Loader.resolve "missing-book-module-xyz"))]=],
+    "Resolution can be queried separately from execution")
+.endlua
+.pp
+For an editor, keep an explicit document version with every analysis request.
+A delayed result for an earlier buffer must not overwrite diagnostics for
+a newer edit. Session isolation can help separate analyses, but the host
+still owns scheduling and publication. The same principle applies to generated
+documentation: record which interpreter and source revision produced the
+report so a reader can reproduce its view of the API.
+.sh 2 "Build a staged workbench"
+.lua
+book.chain({"Document snapshot", "Token and parse queries", "Type and module queries", "Explicit execution"},
+    "A workbench separates inspection from execution")
+.endlua
+.pp
+A useful workbench offers syntax inspection before evaluation, shows inferred
+types beside expressions, and performs execution only through an explicit
+action. Parse failures should retain source context rather than becoming
+empty trees. Type failures should not trigger fallback evaluation. Execution
+results should distinguish returned values, output bytes, and diagnostics,
+because those are separate channels that a user interface may present
+differently.
+.pp
+Avoid repeated full-session mutation merely to answer a local query. A fresh
+analysis context can make results independent of stale interactive bindings.
+For a real project, however, imports and public interfaces supply necessary
+context, so an isolated expression query is not automatically equivalent to
+checking the expression in its original module. State the analysis environment
+alongside the result when that distinction affects interpretation.
+.sh 2 "Sources and further work"
+.pp
+Read the Frontend, Type, Module, and Loader host modules in both dialects.
+Build a report listing one module's public members and types, then add an
+explicitly separate action for evaluating a sample expression. Test that
+a definition evaluated through Frontend does not appear in the caller.
+Describe how the report should distinguish source modules from registered
+primitive namespaces, and which authored behavioral information still cannot
+be inferred from either registry.

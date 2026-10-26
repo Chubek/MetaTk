@@ -1,0 +1,126 @@
+.lua
+book.chapter(6, "Functions, closures, and application")
+.endlua
+.sh 2 "Functions are ordinary values"
+.pp
+A named function lists parameters before :=. An anonymous function uses fn,
+parameters, an arrow, and a body. The parser also recognizes fun, but this book
+uses fn consistently. Either form constructs a callable value with a type.
+It can be stored in a binding, placed in a collection, returned from another
+function, or passed to a library operation. The important distinction is
+between constructing a function and applying it to arguments.
+.lua
+book.code("metaml", [=[add x y := x + y
+apply_twice f x := f (f x)
+double := fn x -> x * 2
+Test.equal "named call" (add 20 22) 42
+Test.equal "higher order" (apply_twice double 3) 12
+Test.equal "inline lambda" (List.map (fn x -> x + 1) [1, 2]) [2, 3]]=],
+    "Named and anonymous function values")
+.endlua
+.pp
+The parentheses around the lambda passed to List.map delimit its body from the
+surrounding application. Without that boundary, a reader and parser can have
+different ideas about which expression belongs to the lambda. For teaching
+and public examples, prefer explicit grouping over the shortest spelling that
+happens to parse. The same principle applies when passing a conditional or
+match expression as a function argument.
+.sh 2 "Currying makes configuration reusable"
+.pp
+Whitespace application is the idiomatic form: f x y. Supplying fewer arguments
+returns a partial application that remembers the supplied values. A type
+written A -> B -> C associates to the right, so it can be read as a function
+from A to a function from B to C. This viewpoint explains why data-last
+libraries fit pipelines: configure the operation first, then provide the data.
+.lua
+book.code("metaml", [=[offset amount value := amount + value
+add_ten := offset 10
+map_ten := List.map add_ten
+Test.equal "partial application" (add_ten 5) 15
+Test.equal "configured traversal" (map_ten [1, 2, 3]) [11, 12, 13]
+Test.equal "pipeline use" ([4, 5] |> map_ten) [14, 15]]=], "Configuration by partial application")
+.endlua
+.pp
+Parenthesized call syntax is supported, but f(x, y) is a multiargument call;
+it should not be assumed to pass one tuple. When an API takes a pair, use
+whitespace with an explicit tuple or a clearly nested grouping. Currying and
+tuple-taking functions have different types even when both eventually consume
+two values. Core.curry and Core.uncurry deliberately convert between those
+interfaces, as the tuples chapter shows.
+.sh 2 "A closure captures what its body needs"
+.pp
+A closure consists conceptually of code plus an environment. When a function
+returns another function, the returned value retains the bindings needed to
+evaluate its body later. This is why make_multiplier can finish its own call
+without making the chosen factor disappear. The host implementations use
+different memory-management strategies, but the language-level result must
+remain the same.
+.lua
+book.code("metaml", [=[make_multiplier factor := fn value -> factor * value
+triple := make_multiplier 3
+quadruple := make_multiplier 4
+Test.equal "first environment" (triple 7) 21
+Test.equal "second environment" (quadruple 7) 28
+Test.equal "independent closures" (triple 2, quadruple 2) (6, 8)]=],
+    "Two closures from one definition")
+book.uml({
+    {id="C", name="Closure", members={"parameter patterns", "body expression"}},
+    {id="E", name="Environment", members={"captured bindings"}}
+}, {{"C", "E", "captures"}}, "A closure's conceptual structure")
+.endlua
+.pp
+Capturing does not imply deep copying every reachable resource. An immutable
+list can share a tail, and a foreign table handle can still refer to mutable
+storage. A closure using that handle can observe later mutations of the
+resource. Likewise, retaining a MetaML function in native code requires the
+owning Session to remain alive. Language-level lexical scope and native
+resource lifetime are related concerns, but one does not replace the other.
+.sh 2 "Patterns as parameters"
+.pp
+A function parameter can be a pattern rather than a simple variable. A tuple
+pattern is convenient for unpacking a fixed product; a record pattern names
+fields directly. The pattern is checked against the actual value when the
+function is applied. If it fails, evaluation reports a diagnostic. Defining
+another function with the same name is not a way to add a fallback clause.
+Write one function containing a match when several shapes are acceptable.
+.lua
+book.code("metaml", [=[sum_pair (left, right) := left + right
+head_or_zero xs := match xs with
+  | [] -> 0
+  | head :: _ -> head
+Test.equal "tuple parameter" (sum_pair (20, 22)) 42
+Test.equal "explicit fallback" (head_or_zero []) 0]=], "Destructuring and alternatives")
+.endlua
+.pp
+A partial application delays the body, including its eventual pattern match,
+until enough arguments are available. It still evaluates the argument
+expressions supplied now. That separation explains why a partially applied
+printer can produce effects while being configured if a configuration
+expression itself prints, even though the printer's body has not yet run.
+Keep configuration expressions pure when you want reusable functions whose
+construction has no surprising observable behavior.
+.sh 2 "Application versus composition"
+.pp
+MetaML gives juxtaposition a type-directed interpretation. Ordinary compatible
+application is preferred, while supported function-typed situations can resolve
+as composition. The checker records that choice for the evaluator. This is a
+distinctive feature, but it makes types particularly important when reading a
+dense expression of function names. A value of type Int -> Int can transform
+an integer; a value of type (Int -> Int) -> Int consumes a function instead.
+Similar surface syntax does not make those operations equivalent.
+.pp
+Use explicit >> or << when building a pipeline function, and |> when passing a
+known value through steps. A named intermediate function can make an inferred
+interface visible at the prompt with #type. These choices also improve error
+locality: a mismatch between two named stages is easier to interpret than a
+failure inside a long unparenthesized sequence. Composition is explored in
+detail after the chapter on tacit parameter scope.
+.sh 2 "Sources and further work"
+.pp
+Read the evaluator's application and closure cases, the function type
+representation, and the parser's lambda handling in MetaML.hpp. The portable
+List.map and Option.map definitions are useful higher-order clients. Implement
+make_affine scale offset as a closure, then construct two independently
+configured transformations and test them on the same inputs. Finally, change
+one interface to accept a tuple and explain why its type is different from
+the curried version even though the arithmetic formula is unchanged.

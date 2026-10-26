@@ -1,0 +1,122 @@
+.lua
+book.chapter(26, "Graph algorithms and dependency analysis")
+.endlua
+.sh 2 "State the meaning of an edge"
+.pp
+Graph represents directed relationships using pairs of string node names.
+Before applying an algorithm, define the edge orientation. An edge from a
+prerequisite to its consumer supports prerequisite-first topological order.
+An edge from a consumer to its dependency encodes the opposite relation.
+Both are legitimate models, but silently switching conventions produces build
+plans in the wrong order even when the graph algorithm is correct.
+.lua
+book.code("metaml", [=[edges := [("parse", "check"), ("check", "emit"), ("parse", "emit")]
+Test.equal "dependency order" (Graph.topo_sort [] edges) (Ok ["parse", "check", "emit"])
+Test.equal "direct shortest path" (Graph.shortest_path "parse" "emit" edges)
+  (Some ["parse", "emit"])
+Test.equal "reverse unreachable" (Graph.shortest_path "emit" "parse" edges) None]=],
+    "Edges point from prerequisites to consumers")
+.endlua
+.pp
+Some functions accept an explicit node list in addition to edges. This retains
+isolated vertices that cannot be discovered from endpoints. A project with a
+standalone source file still contains that file even if it has no dependencies.
+Other operations discover nodes in deterministic first-seen order. Include
+isolated-node cases in tests so an otherwise correct traversal does not
+silently omit valid work.
+.sh 2 "Reachability answers impact questions"
+.pp
+Successors and predecessors inspect adjacent nodes. Reachable performs a
+breadth-first traversal and includes the starting node. Depth_first provides
+another deterministic traversal order. With prerequisite-to-consumer edges,
+reachability from a changed input identifies potentially affected consumers.
+This is an impact set, not necessarily a minimal rebuild set: content hashes
+or semantic equivalence may establish that some downstream outputs are
+unchanged despite being reachable.
+.lua
+book.code("metaml", [=[edges := [("a", "b"), ("b", "c"), ("a", "d")]
+Test.equal "adjacent consumers" (Graph.successors "a" edges) ["b", "d"]
+Test.equal "adjacent prerequisites" (Graph.predecessors "c" edges) ["b"]
+Test.equal "breadth first" (Graph.reachable "a" edges) ["a", "b", "d", "c"]
+Test.check "self edge is cyclic" (Graph.has_cycle [("x", "x")])]=],
+    "Adjacency and transitive impact")
+.endlua
+.pp
+Shortest_path is unweighted. It minimizes the number of edges, not a numeric
+cost attached to a domain operation. For an explanation such as "why does
+this target depend on this input?" an unweighted shortest path is often useful.
+For scheduling by elapsed time or monetary cost, a different algorithm and
+representation are needed. The function's name does not imply a weighted
+optimization problem that its input type cannot even express.
+.sh 2 "Topological sorting exposes cycles"
+.pp
+A topological order places every source before its destination. It exists
+only for an acyclic directed graph. Topo_sort returns Err when a cycle
+prevents such an order. Multiple valid orders can exist; deterministic output
+for a fixed input does not make one order mathematically unique. Normalize
+externally obtained node and edge lists when reproducibility must survive
+unstable directory enumeration or native hash-map iteration.
+.lua
+book.algorithm("Kahn-style topological ordering", {
+    "Compute the incoming-edge count of every node.",
+    "Place all zero-count nodes in a deterministic ready queue.",
+    "While the queue is nonempty:",
+    {1, "Remove a ready node and append it to the output."},
+    {1, "Decrease the incoming counts of its successors."},
+    {1, "Enqueue newly zero-count successors in a stable order."},
+    "If output omits nodes, report a cycle; otherwise return the order."
+})
+.endlua
+.pp
+The pseudocode explains the invariant: a ready node has no unprocessed
+predecessor. Each processed edge removes one outstanding requirement. A
+remaining nonempty subgraph with no ready node contains a dependency cycle.
+This reasoning is useful even if the native implementation uses different
+internal containers. It connects the algorithm's output to the meaning of
+the edges rather than merely presenting a traversal recipe.
+.sh 2 "Strong components organize mutual dependence"
+.pp
+Strongly connected components partition nodes into maximal groups whose
+members can reach one another. The sccs operation accepts an explicit node
+list, retaining isolated vertices. A singleton component is cyclic only if
+it has a self-edge. In a language implementation, components can group
+mutually dependent definitions before type analysis; in a build planner,
+they can provide a more informative cycle report than a single boolean.
+.pp
+Collapse each component to one summary node and the resulting component
+graph is acyclic. That observation separates local cyclic reasoning from
+global scheduling. It does not automatically make cyclic module initialization
+valid: a group can still request a value before it exists. Graph analysis
+identifies structure; the language's initialization semantics determine
+whether that structure has an executable interpretation.
+.sh 2 "Visualize the model you actually use"
+.lua
+book.graph({
+    {id="P", label="parse", x=0, y=0},
+    {id="C", label="check", x=2.3, y=0},
+    {id="E", label="emit", x=4.6, y=0}
+}, {{"P", "C"}, {"C", "E"}}, "A prerequisite-first language pipeline")
+.endlua
+.pp
+Graph.to_dot produces Graphviz source rather than launching an external
+renderer. This separation makes visualization usable from an embedding that
+wants to store, inspect, or transmit the graph. The book's diagrams instead
+use its custom pic-producing rofflet, but the same principle applies: the
+data model and its rendering are separate operations. Label the orientation
+and include isolated nodes so a picture does not accidentally misrepresent
+the graph being analyzed.
+.pp
+The MetaML Graph API rebuilds native graph structures from its lists for
+operations; it is not a persistent mutable graph handle. Repeated analysis
+of a very large graph can therefore incur conversion and allocation costs.
+The native DSLtk DirectedGraph API offers a different interface with stable
+handles, discussed in chapter 38. Select the boundary appropriate to the
+workload rather than assuming the two APIs have identical resource behavior.
+.sh 2 "Sources and further work"
+.pp
+Read metalib/cpp/Graph.h and its D mirror, then compare the DirectedGraph
+implementation in DSLtk.hpp. Build a dependency report with one isolated
+node, one diamond, and one cycle. Explain why reversing every edge preserves
+the existence of cycles but reverses the intended scheduling interpretation.
+Add a shortest-path explanation for one dependency and a component-based
+diagnostic for the cycle.

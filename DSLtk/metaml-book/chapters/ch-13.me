@@ -1,0 +1,123 @@
+.lua
+book.chapter(13, "Records and row polymorphism")
+.endlua
+.sh 2 "Field names make products communicative"
+.pp
+A record associates labels with values. Its expression syntax uses braces and
+field assignments such as name = expression. Projection uses a dot after a
+record-valued expression. Records are useful when a fixed product's positions
+would be hard to remember: a declaration with name, source, and exported fields
+is clearer than a triple whose ordering every caller must learn separately.
+Labels are part of the structure, not comments attached to tuple positions.
+.lua
+book.code("metaml", [=[person := { name = "Ada", score = 40 }
+Test.equal "named field" person.name "Ada"
+Test.equal "numeric field" person.score 40
+Test.equal "label order" {a = 1, b = 2} {b = 2, a = 1}
+describe p := p.name ^ ":" ^ Int.to_string p.score
+Test.equal "record consumer" (describe person) "Ada:40"]=],
+    "Construction, projection, and structural equality")
+.endlua
+.pp
+The runtime sorts labels for deterministic construction and lookup. Source
+field order therefore does not define record identity. This is helpful for
+stable rendering, but it does not mean field expressions may be rearranged
+without considering their effects. Data layout and evaluation order are
+different contracts. Keep construction expressions pure when you want to
+treat a record literal as a declarative collection of independent facts.
+.sh 2 "Open rows describe minimum requirements"
+.pp
+A function that only needs a name should not require every caller to use an
+identical larger record type. The signature { name : String | r } -> String
+states a known field and an open row r for additional fields. It accepts a
+record with a score, a record with an address, or a record with both, provided
+the name field has the promised type. The extra fields are not discarded by
+calling the projection; they simply are not required by that operation.
+.lua
+book.code("metaml", [=[get_name :: { name : String | r } -> String
+get_name p := p.name
+Test.equal "one extension" (get_name {name = "Ada", score = 40}) "Ada"
+Test.equal "another extension" (get_name {name = "Grace", active = true}) "Grace"
+Test.equal "minimal record" (get_name {name = "Edsger"}) "Edsger"]=],
+    "One interface over several record shapes")
+.endlua
+.pp
+Row polymorphism is static. It does not mean a field name can be computed from
+an arbitrary string and then looked up without a type-level guarantee.
+For string-keyed dynamic storage, use a table or an explicit association list.
+The distinction matters in schema design: a record says which named fields
+are present, while a dynamic map may need to return Option for every lookup.
+Choose according to how much the program knows before runtime.
+.sh 2 "Unification aligns labels"
+.pp
+Ordinary tuple unification pairs components by position. Record unification
+must instead align labels, unify the corresponding field types, and account
+for labels remaining on either side through row tails. A closed record type
+has no unspecified extension, while an open row represents additional
+structure. A missing required label or an incompatible field type is a static
+problem, not an instruction to return a default value silently.
+.lua
+book.algorithm("Reason about a record constraint", {
+    "Collect the required labels and their types.",
+    "Match each required label with the supplied record's label.",
+    "Unify the corresponding field types.",
+    "Account for unmatched labels through the open row, if present.",
+    "Reject missing required fields or incompatible closed shapes.",
+    "Preserve the relationship between any shared row variables."
+})
+.endlua
+.pp
+The pseudocode is a conceptual guide, not the complete row-unification
+algorithm. The implementation handles fresh variables, substitutions, and
+recursive constraints. For users, the practical lesson is to write the
+smallest honest field requirement. Overly closed signatures force callers
+to rebuild equivalent data unnecessarily, while an overly vague dynamic
+representation loses guarantees that the checker could have provided.
+.sh 2 "Immutable updates and reconstruction"
+.pp
+Records are immutable values. Updating a logical entity means constructing
+another record, either with the parser's record-with form or by explicit
+construction. The latter is especially clear when only a few fields exist
+and the example is intended as a public contract. The old binding continues
+to denote the old value. A field containing a mutable foreign handle is a
+separate case: the record remains unchanged while the referred resource can
+change internally.
+.lua
+book.code("metaml", [=[original := { name = "Ada", score = 40 }
+bump p := { name = p.name, score = p.score + 1 }
+updated := bump original
+Test.equal "new value" updated.score 41
+Test.equal "old value" original.score 40
+Test.equal "copied identity" updated.name original.name]=], "Explicit immutable reconstruction")
+.endlua
+.pp
+Explicit reconstruction also defines what happens to extra fields: this bump
+returns exactly the fields it constructs. Do not describe it as preserving
+an arbitrary open row merely because its input projections are flexible.
+Input extensibility and output preservation are distinct properties. When
+designing a generic record transformation, make both properties visible in
+its type and tests, including a caller with an extra field that matters.
+.sh 2 "Patterns and domain equality"
+.pp
+Record patterns unpack named fields, and an open pattern can use .. for
+additional fields. They are useful when several fields are needed together,
+but a simple projection function often gives a clearer reusable interface.
+Dot syntax also serves module paths, so maintain conventional capitalization
+to distinguish List.map from value.name. An unfamiliar dotted expression is
+a good reason to inspect its inferred type rather than guess its namespace.
+.pp
+Structural record equality includes labels and values. Adding a function-valued
+field can make a previously comparable record unsuitable for generic equality.
+For domain entities, compare a stable identifier or selected semantic fields
+instead of treating every implementation detail as part of identity. A
+compiler's source-location annotation, for example, may matter for diagnostics
+but not for an optimization's notion of equivalent expressions.
+.sh 2 "Sources and further work"
+.pp
+Inspect record expression and pattern handling, make_record, record_field,
+and row unification in both runtimes. Model a compiler declaration with name,
+arity, and source fields, then write a row-polymorphic name projection and a
+specific validation function. Add an extra field at one call site and observe
+which functions still apply. Finally, explain why a transformation that
+reconstructs only name and arity should not claim to preserve the caller's
+source annotation.

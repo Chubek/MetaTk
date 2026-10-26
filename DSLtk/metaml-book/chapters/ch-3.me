@@ -1,0 +1,125 @@
+.lua
+book.chapter(3, "Source text, tokens, and layout")
+.endlua
+.sh 2 "Names are the first interface"
+.pp
+A lexer turns bytes into tokens before a parser can recognize expressions.
+Identifiers conventionally start lowercase for values and uppercase for
+constructors, types, and modules. The implementation also accepts underscore
+starts and apostrophes within identifiers. Digits may follow the first
+character. Use names to expose roles: parse_count suggests a function, Count
+suggests a constructor or module, and count suggests a value. Keywords such as
+module, let, fn, and match are reserved syntactic markers.
+.pp
+Case is not merely decorative when dot notation appears. List.map is a module
+path, while person.name projects a field from a record-valued expression.
+Both are readable because the surrounding conventions help identify what is
+being selected. A source formatter must preserve the spelling and case of
+identifiers, even when it can safely adjust whitespace elsewhere. Renaming is
+a binding-aware transformation, not a case-normalization pass.
+.sh 2 "Numeric tokens and their boundaries"
+.pp
+Integer literals support decimal, hexadecimal, and binary forms. Separators
+improve readability but must occur between digits; a trailing underscore or
+repeated underscore is not discarded silently. Floating literals include a
+fractional part or exponent. The lexer validates literal syntax before
+arithmetic begins, so an invalid token should be diagnosed as a source problem,
+not interpreted as a surprising runtime number.
+.lua
+book.code("metaml", [=[decimal := 1_024
+hexadecimal := 0x400
+binary := 0b10000000000
+scientific := 1.25e2
+Test.equal "integer spellings" (decimal, hexadecimal, binary) (1024, 1024, 1024)
+Test.equal "exponent" scientific 125.0]=], "Several spellings, equal numeric values")
+book.code("metaml-error:M0105", [=[broken := 1__0]=], "Malformed numeric separators are rejected")
+.endlua
+.pp
+Unary negation has an unambiguous spelling, ~. Negative numeric tokens are also
+recognized in suitable lexical positions, but an argument such as f -1 can be
+hard to distinguish visually from subtraction. Write f (~1) in examples and
+interfaces. That convention makes the syntactic boundary explicit and works
+equally well when the negative argument is computed rather than literal.
+Arithmetic representation and overflow are separate questions, covered next.
+.sh 2 "Strings and comments"
+.pp
+Double-quoted strings recognize newline, tab, carriage return, quote,
+backslash, zero-byte, and Unicode scalar escapes. A Unicode escape names a
+scalar and encodes it as UTF-8 bytes. Invalid scalars, including surrogates, are
+rejected. A raw string starts with r followed by a double quote and leaves
+backslashes literal. Raw syntax is helpful for patterns and paths, but it is
+not a substitute for understanding the receiving library's escaping rules.
+.lua
+book.code("metaml", [=[ordinary := "a\nb"
+raw := r"a\nb"
+Test.equal "escaped newline" (String.length ordinary) 3
+Test.equal "raw backslash" (String.length raw) 4
+Test.equal "scalar becomes UTF-8" (String.length "\u{e9}") 2
+Test.equal "embedded zero" (String.length "a\0b") 3]=], "Literal syntax and byte content")
+.endlua
+.pp
+Line comments start with two hyphens. Block comments use opening brace-hyphen
+and closing hyphen-brace, and they nest. A lexer therefore needs a nesting
+counter rather than a search for the first closing pair. A quote inside a
+comment does not begin a language string, and a comment marker inside a string
+does not begin a comment. These distinctions matter when writing a highlighter
+or stripping comments: careless regular-expression substitution can change a
+program's meaning before the parser ever sees it.
+.lua
+book.algorithm("Scan a nested block comment", {
+    "Set depth to one after consuming the opening pair.",
+    "While depth is positive:",
+    {1, "If the next pair opens a comment, increment depth."},
+    {1, "Else if it closes a comment, decrement depth."},
+    {1, "Else consume the next source byte."},
+    {1, "At end of input, report incomplete input or a lexical error."},
+    "Resume tokenization only after depth reaches zero."
+})
+.endlua
+.sh 2 "Hashes and dollars have distinct jobs"
+.pp
+A numbered dollar reference addresses a formal parameter of an enclosing tacit
+definition. A numbered hash is a section hole. A named hash at the start of a
+form can introduce a directive, and some other hash-prefixed text can be treated
+as a comment. Prefer the unambiguous double-hyphen comment convention. Otherwise
+a sentence beginning with a directive-like word can accidentally ask the REPL
+to do something rather than merely annotate source.
+.pp
+Numbered placeholders are one-based and bounded to 1024. The lexical bound
+prevents numeric conversion overflow and enormous generated parameter lists;
+zero is rejected as an invalid parameter index in the appropriate later stage.
+The bound is an implementation contract, not an invitation to write functions
+with hundreds of numbered arguments. Readability normally deteriorates long
+before that limit becomes relevant.
+.sh 2 "Newlines are not freely movable"
+.pp
+Blocks have explicit markers such as struct/end and let/in, but the current
+parser also uses newlines and source columns to recognize top-level boundaries.
+Place separate definitions at column one. Indent a continued pipeline or
+arithmetic expression, or surround it with parentheses. This is a practical
+layout convention rather than a full offside-rule language. It also means that
+older claims of completely insignificant indentation are too strong for the
+implementation readers run today.
+.lua
+book.code("metaml", [=[result :=
+  [1, 2, 3]
+  |> List.map (fn x -> x + 1)
+  |> List.sum
+Test.equal "continued pipeline" result 9]=], "Make continuation visible")
+.endlua
+.pp
+For language tools, preserve source spans even when discarding comments and
+whitespace. The lexer reports tokens, diagnostics, and whether input is
+incomplete. An interactive client can wait for more input after an unterminated
+string; a batch client can report the same condition as an unfinished file.
+Conflating incomplete input with valid empty input produces confusing REPL
+behavior and makes editors lose the location of the actual problem.
+.sh 2 "Sources and further work"
+.pp
+Inspect lex, LexResult, and the token definitions in MetaML.hpp and MetaML.d.
+The book's syntax-highlight rofflet is intentionally only a presentation lexer;
+it is not used to accept programs. Try nested comments containing quote marks,
+strings containing comment delimiters, and a multiline pipeline. Predict which
+characters become tokens before running the examples. Then use #ast to see how
+the parser groups those tokens, keeping lexical recognition distinct from
+expression precedence and binding scope.

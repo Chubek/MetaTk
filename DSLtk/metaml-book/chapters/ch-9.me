@@ -1,0 +1,120 @@
+.lua
+book.chapter(9, "Types, inference, and unification")
+.endlua
+.sh 2 "Types describe permitted connections"
+.pp
+MetaML uses Hindley-Milner-style inference extended with numeric constraints,
+row-polymorphic records, and ML-style modules. A type tells us which
+connections a program may make: a string parser consumes String, an increment
+function consumes a number, and a list traversal must use one consistent
+element type. Inference reconstructs many of these relationships from code so
+the programmer need not repeat every intermediate type annotation.
+.pp
+Write type variables with apostrophe-prefixed names. A signature such as
+'a -> 'a says that an input type is preserved, not that a value is dynamically
+untyped. At each use, the bound polymorphic function can receive a fresh
+instantiation. All occurrences of a variable within that instantiation must
+agree. This is how one identity binding supports several types without
+allowing it to turn an integer into a string arbitrarily.
+.lua
+book.code("metaml", [=[identity :: 'a -> 'a
+identity x := x
+pair :: 'a -> 'b -> ('a, 'b)
+pair x y := (x, y)
+Test.equal "independent uses" (identity 1, identity "x") (1, "x")
+Test.equal "two variables" (pair true 3) (true, 3)]=], "Polymorphism with explicit relationships")
+.endlua
+.sh 2 "Read compound types structurally"
+.pp
+Arrows associate rightward. Int -> Int -> Int is curried; (Int, Int) -> Int
+accepts one tuple. A list type ['a] has one element type. A tuple ('a, 'b)
+has fixed positions whose types may differ. A type-constructor application
+such as Option Int or Result Int String describes a structured family.
+Parenthesize a nested application when it is itself an argument, as in
+Option (Option Int), so the intended grouping is visible.
+.lua
+book.grammar("Common type forms", {
+    {"type", 'atom [ "->" type ]'},
+    {"atom", '"Int" | "String" | type_variable'},
+    {"atom", '"[" type "]" | "(" type "," type ")"'},
+    {"atom", 'constructor type_argument*'},
+    {"atom", '"{" field_types [ "|" row ] "}"'}
+})
+.endlua
+.pp
+Numeric operations introduce Num constraints rather than unconstrained
+polymorphism. A sum can be generic over supported numeric inputs without
+being valid for strings, functions, or arbitrary records. Numeric variables
+may default in unconstrained situations. At external boundaries, choose an
+explicit representation and conversion instead of relying on a printed
+polymorphic-looking type to imply a native machine layout.
+.sh 2 "Unification solves equations between types"
+.pp
+Inference generates requirements such as "the argument type of this function
+must equal the type of that expression." Unification solves those requirements
+by substituting variables consistently. A variable can become Int, or become
+a function type, but one variable cannot simultaneously mean Int and String
+within the same constraint system. Matching constructors unify their
+corresponding arguments; incompatible constructors produce a type error.
+.lua
+book.algorithm("A conceptual unifier", {
+    "Apply the current substitution to both input types.",
+    "If the types are identical, return the substitution.",
+    "If one side is a variable:",
+    {1, "Reject a binding that would make the variable contain itself."},
+    {1, "Otherwise extend the substitution with that binding."},
+    "If both sides have the same constructor, unify corresponding arguments.",
+    "Otherwise report the conflicting types and their source context."
+})
+.endlua
+.pp
+The self-containment check is often called the occurs check. Without it, an
+equation such as a = a -> b would demand an infinite type in an ordinary
+finite-type system. This is a useful example of an implementation invariant
+with a direct user consequence: a failure involving self-application may
+reflect an impossible type equation rather than a missing declaration. The
+Type tooling module exposes selected unification operations on textual types
+for experiments later in the book.
+.sh 2 "Generalization has a scope"
+.pp
+At suitable binding boundaries, inference generalizes variables that are not
+fixed by the surrounding environment. Later uses instantiate that scheme.
+A function parameter is not automatically generalized independently at every
+occurrence, so rank-one polymorphism is weaker than a system with arbitrary
+higher-rank arguments. When a higher-order function needs several uses of a
+parameter at unrelated types, consider passing separate specialized functions
+or reorganizing the binding boundary.
+.pp
+The current implementation does not impose a general ML value restriction for
+mutable opaque handles. Treat a table or parser handle as having one coherent
+element type, even if a generalized binding appears permissive. Static
+polymorphism does not allocate independent mutable storage for each type
+instantiation. An explicit annotation or a narrow wrapper module can make the
+intended homogeneous use clear to both the reader and the checker.
+.sh 2 "Rows and module identities extend the picture"
+.pp
+A record type can specify known fields plus an open row. The type
+{ name : String | r } describes records containing a string name along with
+additional fields represented by r. This is static extensibility, not a
+dictionary of arbitrary untyped values. Row unification must align labels and
+reconcile the remaining fields, which is more involved than comparing two
+fixed-position tuples. Chapter 13 develops the practical interface patterns.
+.pp
+Modules add named type paths and abstraction boundaries. An opaque module's
+public type is not interchangeable with Int merely because its implementation
+uses an integer internally. The checker must preserve the public identity
+while verifying exported values against the signature. This is why module
+errors are often reported separately from ordinary expression mismatches:
+the failure concerns an interface promise as well as a local type equation.
+.lua
+book.code("metaml-error:M0301", [=[bad := 1 + "one"]=], "Incompatible operands fail before evaluation")
+.endlua
+.sh 2 "Sources and further work"
+.pp
+Read the type representation, substitution, inference, and unification routines
+in MetaML.hpp together with metalib/cpp/Type.h. Use #type to inspect identity,
+partial List.map, and a row-polymorphic projection. Before asking the tool,
+write down the equations each expression imposes. Then compare your reasoning
+with the inferred answer. The objective is not to memorize the checker's
+variable names, which may be normalized, but to understand which relationships
+remain shared and which uses receive fresh instantiations.

@@ -1,0 +1,139 @@
+.lua
+book.chapter(38, "DSLtk.hpp: graphs, terms, and equality saturation")
+.endlua
+.sh 2 "DirectedGraph owns stable handles"
+.pp
+DirectedGraph is a directed multigraph supporting isolated nodes, parallel
+edges, self-loops, and cycles. C++ graph objects have value semantics; D
+graphs are reference types. Node and edge IDs belong to one graph and are
+not recycled. Removal invalidates the removed handles, while mutations can
+invalidate native references returned by accessors. Retain IDs across graph
+changes rather than assuming a reference into internal storage remains valid.
+.lua
+book.code("cpp", [=[#include "DSLtk.hpp"
+#include <cassert>
+int main() {
+    dsl::DirectedGraph<> graph;
+    auto entry = graph.add_node("entry");
+    auto exit = graph.add_node("exit");
+    graph.add_edge(entry, exit, "next");
+    auto path = graph.shortest_path(entry, exit);
+    assert(path && path->size() == 2);
+}]=], "A complete native graph client")
+book.code("d-fragment", [=[auto graph = new DirectedGraph!();
+auto entry = graph.add_node("entry");
+auto exit = graph.add_node("exit");
+graph.add_edge(entry, exit, "next");
+assert(!graph.shortest_path(entry, exit).isNull);]=], "The corresponding D graph construction")
+.endlua
+.pp
+Adjacency preserves insertion order, including redirected incoming edges.
+Traversals visit reachable nodes once; topological sorting rejects cycles;
+strong components partition the live graph. DOT rendering uses internal IDs
+as identifiers and escaped payload labels. It generates text without
+launching Graphviz. Graph objects are mutable and unsynchronized, so an
+application sharing them between threads needs its own ownership discipline.
+.sh 2 "First-order terms make variables explicit"
+.pp
+Term represents function symbols with ordered arguments or variables.
+Unquoted question-mark atoms in S-expression notation denote variables;
+quoted forms remain literal symbols. Matching binds pattern variables to
+subject subterms, with repeated variables requiring structural equality.
+Unification solves equations involving variables on both sides and performs
+an occurs check to reject cyclic equations such as x equal to f of x.
+.pp
+Substitution is simultaneous: inserted bindings are not recursively substituted
+again during the same application. Unification composes its bindings so one
+simultaneous substitution makes both inputs equal. This precise contract
+matters when chaining analyses. A substitution map is not merely a sequence
+of textual replacements, and first-order term operations do not automatically
+understand lexical binding, alpha-equivalence, or capture avoidance in a
+higher-order language.
+.sh 2 "Tree normalization reports its stopping condition"
+.lua
+book.code("cpp-fragment", [=[dsl::TermRewriteSystem rules;
+rules.add_rule("(rewrite add-zero (add ?x 0) ?x)");
+rules.add_rule("(rewrite mul-one (mul ?x 1) ?x)");
+auto report = rules.normalize(dsl::parse_term("(mul (add a 0) 1)"), 100);
+assert(report.normal_form() && report.steps == 2);]=], "Bounded first-order normalization in C++")
+book.code("d-fragment", [=[auto rules = new TermRewriteSystem;
+rules.add_rule("(rewrite add-zero (add ?x 0) ?x)");
+rules.add_rule("(rewrite mul-one (mul ?x 1) ?x)");
+auto report = rules.normalize(parse_term("(mul (add a 0) 1)"), 100);
+assert(report.normal_form() && report.steps == 2);]=], "The corresponding D normalization")
+.endlua
+.pp
+Rules are validated so right-side variables are bound on the left. The
+system tries rules in insertion order with outermost or innermost traversal.
+A report distinguishes normal form from step-limit exhaustion. Reaching a
+budget does not prove normalization, and identity rules still count as
+applications. A zero budget can inspect reducibility without changing the
+term. Termination and confluence are not inferred from the rule syntax.
+.sh 2 "Shared graph reduction is a different operation"
+.pp
+TermGraph stores finite acyclic terms with shared subexpressions. Reducing
+a shared redex redirects every incoming edge to its replacement, so one
+reduction affects all occurrences sharing that node. Continue with the
+returned root because rewriting a root can remove its old ID. Garbage is
+retained until explicit collection with every root that must remain alive.
+Unfolding a highly shared graph into a tree can expand its size dramatically.
+.pp
+The general DirectedGraph permits cycles, while TermGraph's construction and
+reduction contracts require acyclic finite terms. Do not transfer assumptions
+between them merely because both use node IDs. A step budget limits rule
+applications, not memory usage or recursion depth. The difference between
+tree rewriting and graph reduction is observable in work counts and aliasing,
+even when both eventually render the same unshared expression.
+.sh 2 "Equality saturation retains alternatives"
+.pp
+EGraph stores hash-consed e-nodes in union-find equivalence classes. Unite
+asserts equality; rebuild restores congruence, so equal children imply equal
+parent applications. Saturation matches rules and adds equivalent forms
+rather than destructively selecting one rewrite path. Extraction then
+chooses a finite representative under the supplied implementation's cost
+policy. This separates discovering equalities from choosing an output.
+.lua
+book.code("cpp", [=[#include "DSLtk.hpp"
+#include <cassert>
+int main() {
+    dsl::EGraph graph;
+    auto root = graph.add("(mul (add a 0) 1)");
+    auto rules = dsl::sexpr_rules(R"(
+        (rewrite add-zero (add ?x 0) ?x)
+        (rewrite mul-one (mul ?x 1) ?x)
+    )");
+    auto report = graph.saturate(rules);
+    assert(report.saturated());
+    assert(graph.extract(root).dump() == "a");
+}]=], "A complete equality-saturation example")
+book.code("d-fragment", [=[auto graph = new EGraph;
+auto root = graph.add("(mul (add a 0) 1)");
+auto rules = sexpr_rules(`
+    (rewrite add-zero (add ?x 0) ?x)
+    (rewrite mul-one (mul ?x 1) ?x)
+`);
+assert(graph.saturate(rules).saturated());
+assert(graph.extract(root).dump() == "a");]=], "The corresponding D saturation")
+.endlua
+.pp
+Saturation limits bound iterations, nodes, and applications, with reports
+distinguishing saturation from each limit. Bounded partial results remain
+useful but are not proof that every applicable equality was discovered.
+Rules still require semantic justification. An e-graph can efficiently
+represent invalid equalities just as readily as valid ones if the client
+supplies unsound arithmetic or effect-reordering rules.
+.sh 2 "Sources and further work"
+.pp
+Repeated variables have different equality criteria in these systems.
+First-order matching compares structural subterms; e-matching compares
+equivalence classes, which may contain several different-looking expressions.
+That difference is the reason equality saturation can discover matches that
+a purely textual rewrite misses. Keep the criterion explicit when moving
+a rule or a test between the two APIs.
+.pp
+Read DirectedGraph, Term, TermRewriteSystem, TermGraph, and EGraph in both
+toolkit implementations, plus the graph/term regression tests. Compare
+normalizing two duplicated subterms as a tree with reducing one shared
+subterm as a graph. Then run an e-graph with a deliberately small budget
+and inspect its stop report. Explain why valid partial output, normal form,
+and saturation are three different claims.

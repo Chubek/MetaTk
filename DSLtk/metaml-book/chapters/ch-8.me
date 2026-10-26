@@ -1,0 +1,130 @@
+.lua
+book.chapter(8, "Sections, pipelines, and composition")
+.endlua
+.sh 2 "An operator can become a function"
+.pp
+A section captures the missing argument of an operator expression. (+ 1)
+increments its input and (* 2) doubles it. Parenthesizing an operator alone,
+as in (+), produces its curried function form. This makes operators useful
+arguments to folds and maps without inventing trivial named wrappers. The
+parser elaborates sections before type checking; the resulting values follow
+ordinary function rules.
+.lua
+book.code("metaml", [=[increment := (+ 1)
+double := (* 2)
+Test.equal "sections" (increment 4, double 4) (5, 8)
+Test.equal "operator as function" ((+) 20 22) 42
+Test.equal "operator in fold" (List.fold_left (+) 0 [1, 2, 3]) 6]=],
+    "Sections and operator references")
+.endlua
+.pp
+Explicit section holes make argument order visible. (#2 - #1) constructs a
+two-argument function that subtracts its first argument from its second.
+Repeated holes reuse a parameter, and the highest number determines arity.
+As with tacit parameters, indices are positive and bounded. The enclosing
+parenthesized section is the binding context; holes do not become global
+variables or refer to results from earlier expressions.
+.lua
+book.code("metaml", [=[reverse_subtract := (#2 - #1)
+square_section := (#1 * #1)
+Test.equal "reordered operands" (reverse_subtract 3 10) 7
+Test.equal "repeated hole" (square_section 6) 36]=], "Local section holes")
+.endlua
+.sh 2 "Pipelines pass a value"
+.pp
+The expression x |> f supplies x to f. With data-last APIs, partially apply
+the configuration arguments and leave the data argument for the pipeline.
+List.map increment is a function awaiting a list; String.split comma is a
+function awaiting text. Read a pipeline from left to right as a sequence of
+interfaces. Each stage's output type must satisfy the next stage's input type.
+.lua
+book.code("metaml", [=[total :=
+  [1, 2, 3, 4]
+  |> List.filter (fn x -> x % 2 == 0)
+  |> List.map (* 10)
+  |> List.sum
+Test.equal "configured stages" total 60]=], "A data-last collection pipeline")
+.endlua
+.pp
+A pipeline is not automatically lazy, streaming, or fused. In the example,
+filter constructs a list, map constructs another list, and sum reduces it.
+For small data the clarity is often worth those intermediate structures.
+For large data a fold can combine the operations in one traversal. The language
+does not promise that a visually compact pipeline eliminates allocation or
+invokes an optimizer. Performance reasoning must follow the actual operations.
+.sh 2 "Composition builds a function"
+.pp
+Forward composition f >> g means first f and then g. Backward composition
+g << f expresses the same order. The Unicode composition spelling is backward
+composition as well. Unlike a value pipeline, composition produces a function
+that can be stored and applied later. This is useful when multiple inputs
+should traverse the same configured sequence of transformations.
+.lua
+book.code("metaml", [=[increment x := x + 1
+double x := x * 2
+forward := increment >> double
+backward := double << increment
+Test.equal "composition order" (forward 3, backward 3) (8, 8)
+Test.equal "stored pipeline" (List.map forward [1, 2, 3]) [4, 6, 8]]=],
+    "Compose once, apply many times")
+book.equation('"(A -> B)" " * " "(B -> C)" " -> " "(A -> C)"',
+    "(A -> B) and (B -> C) compose to (A -> C)", "The interface law of composition")
+.endlua
+.pp
+The middle type is the connecting contract. If the first function returns
+Option Int and the next expects Int, ordinary composition does not remove
+the Option layer. Use Option.map or Option.flat_map as appropriate. Likewise,
+Result-producing functions require error-aware composition. The wrapper is
+information about absence or failure, not noise to be ignored when arranging
+a pipeline. Chapter 23 develops those patterns with complete examples.
+.sh 2 "Typed juxtaposition and predictability"
+.pp
+Bare juxtaposition has a type-directed interpretation in MetaML. Compatible
+ordinary application is resolved as application; supported function-typed
+contexts can resolve as concatenative composition. The checker records its
+decision in the AST, and evaluation follows that decision. This is a typed
+elaboration mechanism, not untyped concatenation of arbitrary stack operations.
+Types and explicit grouping are therefore essential tools for understanding it.
+.pp
+For a short idiom, juxtaposition can be elegant. For a long program, explicit
+operators usually tell the story better. The book uses |> for data flow and
+>> for constructing reusable forward pipelines. When maintaining code that
+uses implicit composition, inspect #type and #ast before changing order or
+adding arguments. An apparently harmless edit can change which application
+relationship is compatible, and thus change the interpretation selected by
+the checker.
+.sh 2 "Refactor without changing observable behavior"
+.pp
+For pure functions, replacing nested application with an equivalent pipeline
+usually exposes the same mathematical computation. With effects, inspect
+when each stage is constructed and when its body runs. A partially applied
+operation may evaluate effectful configuration expressions immediately.
+A composed function delays its transformation bodies until application.
+These timing differences matter for output, mutable resources, and callbacks
+that consult external state.
+.pp
+Algebraic identities also need domain assumptions. Function composition is
+associative extensionally for suitable pure functions, but rearranging a
+numeric expression can change floating-point rounding, and changing a list
+pipeline into a fold can change callback order if written carelessly. State
+what equivalence you intend: same value, same errors, same output sequence,
+or all of these. A test should observe the contract that clients actually rely
+on, rather than only the happy-path integer result.
+.lua
+book.algorithm("Review a pipeline refactoring", {
+    "Write the input and output type of every stage.",
+    "Check that adjacent types agree, including Option and Result wrappers.",
+    "Record when configuration expressions and callbacks run.",
+    "Compare output order and failure behavior on boundary inputs.",
+    "Measure intermediate allocation if performance motivated the change."
+})
+.endlua
+.sh 2 "Sources and further work"
+.pp
+The parser's section elaboration and the checker's application/composition
+resolution are the authoritative implementation points. Read the portable
+List and Option signatures for data-last examples. Build a text pipeline that
+splits comma-separated integers and returns an Option total. First write it
+with named intermediate values, then with a pipeline. A malformed field should
+preserve failure rather than disappear silently. This exercise connects
+composition to the information carried by types.

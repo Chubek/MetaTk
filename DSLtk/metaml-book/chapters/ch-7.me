@@ -1,0 +1,126 @@
+.lua
+book.chapter(7, "Tacit programming with numbered parameters")
+.endlua
+.sh 2 "Numbered formals remove local naming"
+.pp
+A tacit definition refers to its formal arguments with $1, $2, and subsequent
+one-based indices. The parser discovers the highest referenced position and
+elaborates an appropriate function. The resulting function participates in the
+same inference, application, and module machinery as a named function. Tacit
+notation changes how parameters are written; it does not disable typing or
+introduce a second evaluator for arithmetic.
+.lua
+book.code("metaml", [=[add :: Int -> Int -> Int
+add := $1 + $2
+square := $1 * $1
+named_square value := value * value
+Test.equal "two parameters" (add 20 22) 42
+Test.equal "equivalent styles" (square 9) (named_square 9)]=],
+    "Tacit definitions with one and two parameters")
+.endlua
+.pp
+Read the first example by substituting parameter roles, not by imagining a
+stack machine. The first supplied argument occupies formal position one and
+the second occupies position two. Repeated occurrences of $1 denote the same
+argument value. Because ordinary application is eager, the expression that
+produced that argument has already been evaluated; mentioning $1 twice does
+not rerun it or consume two different input values.
+.sh 2 "Arity follows the largest index"
+.pp
+An occurrence of $3 requires a function with at least three formal positions,
+even when $1 and $2 do not occur in the body. Sparse numbering therefore
+creates intentionally unused arguments. This can be convenient for adapting
+a callback signature, but it can also conceal a simple mistake. An explicit
+type and a small test make the intended arity clear. The implementation bounds
+indices to 1024 and rejects zero; these are validation rules, not style advice.
+.lua
+book.code("metaml", [=[third :: Int -> Int -> Int -> Int
+third := $3
+keep := $1
+Test.equal "sparse numbering" (third 10 20 30) 30
+Test.equal "return argument" (keep "payload") "payload"
+reorder := ($2, $1)
+Test.equal "reuse as data" (reorder 7 "seven") ("seven", 7)]=],
+    "Formal positions determine the generated interface")
+book.algorithm("Elaborate a tacit binding", {
+    "Identify numbered references belonging to this binding.",
+    "Validate that every index is positive and within the implementation bound.",
+    "Find the largest referenced index n.",
+    "Create n formal parameter positions.",
+    "Resolve each numbered occurrence to its corresponding formal.",
+    "Type-check the resulting function using the ordinary function rules."
+})
+.endlua
+.pp
+Elaboration is a useful mental model even though implementation details include
+scope tracking, signatures, and special handling for nested expressions. The
+essential invariant is that numbered references resolve to formal arguments,
+not to whatever values happened to be printed by the REPL earlier. A reusable
+function must behave the same way when called from a fresh session, a module,
+or a native embedding with no interactive result history.
+.sh 2 "Use one parameter style per binding"
+.pp
+A computation that mixes a named formal with numbered references is rejected
+with M0201. The implementation has some accommodation for declared parameter
+names used merely as placeholders for an otherwise fully numbered body, but
+that spelling communicates less clearly than a purely tacit definition.
+Choose named formals or numbered formals consistently within a binding. If a
+helper needs descriptive names, write it as a separate named function.
+.lua
+book.code("metaml-error:M0201", [=[mixed value := value + $2]=],
+    "A genuinely mixed parameter style is rejected")
+.endlua
+.pp
+This rule is easiest to remember as a scope rule rather than a formatting
+preference. A reader should not have to reconstruct whether value and $1 are
+aliases, whether $2 is a second declared parameter, or whether a numbered
+reference accidentally belongs to a surrounding definition. Clarity at the
+binding boundary is especially important when callbacks and nested closures
+appear. Named lambdas are often the better choice once the body has several
+independent local roles.
+.sh 2 "Tacit does not mean inaccessible"
+.pp
+Short projections and arithmetic wrappers are natural tacit functions. Their
+meaning fits in one glance and the type states what the positions represent.
+Longer functions often benefit from a named interface even if they internally
+call tacit helpers. A useful library can mix those styles between definitions
+without imposing a project-wide preference for either extreme. The goal is
+to expose the algorithm, not to maximize or minimize the number of identifiers.
+.lua
+book.code("metaml", [=[distance_squared := $1 * $1 + $2 * $2
+score := $1.score
+Test.equal "coordinate calculation" (distance_squared 3 4) 25
+Test.equal "record projection" (score { name = "Ada", score = 42 }) 42
+Test.equal "tacit callback" (List.map score [{score = 1}, {score = 2}]) [1, 2]]=],
+    "Small functions whose positions remain obvious")
+.endlua
+.pp
+When a function argument is itself callable, its numbered reference is still
+a value. Applying or composing that value follows the same type-directed
+rules as a named function argument. A signature can make the intended relation
+explicit. Do not infer from the word concatenative that $n dynamically indexes
+the evaluator's observable stack. The formal-parameter contract remains in
+force in every supported context.
+.sh 2 "Distinguish dollars from section holes"
+.pp
+The next chapter introduces #1 and #2 inside parenthesized sections. Those
+holes are local to the section that elaborates them, whereas numbered dollars
+refer to a tacit definition's formal positions. Both can produce ordinary
+functions, but they choose their binding boundary differently. A section is
+often best for a local callback such as reversing two operator operands; a
+tacit definition is best when naming a reusable positional computation.
+.pp
+When reviewing code, first identify the binder, then resolve the placeholder.
+This habit scales to compiler work: a syntax transformation that copies a
+placeholder without preserving its binding context can silently change
+meaning. Explicit AST representations and scope-aware passes are the tools
+for avoiding such errors. Meta-programming becomes safer when the writer
+understands the binding rules of the language being transformed.
+.sh 2 "Sources and further work"
+.pp
+Inspect TacitRef handling and binding elaboration in both runtime files, and
+compare the tacit definitions in metalib/int/mod.ml. Rewrite an affine
+transformation in named and tacit form and test their equality over a finite
+list of inputs. Then deliberately swap $1 and $2 and choose a test that detects
+the change. An addition-only example is a poor detector because commutativity
+can hide the mistake; subtraction or string concatenation exposes ordering.

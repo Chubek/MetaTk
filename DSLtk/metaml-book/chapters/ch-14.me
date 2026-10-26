@@ -1,0 +1,126 @@
+.lua
+book.chapter(14, "Patterns, guards, and total functions")
+.endlua
+.sh 2 "A match is structured case analysis"
+.pp
+A match evaluates its scrutinee, then considers alternatives in source order.
+Each branch begins with a vertical bar, followed by a pattern, an optional
+guard, an arrow, and a body. Patterns both test structure and introduce
+bindings. They let a function describe the domain's cases directly instead
+of manually checking tags and extracting fields through unchecked indices.
+The wildcard underscore ignores a value without giving it a useful name.
+.lua
+book.code("metaml", [=[describe xs := match xs with
+  | [] -> "empty"
+  | x :: _ when x < 0 -> "starts negative"
+  | _ :: _ -> "nonempty"
+Test.equal "empty case" (describe []) "empty"
+Test.equal "guarded case" (describe [~2, 3]) "starts negative"
+Test.equal "fallback case" (describe [2, 3]) "nonempty"]=], "Shape tests followed by a guard")
+.endlua
+.pp
+Supported patterns include primitive literals, unit, variables, tuples, fixed
+lists, cons cells, constructors, records, and annotations. Each form encodes a
+different structural requirement. A fixed list pattern states a particular
+length; a cons pattern states only that at least one element exists and binds
+the rest. Choose the weakest pattern that captures the invariant needed by
+the branch, rather than accidentally rejecting longer valid input.
+.sh 2 "Selection controls evaluation"
+.pp
+The scrutinee is evaluated once. A branch's bindings become available only
+after its pattern matches. The guard then runs in that extended environment;
+if it is false, matching continues with later branches. Only the selected
+branch body is evaluated. This makes match an appropriate way to delay a
+fallback computation until absence or failure is known, unlike an ordinary
+helper whose default argument is evaluated eagerly.
+.lua
+book.code("metaml", [=[value_or_compute option fallback := match option with
+  | Some value -> value
+  | None -> fallback ()
+Test.equal "unused fallback" (value_or_compute (Some 7) (fn _ -> 1 / 0)) 7
+Test.equal "used fallback" (value_or_compute None (fn _ -> 42)) 42]=],
+    "A function-valued fallback is invoked only in the selected branch")
+book.algorithm("Select a match branch", {
+    "Evaluate the scrutinee once to a value v.",
+    "For each branch, in source order:",
+    {1, "Attempt its structural pattern against v."},
+    {1, "On success, extend the environment with pattern bindings."},
+    {1, "If a guard exists and is false, continue to the next branch."},
+    {1, "Evaluate and return this branch's body."},
+    "If no branch is selected, report M0401."
+})
+.endlua
+.pp
+Effects in guards are therefore observable even when the branch body is not
+selected. An effectful first guard can run before a later successful branch.
+Pure predicates make case analysis easier to reason about and refactor. If
+an operation needs to log every attempted branch, that is a procedural
+contract worth documenting explicitly rather than hiding inside what appears
+to be a declarative pattern match.
+.sh 2 "Order is part of meaning"
+.pp
+Place specific cases before catch-all cases. A wildcard branch first makes
+later branches unreachable at runtime even if the checker does not reject
+every such arrangement. Guards also affect coverage: a pattern matching all
+integers with a positive-value guard does not cover zero or negative values.
+The pattern's structural breadth is not the same as the guarded branch's
+effective domain.
+.lua
+book.code("metaml", [=[classify n := match n with
+  | 0 -> "zero"
+  | x when x < 0 -> "negative"
+  | _ -> "positive"
+Test.equal "literal priority" (classify 0) "zero"
+Test.equal "guard priority" (classify (~1)) "negative"
+Test.equal "remaining domain" (classify 3) "positive"]=], "A deliberate partition of integer inputs")
+.endlua
+.pp
+In a tree interpreter, order can distinguish specialized optimizations from
+general traversal. A branch for adding two numeric literals should precede
+a general addition branch if both occur in one match. In a validator, however,
+an overly broad fallback can mask a newly added constructor. Whenever a domain
+model changes, review the matches that interpret it, not just the declaration
+that introduces the new case.
+.sh 2 "Totality is a contract you must establish"
+.pp
+A total function returns a defined result for every input in its stated
+domain. Successful type checking does not prove every nested match and guard
+is exhaustive in this implementation. If no alternative matches, evaluation
+reports M0401. Function parameter patterns use the same matching machinery,
+so a parameter such as x :: xs is a partial interface unless callers guarantee
+a nonempty list.
+.lua
+book.code("metaml-error:M0401", [=[head_only (x :: _) := x
+head_only []]=], "A partial parameter pattern fails at application")
+.endlua
+.pp
+For public APIs, represent ordinary absence with Option and expected failures
+with Result. That makes the missing case part of the return type rather than
+an undocumented evaluator exception. A parser returning Err can participate
+in a validation pipeline; a deliberately failed parameter pattern aborts the
+current computation. The two behaviors are not interchangeable merely because
+both arise from an input that the caller did not expect.
+.sh 2 "Test the partition, not just one branch"
+.pp
+A useful match test suite contains a witness for each reachable branch and
+for each relevant boundary between guards. For a sign classifier, test zero,
+one positive, and one negative value. For a list shape classifier, test empty,
+singleton, and longer lists. For a recursive tree, test a leaf and a node
+whose children exercise different cases. These tests correspond to the
+structure of the domain rather than mirroring every implementation line.
+.pp
+Property-style tests can add confidence. If a classifier returns one of three
+documented labels, verify that membership for a finite generated sample.
+If a transformation preserves evaluation, compare the original and transformed
+tree over representative inputs. Such tests remain useful when the branch
+implementation changes because they state a semantic relationship instead
+of a particular control-flow arrangement.
+.sh 2 "Sources and further work"
+.pp
+Read the pattern representation and matching routines in MetaML.hpp and
+MetaML.d, plus the Option and Result library definitions. Write a safe head
+function returning Option, then a function that consumes its result with a
+lazy fallback. Add a guard whose boundary is zero and test both adjacent
+values. Finally, explain why a pattern generator in a comprehension skips a
+mismatch while a function parameter pattern reports M0401; they serve different
+control-flow contracts despite sharing structural matching concepts.

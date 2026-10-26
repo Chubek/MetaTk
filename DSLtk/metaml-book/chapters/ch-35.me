@@ -1,0 +1,113 @@
+.lua
+book.chapter(35, "DSLtk.hpp: composition and feature mixins")
+.endlua
+.sh 2 "Understand the toolkit beneath the language"
+.pp
+DSLtk.hpp is a header-only C++20 toolkit for constructing domain-specific
+languages. Most names live in namespace dsl; the generic REPL also has the
+dsltk namespace alias used by surrounding documentation. MetaML adds its
+own grammar, type system, evaluator, and module semantics on top of reusable
+facilities. When reading the implementation, distinguish what a toolkit can
+provide from which facilities a particular MetaML path actually uses.
+.pp
+The header contains several complementary abstractions rather than one
+mandatory object hierarchy. Feature mixins can be composed through dsl::DSL,
+while parsers, graphs, terms, streams, and other facilities can also be used
+directly. A language author can choose only the relevant components. Adding
+a generic graph algorithm belongs in the toolkit; assigning meaning to a
+MetaML constructor belongs in the language layer.
+.sh 2 "CRTP supplies a static composition point"
+.pp
+The curiously recurring template pattern passes the final derived type to
+a base template. DSL takes that derived type and a list of feature templates.
+Each feature contributes operations to the composed type, avoiding a central
+runtime registry of every possible DSL capability. This is host-language
+metaprogramming: C++ templates construct an interface at compilation time,
+while the resulting operations can still process runtime values.
+.lua
+book.code("cpp", [=[#include "DSLtk.hpp"
+#include <cassert>
+struct Arithmetic : dsl::DSL<Arithmetic, dsl::Pipeline, dsl::Operators> {};
+int main() {
+    auto value = Arithmetic::wrap(5)
+        | dsl::pipe([](int x) { return x + 3; })
+        | dsl::pipe([](int x) { return x * 2; });
+    auto positive = Arithmetic::make_pred([](int x) { return x > 0; });
+    assert(value == 16);
+    assert(positive(value));
+}]=], "A complete feature-composed C++ client")
+.endlua
+.pp
+The D counterpart uses template mixins and native template syntax rather
+than C++ inheritance spelling. DSLtk.d provides the corresponding feature
+families at module scope. The important shared idea is composing a small
+domain interface from reusable operations. Native syntax and reflection
+facilities differ, so source-level similarity is not the criterion for
+parity; the resulting operation's behavior is.
+.sh 2 "Pipeline adapters expose data flow"
+.pp
+Pipe wraps a callable as a stage. Chaining a value through stages expresses
+ordinary function composition at the C++ level. This resembles MetaML's |>
+notation conceptually but is a separate host API with C++ overload resolution,
+types, and lifetime rules. Do not assume a host pipeline inherits MetaML's
+numeric wrapping, type inference, or diagnostic conversion merely because
+the visual flow looks familiar.
+.pp
+Use explicit parameter and return types when a stage boundary is difficult
+to understand. Generic lambdas can make adapters reusable, but also increase
+the distance between a mistaken type and a compiler diagnostic. A thin
+domain wrapper can expose meaningful operations while keeping template
+machinery inside its implementation. That is the purpose of the toolkit:
+users of the resulting DSL should not need to understand every feature mixin.
+.sh 2 "Predicates and static names"
+.pp
+The Operators family composes predicate-like operations. A predicate wrapper
+gives ordinary callables a vocabulary for conjunction, disjunction, and
+negation. Keep side effects out of predicate composition unless the exact
+evaluation order is part of the contract. A validation rule is easier to
+reason about when its only observable result is its boolean answer.
+.pp
+Fixed strings support compile-time names used in tagged AST construction,
+pattern dispatch, and other template APIs. A tag such as num is known to
+the compiler even though a leaf's payload can be runtime data. This
+separation enables specialized dispatch without requiring the entire parsed
+program to exist at compile time. Static names are a vocabulary mechanism,
+not a claim that all language processing is constant evaluation.
+.lua
+book.code("cpp-fragment", [=[auto tree = dsl::node<"add">(
+    dsl::leaf<"num">(2), dsl::leaf<"num">(3));]=], "Compile-time tags with runtime payloads in C++")
+book.code("d-fragment", [=[auto tree = node!"add"(leaf!"num"(2), leaf!"num"(3));]=],
+    "The corresponding D tag syntax")
+.endlua
+.sh 2 "Expression templates and other feature families"
+.pp
+Expression templates build host expression objects whose evaluation can be
+deferred or fused according to their implementation. They are distinct from
+MetaML's runtime expression AST and from a generic tagged ASTNode. Choose
+the representation according to purpose: a numeric host DSL may benefit
+from expression templates, while an editor or interpreter needs inspectable
+syntax with source information. Similar words such as expression and node
+can describe different layers with different ownership contracts.
+.pp
+The header also contains optional-value and Result helpers, memoization,
+lazy values, task pipelines, enum reflection, PEG facilities, serialization,
+preprocessing, and graph-oriented language tools. Read the relevant public
+contract before combining them. Memoizing an effectful operation changes
+behavior, a lazy value delays work but may retain captures, and a runtime
+tree owns different data from a parser cursor borrowing source bytes.
+.sh 2 "Build small native experiments"
+.pp
+A focused translation unit is often the fastest way to understand a toolkit
+facility. Include only the public header, construct a minimal example, and
+assert a semantic result. Compile with the project's actual C++20 requirement.
+When a feature exists in both dialects, write a corresponding D example or
+consult the mirrored native tests. Keep those experiments separate from
+claims about MetaML syntax: host template code is not executable MetaML.
+.sh 2 "Sources and further work"
+.pp
+Start with DSLtk.hpp's feature list, examples/01-basic-usage.cpp, and the
+toolkit manual under DSLtk/manual/DSLtk. Compare DSLtk.d's mixin-based
+composition with the C++ CRTP interface. Build a two-stage host pipeline
+that validates and formats a small domain value. Explain which work occurs
+at template instantiation and which occurs when the pipeline runs, then
+identify the lifetime of every object captured by its callbacks.

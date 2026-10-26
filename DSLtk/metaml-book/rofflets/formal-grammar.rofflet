@@ -1,0 +1,2 @@
+-- Compatibility entry point; implementation is kept with luaROFF.
+dofile(BOOK_ROOT .. '/luaROFF/rofflets/formal-grammar.rofflet')

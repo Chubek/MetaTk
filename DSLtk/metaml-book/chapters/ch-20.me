@@ -1,0 +1,125 @@
+.lua
+book.chapter(20, "Diagnostics, recovery, and executable specifications")
+.endlua
+.sh 2 "A diagnostic has structure"
+.pp
+Language failures carry a severity, code, message, and source span, with
+additional context where available. Session.render combines a diagnostic
+with remembered source text to produce a readable display. A machine client
+should inspect codes and spans instead of parsing English prose. Messages
+can improve while a stable code continues to identify the category of
+failure that an editor, test runner, or host application needs to handle.
+.lua
+book.code("text", [=[M01xx  lexical recognition and malformed literals
+M02xx  parsing, binding syntax, and placeholder context
+M03xx  expression type checking
+M04xx  evaluation and primitive invocation
+M05xx  modules and source imports
+M06xx  REPL and file directives]=], "Diagnostic families by stage")
+.endlua
+.pp
+Stage information is actionable. A lexical error asks you to inspect the
+token spelling, not the function's implementation. A module signature error
+asks whether the public contract is satisfied, not whether an arithmetic
+branch is correct. A denied primitive may be perfectly well typed yet
+unavailable under the embedding's capability policy. Keeping these failures
+separate prevents random edits that obscure the original problem.
+.sh 2 "Expected failure belongs in data"
+.pp
+Option and Result are ordinary values, not diagnostics. A parser returning
+None or Err lets its caller choose a fallback, annotate an error, or continue
+processing other inputs. Core.error deliberately aborts the current
+computation with M0407. Use it for a violated invariant when no ordinary
+result makes sense, rather than as the default implementation of routine
+invalid user input.
+.lua
+book.code("metaml", [=[parse_count text := match Int.from_string text with
+  | Some n when n >= 0 -> Ok n
+  | _ -> Err "expected a non-negative count"
+Test.equal "valid input" (parse_count "12") (Ok 12)
+Test.equal "malformed input" (parse_count "oops") (Err "expected a non-negative count")
+Test.equal "invalid domain" (parse_count "-1") (Err "expected a non-negative count")]=],
+    "A validation error remains composable data")
+.endlua
+.pp
+The result type documents the possibility of failure. A consumer must account
+for it through matching or a combinator, rather than discovering an evaluator
+exception at an arbitrary later point. Rich applications can use an error
+ADT instead of String to preserve categories and source positions. Render
+human-facing text at the boundary, where the caller knows which filename,
+field, or user action supplies the missing context.
+.sh 2 "Recognize common runtime codes"
+.pp
+M0401 is a failed pattern, M0402 integer division by zero, and M0403 a denied
+primitive. M0404 covers invalid runtime operations such as rejected bounds.
+M0405 reports unsupported comparison, M0406 depth exhaustion, and M0407 an
+explicit Core.error. M0408 concerns use before definition. M0409 wraps a
+recoverable native callback exception with the primitive's identity. These
+codes describe different recovery possibilities and should not all be
+flattened into an uninformative "script failed" string.
+.lua
+book.code("metaml-error:M0407", [=[Core.error "broken invariant"]=],
+    "An explicit abort has a diagnostic code")
+book.code("metaml-error:M0405", [=[same := (fn x -> x) == (fn x -> x)
+same]=], "Function equality is not a generic structural operation")
+.endlua
+.pp
+Diagnostic conversion is not recovery from arbitrary native failure. Invalid
+pointers, undefined behavior, process termination, allocation exhaustion, and
+infinite computation are outside the promise made by wrapping ordinary host
+exceptions. An embedding must design native callbacks carefully and choose
+appropriate process-level controls when running untrusted code. The runtime
+architecture chapter separates those responsibilities from normal language
+error handling.
+.sh 2 "Recovery retains useful state, not a transaction log"
+.pp
+After an evaluation diagnostic, the session resets depth bookkeeping and its
+observable value stack so later submissions can proceed without stale
+intermediate results. Earlier definitions and effects may remain. This is
+useful in an interactive workbench, where one bad expression should not make
+the entire session unusable, but it means that retrying a whole file can
+repeat earlier work. Recovery tests should check both the error and a later
+successful operation in the same session.
+.lua
+book.algorithm("Test an embedding's recovery contract", {
+    "Create a session and define a harmless reusable function.",
+    "Submit an expression expected to produce a particular diagnostic code.",
+    "Check the returned code and source context.",
+    "Submit a later successful call in the same session.",
+    "Verify the result and that stale stack/depth state did not leak.",
+    "Separately account for any external effects from earlier successful units."
+})
+.endlua
+.pp
+Testing only a fresh process after an error misses state-recovery bugs.
+Testing only the same process can hide undeclared dependencies between
+examples. Use both patterns for their respective purposes: independent
+processes establish self-contained programs, while same-session tests
+establish recovery and lifetime behavior. The book checker uses fresh
+processes because its listings are teaching units, not a shared interactive
+transcript with hidden prerequisites.
+.sh 2 "Assertions are executable explanations"
+.pp
+Test.equal compares an actual result with an expected value. Test.check
+asserts a boolean property. The small Test module prints deterministic
+success lines and aborts on a failed assertion. Meaningful test names explain
+the contract: "half-open range" is more informative than "test 3." Put the
+actual computation before the expected value consistently so a reader can
+audit the example without remembering a local argument convention.
+.pp
+For errors, assert a stable code rather than an entire rendered message unless
+presentation is specifically under test. For approximate numerical behavior,
+assert an appropriate bound. For a compiler transformation, assert semantic
+preservation and a meaningful shape change. A collection of assertions that
+merely repeats the implementation's branches can miss the relationship the
+algorithm was meant to preserve. Examples should teach that relationship
+as well as demonstrate syntax.
+.sh 2 "Sources and further work"
+.pp
+The canonical code registry is manual/errors.md. Read Session.render, the
+runtime's error boundaries, and metalib/test/mod.ml or the Test definition
+located through the prelude imports. Add a validator returning an application
+error ADT, then render those errors separately. Design a same-session test
+that fails once and succeeds afterwards. Explain which state should reset,
+which definitions may remain, and why a printed line cannot be rolled back
+by clearing an interpreter stack.

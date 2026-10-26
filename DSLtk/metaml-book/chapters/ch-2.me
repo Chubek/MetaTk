@@ -1,0 +1,123 @@
+.lua
+book.chapter(2, "Building MetaML and working at the prompt")
+.endlua
+.sh 2 "Build the executable you will actually use"
+.pp
+The core C++ interpreter is header-only, but a command-line executable gives us
+a repeatable environment for learning. The current dependency requires C++20:
+DSLtk.hpp uses concepts and class-valued template parameters. Older references
+to a C++17 MetaML interface do not override that requirement. CMake configures
+the project, a C++ compiler builds it, and Python runs the repository's checking
+scripts. A D compiler is useful when checking dialect parity but is unnecessary
+for a C++-only first session.
+.lua
+book.code("sh", [=[# Run from the repository's DSLtk directory.
+cmake -S . -B build -DMETAML_BUILD_REPL=ON -DBUILD_TESTING=OFF
+cmake --build build --target metaml-repl-cpp --parallel 2
+build/metaml-repl-cpp --version
+build/metaml-repl-cpp --stdlib metalib -e 'List.sum [1, 2, 3]']=],
+    "Configure, compile, and run")
+.endlua
+.pp
+The target selects metaml-cli/metaml.cpp in this checkout. Some older prose
+uses a repl directory; follow the actual CMake source path when investigating
+build failures. The executable detects the portable host-library bundle and
+installs it. It also loads the portable prelude unless instructed otherwise.
+This is why a CLI example can use Graph or ASTBuilder whereas an untouched
+embedding Session initially has only its core facilities.
+.pp
+Building an interpreter and building this book are separate tasks. The book's
+build.sh can compile luaROFF, but it does not silently build MetaML. Supply an
+existing MetaML executable when requesting checked book examples. This keeps
+the publishing workflow useful to readers who only want a PDF, and keeps a
+language build failure distinguishable from a typesetting failure.
+.sh 2 "Three ways to submit a program"
+.pp
+Interactive input is convenient for discovering a type or testing a small
+expression. A terminal shows the historical prompt spelling meaml>, while
+piped input suppresses prompts. An unfinished construct requests continuation
+instead of immediately treating every newline as a complete program. A file
+is better for a multi-definition experiment because it preserves source
+locations and can be rerun after changes.
+.lua
+book.code("sh", [=[build/metaml-repl-cpp --stdlib metalib
+build/metaml-repl-cpp --stdlib metalib program.ml
+build/metaml-repl-cpp --no-tty --no-history --stdlib metalib \
+  -e 'Test.equal "arithmetic" (6 * 7) 42'
+build/metaml-repl-cpp --dump-ast program.ml]=], "Interactive, file, and expression modes")
+.endlua
+.pp
+Files are quiet except for explicit output and diagnostics; the -e route uses
+the REPL's formatting of results. Do not write a test that assumes those two
+display modes are interchangeable. For a durable example, use Test.equal or
+Test.check and examine the exit status. For data exchange, use an explicit
+serialization routine or the embedding API rather than scraping a prompt.
+.sh 2 "Ask focused questions at the prompt"
+.pp
+The directives form a small workbench. #type checks an expression without
+evaluating it. #ast shows syntax. #trace evaluates with a reduction trace.
+#stack exposes the interpreter's observable result stack. #load remembers and
+executes a file, #reload executes the remembered file again, and #clear resets
+the interactive state according to the language policy. #help and #quit belong
+to the generic shell. Directives are top-level commands, not ordinary functions
+that can be inserted into a lambda body.
+.lua
+book.code("text", [=[meaml> increment x := x + 1
+meaml> #type increment
+meaml> #trace increment 41
+meaml> #load "experiment.ml"
+meaml> #reload]=], "A workbench transcript: enter the commands, not the prompts")
+.endlua
+.pp
+Use #type before tracing when a composition is ambiguous. If the type is wrong,
+an execution trace cannot repair the interface. Conversely, successful type
+checking does not prove that a match is exhaustive, a divisor is nonzero, or a
+host capability has been granted. Choose the observation appropriate to the
+stage you are investigating. The diagnostics chapter gives a code-family map
+for making this choice systematic.
+.sh 2 "History, reload, and reproducibility"
+.pp
+History normally lives below XDG_STATE_HOME/metaml or the user's local state
+directory. Readline integration is optional in the C++ wrapper. Automated
+examples disable history and terminal behavior so tests do not depend on a
+user's interactive environment. The wrapper checks the last loaded file for
+changes when it processes later input; it is not a continuously running
+background watcher. A file edited while the prompt is idle is not evidence
+that a separate evaluation has already occurred.
+.pp
+Reloading is execution. Earlier definitions may be replaced by later bindings,
+and output or host mutations can happen again. Imports have their own once-only
+cache and are not identical to #load. A robust development loop keeps reusable
+modules mostly pure, places effects in explicit functions, and invokes those
+functions intentionally. This also makes tests easier to isolate in fresh
+processes, which is how the book's complete listings are verified.
+.pp
+Select the standard-library directory explicitly when reproducibility matters.
+Environment-based discovery is useful for an installed application, but an
+unexpected METAML_STDLIB setting can select a different tree during development.
+Record both the interpreter version and the library revision when reporting a
+problem. They form a working pair: new source wrappers can depend on primitives
+that an older executable has not installed.
+.sh 2 "From experiment to regression"
+.pp
+A good interactive discovery becomes a small script with a stated invariant.
+When testing an error, keep the failing submission separate from the successful
+one that verifies recovery. When testing output, capture stdout and stderr
+independently. When testing a transformation, include a normal input, a boundary
+input, and an input whose shape challenges your assumption. This costs little
+for an interpreter and prevents examples from succeeding merely because an old
+session happened to contain a useful binding.
+.lua
+book.code("metaml", [=[twice x := x + x
+Test.equal "normal input" (twice 21) 42
+Test.equal "zero boundary" (twice 0) 0
+Test.equal "negative input" (twice (~3)) (~6)]=], "Turn a prompt experiment into a script")
+.endlua
+.sh 2 "Sources and further work"
+.pp
+Read CMakeLists.txt and metaml-cli/metaml.cpp for supported targets and options;
+metaml-cli/metaml.d is the mirrored native entry point. The generic REPL is
+inside DSLtk.hpp, and MetaML's ReplLanguage connects it to evaluation. Build
+with testing enabled when you want ctest coverage. As an exercise, save the
+last listing to a file, run it in file and expression modes, and explain which
+parts of the output are program effects and which are shell presentation.

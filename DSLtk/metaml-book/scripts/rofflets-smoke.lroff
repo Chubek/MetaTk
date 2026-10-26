@@ -1,0 +1,19 @@
+.lua
+book.chapter(1, book.titles[1])
+book.code("text", [=[.control
+'apostrophe
+backslash \ text]=], "Escaping")
+book.code("metaml", [=[{- outer {- inner -} done -}
+val x := "-- not a comment"
+f := $1 + #2 -- comment]=], "Lexical highlighting")
+book.chain({"lex", "parse", "check"}, "Pipeline")
+book.graph({{id="A", label='quote " and slash \\', x=0, y=0},
+            {id="B", label="next", x=2.3, y=0}}, {{"A", "B"}}, "Labels")
+book.algorithm("Visit", {"push root", {1, "visit child"}, "return"})
+book.grammar("Expression", {{"expr", '"x" | "(" expr ")"'}})
+book.equation('A "->" B', "A -> B", "Function")
+book.memo("Contract", "A backslash \\ is literal text.")
+lroff.emitln(book.symbol("lambda"))
+book.uml({{id="S", name="Session", members={"eval(source)"}},
+          {id="V", name="Value"}}, {{"S", "V", "returns"}}, "Objects")
+.endlua
