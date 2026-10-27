@@ -27,3 +27,13 @@ The engine remains a functional, independently designed preprocessing language, 
 - Installed C11 and C++17 clients compiled and executed successfully using the installed headers and shared library.
 - Refreshed Linux x86-64 prebuilt executable loaded the refreshed Webber plugin successfully.
 - `scripts/verify-install.sh` reproduces the installed-client check.
+# Implementation completion
+
+- Removed the obsolete default-build dependency on the absent VMSpec directory.
+- Implemented Function, Profile and Jackscript public APIs and installation.
+- Added the Jackscript preprocessing profile, UTF-8 reader and worked example.
+- Corrected block/comment scanning, import retry/once semantics, nested processing
+  limits, integer negation overflow, binary string encoding and option validation.
+- Preserved callback diagnostic locations and host-reported plugin diagnostics.
+- Added driver/REPL integration and core/C API regression coverage, and extended
+  installed-client verification to the new APIs.

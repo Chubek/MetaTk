@@ -1,17 +1,15 @@
 #include "MetaTeX.h"
-#include <algorithm>
 #include <stdexcept>
 namespace metatex {
-std::vector<Token> Lexer::scan(std::string_view s) {
-    if(s.size()>16*1024*1024)throw std::runtime_error("source size limit exceeded");
-    // Reject malformed UTF-8 before scanning control words as well as text.
-    for(std::size_t at=0;at<s.size();){
-        unsigned char c=static_cast<unsigned char>(s[at]);
-        if(c<128){if(c==0)throw std::runtime_error("NUL byte in source");++at;continue;}
+Lexer::Lexer(std::string source):source_(std::move(source)){
+    if(source_.size()>16*1024*1024)throw std::runtime_error("source size limit exceeded");
+    for(std::size_t at=0;at<source_.size();){
+        unsigned char c=source_[at];
+        if(c<128){if(!c)throw std::runtime_error("NUL byte in source");++at;continue;}
         unsigned count=c>=0xC2&&c<=0xDF?2:c>=0xE0&&c<=0xEF?3:c>=0xF0&&c<=0xF4?4:0;
-        if(!count||at+count>s.size())throw std::runtime_error("invalid UTF-8 at byte "+std::to_string(at));
+        if(!count||at+count>source_.size())throw std::runtime_error("invalid UTF-8 at byte "+std::to_string(at));
         unsigned cp=c & (0x7F>>count);
-        for(unsigned j=1;j<count;++j){unsigned char b=static_cast<unsigned char>(s[at+j]);
+        for(unsigned j=1;j<count;++j){unsigned char b=source_[at+j];
             if((b&0xC0)!=0x80)throw std::runtime_error("invalid UTF-8 at byte "+std::to_string(at+j));
             cp=(cp<<6)|(b&63);
         }
@@ -19,55 +17,92 @@ std::vector<Token> Lexer::scan(std::string_view s) {
             throw std::runtime_error("invalid UTF-8 at byte "+std::to_string(at));
         at+=count;
     }
-    std::vector<Token> out;
-    std::size_t i=0, line=1, col=1;
-    bool afterControlWord=false;
-    auto emit=[&](TokenKind k, std::string v, std::size_t at, std::size_t ln, std::size_t cl) {
-        if(out.size()>=1500000)throw std::runtime_error("source token limit exceeded");
-        out.push_back({k,std::move(v),at,ln,cl});
+}
+Lexer::Catcodes Lexer::defaultCatcodes(){
+    Catcodes codes;codes.fill(12);
+    for(int c='A';c<='Z';++c)codes[c]=11;
+    for(int c='a';c<='z';++c)codes[c]=11;
+    for(int c=128;c<256;++c)codes[c]=11; // Preserve the existing Unicode text extension.
+    codes['\\']=0;codes['{']=1;codes['}']=2;codes['$']=3;codes['&']=4;
+    codes['\r']=codes['\n']=5;codes['#']=6;codes['^']=7;codes['_']=8;
+    codes[0]=9;codes[' ']=codes['\t']=10;codes['%']=14;codes[127]=15;
+    return codes;
+}
+Token Lexer::next(const Catcodes& codes){
+    struct Character {std::string value;unsigned cp;std::size_t size;};
+    auto character=[&](){
+        unsigned char c=source_[position_];unsigned count=c<128?1:c<224?2:c<240?3:4;
+        unsigned cp=count==1?c:c&(0x7F>>count);
+        for(unsigned i=1;i<count;++i)cp=(cp<<6)|(static_cast<unsigned char>(source_[position_+i])&63);
+        if(c=='\r'&&position_+1<source_.size()&&source_[position_+1]=='\n')count=2;
+        return Character{source_.substr(position_,count),cp,count};
     };
-    auto letter=[](unsigned char c) {return (c>='a'&&c<='z')||(c>='A'&&c<='Z')||c>=128;};
-    while(i<s.size()) {
-        std::size_t at=i, ln=line, cl=col;
-        unsigned char c=static_cast<unsigned char>(s[i]);
-        if (c=='\r') {++i; if(i<s.size() && s[i]=='\n') ++i; ++line; col=1; emit(TokenKind::EndLine,"\n",at,ln,cl); afterControlWord=false; continue;}
-        if (c=='\n') {++i; ++line; col=1; emit(TokenKind::EndLine,"\n",at,ln,cl); afterControlWord=false; continue;}
-        if (c=='%') {while(i<s.size() && s[i]!='\n' && s[i]!='\r') {++i;++col;} continue;}
-        if (c=='\\') {
-            ++i; ++col;
-            if(i==s.size()) {emit(TokenKind::Control,"",at,ln,cl);break;}
-            std::string name;
-            if(letter(static_cast<unsigned char>(s[i]))) {
-                while(i<s.size() && letter(static_cast<unsigned char>(s[i]))) {name+=s[i++];++col;}
-                afterControlWord=true;
-            } else {
-                if(s[i]=='\n' || s[i]=='\r') {
-                    name=" ";if(s[i++]=='\r' && i<s.size() && s[i]=='\n')++i;
-                    ++line;col=1;
-                } else {name+=s[i++];++col;}
-                afterControlWord=false;
+    auto advance=[&](const Character& c){position_+=c.size;if(c.cp=='\r'||c.cp=='\n'){++line_;column_=1;}else ++column_;};
+    auto category=[&](const Character& c){return c.cp<256?codes[c.cp]:11;};
+    auto emit=[&](Token token){if(++emitted_>1500000)throw std::runtime_error("source token limit exceeded");return token;};
+    while(position_<source_.size()){
+        auto c=character();int code=category(c);
+        Token token{TokenKind::Character,c.value,position_,line_,column_};token.category=code;
+        advance(c);
+        if(code==9)continue;
+        if(code==15)throw std::runtime_error("invalid category-code character at byte "+std::to_string(token.offset));
+        if(code==14){
+            while(position_<source_.size()){
+                auto rest=character();advance(rest);
+                if(rest.cp=='\r'||rest.cp=='\n')break;
             }
-            emit(TokenKind::Control,std::move(name),at,ln,cl);continue;
+            state_=State::NewLine;continue;
         }
-        if(c==' ' || c=='\t') {
-            while(i<s.size() && (s[i]==' '||s[i]=='\t')) {++i;++col;}
-            if(!afterControlWord) emit(TokenKind::Space," ",at,ln,cl);
-            afterControlWord=false;continue;
+        if(code==5){
+            // A category-5 character terminates the physical input line,
+            // even when it is not the file's newline character.
+            if(c.cp!='\r'&&c.cp!='\n')while(position_<source_.size()){
+                auto rest=character();advance(rest);
+                if(rest.cp=='\r'||rest.cp=='\n')break;
+            }
+            auto previous=state_;state_=State::NewLine;
+            if(previous==State::SkipSpaces)continue;
+            token.kind=previous==State::NewLine?TokenKind::Control:TokenKind::Space;
+            token.value=previous==State::NewLine?"par":" ";return emit(token);
         }
-        afterControlWord=false;
-        TokenKind kind=TokenKind::Character;
-        switch(c) {case '{':kind=TokenKind::BeginGroup;break;case '}':kind=TokenKind::EndGroup;break;
-            case '$':kind=TokenKind::MathShift;break;case '&':kind=TokenKind::Alignment;break;
-            case '#':kind=TokenKind::Parameter;break;case '^':kind=TokenKind::Superscript;break;
-            case '_':kind=TokenKind::Subscript;break;default:break;}
-        std::string val;
-        if(c>=0x80) { // Preserve a complete UTF-8 codepoint.
-            int count=(c&0xE0)==0xC0?2:(c&0xF0)==0xE0?3:(c&0xF8)==0xF0?4:1;
-            count=static_cast<int>(std::min<std::size_t>(count,s.size()-i));
-            val.assign(s.substr(i,count));i+=count;++col;
-        } else {val=static_cast<char>(c);++i;++col;}
-        emit(kind,std::move(val),at,ln,cl);
+        if(code==10){
+            if(state_!=State::MidLine)continue;
+            state_=State::SkipSpaces;token.kind=TokenKind::Space;token.value=" ";return emit(token);
+        }
+        if(code==0){
+            token.kind=TokenKind::Control;token.value.clear();state_=State::SkipSpaces;
+            if(position_==source_.size())return emit(token);
+            auto next=character();int nextCode=category(next);
+            if(nextCode==11){
+                do {token.value+=next.value;advance(next);
+                    if(position_==source_.size())break;
+                    next=character();
+                }while(category(next)==11);
+            }else{
+                token.value=(nextCode==5||nextCode==10)?" ":next.value;advance(next);
+                if(nextCode!=5&&nextCode!=10)state_=State::MidLine;
+            }
+            return emit(token);
+        }
+        state_=State::MidLine;
+        switch(code){
+        case 1:token.kind=TokenKind::BeginGroup;break;
+        case 2:token.kind=TokenKind::EndGroup;break;
+        case 3:token.kind=TokenKind::MathShift;break;
+        case 4:token.kind=TokenKind::Alignment;break;
+        case 6:token.kind=TokenKind::Parameter;break;
+        case 7:token.kind=TokenKind::Superscript;break;
+        case 8:token.kind=TokenKind::Subscript;break;
+        case 13:token.kind=TokenKind::Control;token.active=true;break;
+        default:break;
+        }
+        return emit(token);
     }
-    return out;
+    return {TokenKind::Sentinel,"",position_,line_,column_};
+}
+std::vector<Token> Lexer::scan(std::string_view source){
+    Lexer lexer{std::string(source)};auto codes=defaultCatcodes();std::vector<Token> tokens;
+    for(;;){auto token=lexer.next(codes);if(token.kind==TokenKind::Sentinel)break;tokens.push_back(std::move(token));}
+    return tokens;
 }
 }

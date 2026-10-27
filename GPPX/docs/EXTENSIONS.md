@@ -106,3 +106,22 @@ both produce `a_b_c`. Free returned names with `gppx_free()`.
 `examples/mylang.cpp` demonstrates style configuration, qualified macros,
 UTF-8 source loading, and a C++ custom directive. Build target `gppx_mylang`,
 then run it without arguments for a demo or with a UTF-8 source filename.
+## Function and profile helpers
+
+`<GPPX-Function.h>` exposes `gppx_function_define(state, name, parameters, body)`
+and `gppx_function_call(state, name, argc, argv, &output)`. Definition parameters
+are comma-separated identifiers with an optional final `...`. Calls accept
+separate textual arguments, preserving embedded commas without reparsing an
+invocation string. They dispatch to either a function macro or a registered
+native macro callback. Argument and replacement expansion follows the current
+syntax. Release returned output with `gppx_free`. C++ callers can use
+`Engine::call(name, arguments)`.
+
+`<GPPX-Profile.h>` enumerates the four profiles with `gppx_profile_count()` and
+`gppx_profile_name(index)`. `gppx_profile_apply` applies a base profile, optional
+directive override and optional `GPPX_Style`. NULL fields preserve current
+settings; application is sequential, not transactional.
+
+`<GPPX-Jackscript.h>` provides the [Jackscript integration](JACKSCRIPT.md).
+All three headers are installed and included by `<GPPX-all.h>`. These helpers
+do not change the ABI 1 host function table.

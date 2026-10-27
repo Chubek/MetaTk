@@ -4,7 +4,6 @@ include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 option(GPPX_BUILD_TESTS "Build and run unit/integration tests" ON)
 option(GPPX_BUILD_WEBBER "Build sample Webber shared plugin" ON)
-option(GPPX_BUILD_VMSPECS "Build the VM reference catalogue" ON)
 option(GPPX_BUILD_EXAMPLES "Build the mylang example" ON)
 option(GPPX_SANITIZERS "Enable address/undefined sanitizers (GCC/Clang)" OFF)
 set(CMAKE_CXX_STANDARD 17)
@@ -46,6 +45,11 @@ endif()
 if(GPPX_BUILD_TESTS)
  enable_testing()
  find_package(Python3 COMPONENTS Interpreter QUIET)
+ if(Python3_Interpreter_FOUND)
+  add_test(NAME gppx_driver COMMAND "${Python3_EXECUTABLE}"
+   "${CMAKE_CURRENT_SOURCE_DIR}/tests/test_driver.py" $<TARGET_FILE:gppx_cli>
+   "${CMAKE_CURRENT_SOURCE_DIR}")
+ endif()
  if(UNIX AND Python3_Interpreter_FOUND)
   find_program(GPPX_VIM_EXECUTABLE NAMES vim)
   if(GPPX_VIM_EXECUTABLE)
@@ -86,7 +90,7 @@ if(GPPX_BUILD_TESTS)
 
 endif()
 install(TARGETS gppx gppx_cli EXPORT GPPXTargets RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(FILES include/GPPX.h include/GPPX.hpp include/GPPX-all.h include/GPPX-Directive.h include/GPPX-Macro.h include/GPPX-Syntax.h include/GPPX-Reader.h include/GPPX-Sink.h include/GPPX-Embed.h include/GPPX-Rewriter.h include/GPPX-PMatch.h include/GPPX-Style.h include/GPPX-Layout.h include/GPPX-UTF8Input.h include/GPPX-MetaSym.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(FILES include/GPPX.h include/GPPX.hpp include/GPPX-all.h include/GPPX-Directive.h include/GPPX-Macro.h include/GPPX-Syntax.h include/GPPX-Reader.h include/GPPX-Sink.h include/GPPX-Embed.h include/GPPX-Rewriter.h include/GPPX-PMatch.h include/GPPX-Style.h include/GPPX-Layout.h include/GPPX-UTF8Input.h include/GPPX-MetaSym.h include/GPPX-Function.h include/GPPX-Profile.h include/GPPX-Jackscript.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(EXPORT GPPXTargets NAMESPACE GPPX:: DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/GPPX)
 if(GPPX_BUILD_WEBBER)
  install(TARGETS gppx_webber LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/gppx/plugins)
@@ -100,7 +104,3 @@ write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/GPPXConfigVersion.
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/GPPXConfig.cmake"
   "${CMAKE_CURRENT_BINARY_DIR}/GPPXConfigVersion.cmake"
   DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/GPPX")
-
-if(GPPX_BUILD_VMSPECS)
- add_subdirectory(VMSpec)
-endif()

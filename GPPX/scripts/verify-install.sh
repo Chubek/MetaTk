@@ -21,6 +21,16 @@ int main(void) {
         !out || strcmp(out,"works") ||
         gppx_pmatch_glob("a*?","abcd")<=0;
     gppx_free(out);
+    if (!bad) {
+        const char *args[]={"works"};
+        GPPX_Profile profile={"jackscript",0,0};
+        out=0;
+        bad=gppx_profile_apply(s,&profile) ||
+            gppx_function_define(s,"WRAP","x","[x]") ||
+            gppx_function_call(s,"WRAP",1,args,&out) ||
+            !out || strcmp(out,"[works]") || gppx_jackscript_enable(s);
+        gppx_free(out);
+    }
     gppx_destroy(s);
     return bad?1:0;
 }
@@ -30,7 +40,9 @@ cat >"$tmp/client.cpp" <<'SOURCE'
 int main() {
     gppx::Engine engine;
     engine.define("CHECK","works");
-    return engine.process("CHECK\n") == "works\n" ? 0 : 1;
+    engine.define("WRAP(x)","[x]");
+    return engine.process("CHECK\n") == "works\n" &&
+        engine.call("WRAP",{"works"}) == "[works]" ? 0 : 1;
 }
 SOURCE
 "$cc" -std=c11 -Wall -Wextra -Werror -I"$prefix/include" "$tmp/client.c" -L"$prefix/lib" -Wl,-rpath,"$prefix/lib" -lgppx -o "$tmp/check-c"

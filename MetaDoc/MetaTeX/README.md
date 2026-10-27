@@ -1,3 +1,15 @@
+# MetaTeX project
+
+**TeX82 / TeXScrape integration (new):** A genuine TeX82-to-DVI compiler is now
+implemented in `truth/TeXScrape/Working/TeX.c`. For a dependency-free build,
+use `cmake -S . -B build-tex82 -DMETATEX_TEXSCRAPE_ONLY=ON`,
+`cmake --build build-tex82`, then `ctest --test-dir build-tex82`.
+See [`truth/TeXScrape/README.md`](truth/TeXScrape/README.md) for examples,
+font configuration, and known limits. This is a separate binary from the
+existing MetaTeX C++ semantic engine and its LaTeX/NekoTeX plugins.
+
+---
+
 # MetaTeX — executable engine prototype
 
 **Status: working, tested subset; NOT a full TeX82/LaTeX implementation.**
@@ -8,8 +20,8 @@ can tokenize, expand a useful subset of TeX, execute external dialect plugins,
 produce a semantic document IR, and render HTML, MathML, JSON, text, and PDF.
 
 Full TeX compatibility, including TeX's page-building algorithm, complete
-`\catcode` mutations, hyphenation, Lua, font metric tables, macro delimited
-parameters, and arbitrary LaTeX packages, **is not implemented**. Do not use
+`\catcode` mutations, hyphenation, Lua, font metric tables,
+and arbitrary LaTeX packages, **is not implemented**. Do not use
 this as a drop-in replacement for TeX Live or production publishing.
 
 ## Build
@@ -89,11 +101,19 @@ versioned scene-artifact format, not arbitrary language programs.
 
 ## Implemented
 
-- UTF-8-preserving lexer with TeX-like escape/control word, group, comment,
-  math delimiter, parameter, superscript, subscript and space tokens.
-- Expandable macros: `\def`, `\gdef`, `\let`; scoped definitions; `#1`–`#9`
-  undelimited arguments; `\csname` and basic branching (`\iftrue`,
+- Incremental UTF-8-preserving lexer with scoped/global `\catcode` assignments
+  for character codes 0–255, active-character macros, and category-preserving
+  stored tokens. Includes escape/control word, group, comment, math delimiter,
+  parameter, superscript, subscript and space tokens.
+- Expandable macros: `\def`, `\gdef`, `\edef`, `\xdef`, `\let`; scoped definitions; `#1`–`#9`
+  undelimited and delimited arguments, literal parameter prefixes, and `#{`
+  brace delimiters; `\csname` and basic branching (`\iftrue`,
   `\iffalse`, `\ifdefined`, `\ifnum`). Processing budget limits runaway macros.
+- Shared native expansion scanner with `\noexpand`, `\expandafter`, expanded
+  `\csname` names, `\string`, `\number`, and `\romannumeral`.
+- Scoped TeX82 integer registers `\count0`–`\count255`, `\countdef` aliases,
+  `\the`, `\advance`, `\multiply`, `\divide`, and `\global` for these assignments
+  and macro definitions. Arithmetic overflow and division by zero are diagnosed.
 - Basic input inclusion, event-driven command handlers, document blocks,
   inline styles, headings, labels/references, lists and simple environments.
 - External shared library plugins: **LaTeX** (document skeleton, sectioning,
@@ -109,12 +129,12 @@ versioned scene-artifact format, not arbitrary language programs.
 
 ## Not implemented yet
 
-- Full TeX82 primitive semantics, register arithmetic, glue and boxes,
+- Full TeX82 primitive semantics, dimension/glue registers, glue and boxes,
   Knuth–Plass line breaking, page insertion/shipout, DVI, PostScript, EPUB,
-  TROFF IR, programmable active characters or mutable catcode tables.
+  TROFF IR, complete TeX input normalization and `^^` character notation.
 - True LaTeX kernel, .sty/.cls loading, NFSS, BibTeX/Biber, TikZ, tabular
   layout, proper floats, verbatim preserving comments, alignment mathematics,
-  special-case token expansion (`\edef` currently acts like `\def`), and
+  complete special-case token expansion, and
   arbitrary LaTeX package compatibility.
 - Lua/MRuby/MicroPython bindings and the advanced `inter/*.midl` IR modules.
 - Full support for the user's private third-party libraries. See

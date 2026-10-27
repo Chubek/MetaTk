@@ -28,6 +28,7 @@ public:
  std::string process(std::string_view input,std::string virtualPath = "<stdin>");
  std::string processFile(const std::filesystem::path& path);
  void define(std::string name,std::string replacement);
+ std::string call(const std::string& name,const std::vector<std::string>& arguments);
  void undef(const std::string& name);
  void includePath(std::filesystem::path path);
  void set(std::string option,std::string value);
@@ -41,6 +42,7 @@ public:
  void registerSyntax(std::string name,std::function<void(std::string_view)> handler);
  void registerPMatch(std::string name,std::function<bool(std::string_view,std::string_view)> handler);
  std::vector<Diagnostic> diagnostics() const;
+ void diagnostic(std::string message);
  std::string lastError() const;
  bool match(const std::string& engine,std::string_view pattern,std::string_view subject);
  void writeSink(const std::string& name,std::string_view content);

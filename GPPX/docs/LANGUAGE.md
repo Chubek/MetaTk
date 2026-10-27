@@ -11,6 +11,7 @@ Supported profiles:
 | `c` | `#` | `NAME`, `FUN(args)` |
 | `percent` | `%` | `NAME`, `FUN(args)` |
 | `template` | `@` | `{{NAME}}`, `{{FUN(args)}}` |
+| `jackscript` | `#` | `$(NAME)`, `$(FUN(args))` |
 
 `#syntax profile template` changes the grammar immediately; the next directive must use `@`. Individual syntax options: `directive` or `prefix`, `macro_style`/`macros`, `macro_open`, `macro_close`, `line_comment`, `block_open`, `block_close`, `expand_strings`, `strict`, `max_depth`, `max_output`, `max_includes`.
 
@@ -74,7 +75,9 @@ Literal VALUE and #directives are not processed.
 #embed "payload.bin" string
 ```
 
-Include resolution checks the containing file's directory, `-I` paths, then the current working directory; relative path resolution is predictable for nested files. `#pragma once` and `#import` prevent subsequent expansions; cycles cause errors. Raw blocks ignore all directives and expansion inside them. `#for` uses inclusive ranges and restores a previously defined variable on completion.
+Include resolution checks the containing file's directory, `-I` paths, then the current working directory; relative path resolution is predictable for nested files. `#pragma once`, `#include_once` and `#import` prevent subsequent expansions, including ordinary `#include`; cycles cause errors. Raw blocks ignore directives and expansion inside them except their nested `#raw`/`#endraw` delimiters. `#for` uses inclusive ranges and restores a previously defined variable on completion. Block terminators inside comments or nested raw/macro blocks do not close an enclosing loop.
+
+`max_depth` bounds macro expansion, nested processing blocks, and reentrant function calls. Limits must be positive decimal integers. Boolean options accept `true`/`false`, `yes`/`no`, or `1`/`0`. String embeds escape binary bytes using fixed-width octal escapes, including NUL.
 
 ## Output and diagnostics
 
@@ -84,4 +87,4 @@ Unknown directives are errors by default. `--no-strict` or `#syntax strict false
 
 ## Configuration
 
-`--config driver/config.yaml` enables a small YAML subset: `key: value` scalar settings, `include_path: path`, `plugin: path`, plus the two dash-item lists `include_paths:` and `plugins:`. Quote simple values with matching single/double quotes. Nested mappings, aliases, arbitrary escapes, and more advanced YAML types are not supported. This limitation is intentional to keep GPPX dependency-free.
+`--config driver/config.yaml` enables a small YAML subset: `key: value` scalar settings, `include_path: path`, `plugin: path`, two dash-item lists `include_paths:` and `plugins:`, and one-level `syntax:`, `options:`, and `defines:` mappings with two-space indentation. Paths are relative to the configuration file. Quote simple values with matching single/double quotes; `""` is an empty scalar. Deeper mappings, aliases, arbitrary escapes, and more advanced YAML types are not supported.

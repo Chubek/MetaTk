@@ -83,7 +83,7 @@ void config(Engine& engine,const std::filesystem::path& path) {
         auto key=trim(text.substr(0,sep));
         auto value=scalar(text.substr(sep+1),line);
         if (key.empty()) throw Error("config line "+std::to_string(line)+": empty key");
-        if (indent==0 && value.empty()) {
+        if (indent==0 && trim(text.substr(sep+1)).empty()) {
             if (key=="syntax"||key=="options"||key=="defines"||key=="plugins"||key=="include_paths") {
                 section=key;continue;
             }

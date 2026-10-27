@@ -128,6 +128,27 @@ int main(void) {
         REQUIRE(gppx_utf8_load(GPPX_TEST_DATA_PATH,&out)!=0 && !out);
         remove(GPPX_TEST_DATA_PATH);
     }
+    {
+        GPPX_Profile profile={"c",NULL,NULL};
+        const char *argv[]={"a,b"};
+        REQUIRE(gppx_profile_count()==4);
+        REQUIRE(strcmp(gppx_profile_name(3),"jackscript")==0);
+        REQUIRE(gppx_profile_name(4)==NULL);
+        REQUIRE(gppx_profile_apply(state,&profile)==0);
+        REQUIRE(gppx_function_define(state,"WRAP","x","[x]")==0);
+        REQUIRE(gppx_function_call(state,"WRAP",1,argv,&out)==0);
+        REQUIRE(equals(out,"[a,b]"));
+        REQUIRE(gppx_function_define(state,"BAD","x,x","x")!=0);
+        REQUIRE(gppx_function_call(state,"UNKNOWN",0,NULL,&out)!=0 && !out);
+        REQUIRE(gppx_function_call(state,"WRAP",-1,NULL,&out)!=0 && !out);
+        REQUIRE(gppx_jackscript_enable(state)==0);
+        REQUIRE(gppx_process(state,"#!/usr/bin/env jsc\n#define X 42\nconst X := $(WRAP($(X)));\n","demo.jcks",&out)==0);
+        REQUIRE(equals(out,"#!/usr/bin/env jsc\nconst X := [42];\n"));
+        REQUIRE(gppx_sink_write_file(GPPX_TEST_DATA_PATH,"\xEF\xBB\xBF" "#!/usr/bin/env jsc\n",22,0)==0);
+        REQUIRE(gppx_jackscript_reader(state,GPPX_TEST_DATA_PATH,&out,NULL)==0);
+        REQUIRE(equals(out,"#!/usr/bin/env jsc\n"));
+        remove(GPPX_TEST_DATA_PATH);
+    }
     gppx_destroy(state);
     printf("PASS %d C extension tests\n",count);
     return 0;

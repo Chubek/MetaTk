@@ -7,7 +7,7 @@ using namespace metatex;
 #define CHECK(x) do {if(!(x))throw std::runtime_error("check failed at line "+std::to_string(__LINE__)+": " #x);} while(false)
 bool errors(const Document& doc){for(const auto& d:doc.diagnostics)if(d.severity==Diagnostic::Severity::Error)return true;return false;}
 template<class F> void fails(F fn,const std::string& message){
-    try {fn();}catch(const std::runtime_error& ex){CHECK(std::string(ex.what()).find(message)!=std::string::npos);return;}
+    try {fn();}catch(const std::runtime_error& ex){if(std::string(ex.what()).find(message)==std::string::npos)throw std::runtime_error("expected '"+message+"', got '"+ex.what()+"'");return;}
     throw std::runtime_error("expected failure: "+message);
 }
 int main(int argc,char** argv){
@@ -50,7 +50,7 @@ int main(int argc,char** argv){
     CHECK(renderText(recursive)=="End\n\n");
     writeFile(dir/"sub"/"two.tex",R"(C\bye ignored)");
     CHECK(renderText(e.compile(R"(\input{sub/one}End)",dir/"main.tex"))=="AC\n\n");
-    fails([&]{readFile(dir/"loop.tex",3);},"input size limit");
+    fails([&]{readFile(dir/"loop.tex",3);},"input byte limit");
     fails([&]{e.compile(R"(\def\a{\textbf{\a}}\a)");},"nested execution limit");
     fails([&]{e.compile(std::string(1024,'{'));},"group nesting limit");
     CHECK(renderText(e.compile("recovered"))=="recovered\n\n");

@@ -1,5 +1,6 @@
 #pragma once
 #include <cstddef>
+#include <array>
 #include <cstdint>
 #include <deque>
 #include <filesystem>
@@ -11,6 +12,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace metatex {
@@ -21,10 +23,23 @@ struct Token {
     TokenKind kind = TokenKind::Character;
     std::string value;
     std::size_t offset = 0, line = 1, column = 1;
+    bool expansionProtected = false;
+    bool active = false;
+    int category = 12;
+    std::string controlName() const { return active?std::string(1,'\1')+value:value; }
 };
 class Lexer {
 public:
+    using Catcodes = std::array<int,256>;
+    Lexer() = default;
+    explicit Lexer(std::string source);
+    static Catcodes defaultCatcodes();
+    Token next(const Catcodes& catcodes);
     static std::vector<Token> scan(std::string_view source);
+private:
+    std::string source_;
+    std::size_t position_=0,line_=1,column_=1,emitted_=0;
+    enum class State { NewLine, MidLine, SkipSpaces } state_=State::NewLine;
 };
 
 enum class SpanKind { Text, Bold, Italic, Code, Math, Link, Image, SmallCaps, Underline };
@@ -57,6 +72,8 @@ struct Document {
 struct Macro {
     int parameters = 0;
     std::vector<Token> replacement;
+    std::vector<Token> prefix;
+    std::vector<std::vector<Token>> delimiters;
 };
 
 class Engine {
@@ -110,9 +127,18 @@ public:
 private:
     struct Environment { Handler begin, end; };
     std::unordered_map<std::string, Handler> handlers_;
+    std::unordered_set<std::string> expandablePrimitives_;
     std::unordered_map<std::string, Environment> environments_;
     std::vector<std::unordered_map<std::string, Macro>> scopes_;
     std::vector<std::unordered_map<std::string, Handler>> commandScopes_;
+    std::vector<std::unordered_map<int, int>> countScopes_;
+    std::vector<std::unordered_map<std::string, int>> countAliasScopes_;
+    bool globalAssignment_ = false;
+    Lexer::Catcodes catcodes_=Lexer::defaultCatcodes();
+    std::vector<std::unordered_map<int,int>> catcodeSaves_;
+    std::optional<Lexer> source_;
+    std::vector<bool> conditions_;
+    std::size_t conditionalFloor_=0;
     std::deque<Token> stream_;
     Document document_;
     std::filesystem::path file_;
@@ -127,15 +153,31 @@ private:
     std::string lastHeadingNumber_, lastHeadingId_;
     std::size_t headingSequence_ = 0;
     std::size_t operations_ = 0, includeDepth_ = 0, executionDepth_ = 0;
+    std::size_t expansionDepth_ = 0;
     bool stopped_ = false, endInput_ = false;
     Token current_;
     Token pop(bool skipSpace = false);
+    bool ensureToken();
+    void executeSource(std::string source);
     Token peek(bool skipSpace = false);
     bool consume(TokenKind kind);
     void run(bool nested);
     void command(const std::string& name);
     const Macro* lookup(const std::string& name) const;
     void expand(const Macro& macro);
+    bool expandToken(const Token& token);
+    Token expanded(bool skipSpace = false);
+    int scanInteger();
+    void installExpansion();
+    void installRegisters();
+    std::optional<int> countAlias(const std::string& name) const;
+    int countValue(int index) const;
+    int scanCountIndex();
+    int scanCountRegister();
+    void assignCount(int index);
+    void storeCount(int index, int value);
+    void defineCount(std::string name, int index);
+    void scanOptionalEquals();
     void installPrimitives();
     void installScripting();
     Document compileImpl(std::string source, std::filesystem::path filename, bool reset);
@@ -143,8 +185,10 @@ private:
     void beginGroup();
     void endGroup();
     void readInput();
-    void scanDefinition(bool global);
+    void scanDefinition(bool global, bool expandReplacement = false);
     void conditional(bool condition);
+    void finishConditional(bool alternative);
+    void assignCatcode();
     void processMathShift();
     void addSpace();
 };

@@ -14,4 +14,7 @@
 #include "GPPX-Layout.h"
 #include "GPPX-UTF8Input.h"
 #include "GPPX-MetaSym.h"
+#include "GPPX-Function.h"
+#include "GPPX-Profile.h"
+#include "GPPX-Jackscript.h"
 #endif

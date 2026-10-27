@@ -366,3 +366,36 @@ int gppx_metasym_undef(GPPX_State *state,const char *name_space,const char *name
     if (!state || gppx_metasym_name(name_space,name,&symbol)) return 1;
     rc=gppx_undef(state,symbol);free(symbol);return rc;
 }
+
+int gppx_function_define(GPPX_State *state,const char *name,const char *parameters,const char *body) {
+    size_t a,b;
+    char *signature;
+    int rc;
+    if (!state || !gppx_directive_valid_name(name) || !parameters || !body) return 1;
+    a=strlen(name);b=strlen(parameters);
+    if (a>SIZE_MAX-3 || b>SIZE_MAX-a-3) return 1;
+    signature=(char*)malloc(a+b+3);
+    if (!signature) return 1;
+    memcpy(signature,name,a);signature[a]='(';
+    memcpy(signature+a+1,parameters,b);signature[a+b+1]=')';signature[a+b+2]=0;
+    rc=gppx_define(state,signature,body);free(signature);return rc;
+}
+size_t gppx_profile_count(void) {return 4;}
+const char *gppx_profile_name(size_t index) {
+    static const char *const names[]={"c","percent","template","jackscript"};
+    return index<gppx_profile_count() ? names[index] : NULL;
+}
+int gppx_profile_apply(GPPX_State *state,const GPPX_Profile *profile) {
+    if (!state || !profile) return 1;
+    if (profile->base && gppx_syntax_apply_profile(state,profile->base)) return 1;
+    if (profile->directive && gppx_set_option(state,"directive",profile->directive)) return 1;
+    return profile->style ? gppx_style_apply(state,profile->style) : 0;
+}
+int gppx_jackscript_reader(GPPX_State *state,const char *path,char **output,void *userdata) {
+    (void)state;(void)userdata;
+    return gppx_utf8_load(path,output);
+}
+int gppx_jackscript_enable(GPPX_State *state) {
+    if (gppx_syntax_apply_profile(state,"jackscript")) return 1;
+    return gppx_register_reader(state,".jcks",gppx_jackscript_reader,NULL);
+}

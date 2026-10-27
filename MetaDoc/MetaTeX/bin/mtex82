@@ -1,0 +1,17 @@
+#!/bin/sh
+# Native TeX82/PlainTeX frontend, distinct from modern MetaTeX formats.
+set -eu
+self=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ -f "$self/../truth/TeXScrape/PlainTeX/Bootstrapped.sh" ]; then
+    helper="$self/../truth/TeXScrape/PlainTeX/Bootstrapped.sh"
+elif [ -f "$self/../share/texscrape/Bootstrapped.sh" ]; then
+    helper="$self/../share/texscrape/Bootstrapped.sh"
+else
+    echo 'mtex82: cannot locate TeXScrape PlainTeX helper' >&2
+    exit 2
+fi
+if [ -z "${TEXSCRAPE_TEX_ENGINE:-}" ] && [ -x "$self/../build-tex82/bin/texscrape" ]; then
+    TEXSCRAPE_TEX_ENGINE="$self/../build-tex82/bin/texscrape"
+    export TEXSCRAPE_TEX_ENGINE
+fi
+exec /bin/sh "$helper" "$@"

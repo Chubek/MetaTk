@@ -22,7 +22,7 @@ Usage: gppx [options] [input-file]
   -P, --plugin FILE      Load a native shared-library plugin
   --plugin-dir DIR        Load .so/.dylib/.dll plugins, sorted by filename
   -c, --config FILE      Load configuration (documented YAML subset)
-  --profile NAME         Syntax profile: c, percent, template
+   --profile NAME         Syntax profile: c, percent, template, jackscript
   --prefix TEXT          Override directive prefix
   --macros STYLE         bare, dollar, mustache
   --max-depth NUMBER     Macro expansion limit

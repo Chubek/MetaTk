@@ -73,6 +73,10 @@ profiles:
     directive: '@'
     macro_style: mustache
     string_expansion: false
+  jackscript:
+    directive: '#'
+    macro_style: dollar
+    string_expansion: false
 
 embed_formats:
   - hex

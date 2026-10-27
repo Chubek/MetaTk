@@ -1,0 +1,8 @@
+% Compile using the bundled PlainTeX format.
+\count100=10
+\advance\count100 by 8
+\multiply\count100 by 2
+\divide\count100 by 3
+\noindent The register contains \the\count100.\par
+\ifnum\count100=12 Arithmetic is correct.\else Arithmetic failed.\fi
+\par\bye

@@ -17,7 +17,7 @@ void help() {
  :define NAME VALUE   Define object macro (VALUE may contain spaces)
  :undef NAME          Remove object macro
  :syntax KEY VALUE    Change syntax or option
- :profile NAME        Switch profile (c, percent, template)
+  :profile NAME        Switch profile (c, percent, template, jackscript)
  :plugin PATH         Load shared plugin or plugin directory
  :config FILE         Apply a config file
  :file FILE           Process an input file

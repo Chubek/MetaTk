@@ -34,7 +34,7 @@ Row n => ADD(n,10)
 $(GREETING)'
 ```
 
-Profiles: `c` (`#directive`, bare identifier macros), `percent` (`%directive`), `template` (`@directive`, `{{MACRO}}`). Change syntax *during preprocessing* with `#syntax prefix %` or `#syntax profile template`; plugins can add syntax options.
+Profiles: `c` (`#directive`, bare identifier macros), `percent` (`%directive`), `template` (`@directive`, `{{MACRO}}`), and `jackscript` (`#directive`, `$(MACRO)`, UTF-8 `.jcks` reader). Change syntax *during preprocessing* with `#syntax prefix %` or `#syntax profile template`; plugins can add syntax options.
 
 ## Implemented features
 
@@ -108,8 +108,9 @@ supported mapping/sequence conventions.
 - `build/gppx_mylang [source.my]` demonstrates a custom language front end
   using the style, UTF-8 input and qualified-symbol helpers. With no argument,
   it prints a built-in demonstration. See [extension APIs](docs/EXTENSIONS.md).
-- [VM reference specifications](VMSpec/README.md) expand to JSON under
-  `build/VMSpec/json/`; `GPPX_BUILD_VMSPECS=OFF` disables this build target.
-  These are documented semantic subsets, not executable VM implementations.
+- `gppx --profile jackscript examples/jackscript/ReadCSV.jcks` demonstrates
+  Jackscript source preprocessing. See [Jackscript integration](docs/JACKSCRIPT.md).
+- `GPPX-Function.h` provides direct function definition/invocation;
+  `GPPX-Profile.h` provides profile enumeration and composition.
 - `sh addons/install.sh [--prefix VIM_RUNTIME_DIR]` installs the
   [Vim syntax and indentation support](addons/README.md).
