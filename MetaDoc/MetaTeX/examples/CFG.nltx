@@ -1,0 +1,15 @@
+\documentclass{article}
+\title{A Context-Free Grammar}
+\author{NekoTeX examples}
+\begin{document}
+\maketitle
+\section{Balanced parentheses}
+\concept{Nonterminal}: S. The start symbol is S.
+\codeblock{S -> (S)S | epsilon}
+\note{The empty word is accepted. Every nonempty derivation pairs an opening
+parenthesis with a closing parenthesis and leaves another balanced suffix.}
+\section{Example derivation}
+\codeblock{S -> (S)S -> ()S -> ()(S)S -> ()()S -> ()()}
+\exercise{Derive (()) and explain why (() cannot be derived.}
+\tip{Track the number of unmatched opening parentheses in each prefix.}
+\end{document}

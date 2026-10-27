@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MetaTeX.h"
+#include "MetaTeX-Device.h"
 #include <DSLtk.hpp>
 #include <cmath>
 #include <concepts>
@@ -11,7 +12,7 @@
 namespace metatex {
 
 // All renderers consume the same semantic IR, including documents built in C++.
-enum class OutputFormat { HTML, PDF, JSON, Text };
+enum class OutputFormat { HTML, PDF, JSON, Text, PostScript, TroffIR, EPUB };
 
 inline std::string render(const Document& doc, OutputFormat format) {
     switch (format) {
@@ -19,11 +20,14 @@ inline std::string render(const Document& doc, OutputFormat format) {
     case OutputFormat::PDF: return renderPDF(doc);
     case OutputFormat::JSON: return renderJSON(doc);
     case OutputFormat::Text: return renderText(doc);
+    case OutputFormat::PostScript: return renderPostScript(doc);
+    case OutputFormat::TroffIR: return renderTroffIR(doc);
+    case OutputFormat::EPUB: return renderEPUB(doc);
     }
     throw std::invalid_argument("unknown MetaTeX output format");
 }
 
-// PDF here is the in-memory basic writer; renderCairoPDF remains available for
+// PDF here is the in-memory libHaru device; renderCairoPDF remains available for
 // callers who want the optional shaped, file-based PDF backend.
 inline void writeDocument(const Document& doc, const std::filesystem::path& path,
                           OutputFormat format) {

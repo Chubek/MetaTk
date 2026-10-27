@@ -12,7 +12,7 @@ Important current bounds include:
 | Source bytes per ordinary read/scan | 16 MiB |
 | Source tokens, queued tokens, processing operations | 1,500,000 limits |
 | Nested token execution | 128 |
-| Nested expansion/integer scanning | 128 |
+| Nested expansion/numeric scanning | 128 |
 | Group scopes | 1024 including the base scope |
 | Conditional nesting | 1024 |
 | Input-file nesting | 16 |

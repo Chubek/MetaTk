@@ -1,0 +1,9 @@
+% Compile with: metatex -f plain -T pdf lua/lmtex.tex
+% The Lua host API is require('lmtex').new():compile(source, device).
+\textbf{MetaTeX from Lua}\par
+The Lua binding returns binary-safe HTML, PDF, JSON, text, PostScript,
+TROFF IR, or EPUB from the same native document model.
+\par
+\def\greeting#1{Hello, #1.}
+\greeting{Lua}
+\bye

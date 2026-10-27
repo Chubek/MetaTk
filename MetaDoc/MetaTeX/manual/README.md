@@ -28,7 +28,7 @@ compatibility and full LaTeX compatibility have not been established. Consult
 14. [Controlling expansion](14-expansion-control.md)
 15. [Constructed names and strings](15-names-and-strings.md)
 16. [Integer syntax and conversion](16-integers.md)
-17. [Integer registers](17-registers.md)
+17. [Registers and measurements](17-registers.md)
 18. [Register arithmetic](18-arithmetic.md)
 19. [Conditional input](19-conditionals.md)
 20. [Multi-file documents](20-input-files.md)

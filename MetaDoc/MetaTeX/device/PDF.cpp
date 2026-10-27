@@ -1,5 +1,9 @@
 #include "MetaTeX.h"
 #include "Vector.h"
+#include "../utils/Memory.hpp"
+#include <hpdf.h>
+#include <hpdf_doc.h>
+#include <hpdf_pages.h>
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
@@ -91,29 +95,33 @@ std::string renderPDF(const Document& doc){
         for(const auto& line:lines)p.addLine(line,font,bold,leading,left);
         if(b.kind!=BlockKind::ListItem)p.gap(b.kind==BlockKind::Paragraph?9:6);
     }
-    // 1: catalog; 2: pages; 3: regular font; 4: bold font;
-    // for page k: (5+2k): page, (6+2k): stream.
-    int count=4+2*(int)p.pages.size();
-    std::vector<std::string> objects(count+1);
-    objects[1]="<< /Type /Catalog /Pages 2 0 R >>";
-    auto pages=detail::vectorStream();
-    pages<<"<< /Type /Pages /Kids [";
-    for(std::size_t i=0;i<p.pages.size();++i)pages<<(5+2*i)<<" 0 R ";
-    pages<<"] /Count "<<p.pages.size()<<" >>";objects[2]=pages.str();
-    objects[3]="<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>";
-    objects[4]="<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>";
-    for(std::size_t i=0;i<p.pages.size();++i){
-        std::size_t pageId=5+i*2, streamId=6+i*2;
-        objects[pageId]="<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents "+std::to_string(streamId)+" 0 R >>";
-        const auto& content=p.pages[i];
-        objects[streamId]="<< /Length "+std::to_string(content.size())+" >>\nstream\n"+content+"endstream";
+    // libHaru owns PDF resources, objects, xrefs and serialization. Its low-level
+    // page-stream interface retains the native renderer's exact vector geometry.
+    // No exception crosses a C callback: failures are checked at the call site.
+    HPDF_Doc pdf=HPDF_New(nullptr,nullptr);
+    if(!pdf)throw std::runtime_error("libHaru: document allocation failed");
+    util::ScopeExit cleanup([&]{HPDF_Free(pdf);});
+    auto check=[](HPDF_STATUS status){if(status!=HPDF_OK)throw std::runtime_error("libHaru error "+std::to_string(status));};
+    pdf->pdf_version=HPDF_VER_14;
+    check(HPDF_SetCompressionMode(pdf,HPDF_COMP_NONE));
+    check(HPDF_SetInfoAttr(pdf,HPDF_INFO_CREATOR,"MetaTeX (libHaru)"));
+    auto regular=HPDF_GetFont(pdf,"Helvetica","WinAnsiEncoding");
+    auto bold=HPDF_GetFont(pdf,"Helvetica-Bold","WinAnsiEncoding");
+    if(!regular||!bold)throw std::runtime_error("libHaru: cannot load base fonts");
+    for(const auto& content:p.pages){
+        auto page=HPDF_AddPage(pdf);
+        if(!page)throw std::runtime_error("libHaru: cannot allocate page");
+        check(HPDF_Page_SetWidth(page,595));check(HPDF_Page_SetHeight(page,842));
+        const char* f1=HPDF_Page_GetLocalFontName(page,regular);
+        const char* f2=HPDF_Page_GetLocalFontName(page,bold);
+        if(!f1||!f2||std::string_view(f1)!="F1"||std::string_view(f2)!="F2")
+            throw std::runtime_error("libHaru: unexpected font resource names");
+        auto attr=static_cast<HPDF_PageAttr>(page->attr);
+        check(HPDF_Stream_WriteStr(attr->stream,content.c_str()));
     }
-    std::string result="%PDF-1.4\n%MetaTeX\n";std::vector<std::size_t> offsets(count+1);
-    for(int i=1;i<=count;i++){offsets[i]=result.size();result+=std::to_string(i)+" 0 obj\n"+objects[i]+"\nendobj\n";}
-    std::size_t xref=result.size();
-    auto trailer=detail::vectorStream();trailer<<"xref\n0 "<<count+1<<"\n0000000000 65535 f \n";
-    for(int i=1;i<=count;i++)trailer<<std::setw(10)<<std::setfill('0')<<offsets[i]<<" 00000 n \n";
-    trailer<<"trailer\n<< /Size "<<count+1<<" /Root 1 0 R >>\nstartxref\n"<<xref<<"\n%%EOF\n";
-    return result+trailer.str();
+    check(HPDF_SaveToStream(pdf));
+    HPDF_UINT32 size=HPDF_GetStreamSize(pdf);std::string result(size,'\0');
+    check(HPDF_ReadFromStream(pdf,reinterpret_cast<HPDF_BYTE*>(result.data()),&size));
+    result.resize(size);return result;
 }
 }

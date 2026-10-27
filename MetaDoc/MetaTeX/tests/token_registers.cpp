@@ -25,13 +25,14 @@ int main(){
     check(R"({\global\toksdef\words=0 }\words={OK}\the\words)","OK");
     check(R"(\toksdef\words=0 \let\saved=\words\def\words{BAD}\saved={OK}\the\saved)","OK");
     check(R"(\def\a{old}\toks0={\a}\edef\b{\the\toks0}\def\a{new}\b)","new");
+    check(R"(\def\a{old}\toks0={\a}\edef\b{\expandafter\relax\the\toks0}\def\a{new}\b)","old");
     check(R"(\toks0={\unknown}\edef\b{\the\toks0}\def\unknown{OK}\b)","OK");
     check(R"(\toks0={\def\a#1{#1}}\edef\b{\the\toks0}\b\a{OK})","OK");
     check(R"(\toks0={A}\toks0=\expandafter{\the\toks0 B}\the\toks0)","AB");
     check(R"(\toks0={A}{\xdef\saved{\the\toks0}}\saved)","A");
     check(R"(\catcode`\~=13 \def~{A}\toks0={~}\catcode`\~=12 \the\toks0~)","A~");
     check(R"(\toksdef\r=0 \r={A}{\countdef\r=0 \r=2 \the\r}\the\r)","2A");
-    for(auto source:{R"(\toks256={A})",R"(\toksdef X=0)",R"(\toks0=\count0)",R"(\toks0=A)",R"(\toks0={missing)",R"(\advance\toks0 by 1)",R"(\number\toks0)",R"(\dimen0=\toks0)",R"(\skip0=\toks0)"}){
+    for(auto source:{R"(\toks256={A})",R"(\toksdef X=0)",R"(\toks0=\count0)",R"(\toks0=A)",R"(\toks0={missing)",R"(\advance\toks0 by 1)",R"(\number\toks0)",R"(\dimen0=\toks0)",R"(\skip0=\toks0)",R"(\toks0={#1}\edef\a{\the\toks0}\edef\b{\a})"}){
         Engine engine;CHECK(errors(engine.compile(source)));
     }
     Engine engine;CHECK(!errors(engine.compileFragment(R"(\toks0={OK})")));

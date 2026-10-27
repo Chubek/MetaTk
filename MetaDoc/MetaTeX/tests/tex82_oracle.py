@@ -45,6 +45,7 @@ cases = [
     (r"\toks0={A}{\toks0={B}{\global\toks0={C}}}", r"\the\toks0", "C"),
     (r"\toksdef\words=0 \words={OK}", r"\the\words", "OK"),
     (r"\def\a{old}\toks0={\a}\edef\b{\the\toks0}\def\a{new}", r"\b", "new"),
+    (r"\def\a{old}\def\empty{}\toks0={\a}\edef\b{\expandafter\empty\the\toks0}\def\a{new}", r"\b", "old"),
     (r"\toks0={\def\a#1{#1}}\edef\b{\the\toks0}\b", r"\a{OK}", "OK"),
     (r"\toks0={A}\toks0=\expandafter{\the\toks0 B}", r"\the\toks0", "AB"),
     (r"\toksdef\words=0 \let\saved=\words\def\words{BAD}\saved={OK}", r"\the\saved", "OK"),

@@ -13,9 +13,11 @@ the CLI, dynamic plugins, interactive terminal behavior, vector rendering,
 and scripting. The manual-example target also checks its 44-chapter index and
 compiles the marked examples to all four CLI targets.
 
-`native-tex82-oracle` runs selected expansion, category-code, and integer cases
+`native-tex82-oracle` runs selected expansion, category-code, integer, and token-list cases
 independently through MetaTeX and TeXScrape INITEX, checking both against expected
-results. These comparisons need no installed TeX engine, fonts, or format
+results. The dimension and glue oracle targets additionally compare fixed-point
+rounding, physical units, formatting, and ordered glue arithmetic. These
+comparisons need no installed TeX engine, fonts, or format
 image. Broader TeXScrape Plain TeX tests use available font fixtures and may
 skip font-dependent portions when those fixtures are absent.
 

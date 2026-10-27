@@ -1,3 +1,4 @@
 #pragma once
 #include "MetaTeX.h"
-// Command registration, token expansion and macro scopes are exposed by metatex::Engine.
+// Engine preserves its registration API. Typed C++ adapters are in command/
+// (installed as metatex/command/): Native, Symbol, Extern, MML, Shell, Builtin.

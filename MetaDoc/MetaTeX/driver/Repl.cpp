@@ -1,4 +1,5 @@
 #include "Repl.h"
+#include "Driver.hpp"
 #include <replxx.hxx>
 #include <algorithm>
 #include <cerrno>
@@ -9,28 +10,6 @@
 
 namespace metatex {
 namespace {
-bool incomplete(const std::string& source){
-    int groups=0,environments=0,conditionals=0;std::string math;
-    auto tokens=Lexer::scan(source);
-    for(std::size_t i=0;i<tokens.size();++i){const auto& token=tokens[i];
-        if(token.kind==TokenKind::BeginGroup)++groups;
-        if(token.kind==TokenKind::EndGroup)--groups;
-        if(token.kind==TokenKind::MathShift){
-            std::string delimiter="$";
-            if(i+1<tokens.size()&&tokens[i+1].kind==TokenKind::MathShift){delimiter="$$";++i;}
-            if(math.empty())math=delimiter;else if(math==delimiter)math.clear();
-        }
-        if(token.kind==TokenKind::Control){
-            if(token.value=="begin")++environments;
-            if(token.value=="end")--environments;
-            if(token.value=="iftrue"||token.value=="iffalse"||token.value=="ifdefined"||token.value=="ifnum")++conditionals;
-            if(token.value=="fi")--conditionals;
-            if(token.value=="("||token.value=="[")math=token.value;
-            if(token.value==")"||token.value=="]")math.clear();
-        }
-    }
-    return groups>0||environments>0||conditionals>0||!math.empty();
-}
 bool diagnostics(const Document& doc){
     bool error=false;
     for(const auto& d:doc.diagnostics){
@@ -39,8 +18,7 @@ bool diagnostics(const Document& doc){
     }return error;
 }
 void save(const Document& doc,const std::string& output,const std::string& target){
-    if(target=="pdf"){if(!renderCairoPDF(doc,output))writeFile(output,renderPDF(doc));}
-    else writeFile(output,target=="html"?renderHTML(doc):target=="json"?renderJSON(doc):renderText(doc));
+    writeFile(output,renderDevice(doc,target));
 }
 }
 int runRepl(Engine& engine,const std::string& format,const std::string& input,const std::string& output,const std::string& target){
@@ -103,9 +81,7 @@ int runRepl(Engine& engine,const std::string& format,const std::string& input,co
                 else if(line.starts_with(":load ")){auto file=line.substr(6);evaluate(readFile(file),std::filesystem::absolute(file));}
                 else if(line.starts_with(":write ")){
                     auto file=line.substr(7);
-                    if(!input.empty()&&(std::filesystem::weakly_canonical(file)==std::filesystem::weakly_canonical(input)||
-                       (std::filesystem::exists(file)&&std::filesystem::equivalent(file,input))))
-                        throw std::runtime_error("output must not overwrite the input file");
+                    driver::checkOutputPath(input,file);
                     save(document,file,target);
                 }else throw std::runtime_error("unknown REPL command: "+line);
             }catch(const std::exception& ex){std::cerr<<"metatex: "<<ex.what()<<'\n';status=1;}
@@ -113,7 +89,7 @@ int runRepl(Engine& engine,const std::string& format,const std::string& input,co
         }
         if(pending.size()+line.size()+1>16*1024*1024){std::cerr<<"metatex: REPL input limit exceeded\n";pending.clear();explicitBlock=false;status=1;continue;}
         pending+=line+'\n';
-        try {if(explicitBlock||incomplete(pending))continue;}
+        try {if(explicitBlock||driver::incompleteSource(pending))continue;}
         catch(const std::exception& ex){std::cerr<<"metatex: "<<ex.what()<<'\n';pending.clear();status=1;continue;}
         evaluate(pending,"<repl>");pending.clear();
     }

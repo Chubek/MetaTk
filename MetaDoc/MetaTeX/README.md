@@ -4,6 +4,10 @@ Read the [44-chapter MetaTeX manual](manual/README.md) for installation,
 authoring, macros, renderers, embedding, plugins, and scripting. Its marked
 examples are exercised by the `manual-examples` CTest target.
 
+The [subsystem guide](docs/SUBSYSTEMS.md) documents the command adapters, POSIX
+IPC/network streams, FreeType/HarfBuzz font APIs, libHaru PDF device,
+PostScript/ditroff/EPUB outputs, templates, and Lua binding.
+
 **TeX82 / TeXScrape integration (new):** A genuine TeX82-to-DVI compiler is now
 implemented in `truth/TeXScrape/Working/TeX.c`. For a dependency-free build,
 use `cmake -S . -B build-tex82 -DMETATEX_TEXSCRAPE_ONLY=ON`,
@@ -24,7 +28,7 @@ can tokenize, expand a useful subset of TeX, execute external dialect plugins,
 produce a semantic document IR, and render HTML, MathML, JSON, text, and PDF.
 
 Full TeX compatibility, including TeX's page-building algorithm, complete
-`\catcode` mutations, hyphenation, Lua, font metric tables,
+`\catcode` mutations, hyphenation, LuaTeX semantics, TeX font metric tables,
 and arbitrary LaTeX packages, **is not implemented**. Do not use
 this as a drop-in replacement for TeX Live or production publishing.
 
@@ -32,7 +36,8 @@ this as a drop-in replacement for TeX Live or production publishing.
 
 On Linux with CMake >= 3.18 and a C++20 compiler, using the workspace's dynalo,
 replxx, DSLtk, MetaML/metalib and cpp-httplib sources, plus SQLite3/NNG development
-libraries (see [dependencies](docs/DEPENDENCIES.md)):
+libraries, libHaru sources, FreeType/HarfBuzz and Lua development files
+(see [dependencies](docs/DEPENDENCIES.md) and [subsystems](docs/SUBSYSTEMS.md)):
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -47,11 +52,10 @@ The CLI finds plugins beside
 its executable (or under `METATEX_PLUGIN_PATH`). Plugin loading uses **dynalo**,
 so the plugins must be built with an ABI-compatible compiler and core library.
 
-PangoCairo development packages are optional. If `pkg-config pangocairo`
-works when configuring, the PDF device uses Cairo, Pango, Fontconfig,
-FreeType, and HarfBuzz indirectly for Unicode shaping. Otherwise a built-in,
-valid PDF 1.4 writer is used, with limited fonts and Unicode glyph support.
-No library download is performed as part of the build.
+PDF output uses the workspace's libHaru library with native semantic layout,
+vector geometry, and limited base-font Unicode support. PangoCairo development
+packages optionally enable the explicit `renderCairoPDF` API. No library download
+is performed as part of the build.
 
 ## Ready-to-run local build
 
@@ -77,7 +81,7 @@ MetaVect plugin and current engine fixes.
 ```
 
 `-f` accepts `plain`, `latex`, `nekotex`; `-T` accepts `pdf`, `html`, `text`,
-`json`. Format defaults to NekoTeX for `.nltx` or LaTeX otherwise. Output
+`json`, `ps`, `troff-ir`, and `epub`. Format defaults to NekoTeX for `.nltx` or LaTeX otherwise. Output
 is PDF by default. The source path and diagnostics are printed to the terminal;
 undefined commands cause an error exit status, not silent acceptance.
 Compilation errors preserve existing output files. Input and output cannot be
@@ -112,7 +116,7 @@ versioned scene-artifact format, not arbitrary language programs.
 - Expandable macros: `\def`, `\gdef`, `\edef`, `\xdef`, `\let`; scoped definitions; `#1`–`#9`
   undelimited and delimited arguments, literal parameter prefixes, and `#{`
   brace delimiters; `\csname` and basic branching (`\iftrue`,
-  `\iffalse`, `\ifdefined`, `\ifnum`). Processing budget limits runaway macros.
+  `\iffalse`, `\ifdefined`, `\ifnum`, `\ifdim`). Processing budget limits runaway macros.
 - Shared native expansion scanner with `\noexpand`, `\expandafter`, expanded
   `\csname` names, `\string`, `\number`, and `\romannumeral`.
 - Ordered `\aftergroup` token insertion after local state restoration, and
@@ -120,6 +124,11 @@ versioned scene-artifact format, not arbitrary language programs.
 - Scoped TeX82 integer registers `\count0`–`\count255`, `\countdef` aliases,
   `\the`, `\advance`, `\multiply`, `\divide`, and `\global` for these assignments
   and macro definitions. Arithmetic overflow and division by zero are diagnosed.
+- Scoped dimension (`\dimen`), glue (`\skip`), and token-list (`\toks`) registers
+  with typed aliases and global assignment. Dimensions use exact scaled points
+  and nine physical units; glue includes finite and `fil`/`fill`/`filll` orders.
+  Token lists retain unexpanded tokens, including when copied by `\the` into
+  expanded definitions. Numeric register arithmetic is checked before storage.
 - Basic input inclusion, event-driven command handlers, document blocks,
   inline styles, headings, labels/references, lists and simple environments.
 - External shared library plugins: **LaTeX** (document skeleton, sectioning,
@@ -135,14 +144,14 @@ versioned scene-artifact format, not arbitrary language programs.
 
 ## Not implemented yet
 
-- Full TeX82 primitive semantics, dimension/glue registers, glue and boxes,
-  Knuth–Plass line breaking, page insertion/shipout, DVI, PostScript, EPUB,
-  TROFF IR, and complete TeX input normalization including `\endlinechar`.
+- Full TeX82 primitive semantics, box/math-glue registers, glue/box layout,
+  Knuth–Plass line breaking, page insertion/shipout, native DVI emission,
+  and complete TeX input normalization including `\endlinechar`.
 - True LaTeX kernel, .sty/.cls loading, NFSS, BibTeX/Biber, TikZ, tabular
   layout, proper floats, verbatim preserving comments, alignment mathematics,
   complete special-case token expansion, and
   arbitrary LaTeX package compatibility.
-- Lua/MRuby/MicroPython bindings and the advanced `inter/*.midl` IR modules.
+- LuaTeX semantics, MRuby/MicroPython bindings and the advanced `inter/*.midl` IR modules.
 - Full support for the user's private third-party libraries. See
   `docs/DEPENDENCIES.md` for the integration status.
 

@@ -7,7 +7,10 @@ The native implementation is organized around a few public contracts:
 | `core/Lexer.cpp` | UTF-8 validation, incremental tokenization, category lookup |
 | `core/Engine.cpp` | Source frames, macro arguments, grouping, semantic execution |
 | `core/Expansion.cpp` | Expandable primitives and integer scanning |
-| `core/Registers.cpp` | Count registers, arithmetic, category assignments |
+| `core/Registers.cpp` | Typed register banks, aliases, scopes, arithmetic, category assignments |
+| `core/Dimensions.cpp` | Fixed-point distance scanning, conversion, and printing |
+| `core/Glue.cpp` | Glue scanning, formatting, and ordered arithmetic |
+| `core/TokenRegisters.cpp` | Immutable token-list storage and assignments |
 | `core/Math.cpp` | Supported math-source conversion |
 | `device/` | Rendering and DVI validation helpers |
 | `plugins/` | LaTeX, NekoTeX, and MetaVect handlers |

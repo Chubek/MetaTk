@@ -16,7 +16,8 @@ identity. An invocation with too few arguments produces a diagnostic.
 
 Use `\gdef` for a global definition. `\let` copies an existing macro's current
 replacement and parameter structure, rather than referring to future
-redefinitions of that macro. General aliases to every primitive meaning are
+redefinitions of that macro. It also preserves the identities of register
+aliases. General aliases to every primitive meaning are
 not yet complete; restrict portability assumptions about `\let` accordingly.
 
 When defining a macro inside another macro's replacement, double the parameter

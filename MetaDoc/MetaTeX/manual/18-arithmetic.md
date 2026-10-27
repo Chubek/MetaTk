@@ -1,9 +1,9 @@
 # 18 — Register arithmetic
 
-`\advance`, `\multiply`, and `\divide` operate on a count register or count
-alias. The optional keyword `by` is case-insensitive. Their operands use the
-ordinary integer scanner, so macros, signs, radix prefixes, and other count
-registers can supply values.
+`\advance`, `\multiply`, and `\divide` operate on count, dimension, or glue
+registers and their aliases. The optional keyword `by` is case-insensitive.
+For counts, operands use the ordinary integer scanner, so macros, signs,
+radix prefixes, and other count registers can supply values.
 
 <!-- metatex-example {"format":"plain","text":"-7"} -->
 ```tex
@@ -24,10 +24,31 @@ division by zero emits an error and preserves the destination register's
 previous value. This preservation is specific to the failed arithmetic
 operation, not a rollback of earlier commands in the compilation.
 
-The range is symmetric about zero and excludes the most-negative signed
+The count range is symmetric about zero and excludes the most-negative signed
 32-bit machine value. This avoids negation and division corner cases and
 matches the intended TeX integer range. Use an external calculation or a
 MetaML command for values outside that range, then insert validated textual
 results rather than relying on wraparound.
+
+For dimensions, `\advance` scans a distance, while `\multiply` and `\divide`
+scan an integer factor. Arithmetic is performed in scaled points; division
+truncates toward zero at scaled-point precision. The magnitude limit is
+1073741823sp, and an overflowing operation leaves the prior value intact.
+
+Glue multiplication and division act on width, stretch, and shrink together,
+preserving their orders. Addition sums widths. Stretch and shrink are combined
+separately: equal orders add, and the higher nonzero order dominates when
+orders differ. Zero components do not override a nonzero component's order.
+
+<!-- metatex-example {"format":"plain","text":"3.0pt plus 2.0fil"} -->
+```tex
+\skip0=1pt plus 2fil\relax
+\advance\skip0 by 2pt plus 4pt\relax
+\the\skip0
+```
+
+All glue components are checked before committing a result. Overflow in just
+the stretch or shrink component preserves the complete previous glue value.
+Arithmetic on token-list registers is diagnosed rather than silently ignored.
 
 [Contents](README.md)

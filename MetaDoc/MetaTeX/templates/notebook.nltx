@@ -1,0 +1,10 @@
+\documentclass{article}
+\title{Untitled notebook}
+\author{Author}
+\begin{document}
+\maketitle
+\section{Notes}
+\note{Record an observation here.}
+\exercise{Write a question to investigate.}
+\tip{Explain the next step.}
+\end{document}

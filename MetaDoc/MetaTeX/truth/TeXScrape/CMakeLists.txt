@@ -23,9 +23,16 @@ install(TARGETS texscrape-dvi RUNTIME DESTINATION bin)
 # Binary readers/sinks are reusable MetaTeX subsystems, tested without plugins.
 add_library(metatex_streams STATIC
   ../../reader/File.cpp ../../reader/STDIN.cpp ../../reader/Pipe.cpp
-  ../../reader/MemoryMap.cpp ../../sink/IOSinks.cpp)
+  ../../reader/MemoryMap.cpp ../../reader/FIFO.cpp ../../reader/SharedMemory.cpp
+  ../../reader/MSGQueue.cpp ../../reader/Socket.cpp ../../sink/IOSinks.cpp
+  ../../sink/IPCSinks.cpp ../../sink/NetworkSinks.cpp)
 target_compile_features(metatex_streams PUBLIC cxx_std_20)
 target_include_directories(metatex_streams PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/../../include")
+find_package(Threads REQUIRED)
+target_link_libraries(metatex_streams PUBLIC Threads::Threads)
+if(UNIX AND NOT APPLE)
+  target_link_libraries(metatex_streams PUBLIC rt)
+endif()
 
 install(TARGETS texscrape RUNTIME DESTINATION bin)
 install(PROGRAMS PlainTeX/Bootstrapped.sh DESTINATION share/texscrape)

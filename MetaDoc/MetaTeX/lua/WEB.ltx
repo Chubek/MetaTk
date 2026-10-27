@@ -1,0 +1,15 @@
+\documentclass{article}
+\title{A Literate Lua Host}
+\author{MetaTeX examples}
+\begin{document}
+\maketitle
+\section{The document interface}
+A host creates an engine with \texttt{lmtex.new()} and passes source to
+\texttt{engine:compile(source, device)}. The returned string is binary-safe.
+\section{Persistent fragments}
+Use \texttt{engine:fragment(source, device)} to keep definitions between
+submissions. A full compilation starts a fresh document.
+\section{Errors and ownership}
+Compilation errors return nil and diagnostic text. The engine is collected
+automatically; \texttt{engine:close()} also releases it explicitly.
+\end{document}

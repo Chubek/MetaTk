@@ -15,7 +15,8 @@ basis; generated files and documentation are not substitutes for execution.
 | Native MetaTeX C++ semantic engine | **Builds with workspace dependencies; still a subset** | Native core, plugins, CLI, and renderer tests; macro parameter scanning extended against TeXScrape's `macrocall`/`scantoks` |
 | LaTeX and NekoTeX plugins | **Pre-existing subsets, not complete formats** | Original plugin source retained |
 | Unicode/OpenType shaping, TeX82 extensions, e-TeX, XeTeX/LuaTeX | **Not implemented in TeXScrape** | TeX82 uses an 8-bit font model |
-| Empty MetaTeX IR, network/IPC, fonts, alternate outputs | **Not implemented** | Empty scaffolds are retained rather than filled with invented functionality |
+| Native network/IPC, font APIs, alternate outputs and Lua binding | **Implemented for documented subset APIs** | See `docs/SUBSYSTEMS.md`; real transport, font/shaping and output-device integration cases |
+| Advanced MIDL IR and QS/TeXpresso modules | **Awaiting existing language specifications** | User selected existing toolchains; compiler/grammar paths have not yet been supplied |
 | Official TRIP compatibility / full LaTeX2e regression coverage | **Not established** | Needs original TRIP fixtures and broad compatibility suite |
 
 ## Fixed defects in TeXScrape's previously revised C port
@@ -77,7 +78,8 @@ constants. Expansion depth and processing budgets bound recursive input.
 assignments, `\countdef`, arithmetic, and global assignments. Arithmetic uses
 checked intermediates and preserves register contents on arithmetic overflow
 or division by zero. Registers persist across REPL fragments and reset for a
-new compilation. Dimension, glue, token-list, and box registers are still absent.
+new compilation. The typed register extensions below now add dimensions,
+glue, and token lists. Box and math-glue registers remain absent.
 
 CTest targets `expansion-scanner` and `integer-registers` assert exact IR,
 HTML, and PDF output as well as diagnostics and recovery. `native-tex82-oracle`
@@ -104,7 +106,7 @@ The public `Lexer::scan` helper remains available with default categories.
 `incremental-catcodes` checks IR/HTML/PDF output, local/global restoration,
 active characters, macro token preservation, conditional branches, included
 files, REPL state, malformed assignments, and category-sensitive delimiters.
-The native/reference test now covers 30 shared cases. Full TeX input handling
+The native/reference test now covers 39 shared cases. Full TeX input handling
 is still incomplete: `\endlinechar`, configurable Unicode
 categories above 255, and category-aware external script insertion remain
 outstanding. Source NUL bytes are intentionally still rejected.
@@ -128,7 +130,7 @@ exact source, document IR, HTML, PDF text, errors, and scanner positions.
 
 `manual/README.md` indexes 44 authored chapters covering the native application,
 language, outputs, APIs, extension interfaces, verification, and actual limits.
-`manual-examples` validates the chapter sequence and links and compiles 32 marked
+`manual-examples` validates the chapter sequence and links and compiles 37 marked
 examples into all four CLI formats. The manual, supporting guides, and this
 status report are installed together under `share/doc/metatex`.
 
@@ -136,3 +138,33 @@ The native implementation is still incomplete. Typed TeX layout, remaining
 register classes, full mathematical/page construction, general LaTeX package
 loading, native DVI emission, and full compatibility validation have not been
 completed by these additions or by documenting them.
+
+## Typed registers and exact measurements
+
+Native registers now share a typed, group-scoped bank with separate 256-slot
+spaces for counts, dimensions, glue, and token lists. `\dimendef`, `\skipdef`,
+and `\toksdef` install aliases. Global assignments and aliases override saved
+local meanings; `\let` preserves a register alias's identity. Token-list
+backing storage is immutable and shared across copies.
+
+`core/Dimensions.cpp` implements decimal/comma fractions, physical units
+`pt`, `sp`, `in`, `pc`, `cm`, `mm`, `bp`, `dd`, `cc`, internal quantities,
+and exact fixed-point printing. `\ifdim` compares the resulting scaled points.
+`dimension-tex82-oracle` compares 74 cases against TeXScrape, including rounding
+boundaries, conversions, negative quantities, and arithmetic. Font-relative
+units, magnification/true units, and layout integration are not implemented.
+
+`core/Glue.cpp` implements natural width, stretch, shrink, and infinite orders
+through `filll`, with checked addition, multiplication, and division. Higher
+nonzero orders dominate lower orders. `glue-tex82-oracle` compares 38 cases
+against TeXScrape. Glue storage is not evidence of a working TeX line breaker.
+
+`core/TokenRegisters.cpp` implements unexpanded assignment and copying.
+`\the` inserts stored tokens normally, but copies them verbatim into an
+expanded definition, retaining control sequences and literal parameter tokens.
+Numeric use and arithmetic on token lists are diagnosed.
+
+The `dimension-registers`, `glue-registers`, and `token-registers` CTest targets
+assert exact source, IR, HTML, PDF text, scoping, errors, and recovery. The
+manual's existing chapters now document these features with executable examples;
+the chapter count remains 44.

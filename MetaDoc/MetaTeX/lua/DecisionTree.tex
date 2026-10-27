@@ -1,0 +1,7 @@
+% A decision tree expressed with native TeX conditionals.
+\textbf{A small decision tree}\par
+\def\classify#1{\ifnum#1<0 negative\else\ifnum#1=0 zero\else positive\fi\fi}
+Input -4 is \classify{-4}.\par
+Input 0 is \classify{0}.\par
+Input 7 is \classify{7}.\par
+\bye

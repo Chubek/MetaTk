@@ -3,15 +3,17 @@
 The native engine is a useful, tested semantic-document subset. It is not yet
 a complete TeX82 or LaTeX implementation. Working areas include incremental
 category scanning, active characters, macro parameters and expanded
-definitions, integer registers, selected conditionals, semantic document
+definitions, integer/dimension/glue/token-list registers, selected conditionals, semantic document
 plugins, four renderers, vector scenes, and scripting.
 
-Substantial unfinished areas include dimension/glue/token/box registers,
+Substantial unfinished areas include box and math-glue registers,
 typed box–glue–penalty layout, Knuth–Plass line breaking, TeX hyphenation and
 page building, full math layout, complete primitive meanings and conditionals,
 general LaTeX kernel/package loading, and native DVI emission from `Document`.
 Input normalization still lacks `\endlinechar`; full Unicode category tables
 and category-aware generated-source insertion are also outstanding.
+Dimension scanning currently covers physical units and internal quantities;
+font-relative units and magnification still require implementation.
 
 | Symptom | First checks |
 |---|---|
