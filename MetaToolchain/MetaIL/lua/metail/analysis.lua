@@ -1,6 +1,51 @@
 local ir=require('metail.ir')
 local numeric=require('metanum')
 local A={}
+-- Facts describe values on successful evaluation. `pure` additionally proves
+-- evaluation is safe to discard: no calls and no possible traps. In particular,
+-- knowing the result of (tick() & 0) does not permit deleting tick().
+function A.integer_facts(n,env,cache)
+  env=env or {};cache=cache or {}
+  if cache[n] then return cache[n] end
+  local native=require('weighstone_native')
+  local f
+  if n.tag=='int' then
+    f={lo=n.value,hi=n.value,zero=~n.value,one=n.value,pure=true,total=true}
+  elseif n.tag=='var' then
+    f=ir.copy(env[n.name] or {lo=math.mininteger,hi=math.maxinteger,zero=0,one=0})
+    f.pure=true;f.total=true -- reading a previously computed local is total
+  elseif n.tag=='call' then
+    f={lo=math.mininteger,hi=math.maxinteger,zero=0,one=0,pure=false,total=true}
+  else
+    local a=A.integer_facts(n.args[1],env,cache)
+    local b=n.args[2] and A.integer_facts(n.args[2],env,cache)
+    if n.op=='select' then
+      local c=A.integer_facts(n.args[3],env,cache)
+      if a.lo==0 and a.hi==0 then f=ir.copy(c);f.pure=a.pure and c.pure
+      elseif a.lo>0 or a.hi<0 or a.one~=0 then f=ir.copy(b);f.pure=a.pure and b.pure
+      else f=native.transfer('join',b,c);f.pure=a.pure and b.pure and c.pure end
+    else
+      f=native.transfer(n.op,a,b)
+      f.pure=f.total and a.pure and (not b or b.pure)
+    end
+  end
+  cache[n]=f
+  return f
+end
+-- Facts never cross a label/terminator: this is intentionally not an SSA or
+-- fixed-point CFG analysis. Reassignment replaces the old value's facts.
+function A.integer_scan(fn,visit)
+  local env={}
+  for index,s in ipairs(fn.statements) do
+    if s.kind=='label' then env={} end
+    if s.expr then
+      local facts=A.integer_facts(s.expr,env)
+      visit(s,index,facts,env)
+      if s.kind=='let' then env[s.name]=A.integer_facts(s.expr,env) end
+    end
+    if s.kind=='goto' or s.kind=='br' or s.kind=='return' then env={} end
+  end
+end
 local statistics={
   Mean={op='mean',minimum=1},
   SampleVariance={op='variance',sample=true,minimum=2},
@@ -17,7 +62,7 @@ maximum-expression-depth literal-histogram variable-uses definitions unused-defi
 call-graph impure-call-sites cfg reachable-blocks unreachable-blocks dominators postdominators
 liveness reaching-definitions natural-loops critical-edges cyclomatic-complexity loop-headers
 block-def-use expression-redundancy constant-branches literal-range parameter-uses branch-targets
-terminal-blocks opcode-histogram statement-histogram expression-purity numeric-statistic]=]):gmatch('%S+') do
+terminal-blocks opcode-histogram statement-histogram expression-purity numeric-statistic integer-facts]=]):gmatch('%S+') do
   kinds[name]=true
 end
 function A.validate(cfg)
@@ -278,7 +323,18 @@ end
 function A.run(program,cfg)
   A.validate(cfg)
   local kind=cfg.kind;local result
-  if kind=='numeric-statistic' then
+  if kind=='integer-facts' then
+    result={}
+    for _,f in ipairs(program.functions) do
+      local entries={}
+      A.integer_scan(f,function(s,index,facts)
+        entries[#entries+1]={statement=index,expression=ir.format(s.expr),
+          min=facts.lo,max=facts.hi,known_zero=facts.zero,known_one=facts.one,
+          discardable=facts.pure}
+      end)
+      result[f.name]=entries
+    end
+  elseif kind=='numeric-statistic' then
     result={}
     local spec=statistics[cfg.statistic]
     for _,f in ipairs(program.functions) do

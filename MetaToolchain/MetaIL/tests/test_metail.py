@@ -19,13 +19,13 @@ def run(*args, ok=True):
         assert p.returncode != 0, (args, p.stdout, p.stderr)
     return p.stdout
 
-assert '321 Optikern kernels' in run('kernels')
+assert '327 Optikern kernels' in run('kernels')
 all_kernels = json.loads(run('kernels','--json'))
-assert all_kernels['count'] == 321
-assert len({k['name'] for k in all_kernels['kernels']}) == 321
-assert sum(k['kind'] == 'analysis' for k in all_kernels['kernels']) == 84
+assert all_kernels['count'] == 327
+assert len({k['name'] for k in all_kernels['kernels']}) == 327
+assert sum(k['kind'] == 'analysis' for k in all_kernels['kernels']) == 85
 assert sum(k['kind'] == 'rewrite' for k in all_kernels['kernels']) == 230
-assert sum(k['kind'] == 'builtin' for k in all_kernels['kernels']) == 7
+assert sum(k['kind'] == 'builtin' for k in all_kernels['kernels']) == 12
 names=[k['name'] for k in all_kernels['kernels']]
 assert names == sorted(names)
 for kernel in all_kernels['kernels']:
@@ -160,4 +160,4 @@ assert a['NaturalLoops']['main']==[], a
 op_counts=json.loads(run('analyze', root/'examples/arithmetic.mi', '--passes', 'CountAddOperations,CountMulOperations'))
 assert op_counts['analyses']['CountAddOperations']['count']>=2
 assert op_counts['analyses']['CountMulOperations']['count']>=2
-print('OK: 321 kernels, 230 rewrite equivalence tests, 24 numeric analyses, parser/IR, CFG/dataflow, effects/traps, CLI')
+print('OK: 327 kernels, 230 rewrite equivalence tests, 24 numeric analyses, parser/IR, CFG/dataflow, effects/traps, CLI')

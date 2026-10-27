@@ -43,6 +43,7 @@ static int initialize(lua_State *L) {
     luaL_openlibs(L);
     lkopt_register(L);
     luaL_requiref(L,"metanum_native",luaopen_metanum_native,0);
+    luaL_requiref(L,"weighstone_native",luaopen_weighstone_native,0);
     lua_settop(L,1);
     lua_pushstring(L,c->root);lua_setglobal(L,"_METAIL_ROOT");
     lua_getglobal(L,"package");

@@ -1,0 +1,4 @@
+-- Weighstone-backed signed-64 optimization.
+local K = lkopt.optimizer.new "WeighstoneKnownBits"
+K:metadata { description = "Propagate fixed-width known bits; fold constants and remove redundant masks.", tags = { "weighstone", "integer-facts" } }
+K:builtin "weighstone-known-bits"

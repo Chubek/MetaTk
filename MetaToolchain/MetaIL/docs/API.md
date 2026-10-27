@@ -129,7 +129,7 @@ must not be destroyed by the caller. Moved-from contexts reject operations.
 ## Requesting kernels
 
 `KernelRegistry` snapshots declarations loaded by `lkopt`, rather than guessing
-registered names from filenames. The registry initially loads the 321 bundled
+registered names from filenames. The registry initially loads the 327 bundled
 kernels; invalid declarations cause loading to fail. Additional directories may
 be registered using `Context::load_kernels`, followed by `registry.refresh(context)`.
 Duplicate names and failed directory loads roll back that directory's additions.

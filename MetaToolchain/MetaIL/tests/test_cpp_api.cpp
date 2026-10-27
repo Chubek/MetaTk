@@ -12,7 +12,7 @@ int main(int argc, char **argv) {
         CHECK(argc==3);
         metail::Context context(argv[1]);
         metail::KernelRegistry registry(context);
-        CHECK(registry.size()==321 && registry.search().size()==321);
+        CHECK(registry.size()==327 && registry.search().size()==327);
         CHECK(registry.find("AddZeroRight") && !registry.find("addzeroright"));
         const auto file=registry.request(std::string("AddZeroRight"));
         CHECK(file.contents.find("add($x,0)")!=std::string::npos);
@@ -51,15 +51,15 @@ K:metadata { description = "Custom embedded pass", keywords = {"widget"},
 )optk"; }
         moved.load_kernels(temp.string());
         registry.refresh(moved);
-        CHECK(registry.size()==322);
+        CHECK(registry.size()==328);
         query={};query.keywords="WIDGET";query.tags={"PROJECT"};query.use="reduce cost";
         matches=registry.search(query);
         CHECK(matches.size()==1 && matches[0].name=="CustomIdentity");
         CHECK(matches[0].path==std::filesystem::absolute(custom));
         CHECK(moved.optimize("fn f(x) { return x+0; }",registry.passes(matches)).source.find("return x;")!=std::string::npos);
         rejects([&] { moved.load_kernels(temp.string()); }); // duplicate is transactional
-        CHECK(metail::KernelRegistry(moved).size()==322);
-        metail::Context independent(argv[1]);CHECK(metail::KernelRegistry(independent).size()==321);
+        CHECK(metail::KernelRegistry(moved).size()==328);
+        metail::Context independent(argv[1]);CHECK(metail::KernelRegistry(independent).size()==327);
         std::filesystem::remove(custom);
         rejects([&] { registry.request(std::string("CustomIdentity")); });
         { std::ofstream out(custom);out<<R"optk(local K = lkopt.optimizer.new "RolledBack"
@@ -67,7 +67,7 @@ K:rewrite { pattern = "add($x,0)", replace = "$x" }
 K:metadata { tags = {"bad\ntag"} }
 )optk"; }
         rejects([&] { moved.load_kernels(temp.string()); });
-        CHECK(metail::KernelRegistry(moved).size()==322);
+        CHECK(metail::KernelRegistry(moved).size()==328);
         std::filesystem::remove(custom);
         std::filesystem::remove(temp);
         // The registry is independent of the runtime which created it.

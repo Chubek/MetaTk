@@ -62,6 +62,7 @@ int metail_lua_main(int argc, char **argv) {
     luaL_openlibs(L);
     lkopt_register(L);
     luaL_requiref(L,"metanum_native",luaopen_metanum_native,0);
+    luaL_requiref(L,"weighstone_native",luaopen_weighstone_native,0);
     lua_settop(L,0);
     lua_pushstring(L,root); lua_setglobal(L,"_METAIL_ROOT");
     lua_createtable(L,argc,0);

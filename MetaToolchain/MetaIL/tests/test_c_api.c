@@ -33,19 +33,25 @@ int main(int argc, char **argv) {
     CHECK(strstr(text,"/ 0") && strstr(text,"* 0"));metail_free(text);
     CHECK(metail_optimize(c,"fn f() { return 9223372036854775807 + 1; }",NULL,"ConstantFolding",1,&text,NULL)==METAIL_OK);
     CHECK(strstr(text,"-9223372036854775808"));metail_free(text);
+    CHECK(metail_optimize(c,"fn f(x) { return (x & 511) < 512; }",NULL,
+        "WeighstoneRanges",1,&text,&stats)==METAIL_OK);
+    CHECK(strstr(text,"return 1;") && strstr(stats,"\"WeighstoneRanges\":1"));
+    metail_free(text);metail_free(stats);
+    CHECK(metail_analyze(c,"fn f(x) { return x & 511; }",NULL,"WeighstoneIntegerFacts",&text)==METAIL_OK);
+    CHECK(strstr(text,"\"max\":511") && strstr(text,"\"discardable\":true"));metail_free(text);
     CHECK(metail_analyze(c,"fn f(x) { return x+1; }",NULL,"InstructionCount",&text)==METAIL_OK);
     CHECK(strstr(text,"InstructionCount"));metail_free(text);
     CHECK(metail_analyze(c,"fn f() {}",NULL,"AddZeroRight",&text)==METAIL_RUNTIME_ERROR && !text);
     CHECK(metail_analyze(c,"fn f() {}",NULL,"",&text)==METAIL_RUNTIME_ERROR && !text);
     CHECK(metail_analyze(c,"fn f() {}",NULL,"InstructionCount,",&text)==METAIL_RUNTIME_ERROR && !text);
     size_t count=0;
-    CHECK(metail_kernel_count(c,&count)==METAIL_OK && count==321);
+    CHECK(metail_kernel_count(c,&count)==METAIL_OK && count==327);
     metail_kernel_info info;
     CHECK(metail_kernel_get(c,count,&info)==METAIL_RUNTIME_ERROR && !info.name);
     CHECK(metail_kernel_get(c,0,&info)==METAIL_OK && info.name && strstr(info.path,".optk"));
-    CHECK(metail_kernels_json(c,&text)==METAIL_OK && strstr(text,"\"count\":321"));metail_free(text);
+    CHECK(metail_kernels_json(c,&text)==METAIL_OK && strstr(text,"\"count\":327"));metail_free(text);
     CHECK(metail_load_kernels(c,"/nonexistent/metail")==METAIL_RUNTIME_ERROR);
-    CHECK(metail_kernel_count(c,&count)==METAIL_OK && count==321);
+    CHECK(metail_kernel_count(c,&count)==METAIL_OK && count==327);
     CHECK(metail_check(c,NULL,NULL)==METAIL_INVALID_ARGUMENT);
     CHECK(metail_check(NULL,"fn f() {}",NULL)==METAIL_INVALID_ARGUMENT);
     CHECK(metail_emit(c,"fn f() {}",NULL,NULL)==METAIL_INVALID_ARGUMENT);

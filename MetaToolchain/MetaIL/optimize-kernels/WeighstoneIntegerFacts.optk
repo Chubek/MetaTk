@@ -1,0 +1,4 @@
+-- Executable, block-local reduced-product analysis.
+local K = lkopt.optimizer.new "WeighstoneIntegerFacts"
+K:metadata { tags = { "weighstone", "integer-facts", "dataflow" } }
+K:analysis { kind = "integer-facts" }

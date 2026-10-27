@@ -1,0 +1,253 @@
+schema: weighstone.manifest.v1
+project: Weighstone
+component: CCINT
+version: 0.1.0
+language: C++20
+distribution: header-only
+requires:
+  - Boost.Multiprecision headers
+optional_backends_integrated: []
+files:
+  - path: '.github/workflows/ci.yml'
+    purpose: 'Continuous integration compilation and CTest execution'
+    status: implemented-or-documentation
+  - path: '.gitignore'
+    purpose: 'Ignore local build and cache outputs'
+    status: implemented-or-documentation
+  - path: 'AGENTS.md'
+    purpose: 'Implementation and review instructions for automated and human contributors'
+    status: implemented-or-documentation
+  - path: 'CMakeLists.txt'
+    purpose: 'CMake interface library, example target and CTest regression executable'
+    status: implemented-or-documentation
+  - path: 'LICENSE'
+    purpose: 'MIT distribution terms'
+    status: implemented-or-documentation
+  - path: 'MANIFEST.yaml'
+    purpose: 'File-by-file repository inventory, purpose and implementation status'
+    status: generated-inventory
+  - path: 'README.md'
+    purpose: 'Project introduction, compile instructions, implemented scope and limitations'
+    status: implemented-or-documentation
+  - path: 'examples/basic.cpp'
+    purpose: 'Standalone range and machine-integer usage example'
+    status: implemented-or-documentation
+  - path: 'examples/loop_tensor.cpp'
+    purpose: 'Runnable tensor bounds, dependence legality and partial loop tiling example'
+    status: implemented-or-documentation
+  - path: 'include/Weighstone/CCINT.hpp'
+    purpose: 'Umbrella include exposing all implemented CCINT headers'
+    status: implemented-or-documentation
+  - path: 'include/Weighstone/CCINT/Abstract.hpp'
+    purpose: 'Interval-congruence product with one-sided, singleton and bottom reduction'
+    status: implemented-or-documentation
+  - path: 'include/Weighstone/CCINT/Affine.hpp'
+    purpose: 'Validated ordered affine maps, evaluation and positional composition'
+    status: implemented-or-documentation
+  - path: 'include/Weighstone/CCINT/BigInt.hpp'
+    purpose: 'Boost-based exact integer alias, integer division and GCD/LCM operations'
+    status: implemented-or-documentation
+  - path: 'include/Weighstone/CCINT/BitVector.hpp'
+    purpose: 'Fixed-width modular integers, signed interpretation, shifts and rotates'
+    status: implemented-or-documentation
+  - path: 'include/Weighstone/CCINT/Checked.hpp'
+    purpose: 'Signed/unsigned overflow-aware addition, subtraction and multiplication'
+    status: implemented-or-documentation
+  - path: 'include/Weighstone/CCINT/Congruence.hpp'
+    purpose: 'Modular-congruence lattice operations and meet using CRT'
+    status: implemented-or-documentation
+  - path: 'include/Weighstone/CCINT/Constraints.hpp'
+    purpose: 'Conservative proof of affine constraints from interval bounds'
+    status: implemented-or-documentation
+  - path: 'include/Weighstone/CCINT/Graph.hpp'
+    purpose: 'Dependence graphs with loop permutation and parallel-axis legality queries'
+    status: implemented-or-documentation
+  - path: 'include/Weighstone/CCINT/Interval.hpp'
+    purpose: 'Unbounded/bounded intervals with lattice and arithmetic operators'
+    status: implemented-or-documentation
+  - path: 'include/Weighstone/CCINT/KnownBits.hpp'
+    purpose: 'Definite-zero and definite-one bitmask analysis operations'
+    status: implemented-or-documentation
+  - path: 'include/Weighstone/CCINT/Linear.hpp'
+    purpose: 'Sparse affine expressions and interval range evaluation'
+    status: implemented-or-documentation
+  - path: 'include/Weighstone/CCINT/Loop.hpp'
+    purpose: 'Signed counted loops, tiling, ordinal nests and bounded affine memory dependences'
+    status: implemented-or-documentation
+  - path: 'include/Weighstone/CCINT/Matrix.hpp'
+    purpose: 'Exact integer matrix determinant via Bareiss elimination'
+    status: implemented-or-documentation
+  - path: 'include/Weighstone/CCINT/NumberTheory.hpp'
+    purpose: 'Extended GCD, modular inverse, generalized CRT and divisibility'
+    status: implemented-or-documentation
+  - path: 'include/Weighstone/CCINT/Polyhedron.hpp'
+    purpose: 'Integer affine sets, budgeted elimination, enumeration and conservative constraint proofs'
+    status: implemented-or-documentation
+  - path: 'include/Weighstone/CCINT/Proof.hpp'
+    purpose: 'Conservative mathematical integer equality query'
+    status: implemented-or-documentation
+  - path: 'include/Weighstone/CCINT/Rational.hpp'
+    purpose: 'Normalized exact rational arithmetic'
+    status: implemented-or-documentation
+  - path: 'include/Weighstone/CCINT/Recurrence.hpp'
+    purpose: 'Mathematical affine induction recurrence and strict/inclusive signed-direction trip counts'
+    status: implemented-or-documentation
+  - path: 'include/Weighstone/CCINT/Symbolic.hpp'
+    purpose: 'Immutable expression trees and small algebraic normalizer'
+    status: implemented-or-documentation
+  - path: 'include/Weighstone/CCINT/Tensor.hpp'
+    purpose: 'Exact tensor shapes, strided layouts, broadcasting, reshape and affine index bounds'
+    status: implemented-or-documentation
+  - path: 'manual/CCINT.md'
+    purpose: 'CCINT 40-chapter manual index, conventions and scope'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/01-design-goals.md'
+    purpose: 'Manual chapter 1: Design Goals; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/02-c-20-setup.md'
+    purpose: 'Manual chapter 2: C++20 Setup; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/03-mathematical-vs-machine-integers.md'
+    purpose: 'Manual chapter 3: Mathematical vs Machine Integers; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/04-big-integers.md'
+    purpose: 'Manual chapter 4: Big Integers; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/05-division-and-remainders.md'
+    purpose: 'Manual chapter 5: Division and Remainders; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/06-gcd-and-lcm.md'
+    purpose: 'Manual chapter 6: GCD and LCM; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/07-extended-euclid.md'
+    purpose: 'Manual chapter 7: Extended Euclid; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/08-modular-inverses.md'
+    purpose: 'Manual chapter 8: Modular Inverses; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/09-chinese-remainder-theorem.md'
+    purpose: 'Manual chapter 9: Chinese Remainder Theorem; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/10-exact-rationals.md'
+    purpose: 'Manual chapter 10: Exact Rationals; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/11-bitvector-representation.md'
+    purpose: 'Manual chapter 11: BitVector Representation; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/12-checked-arithmetic.md'
+    purpose: 'Manual chapter 12: Checked Arithmetic; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/13-shifts-and-rotates.md'
+    purpose: 'Manual chapter 13: Shifts and Rotates; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/14-known-bits.md'
+    purpose: 'Manual chapter 14: Known Bits; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/15-integer-intervals.md'
+    purpose: 'Manual chapter 15: Integer Intervals; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/16-congruence-domains.md'
+    purpose: 'Manual chapter 16: Congruence Domains; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/17-interval-congruence-product.md'
+    purpose: 'Manual chapter 17: Interval-Congruence Product; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/18-widening-and-fixed-points.md'
+    purpose: 'Manual chapter 18: Widening and Fixed Points; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/19-integer-matrices.md'
+    purpose: 'Manual chapter 19: Integer Matrices; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/20-bareiss-determinants.md'
+    purpose: 'Manual chapter 20: Bareiss Determinants; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/21-linear-expressions.md'
+    purpose: 'Manual chapter 21: Linear Expressions; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/22-linear-range-evaluation.md'
+    purpose: 'Manual chapter 22: Linear Range Evaluation; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/23-conservative-inequality-proofs.md'
+    purpose: 'Manual chapter 23: Conservative Inequality Proofs; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/24-symbolic-expression-trees.md'
+    purpose: 'Manual chapter 24: Symbolic Expression Trees; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/25-rewriting-and-simplification.md'
+    purpose: 'Manual chapter 25: Rewriting and Simplification; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/26-equality-queries.md'
+    purpose: 'Manual chapter 26: Equality Queries; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/27-affine-recurrences.md'
+    purpose: 'Manual chapter 27: Affine Recurrences; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/28-trip-counts.md'
+    purpose: 'Manual chapter 28: Trip Counts; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/29-induction-variable-recognition.md'
+    purpose: 'Manual chapter 29: Induction Variable Recognition; capability planned'
+    status: planned-design
+  - path: 'manual/chapters/30-bitwidth-reduction.md'
+    purpose: 'Manual chapter 30: Bitwidth Reduction; capability planned'
+    status: planned-design
+  - path: 'manual/chapters/31-bounds-check-elimination.md'
+    purpose: 'Manual chapter 31: Bounds-Check Elimination; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/32-strength-reduction.md'
+    purpose: 'Manual chapter 32: Strength Reduction; capability planned'
+    status: planned-design
+  - path: 'manual/chapters/33-dependence-analysis.md'
+    purpose: 'Manual chapter 33: Dependence Analysis; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/34-isl-and-presburger-backends.md'
+    purpose: 'Manual chapter 34: ISL and Presburger Backends; capability planned'
+    status: planned-design
+  - path: 'manual/chapters/35-smt-and-bitvector-solving.md'
+    purpose: 'Manual chapter 35: SMT and Bitvector Solving; capability planned'
+    status: planned-design
+  - path: 'manual/chapters/36-testing-and-differential-fuzzing.md'
+    purpose: 'Manual chapter 36: Testing and Differential Fuzzing; capability implemented'
+    status: implemented-or-documentation
+  - path: 'manual/chapters/37-undefined-and-poison-semantics.md'
+    purpose: 'Manual chapter 37: Undefined and Poison Semantics; capability planned'
+    status: planned-design
+  - path: 'manual/chapters/38-compiler-ir-integration.md'
+    purpose: 'Manual chapter 38: Compiler IR Integration; capability planned'
+    status: planned-design
+  - path: 'manual/chapters/39-caching-and-resource-budgets.md'
+    purpose: 'Manual chapter 39: Caching and Resource Budgets; capability planned'
+    status: planned-design
+  - path: 'manual/chapters/40-roadmap-and-extension-contracts.md'
+    purpose: 'Manual chapter 40: Roadmap and Extension Contracts; capability implemented'
+    status: implemented-or-documentation
+  - path: 'support/Config.hpp'
+    purpose: 'Common semantic version and input assertion utility'
+    status: implemented-or-documentation
+  - path: 'support/Graph.hpp'
+    purpose: 'Deterministic directed graphs, reachability, topological ordering and iterative SCCs'
+    status: implemented-or-documentation
+  - path: 'support/Hash.hpp'
+    purpose: 'Common deterministic in-process hash combining helper'
+    status: implemented-or-documentation
+  - path: 'support/Permutation.hpp'
+    purpose: 'Shared rank and permutation validation'
+    status: implemented-or-documentation
+  - path: 'support/Result.hpp'
+    purpose: 'Reusable tri-state proof verdict and value/error result'
+    status: implemented-or-documentation
+  - path: 'tests/test_analysis.cpp'
+    purpose: 'Core hardening regressions and independently enumerated integer-polyhedron proof checks'
+    status: implemented-or-documentation
+  - path: 'tests/test_ccint.cpp'
+    purpose: 'Compiler-built smoke and boundary regression suite'
+    status: implemented-or-documentation
+  - path: 'tests/test_optimization.cpp'
+    purpose: 'Tensor layout, exhaustive small graph, signed tiling and memory dependence regressions'
+    status: implemented-or-documentation
+  - path: 'tests/test_properties.cpp'
+    purpose: 'Exhaustive small-width bitvector and division identity property tests'
+    status: implemented-or-documentation
+  - path: 'tools/build_manual.py'
+    purpose: 'Deterministically regenerate all forty manual chapters and YAML manifest'
+    status: implemented-or-documentation

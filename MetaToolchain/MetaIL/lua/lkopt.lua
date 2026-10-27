@@ -7,7 +7,9 @@ local analysis=require('metail.analysis')
 local M={optimizer={},registered={},order={},numeric=require('metanum')}
 local builtins={['constant-folding']=true,['dead-assignments']=true,
   ['constant-propagation']=true,['copy-propagation']=true,['simplify-branches']=true,
-  ['unreachable-code']=true,['common-subexpressions']=true}
+  ['unreachable-code']=true,['common-subexpressions']=true,
+  ['weighstone-known-bits']=true,['weighstone-ranges']=true,
+  ['weighstone-strength']=true,['weighstone-shifts']=true,['weighstone-algebra']=true}
 local function check(id)
   assert(type(id)=='string' and id:match('^[%a_][%w_]*$'),'invalid kernel identifier: '..tostring(id))
   assert(not M.registered[id],'duplicate kernel: '..id)

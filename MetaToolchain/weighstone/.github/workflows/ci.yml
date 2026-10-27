@@ -1,0 +1,29 @@
+name: C++ tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - compiler: g++
+            build_type: Release
+            extra_flags: ""
+          - compiler: clang++
+            build_type: Release
+            extra_flags: ""
+          - compiler: clang++
+            build_type: Debug
+            extra_flags: "-fsanitize=address,undefined -fno-omit-frame-pointer"
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y libboost-dev cmake g++ clang
+      - run: >-
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DCMAKE_CXX_COMPILER=${{ matrix.compiler }}
+          -DCMAKE_CXX_FLAGS="-Wall -Wextra -Wpedantic -Werror ${{ matrix.extra_flags }}"
+      - run: cmake --build build --parallel
+      - run: ctest --test-dir build --output-on-failure
+      - name: Check generated documentation
+        run: python3 tools/build_manual.py && git diff --exit-code -- manual MANIFEST.yaml

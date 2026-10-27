@@ -1,0 +1,14 @@
+module weighstone;
+
+fn forced_mask(x) { return (x | 73) & 73; }
+fn bounded_compare(x) { let a = x & 511; return a < 512; }
+fn bounded_division(x) { let a = x & 1023; return a / 32; }
+fn aligned_division(x) { return (x << 11) / 2048; }
+fn low_residue(x) { return ((x * 8) + 3) & 7; }
+fn invert_odd_product(x) { return (x * 3) == 9; }
+fn saturated_shift(x) { return (x >> 51) >> 27; }
+fn remainder_chain(x) { return (x % 21) % 7; }
+fn wrapped_equality(x) { return (x + 9223372036854775807) == 1; }
+fn collect_terms(x) { return (x * 7) + (x * 9); }
+fn select_positive(x) { return select(x | 4, x, 1 / 0); }
+fn preserve_effect(x) { return (tick(x) & 511) < 512; }

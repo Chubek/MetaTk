@@ -1,0 +1,4 @@
+-- Weighstone-backed signed-64 optimization.
+local K = lkopt.optimizer.new "WeighstoneAlgebra"
+K:metadata { description = "Combine constants, collect like terms and simplify modular equalities while preserving effects.", tags = { "weighstone", "integer-facts" } }
+K:builtin "weighstone-algebra"

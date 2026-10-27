@@ -1,0 +1,18 @@
+#include "Runtime.hpp"
+#include <cstdint>
+#include <iostream>
+
+int main() {
+    std::int64_t scale = 6;
+    std::int64_t bias = 12;
+    @jit_begin code
+    @jit_bind SCALE scale
+    @jit_bind BIAS bias
+    fn affine(x) {
+        return x * SCALE + BIAS;
+    }
+    @jit_end
+    auto affine = code.get<std::int64_t (*)(std::int64_t)>("affine");
+    std::cout << affine(5) << '\n';
+    return affine(5) == 42 ? 0 : 1;
+}

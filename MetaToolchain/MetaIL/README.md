@@ -2,11 +2,13 @@
 
 MetaIL is a **scaffolded compiler IR and text language** driven by executable **Optikern Lua 5.4 analysis and rewriting kernels**. The upload contained only four empty files and one kernel declaration; this tree fills those files and adds a C host, parser, AST, CFG analyses, transformations, CLI, tests, examples, documentation, and generated kernel definitions.
 
-**Kernel inventory:** 321 `.optk` files: the original `ConstantFolding.optk`, 200 base kernels, and **120 numeric kernels** named `optimize-kernels/Numeric*.optk`. Totals: 84 analyses, 230 expression rewrites, and 7 procedural optimizations. The numeric additions comprise 96 signed-64 rewrites and 24 analyses backed by MetaNum's executable statistics APIs. `metail verify` checks every rewrite for boundary-value, effect, and trap equivalence and requires every rule to fire.
+**Kernel inventory:** 327 `.optk` files: the original `ConstantFolding.optk`, 200 base kernels, **120 numeric kernels**, and **6 Weighstone kernels**. Totals: 85 analyses, 230 declarative rewrites, and 12 procedural optimizations. The numeric additions comprise 96 signed-64 rewrites and 24 MetaNum statistics analyses. Weighstone adds five proof-guided optimization passes and an integer-facts analysis. `metail verify` requires every declarative rewrite to fire and checks boundary values, effects and traps; CTest separately checks the procedural passes.
 
 ## Build and test
 
 Install **Lua 5.4** (real upstream Lua runtime, as a shared library), C11 and C++20 toolchains, CMake, and Python 3 for tests. MetaNum headers default to `../../MetaNum`; override with `-DMETANUM_ROOT=/path/to/MetaNum`. DSLtk defaults to `../../DSLtk` (the workspace's `/mnt/nvme/metatk/DSLtk/DSLtk.hpp`); override with `-DDSLTK_ROOT=/path/to/DSLtk`. The archive deliberately **does not vendor Lua itself**. On Debian/Ubuntu, `liblua5.4-dev` supplies the required shared library.
+
+Integer reasoning uses the header-only **Weighstone** toolkit (default `../weighstone`, override with `-DWEIGHSTONE_ROOT=/path/to/weighstone`) and system **Boost.Multiprecision** headers. These are build-time dependencies; installed MetaIL consumers do not need their headers.
 
 ```sh
 cmake -S . -B build
@@ -174,8 +176,28 @@ build/metail optimize examples/arithmetic.mi --passes NumericMultiplyMinusOneRig
 
 ## Current scope and limits
 
-This is a **working, deliberately bounded foundation**, not a complete backend compiler or a full language runtime. It does not yet perform SSA construction, type inference, memory SSA, global interprocedural optimization, native code emission, exceptions, vectorization, alias analysis, or sophisticated lattice-based range analysis. Some optimizations are intrablock only. Rewrites are exact structural patterns with simple guards, not an SMT prover. Calls are modeled as potentially effectful and therefore block unsafe eliminations. Some analyses (e.g. literal range) report syntactic facts rather than proving ranges for arbitrary expressions.
+### Weighstone integer optimizations
 
-The `tools/generate_kernels.py` script reproducibly regenerates the 320 added kernel definitions, preserves `ConstantFolding.optk`, and rejects unexpected files without deleting them. See [AGENTS.md](AGENTS.md) for contributor integration points and quality requirements.
+The default pipeline includes `WeighstoneKnownBits`, `WeighstoneRanges`,
+`WeighstoneStrengthReduction`, `WeighstoneShifts`, and `WeighstoneAlgebra`.
+They propagate block-local signed ranges, known bits and low-bit congruences,
+preserving 64-bit wraparound, eager logical operators, lazy selects, calls and
+traps. This enables arbitrary-width mask and shift simplifications, range-based
+comparisons, proven division/remainder reductions, modular equalities (including
+odd-multiplier inversion), and constant/like-term combination.
+
+```sh
+build/metail optimize examples/weighstone.mi
+build/metail optimize examples/weighstone.mi --passes WeighstoneKnownBits,WeighstoneRanges
+build/metail analyze examples/weighstone.mi --passes WeighstoneIntegerFacts
+build/metail kernels --tag weighstone --json
+```
+
+See [Weighstone integration](docs/Weighstone.md) for the rewrite families, proof
+contracts, analysis output and reproducible checks.
+
+This is a **working, deliberately bounded foundation**, not a complete backend compiler or a full language runtime. It does not yet perform SSA construction, type inference, memory SSA, global interprocedural optimization, native code emission, exceptions, vectorization, alias analysis, or fixed-point CFG range analysis. Integer facts are intrablock and conservatively reset at labels and terminators. Declarative rewrites use structural patterns; Weighstone passes add conservative integer proofs, not a general SMT solver. Calls are modeled as potentially effectful and block unsafe eliminations. The older literal-range analysis remains syntactic; use `WeighstoneIntegerFacts` for computed value bounds.
+
+The `tools/generate_kernels.py` script reproducibly regenerates the 326 added kernel definitions, preserves `ConstantFolding.optk`, and rejects unexpected files without deleting them. The original 321 declarations are preserved. See [AGENTS.md](AGENTS.md) for contributor integration points and quality requirements.
 
 Build configurations, regression coverage, and results are recorded in [docs/Verification.md](docs/Verification.md).

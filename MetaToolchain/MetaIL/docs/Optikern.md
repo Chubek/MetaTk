@@ -45,7 +45,10 @@ Propagation and CSE are intrablock/conservative. Dead-assignment elimination pre
 ## Kernel count / verification
 
 The generator preserves the 200 base additions and adds 120 numeric kernels:
-84 analyzers + 230 declarative rewrites + 7 procedural passes = **321 total**.
+85 analyzers + 230 declarative rewrites + 12 procedural passes = **327 total**.
+The six Weighstone additions preserve the original 321 declarations; see
+[Weighstone integration](Weighstone.md) for the five procedural passes and
+computed integer-facts analysis.
 `python3 tools/generate_kernels.py --check` checks reproducibility.
 `metail verify` exercises signed limits, mask/shift boundaries, two-capture
 Cartesian products, deterministic full-width random vectors, effectful calls,

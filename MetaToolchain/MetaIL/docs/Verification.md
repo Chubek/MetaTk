@@ -1,4 +1,76 @@
-# Numeric integration verification
+# Integration verification
+
+## Weighstone optimization follow-up
+
+Five procedural passes now use Weighstone's fixed-width values, known bits,
+signed intervals, low-bit congruences, tri-state constraint proofs, and modular
+inverses. A sixth kernel exposes the computed integer facts. See
+[Weighstone integration](Weighstone.md) for the implemented families and contracts.
+
+The baseline passed **16/16 tests in 4.46 seconds**, plus all 230 declarative
+rewrites over 183,473 vectors (2,470 effect/trap cases). Weighstone itself passed
+5/5 tests in 0.47 seconds after building in `/tmp/opencode/weighstone-debug`:
+its existing build cache referred to an old capitalized `Weighstone` directory.
+
+The new tests require **207 positive regression rewrites to fire** and perform
+**213,108** boundary/random fact-containment and equivalence checks. They cover
+all shift widths, signed-wrap boundaries, invalid shifts, zero/overflowing
+division, negative remainders, lazy selects, eager logical expressions, ordered
+calls, local reassignment, block boundaries, malformed native inputs, and the
+combined default pipeline. The independent oracle is the existing C signed-64
+evaluator, not Weighstone's arithmetic implementation. Original declarative
+verification still passes all 183,473 vectors.
+
+| Configuration | Full suite | Time |
+|---|---:|---:|
+| GCC 16 Release, warnings as errors | 17/17 | 6.75 s |
+| Clang 22 Release, warnings as errors | 17/17 | 5.22 s |
+| GCC ASan + UBSan, warnings as errors | 17/17 | 17.35 s |
+| Clang ASan + UBSan, warnings as errors | 17/17 | 16.51 s |
+
+Build trees ran concurrently, so these timings include CPU contention and are
+not optimizer-speed comparisons. After adding whole-function example equivalence
+checks, the focused Weighstone test passed again in all four configurations
+(GCC Release 0.47 s, Clang Release 0.48 s, GCC sanitizers 2.20 s, Clang sanitizers
+1.93 s). No compiler warnings or sanitizer findings were reported.
+
+The 12-function `examples/weighstone.mi` corpus contains **25 IR operators after
+the old pipeline and 11 after the new pipeline (56% fewer)**. Both use two rounds
+and the same cleanup passes. The test checks value, trap and effect equivalence
+for every function. This measures IR simplification, not native machine speed.
+
+Inventory is now **327 kernels: 85 analyses, 230 declarative rewrites, 12
+procedural passes**. The original 321 generated declarations are unchanged.
+Tests with exact registry sizes were updated by six (including custom-kernel
+counts); their behavioral assertions remain. Generator `--check` passes.
+
+The C API and standard Lua 5.4 interpreter exercise the native binding. An
+installed-package consumer using `find_package(MetaIL CONFIG REQUIRED)` also
+successfully ran `WeighstoneRanges` against the installed runtime. Weighstone and
+Boost remain private build-time dependencies; the public C/C++ API is unchanged.
+
+Reproduce from `MetaIL/`:
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_FLAGS=-Werror -DCMAKE_CXX_FLAGS=-Werror
+cmake --build build
+ctest --test-dir build --output-on-failure
+build/metail verify
+build/metail lua tests/test_weighstone.lua
+python3 tools/generate_kernels.py --check
+
+cmake -S . -B /tmp/opencode/metail-weighstone-gcc-asan \
+  -DCMAKE_BUILD_TYPE=Debug \
+  '-DCMAKE_C_FLAGS=-Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  '-DCMAKE_CXX_FLAGS=-Wall -Wextra -Wpedantic -Werror -fsanitize=address,undefined -fno-omit-frame-pointer'
+cmake --build /tmp/opencode/metail-weighstone-gcc-asan
+ctest --test-dir /tmp/opencode/metail-weighstone-gcc-asan --output-on-failure
+```
+
+For Clang, select another tree and add
+`-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++`. Weighstone defaults to
+`../weighstone`; override `WEIGHSTONE_ROOT` for another checkout.
 
 ## Checked DSLtk integration follow-up
 

@@ -1,6 +1,6 @@
 from pathlib import Path
 import argparse
-parser=argparse.ArgumentParser(description='Regenerate the 200 base and 120 numeric Optikern kernels.')
+parser=argparse.ArgumentParser(description='Regenerate the 200 base, 120 numeric, and 6 Weighstone Optikern kernels.')
 parser.add_argument('--check',action='store_true',help='check committed output without writing')
 args=parser.parse_args()
 root=Path(__file__).resolve().parents[1]/'optimize-kernels'
@@ -236,6 +236,21 @@ for source in ('Literals','ExpressionSizes'):
    f'local K = lkopt.optimizer.new "{name}"\n'
    f'K:analysis {{ kind = "numeric-statistic", source = "{source}", statistic = "{statistic}" }}\n')
 assert len(outputs)==320
+for name,kind,description in [
+ ('WeighstoneKnownBits','known-bits','Propagate fixed-width known bits; fold constants and remove redundant masks.'),
+ ('WeighstoneRanges','ranges','Use wrap-aware signed intervals to simplify comparisons, booleans, selects and remainders.'),
+ ('WeighstoneStrengthReduction','strength','Reduce multiplication, division and remainder by powers of two with sign and alignment proofs.'),
+ ('WeighstoneShifts','shifts','Combine valid shifts and eliminate round trips with representable-range proofs.'),
+ ('WeighstoneAlgebra','algebra','Combine constants, collect like terms and simplify modular equalities while preserving effects.'),
+]:
+ emit(root/(name+'.optk'),
+  f'-- Weighstone-backed signed-64 optimization.\nlocal K = lkopt.optimizer.new "{name}"\n'
+  f'K:metadata {{ description = "{description}", tags = {{ "weighstone", "integer-facts" }} }}\n'
+  f'K:builtin "weighstone-{kind}"\n')
+emit(root/'WeighstoneIntegerFacts.optk',
+ '-- Executable, block-local reduced-product analysis.\nlocal K = lkopt.optimizer.new "WeighstoneIntegerFacts"\n'
+ 'K:metadata { tags = { "weighstone", "integer-facts", "dataflow" } }\n'
+ 'K:analysis { kind = "integer-facts" }\n')
 if args.check:
  for path,text in outputs.items():
   assert path.exists() and path.read_text()==text,f'stale generated kernel: {path}'
@@ -245,4 +260,4 @@ else:
   path.write_text(text)
 files=set(root.rglob('*.optk'))
 assert files==set(outputs)|{root/'ConstantFolding.optk'},'unexpected kernel files (never deleted automatically)'
-print(f'Total: 321; analyses: 84; builtins: 7; rewrites: {base_rewrites+len(rewrites)}; numeric additions: 120')
+print(f'Total: 327; analyses: 85; builtins: 12; rewrites: {base_rewrites+len(rewrites)}; numeric additions: 120; Weighstone additions: 6')

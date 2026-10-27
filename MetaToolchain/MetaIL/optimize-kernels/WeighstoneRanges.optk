@@ -1,0 +1,4 @@
+-- Weighstone-backed signed-64 optimization.
+local K = lkopt.optimizer.new "WeighstoneRanges"
+K:metadata { description = "Use wrap-aware signed intervals to simplify comparisons, booleans, selects and remainders.", tags = { "weighstone", "integer-facts" } }
+K:builtin "weighstone-ranges"

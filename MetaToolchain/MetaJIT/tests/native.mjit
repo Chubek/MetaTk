@@ -1,0 +1,145 @@
+#include "Runtime.hpp"
+#include <csignal>
+#include <cstring>
+#include <fstream>
+#include <iostream>
+#include <limits>
+#include <sstream>
+#include <stdexcept>
+#include <sys/resource.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <utility>
+
+using I = std::int64_t;
+using U = std::uint64_t;
+using Fn0 = I (*)();
+using Fn1 = I (*)(I);
+using Fn2 = I (*)(I,I);
+void check(bool ok, const char *message) { if (!ok) throw std::runtime_error(message); }
+I bits(U value) { I result; std::memcpy(&result, &value, sizeof result); return result; }
+template<class F> void rejects(F f) {
+    try { f(); } catch (const std::exception &) { return; }
+    throw std::runtime_error("expected API error");
+}
+void trap(Fn2 fn, I a, I b, int expected) {
+    const auto child = fork();
+    check(child >= 0, "fork failed");
+    if (!child) {
+        const rlimit no_core{0,0};
+        setrlimit(RLIMIT_CORE, &no_core);
+        std::signal(SIGFPE, SIG_DFL);
+        std::signal(SIGILL, SIG_DFL);
+        (void)fn(a,b);
+        _exit(0);
+    }
+    int status = 0;
+    check(waitpid(child, &status, 0) == child, "waitpid failed");
+    check(WIFSIGNALED(status) && WTERMSIG(status) == expected, "missing or incorrect native trap");
+}
+metajit::Executable specialize(I value, int &evaluations) {
+    @jit_begin code
+    @jit_bind VALUE (++evaluations, value)
+    fn f(x) { return x + VALUE + VALUE; }
+    @jit_end
+    return code;
+}
+int main() {
+  try {
+    @jit_begin code
+    @include "ops.mi"
+    @jit_end
+    const I lo = std::numeric_limits<I>::min(), hi = std::numeric_limits<I>::max();
+    auto test_pair = [&](I a, I b) {
+        const U ua = static_cast<U>(a), ub = static_cast<U>(b);
+        check(code.get<Fn2>("add_test")(a,b) == bits(ua+ub), "add");
+        check(code.get<Fn2>("sub_test")(a,b) == bits(ua-ub), "sub");
+        check(code.get<Fn2>("mul_test")(a,b) == bits(ua*ub), "mul");
+        check(code.get<Fn2>("band_test")(a,b) == bits(ua&ub), "band");
+        check(code.get<Fn2>("bor_test")(a,b) == bits(ua|ub), "bor");
+        check(code.get<Fn2>("bxor_test")(a,b) == bits(ua^ub), "bxor");
+        check(code.get<Fn2>("eq_test")(a,b) == (a==b), "eq");
+        check(code.get<Fn2>("ne_test")(a,b) == (a!=b), "ne");
+        check(code.get<Fn2>("lt_test")(a,b) == (a<b), "lt");
+        check(code.get<Fn2>("le_test")(a,b) == (a<=b), "le");
+        check(code.get<Fn2>("gt_test")(a,b) == (a>b), "gt");
+        check(code.get<Fn2>("ge_test")(a,b) == (a>=b), "ge");
+        check(code.get<Fn2>("land_test")(a,b) == (a!=0 && b!=0), "land");
+        check(code.get<Fn2>("lor_test")(a,b) == (a!=0 || b!=0), "lor");
+        check(code.get<Fn1>("neg_test")(a) == bits(U(0)-ua), "neg");
+        check(code.get<Fn1>("bnot_test")(a) == bits(~ua), "bnot");
+        check(code.get<Fn1>("lnot_test")(a) == (a==0), "lnot");
+        check(code.get<Fn2>("nested")(a,b) == bits((ua+ub)*(ua-ub*(ua+7))), "nested expression stack");
+        if (b && !(a==lo && b==-1)) {
+            check(code.get<Fn2>("div_test")(a,b) == a/b, "division");
+            check(code.get<Fn2>("mod_test")(a,b) == a%b, "remainder");
+        }
+        for (unsigned shift = 0; shift < 64; ++shift) {
+            check(code.get<Fn2>("shl_test")(a,shift) == bits(ua<<shift), "shl");
+            const U sign = a < 0 && shift ? (~U(0) << (64-shift)) : 0;
+            check(code.get<Fn2>("shr_test")(a,shift) == bits((ua>>shift)|sign), "arithmetic shr");
+        }
+    };
+    const I edge[] = {lo, hi, -1, 0, 1, -2, 2, -63, 63};
+    for (I a : edge) for (I b : edge) test_pair(a,b);
+    U seed = 0x5ed12345ULL;
+    auto random = [&]() { seed ^= seed<<13; seed ^= seed>>7; seed ^= seed<<17; return bits(seed); };
+    for (unsigned i=0; i<1000; ++i) { const auto a=random(), b=random(); test_pair(a,b); }
+    check(code.get<Fn0>("minimum")() == lo, "minimum literal");
+    check(code.get<Fn0>("maximum")() == hi, "maximum literal");
+    check((code.get<I (*)(I,I,I,I,I,I)>("six")(1,2,3,4,5,6)) == 91, "SysV arguments");
+    check(code.get<Fn2>("gcd")(1071,462) == 21, "backwards branch");
+    check(code.get<Fn1>("choose")(1) == 11 && code.get<Fn1>("choose")(0) == 22, "forward branch");
+    check(code.get<Fn2>("lazy_test")(1,0) == 42, "select evaluated unselected divide");
+    check(code.get<Fn2>("lazy_test")(0,2) == 2, "select false arm");
+    check(code.get<Fn2>("lazy_shift")(1,64) == 42, "select evaluated unselected shift");
+    for (const auto *name : {"div_test", "mod_test"}) {
+        trap(code.get<Fn2>(name), 1, 0, SIGFPE);
+        trap(code.get<Fn2>(name), lo, -1, SIGFPE);
+    }
+    trap(code.get<Fn2>("land_trap"), 0, 0, SIGFPE);
+    trap(code.get<Fn2>("lor_trap"), 1, 0, SIGFPE);
+    for (const auto *name : {"shl_test", "shr_test"}) {
+        trap(code.get<Fn2>(name), 1, -1, SIGILL);
+        trap(code.get<Fn2>(name), 1, 64, SIGILL);
+    }
+    rejects([&] { (void)code.get<Fn0>("missing"); });
+    rejects([&] { (void)code.get<Fn0>("add_test"); });
+    int evaluations=0;
+    auto first = specialize(-5, evaluations), second = specialize(9, evaluations);
+    check(evaluations==2, "binding evaluated more than once");
+    check(first.get<Fn1>("f")(12)==2 && second.get<Fn1>("f")(12)==30, "runtime immediate specialization");
+    auto borrowed = first.get<Fn1>("f");
+    metajit::Executable moved(std::move(first));
+    check(borrowed(12)==2 && first.size()==0, "move construction");
+    rejects([&] { (void)first.get<Fn1>("f"); });
+    second = std::move(moved);
+    check(second.get<Fn1>("f")(12)==2 && moved.size()==0, "move assignment");
+    auto fn = second.get<Fn1>("f");
+    std::uintptr_t address=0;
+    std::memcpy(&address, &fn, sizeof address);
+    std::ifstream maps("/proc/self/maps");
+    std::string line;
+    bool rx=false;
+    while (std::getline(maps,line)) {
+        std::istringstream fields(line);
+        std::string range, permissions;
+        fields >> range >> permissions;
+        const auto dash=range.find('-');
+        const auto begin=std::stoull(range.substr(0,dash),nullptr,16);
+        const auto end=std::stoull(range.substr(dash+1),nullptr,16);
+        if (begin <= address && address < end) rx=permissions.substr(0,3)=="r-x";
+    }
+    check(rx, "code mapping is not RX");
+    metajit::CodeBuffer buffer;
+    rejects([&] { (void)buffer.finalize(); });
+    rejects([&] { buffer.patch64(0, 1); });
+    buffer.append({0xc3});
+    rejects([&] { buffer.patch64(std::numeric_limits<std::size_t>::max(), 1); });
+    rejects([&] { buffer.entry("bad",1,0); });
+    rejects([&] { buffer.entry("bad",0,7); });
+    buffer.entry("ok",0,0);
+    rejects([&] { buffer.entry("ok",0,0); });
+    std::cout << "native execution, traps, ownership and W^X passed\n";
+  } catch (const std::exception &e) { std::cerr << e.what() << '\n'; return 1; }
+}

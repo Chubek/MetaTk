@@ -1,0 +1,4 @@
+-- Weighstone-backed signed-64 optimization.
+local K = lkopt.optimizer.new "WeighstoneStrengthReduction"
+K:metadata { description = "Reduce multiplication, division and remainder by powers of two with sign and alignment proofs.", tags = { "weighstone", "integer-facts" } }
+K:builtin "weighstone-strength"

@@ -1,0 +1,50 @@
+fn add_test(a,b) { return a+b; }
+fn sub_test(a,b) { return a-b; }
+fn mul_test(a,b) { return a*b; }
+fn div_test(a,b) { return a/b; }
+fn mod_test(a,b) { return a%b; }
+fn band_test(a,b) { return a&b; }
+fn bor_test(a,b) { return a|b; }
+fn bxor_test(a,b) { return a^b; }
+fn shl_test(a,b) { return a<<b; }
+fn shr_test(a,b) { return a>>b; }
+fn eq_test(a,b) { return a==b; }
+fn ne_test(a,b) { return a!=b; }
+fn lt_test(a,b) { return a<b; }
+fn le_test(a,b) { return a<=b; }
+fn gt_test(a,b) { return a>b; }
+fn ge_test(a,b) { return a>=b; }
+fn land_test(a,b) { return a&&b; }
+fn lor_test(a,b) { return a||b; }
+fn neg_test(a) { return -a; }
+fn bnot_test(a) { return ~a; }
+fn lnot_test(a) { return !a; }
+fn lazy_test(a,b) { return select(a, 42, 5/b); }
+fn lazy_shift(a,b) { return select(a, 42, 1<<b); }
+fn land_trap(a,b) { return a && (5/b); }
+fn lor_trap(a,b) { return a || (5/b); }
+fn six(a,b,c,d,e,f) { return a+2*b+3*c+4*d+5*e+6*f; }
+fn nested(a,b) { return (a + b) * (a - (b * (a + 7))); }
+fn minimum() { return -9223372036854775808; }
+fn maximum() { return 9223372036854775807; }
+fn gcd(a,b) {
+entry:
+    br b, body, done;
+body:
+    let rest = a % b;
+    let a = b;
+    let b = rest;
+    goto entry;
+done:
+    return a;
+}
+fn choose(c) {
+    br c, yes, no;
+yes:
+    let result = 11;
+    goto done;
+no:
+    let result = 22;
+done:
+    return result;
+}
