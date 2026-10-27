@@ -1,5 +1,182 @@
 # MetaArch — native and cross-language API checkpoint
 
+## MetaAS / MetaLD embedding APIs (2026-10-24; report finalized 2026-10-27)
+
+### API additions and compatibility
+
+Implementation commit: `4fbd4648`. Both libraries expose versioned ISO C11
+interfaces with opaque handles, explicit ownership, bounded diagnostics and
+C++20 RAII wrappers. Their public headers require no internal Dsymspec layouts.
+
+- `MetaAS/MetaAS.h`: `MetaAS`, `MetaASResult`, `MetaASOptions`, `MetaASError`;
+  `metaas_abi_version`, `metaas_options_init`, `metaas_create`, `metaas_free`,
+  `metaas_error`, `metaas_add_include`, `metaas_add_lua`, `metaas_add_plugin`,
+  `metaas_add_assembler_argument`, `metaas_define`, `metaas_register_directive`,
+  `metaas_compile`, `metaas_result_free`, `metaas_result_data`,
+  `metaas_result_size`, `metaas_result_diagnostics`,
+  `metaas_result_dependency_count`, `metaas_result_dependency`.
+- `MetaAS/MetaAS.hpp`: `metaas::options`, `Assembler`, `Result`, `Error`.
+  A host directive returns source through the existing `ArchASInvocation` /
+  `ArchASEmitter` C protocol; Lua and shared-library extensions remain available.
+- `MetaLD/MetaLD.h`: `MetaLD`, `MetaLDOptions`, `MetaLDError`, `MetaLDSymbol`,
+  `MetaLDResolver`; `metald_abi_version`, `metald_options_init`, `metald_create`,
+  `metald_free`, `metald_error`, `metald_state`, `metald_add_file`,
+  `metald_add_memory`, `metald_define`, `metald_set_resolver`, `metald_link`,
+  `metald_image`, `metald_image_size`, `metald_image_base`, `metald_symbol_count`,
+  `metald_symbol_at`, `metald_find_symbol`, `metald_write_elf`,
+  `metald_write_executable`, `metald_write_map`.
+- `MetaLD/MetaLD.hpp`: `metald::options`, `Linker`, `Symbol`, `Error`.
+- ArchLD core: `ArchLDResolveSymbol`, `archld_define_symbol`,
+  `archld_set_symbol_resolver`. Existing entry points retain their signatures.
+- **ArchBFD model layout addition:** `ArchBFDObjectReloc` now appends
+  `source_section`, `target_section`, `has_addend`. Rebuild consumers that depend
+  on this model's size/layout. The opaque `MetaArchABI.h` interface is unchanged.
+- CMake targets `MetaAS::metaas`, `MetaLD::metald`; options
+  `ARCHDB_BUILD_METAAS` and `ARCHDB_BUILD_METALD`. Headers, libraries and guides
+  install through the existing top-level installation rules.
+
+The later typed MetaAS DSL and wrapper refinements in commit `5c54d511` have their
+own [report](MetaAS/REPORT.md). They preserve these C ABI v1 contracts.
+
+### Implementation and contracts
+
+MetaAS assembles borrowed source into an owned result that survives assembler
+destruction. Configuration strings are copied. Each compile gets fresh macro,
+Lua and plugin state, and a failed compile permits reuse. C++ exceptions are
+contained at the C boundary; callback emission is bounded and callback-reported
+errors propagate even when a callback returns success.
+
+MetaLD copies object/archive input buffers and offers strong absolute host
+definitions plus a lazy resolver for strong globals missing after archive
+extraction. Resolved addresses are cached per symbol. Object/archive definitions
+precede the lazy hook; explicit definitions suppress unnecessary archive
+extraction and override weak definitions. Strong duplicates, reserved ELF64 GOT
+overrides, ELF32 address overflow and relocation overflow fail with diagnostics.
+Host definitions appear in symbol queries, maps and ELF `SHN_ABS` entries.
+
+Linking is one shot: collecting becomes linked or failed. Invalid argument/state
+requests do not change state; operational parse/link/write failures are sticky.
+After successful linking, image/symbol queries are read-only and support
+concurrent callers. Mutators/destruction require exclusion. Callbacks must not
+reenter or free their active context. Images contain bytes relocated for the
+configured base, not for their allocation address; executable mapping and host
+function invocation remain the embedder's responsibility.
+
+For same-process use, the top-level MetaLD target compiles only the generated
+ArchLD core against the full MetaArch/ArchBFD runtime. The standalone ArchLD
+build continues using its isolated JSON satellite. All core edits were made in
+`ArchLD/src/ArchLD.w`, tangled into `.c`/`.h`, and checked for byte-identical
+regeneration. No second object parser or new relocation algorithm was introduced.
+
+The full ArchBFD reader received the existing standalone reader's relocation
+provenance and ELF validation checks: checked extents, string termination,
+symbol/relocation links and entry sizes, and signed ELF32 RELA addends. The old
+synthetic ELF fixture incorrectly set `.rela.text.sh_link` to `.strtab` (3);
+it now names `.symtab` (2), with an explicit negative regression for the old value.
+This follows the [ELF gABI section-link rules](https://gabi.xinuos.com/elf/03-sheader.html)
+and [relocation records](https://gabi.xinuos.com/elf/06-reloc.html).
+Existing tests were preserved and this fixture correction is intentional.
+
+### Verification
+
+Before implementation: top-level GCC Release **27/27, 12.48 s**, GCC ASan+UBSan
+**27/27, 85.45 s**. Standalone ArchLD: Release **4/4, 0.24 s**, sanitizers
+**4/4, 1.80 s**. Builds were warning-free.
+
+Full implementation runs used `-Wall -Wextra -Wpedantic -Werror` in both languages:
+
+| Configuration | CTest | Wall time |
+| --- | --- | --- |
+| GCC Release, system Lua | 32/32 | 15.94 s |
+| Clang Release, shared libraries | 32/32 | 16.43 s |
+| GCC Debug ASan+UBSan | 32/32 | 88.58 s |
+| Clang Debug ASan+UBSan, provided Lua sources | 32/32 | 95.70 s |
+
+After the final callback-error/reserved-symbol checks, focused embedding/core
+tests passed **5/5** in all four configurations (respectively **0.39, 0.38, 2.13,
+1.70 s**). Lua/plugins-disabled verification passed **7/7, 0.72 s**. Standalone
+ArchLD still passed **4/4** in Release (**0.25 s**) and sanitizers (**1.64 s**).
+These are observed timings, not performance comparisons; some builds overlapped.
+
+The embedding suite contains **95 C checks and 32 C++ checks** with extensions
+enabled, plus independent `readelf` inspection and execution of three amd64
+outputs (exit 37). It verifies real ELF32/ELF64 inputs, input/result ownership,
+directives/includes/Lua/plugins, errors/retry, archive precedence, copied memory
+archives, weak symbols, resolver caching/exceptions, duplicate definitions,
+relocation overflow and concurrent queries. Existing ArchLD suites run against
+the full runtime too, including **128 hardening/metadata commands**.
+
+Installed static and shared libraries were each consumed with **only installed
+headers/data** by separately compiled C11 and C++20 test programs: **93 C + 32 C++
+checks**, ELF inspection and execution passed (the installed runs omitted the
+test-only shared plugin). A C-only, DSL/tools/tests-disabled MetaLD build also
+linked a real object successfully; its dynamic dependencies contain no C++ runtime.
+No compiler warnings or sanitizer findings were reported in these checks.
+
+Final continuation check on 2026-10-27, including the subsequently committed
+MetaAS DSL: GCC Release **34/34, 13.29 s**. The seven embedding/linker/DSL tests
+also passed with Clang shared Release (**0.65 s**), GCC ASan+UBSan (**3.29 s**),
+and Clang ASan+UBSan (**3.12 s**), all warning-free. The original 95 C + 32 C++
+embedding checks remain intact. Architecture lint exits 0; output is retained in
+`build-archas/meta-api-lint.txt`.
+
+### Reproduction
+
+From the MetaToolchain directory; the yyjson override is specific to this offline
+workspace. Ninja is unavailable here, so Unix Makefiles was used.
+
+```sh
+cmake -S . -B build-embedding -G 'Unix Makefiles' \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_FLAGS='-Wall -Wextra -Wpedantic -Werror' \
+  -DCMAKE_CXX_FLAGS='-Wall -Wextra -Wpedantic -Werror' \
+  -DFETCHCONTENT_SOURCE_DIR_YYJSON=/mnt/nvme/joltfx/third_party/yyjson
+cmake --build build-embedding -j4
+ctest --test-dir build-embedding --output-on-failure -j4
+cmake --install build-embedding --prefix /tmp/opencode/meta-embedding-install
+```
+
+For Clang add `-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++` in a separate
+tree; shared verification adds `-DBUILD_SHARED_LIBS=ON`. Sanitizers use `Debug`
+and append `-fsanitize=address,undefined -fno-omit-frame-pointer` to both flag
+values. Provided Lua adds
+`-DARCHAS_LUA_DIR=/mnt/nvme/metatk/third_party/jiterati/third_party/lua`.
+For extension-free checks add `-DARCHAS_LUA=OFF -DARCHAS_PLUGINS=OFF`.
+For a C-only MetaLD build add `-DARCHDB_BUILD_DSL=OFF -DARCHDB_BUILD_TOOLS=OFF
+-DARCHDB_BUILD_TESTS=OFF`. Focused tests use `-R 'embedding|metald|metaas_dsl'`.
+
+For installed static consumers on this system, compile C with `cc -std=c11` and
+`-I<PREFIX>/include/metaarch`, then link using the C++ driver and
+`-L<PREFIX>/lib -lmetaas -lmetald -larchas -lmetaarch_dsl -lmetaarch -lyaml
+-lyyjson -lxml2 -llua5.5 -ldl -lm`. C++ consumers use `-std=c++20`; the concurrent
+query test additionally uses `-pthread`. Shared consumers need `-lmetaas -lmetald`
+and their configured library search path. The existing `tests/test_embedding.py`
+driver accepts these compiled consumers via `--c` and `--cpp`, installed data via
+`--source <PREFIX>/share/metaarch`, and a scratch directory via `--work`.
+
+### Boundaries and delivery
+
+MetaAS retains ArchAS's GAS/LLVM native object backend and builtin binary/hex/JSON
+encoder backend. MetaLD retains the POSIX, little-endian ELF64 x86-64 / ELF32 i386
+linker and private checked 128-bit arithmetic. Additional object writers, new
+relocations, executable-memory allocation and installed CMake package exports
+were not part of this API addition. Runtime verification is Linux x86-64.
+
+There are no architecture/backend specification edits or encoder-data fixes in
+this task, and no codec changes or serialization size changes. Earlier phase A–G
+reports below remain the record for those separate efforts. See
+[MetaAS/README.md](MetaAS/README.md) and [MetaLD/README.md](MetaLD/README.md) for
+embedding examples and complete ownership/error/extension contracts.
+
+The committed-source snapshot is `build-archas/MetaAS-MetaLD-source.tar.gz`, with
+this report at `mnt/nvme/metatk/MetaArch/REPORT.md`. Recreate from the workspace
+Git root:
+
+```sh
+git archive --format=tar.gz --prefix=mnt/nvme/metatk/MetaArch/ \
+  -o MetaToolchain/build-archas/MetaAS-MetaLD-source.tar.gz HEAD:MetaToolchain
+```
+
 ## Latest addition: ArchAS / domas (2026-10-24)
 
 ### API additions

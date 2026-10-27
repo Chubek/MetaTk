@@ -1,5 +1,31 @@
 # Baseline (2026-10-19, before any edits)
 
+## MetaAS / MetaLD embedding baseline (2026-10-24)
+
+Before the API addition, the existing top-level suite passed **27/27** tests:
+GCC Release **12.48 s**, GCC Debug ASan+UBSan **85.45 s**. Standalone ArchLD
+passed **4/4** in Release (**0.24 s**) and ASan+UBSan (**1.80 s**). No build warnings
+or sanitizer findings. The existing `build-archas*` trees were reused.
+
+After implementation: GCC Release **32/32, 15.94 s**; Clang shared Release
+**32/32, 16.43 s**; GCC ASan+UBSan **32/32, 88.58 s**; Clang ASan+UBSan with
+provided Lua **32/32, 95.70 s**. All use `-Wall -Wextra -Wpedantic -Werror`.
+The five new tests cover same-process C/C++ embedding and the existing ArchLD
+real-ELF/hardening/generated-source suites against the full MetaArch runtime.
+
+Final callback-error and reserved-symbol changes passed the five focused tests
+in all four configurations: **0.39 / 0.38 / 2.13 / 1.70 s**, respectively.
+Lua/plugins-disabled checks passed **7/7, 0.72 s**. Standalone ArchLD remained
+green: Release **4/4, 0.25 s**, sanitizers **4/4, 1.64 s**. Final embedding counts
+are **95 C + 32 C++ checks**, or **91 C + 32 C++** without Lua/plugins.
+Installed static/shared consumers and the C-only MetaLD build were also verified.
+Timings include concurrent work; see the embedding section of `REPORT.md`.
+
+Continuation verification (2026-10-27), after the separately committed typed
+MetaAS DSL: GCC Release **34/34, 13.29 s**; focused embedding/linker/DSL suites
+**7/7** with Clang shared Release (**0.65 s**), GCC sanitizers (**3.29 s**) and
+Clang sanitizers (**3.12 s**).
+
 ## ArchAS baseline (2026-10-24)
 
 Before implementing ArchAS, the unchanged default suite passed **25/25** tests:

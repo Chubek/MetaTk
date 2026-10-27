@@ -4,6 +4,27 @@ All notable changes are documented here, following Keep a Changelog.
 
 ## [Unreleased]
 
+### Added — MetaAS and MetaLD embedding APIs
+- Versioned C11 opaque-handle APIs and C++20 RAII wrappers for assembly and
+  linking in one process, with owned results/copied inputs and documented
+  diagnostics, lifetime and concurrency contracts.
+- MetaAS host directive callbacks, include/constant/native-tool configuration,
+  and access to the existing Lua/shared-library extension system.
+- MetaLD absolute host definitions, cached lazy symbol resolution, memory
+  object/archive inputs, image/symbol inspection and executable/map writers.
+- `MetaAS::metaas` and `MetaLD::metald` CMake targets, optional builds, installation
+  and real ELF32/ELF64 embedding/extension/execution tests.
+
+### Changed — Full-runtime linker integration
+- Compile the CWEB-generated ArchLD core against the complete MetaArch runtime
+  for MetaLD; keep the standalone JSON satellite isolated.
+- Append validated relocation source/target sections and explicit-addend metadata
+  to `ArchBFDObjectReloc`; consumers relying on its size/layout should rebuild.
+- Bring the standalone reader's ELF extent/string/table-link checks and signed
+  ELF32 RELA addends into the full ArchBFD reader. Correct the synthetic test
+  fixture's `.rela.text.sh_link` to name `.symtab` per ELF gABI and retain its
+  previous malformed value as a negative regression.
+
 ### Added — ArchAS assembler
 - `domas -T TARGET` compiles GAS/MetaArchIR input to native objects, assembly,
   flat binary/hex or relocatable JSON section images; AT&T and x86 Intel syntax.

@@ -138,10 +138,16 @@ object references do not need a runtime dynamic linker.
 
 `lib/libarchld.a` and `src/ArchLD.h` expose `archld_new`, `archld_add`, `archld_add_memory`,
 `archld_link`, `archld_symbol`, `archld_map`, `archld_write_elf` and cleanup.
+`archld_define_symbol` installs a copied strong absolute definition;
+`archld_set_symbol_resolver` resolves still-missing strong globals after archive
+extraction. Successful resolutions are cached. Callbacks must not reenter/free
+the context; ELF64 reserves `_GLOBAL_OFFSET_TABLE_` for its own GOT.
 When using the standalone archive, only include the bundled `DsymspecIR.h`
-and `ArchBFD.h` to avoid conflicting with a separate Dsymspec ABI. To integrate
-into a full ArchToolchain build, replace the compatibility satellite with the
-real Dsymspec library and rebuild the ArchBFD dependency normally.
+and `ArchBFD.h` to avoid conflicting with a separate Dsymspec ABI. The top-level
+[MetaLD](../MetaLD/README.md) build integrates this generated core with the full
+MetaArch/ArchBFD runtime and supplies a versioned C11 API and C++20 wrapper.
+Use `MetaLD::metald` together with `MetaAS::metaas` for same-process assembly
+and linking.
 
 `archld_add_memory(ld, name, bytes, size)` copies an object or ordinary archive;
 the caller may immediately release its buffer. `name` supplies diagnostic

@@ -58,6 +58,8 @@ exposing internal struct layouts.
 | `tools/archdb.c` | CLI |
 | `tools/archbfd.c` | Object-format CLI |
 | `ArchAS/` | `domas`, assembler library, Lua templates and versioned directive plugin ABI |
+| `MetaAS/` | C11/C++20 embedding API, custom directives and optional typed assembly DSL |
+| `MetaLD/` | C11/C++20 embedding API, full-runtime linking and host symbol resolution |
 | `tools/extract_bfd.py` | Generates `ArchBFD/*.bfd.yaml` from the binutils checkout |
 | `tests/test_archdb.c` | Round-trip, encoding, diagnostics and catalogue tests |
 | `tests/test_archbfd.c` | Object-format round trips, binutils facts, diagnostics and reader tests |
