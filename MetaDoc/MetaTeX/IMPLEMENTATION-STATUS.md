@@ -104,7 +104,35 @@ The public `Lexer::scan` helper remains available with default categories.
 `incremental-catcodes` checks IR/HTML/PDF output, local/global restoration,
 active characters, macro token preservation, conditional branches, included
 files, REPL state, malformed assignments, and category-sensitive delimiters.
-The native/reference test now covers 25 shared cases. Full TeX input handling
-is still incomplete: `^^` notation, `\endlinechar`, configurable Unicode
+The native/reference test now covers 30 shared cases. Full TeX input handling
+is still incomplete: `\endlinechar`, configurable Unicode
 categories above 255, and category-aware external script insertion remain
 outstanding. Source NUL bytes are intentionally still rejected.
+
+## Input notation, delayed tokens, and optional macro defaults
+
+The native scanner now translates TeX's doubled-superscript notation before
+category lookup, including inside control words. Both lowercase hexadecimal
+and ASCII-shift forms are supported, along with repeated translations and
+custom superscript characters. Translation consumes original bytes and retains
+physical source locations; ignored comment tails are not translated. Encoded
+8-bit characters are represented as UTF-8 in the native text model.
+
+`\aftergroup` queues unexpanded tokens in declaration order and inserts them
+after group-local state has been restored. The LaTeX command-definition plugin
+now stores and uses optional first-argument defaults, including empty overrides,
+invocation-time expansion, and scoped redefinitions. `source-features` asserts
+exact source, document IR, HTML, PDF text, errors, and scanner positions.
+
+## Manual and executable documentation
+
+`manual/README.md` indexes 44 authored chapters covering the native application,
+language, outputs, APIs, extension interfaces, verification, and actual limits.
+`manual-examples` validates the chapter sequence and links and compiles 32 marked
+examples into all four CLI formats. The manual, supporting guides, and this
+status report are installed together under `share/doc/metatex`.
+
+The native implementation is still incomplete. Typed TeX layout, remaining
+register classes, full mathematical/page construction, general LaTeX package
+loading, native DVI emission, and full compatibility validation have not been
+completed by these additions or by documenting them.

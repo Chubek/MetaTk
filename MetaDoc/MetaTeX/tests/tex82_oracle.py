@@ -35,6 +35,19 @@ cases = [
     (r"{\global\catcode`\~=13 \catcode`\~=12 }\def~{OK}", "~", "OK"),
     (r"\catcode`\~=13 \def~{A}\edef\saved{\noexpand~}\def~{B}", r"\saved", "B"),
     (r"\catcode`\@=11 ", r"\number\catcode`\@", "11"),
+    (r"\catcode94=7 ", r"^^41^^42^^43", "ABC"),
+    (r"\catcode94=7 \def\fo^^6f^^7bOK^^7d", r"\foo", "OK"),
+    (r"\catcode94=7 ", r"^^5e^61", "a"),
+    (r"\catcode33=7 ", r"!!41", "A"),
+    (r"\def\a{A}{\def\a{B}\aftergroup\def\aftergroup\b\aftergroup{\aftergroup X\aftergroup}}", r"\a\b", "AX"),
+    (r"\toks0={OK}", r"\the\toks0", "OK"),
+    (r"\toks0={A}\toks1=\toks0\toks0={B}", r"\the\toks1\the\toks0", "AB"),
+    (r"\toks0={A}{\toks0={B}{\global\toks0={C}}}", r"\the\toks0", "C"),
+    (r"\toksdef\words=0 \words={OK}", r"\the\words", "OK"),
+    (r"\def\a{old}\toks0={\a}\edef\b{\the\toks0}\def\a{new}", r"\b", "new"),
+    (r"\toks0={\def\a#1{#1}}\edef\b{\the\toks0}\b", r"\a{OK}", "OK"),
+    (r"\toks0={A}\toks0=\expandafter{\the\toks0 B}", r"\the\toks0", "AB"),
+    (r"\toksdef\words=0 \let\saved=\words\def\words{BAD}\saved={OK}", r"\the\saved", "OK"),
 ]
 
 with tempfile.TemporaryDirectory(prefix="metatex-oracle-") as directory:

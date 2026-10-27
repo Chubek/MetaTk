@@ -16,11 +16,11 @@ std::string trim(std::string s) {
 }
 std::string number(int v) {return std::to_string(v);}
 }
-Engine::Engine(){scopes_.emplace_back();commandScopes_.emplace_back();countScopes_.emplace_back();countAliasScopes_.emplace_back();installPrimitives();installScripting();}
-void Engine::registerCommand(std::string n, Handler h){expandablePrimitives_.erase(n);handlers_[std::move(n)]=std::move(h);}
+Engine::Engine(){scopes_.emplace_back();commandScopes_.emplace_back();registerScopes_.emplace_back();registerAliasScopes_.emplace_back();installPrimitives();installScripting();}
+void Engine::registerCommand(std::string n, Handler h){expandablePrimitives_.erase(n);registerPrimitives_.erase(n);handlers_[std::move(n)]=std::move(h);}
 void Engine::defineCommand(std::string n,Handler h){
     if(n.empty()||!h){report("invalid command definition",true);return;}
-    scopes_.back().erase(n);countAliasScopes_.back().erase(n);commandScopes_.back()[std::move(n)]=std::move(h);
+    scopes_.back().erase(n);registerAliasScopes_.back().erase(n);commandScopes_.back()[std::move(n)]=std::move(h);
 }
 void Engine::registerEnvironment(std::string n, Handler b, Handler e){environments_[std::move(n)]={std::move(b),std::move(e)};}
 void Engine::report(std::string message,bool error){document_.diagnostics.push_back({error?Diagnostic::Severity::Error:Diagnostic::Severity::Warning,std::move(message),file_.string(),current_.line,current_.column});}
@@ -122,14 +122,17 @@ void Engine::executeSource(std::string source){
 void Engine::beginGroup(){
     if(scopes_.size()>=1024)throw std::runtime_error("group nesting limit exceeded");
     scopes_.emplace_back();commandScopes_.emplace_back();groupStyles_.push_back(styles_);
-    countScopes_.emplace_back();countAliasScopes_.emplace_back();
+    registerScopes_.emplace_back();registerAliasScopes_.emplace_back();
     catcodeSaves_.emplace_back();
+    afterGroups_.emplace_back();
 }
 void Engine::endGroup(){
     if(scopes_.size()>1){
         for(auto [character,code]:catcodeSaves_.back())catcodes_[character]=code;
         catcodeSaves_.pop_back();
-        scopes_.pop_back();commandScopes_.pop_back();countScopes_.pop_back();countAliasScopes_.pop_back();styles_=std::move(groupStyles_.back());groupStyles_.pop_back();
+        auto after=std::move(afterGroups_.back());afterGroups_.pop_back();
+        scopes_.pop_back();commandScopes_.pop_back();registerScopes_.pop_back();registerAliasScopes_.pop_back();styles_=std::move(groupStyles_.back());groupStyles_.pop_back();
+        insert(std::move(after));
     }
     else report("unmatched closing group",true);
 }
@@ -154,9 +157,10 @@ std::vector<std::string> Engine::commandNames()const{
 void Engine::defineMacro(std::string name,Macro m,bool global){
     if(name.empty()){report("empty macro name",true);return;}
     if(m.parameters<0||m.parameters>9){report("macro supports at most nine arguments",true);return;}
+    if(m.optionalFirst&&m.parameters==0){report("optional macro parameter requires at least one argument",true);return;}
     if(m.replacement.size()>1500000)throw std::runtime_error("macro replacement limit exceeded");
-    if(global){for(auto& scope:scopes_)scope.erase(name);for(auto& scope:commandScopes_)scope.erase(name);for(auto& scope:countAliasScopes_)scope.erase(name);}
-    else {commandScopes_.back().erase(name);countAliasScopes_.back().erase(name);}
+    if(global){for(auto& scope:scopes_)scope.erase(name);for(auto& scope:commandScopes_)scope.erase(name);for(auto& scope:registerAliasScopes_)scope.erase(name);}
+    else {commandScopes_.back().erase(name);registerAliasScopes_.back().erase(name);}
     (global?scopes_.front():scopes_.back())[std::move(name)]=std::move(m);
 }
 void Engine::expand(const Macro& macro){
@@ -166,6 +170,10 @@ void Engine::expand(const Macro& macro){
     }
     std::vector<std::vector<Token>> args;
     for(int i=0;i<macro.parameters;i++){
+        if(i==0&&macro.optionalFirst){
+            auto optional=readOptionalArgument();
+            args.push_back(optional?std::move(*optional):*macro.optionalFirst);continue;
+        }
         if(i>=static_cast<int>(macro.delimiters.size())||macro.delimiters[i].empty()){
             args.push_back(readArgument());continue;
         }
@@ -212,7 +220,7 @@ void Engine::expand(const Macro& macro){
     std::vector<Token> expanded;
     for(std::size_t i=0;i<macro.replacement.size();i++){
         const Token& t=macro.replacement[i];
-        if(t.kind==TokenKind::Parameter && i+1<macro.replacement.size()){
+        if(t.kind==TokenKind::Parameter && !t.literalParameter && i+1<macro.replacement.size()){
             const auto& n=macro.replacement[++i];
             if(n.kind==TokenKind::Parameter){expanded.push_back(n);continue;}
             if(n.value.size()==1 && n.value[0]>='1' && n.value[0]<='9'){
@@ -226,7 +234,7 @@ void Engine::expand(const Macro& macro){
             }
             expanded.push_back(t);expanded.push_back(n);continue;
         }
-        expanded.push_back(t);
+        auto copy=t;copy.literalParameter=false;expanded.push_back(std::move(copy));
     }
     insert(std::move(expanded));
 }
@@ -257,8 +265,12 @@ void Engine::scanDefinition(bool global,bool expandReplacement){
         pop(); // Opening brace found by the parameter scanner.
         int depth=1;
         while(depth){
-            Token t=expanded();
+            Token t=expanded(false,true);
             if(t.kind==TokenKind::Sentinel){report("unclosed expanded definition",true);valid=false;break;}
+            if(t.definitionOpaque){
+                t.definitionOpaque=false;t.literalParameter=t.kind==TokenKind::Parameter;
+                macro.replacement.push_back(std::move(t));continue;
+            }
             if(t.kind==TokenKind::Control&&!t.expansionProtected&&!hasCommand(t.controlName())){
                 report("undefined control sequence in expanded definition: \\"+t.value,true);valid=false;
             }
@@ -270,7 +282,7 @@ void Engine::scanDefinition(bool global,bool expandReplacement){
     }
     if(hashBrace)macro.replacement.push_back(*hashBrace);
     for(std::size_t i=0;i<macro.replacement.size();++i){
-        if(macro.replacement[i].kind!=TokenKind::Parameter)continue;
+        if(macro.replacement[i].kind!=TokenKind::Parameter||macro.replacement[i].literalParameter)continue;
         if(++i<macro.replacement.size()){
             const auto& t=macro.replacement[i];
             if(t.kind==TokenKind::Parameter)continue;
@@ -406,7 +418,7 @@ void Engine::finishConditional(bool alternative){
     while(ensureToken()){
         Token t=pop();
         if(t.kind!=TokenKind::Control||t.active)continue;
-        if(t.value=="iftrue"||t.value=="iffalse"||t.value=="ifdefined"||t.value=="ifnum")++nesting;
+        if(t.value=="iftrue"||t.value=="iffalse"||t.value=="ifdefined"||t.value=="ifnum"||t.value=="ifdim")++nesting;
         else if(t.value=="fi"){
             if(!nesting){conditions_.pop_back();return;}--nesting;
         }else if(t.value=="else"&&!nesting&&takeElse)return;
@@ -459,24 +471,24 @@ Document Engine::compileFragment(std::string source,std::filesystem::path filena
 }
 Document Engine::compileImpl(std::string source,std::filesystem::path filename,bool reset){
     // Document-defined environments/commands must not leak into another compile.
-    auto handlers=handlers_;auto environments=environments_;auto expandablePrimitives=expandablePrimitives_;
-    if(reset){document_={};scopes_.front().clear();commandScopes_.front().clear();countScopes_.front().clear();countAliasScopes_.front().clear();counters_.clear();lastHeadingNumber_.clear();lastHeadingId_.clear();headingSequence_=0;}
+    auto handlers=handlers_;auto environments=environments_;auto expandablePrimitives=expandablePrimitives_;auto registerPrimitives=registerPrimitives_;
+    if(reset){document_={};scopes_.front().clear();commandScopes_.front().clear();registerScopes_.front().clear();registerAliasScopes_.front().clear();counters_.clear();lastHeadingNumber_.clear();lastHeadingId_.clear();headingSequence_=0;}
     else {document_.blocks.clear();document_.diagnostics.clear();}
     file_=std::move(filename);scopes_.resize(1);commandScopes_.resize(1);
-    countScopes_.resize(1);countAliasScopes_.resize(1);globalAssignment_=false;
+    registerScopes_.resize(1);registerAliasScopes_.resize(1);globalAssignment_=false;
     // Discard any incomplete local groups left by a previous fragment/error.
     while(!catcodeSaves_.empty()){
         for(auto [character,code]:catcodeSaves_.back())catcodes_[character]=code;
         catcodeSaves_.pop_back();
     }
     if(reset)catcodes_=Lexer::defaultCatcodes();
-    conditions_.clear();conditionalFloor_=0;source_.reset();
+    conditions_.clear();conditionalFloor_=0;source_.reset();afterGroups_.clear();
     stream_.clear();envStack_.clear();styles_.clear();groupStyles_.clear();active_={};activeValid_=false;
     pendingSpace_=false;successiveNewlines_=0;operations_=0;
     includeDepth_=executionDepth_=expansionDepth_=0;stopped_=endInput_=false;current_={};
     try {source_.emplace(std::move(source));run(false);flush();}
-    catch(...) {handlers_=std::move(handlers);environments_=std::move(environments);expandablePrimitives_=std::move(expandablePrimitives);scopes_.resize(1);commandScopes_.resize(1);countScopes_.resize(1);countAliasScopes_.resize(1);throw;}
-    if(reset){handlers_=std::move(handlers);environments_=std::move(environments);expandablePrimitives_=std::move(expandablePrimitives);}
+    catch(...) {handlers_=std::move(handlers);environments_=std::move(environments);expandablePrimitives_=std::move(expandablePrimitives);registerPrimitives_=std::move(registerPrimitives);scopes_.resize(1);commandScopes_.resize(1);registerScopes_.resize(1);registerAliasScopes_.resize(1);throw;}
+    if(reset){handlers_=std::move(handlers);environments_=std::move(environments);expandablePrimitives_=std::move(expandablePrimitives);registerPrimitives_=std::move(registerPrimitives);}
     if(!envStack_.empty())report("unclosed environment: "+envStack_.back(),true);
     if(scopes_.size()!=1)report("unclosed group",true);
     return document_;
@@ -503,8 +515,11 @@ void Engine::installPrimitives(){
     registerCommand("let",[](Engine& e){Token dst=e.pop(true);if(dst.kind!=TokenKind::Control){e.report("\\let expects control sequence",true);return;}
         if(e.peek(true).value=="=")e.pop();
         Token src=e.pop(true);
-        if(src.kind==TokenKind::Control){if(const Macro* m=e.lookup(src.controlName())){e.defineMacro(dst.controlName(),*m);return;}}
-        e.defineMacro(dst.controlName(),{0,{src},{},{}});
+        if(src.kind==TokenKind::Control){
+            if(const Macro* m=e.lookup(src.controlName())){e.defineMacro(dst.controlName(),*m,e.globalAssignment_);return;}
+            if(auto reg=e.registerAlias(src.controlName())){e.defineRegister(dst.controlName(),*reg);return;}
+        }
+        e.defineMacro(dst.controlName(),{0,{src},{},{}},e.globalAssignment_);
     });
     registerCommand("input",[](Engine& e){e.readInput();});
     registerCommand("endinput",[](Engine& e){e.endInput_=true;});
@@ -515,6 +530,11 @@ void Engine::installPrimitives(){
     registerCommand("bye",[](Engine& e){e.stopped_=true;});
     registerCommand("bgroup",[](Engine& e){e.beginGroup();});
     registerCommand("egroup",[](Engine& e){e.endGroup();});
+    registerCommand("aftergroup",[](Engine& e){
+        auto token=e.pop();
+        if(token.kind==TokenKind::Sentinel){e.report("missing token after \\aftergroup",true);return;}
+        if(!e.afterGroups_.empty())e.afterGroups_.back().push_back(std::move(token));
+    });
     registerCommand("endcsname",[](Engine& e){e.report("unexpected \\endcsname",true);});
     registerCommand("message",[](Engine& e){e.report("TeX message: "+e.readTextArgument());});
     registerCommand("errmessage",[](Engine& e){e.report(e.readTextArgument(),true);});

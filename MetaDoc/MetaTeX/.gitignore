@@ -1,0 +1,4 @@
+# The workspace ignores directories named "latex" as generated output.
+# This directory contains the native LaTeX plugin's source.
+!plugins/latex/
+!plugins/latex/LaTeX.cpp

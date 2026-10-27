@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <variant>
 
 namespace metatex {
 
@@ -26,6 +27,8 @@ struct Token {
     bool expansionProtected = false;
     bool active = false;
     int category = 12;
+    bool definitionOpaque = false; // Scanner-only: copy from \the into an expanded definition.
+    bool literalParameter = false; // Replacement storage: literal # rather than a parameter reference.
     std::string controlName() const { return active?std::string(1,'\1')+value:value; }
 };
 class Lexer {
@@ -74,6 +77,7 @@ struct Macro {
     std::vector<Token> replacement;
     std::vector<Token> prefix;
     std::vector<std::vector<Token>> delimiters;
+    std::optional<std::vector<Token>> optionalFirst = std::nullopt;
 };
 
 class Engine {
@@ -131,11 +135,18 @@ private:
     std::unordered_map<std::string, Environment> environments_;
     std::vector<std::unordered_map<std::string, Macro>> scopes_;
     std::vector<std::unordered_map<std::string, Handler>> commandScopes_;
-    std::vector<std::unordered_map<int, int>> countScopes_;
-    std::vector<std::unordered_map<std::string, int>> countAliasScopes_;
+    enum class RegisterKind { Count, Dimension, Glue, Tokens };
+    struct Register { RegisterKind kind; int index; };
+    struct Glue {int width=0,stretch=0,shrink=0,stretchOrder=0,shrinkOrder=0;};
+    using TokenList = std::shared_ptr<const std::vector<Token>>;
+    using RegisterValue = std::variant<int,Glue,TokenList>;
+    std::vector<std::unordered_map<int, RegisterValue>> registerScopes_;
+    std::vector<std::unordered_map<std::string, Register>> registerAliasScopes_;
+    std::unordered_set<std::string> registerPrimitives_;
     bool globalAssignment_ = false;
     Lexer::Catcodes catcodes_=Lexer::defaultCatcodes();
     std::vector<std::unordered_map<int,int>> catcodeSaves_;
+    std::vector<std::vector<Token>> afterGroups_;
     std::optional<Lexer> source_;
     std::vector<bool> conditions_;
     std::size_t conditionalFloor_=0;
@@ -165,18 +176,28 @@ private:
     void command(const std::string& name);
     const Macro* lookup(const std::string& name) const;
     void expand(const Macro& macro);
-    bool expandToken(const Token& token);
-    Token expanded(bool skipSpace = false);
+    bool expandToken(const Token& token, bool definition = false);
+    Token expanded(bool skipSpace = false, bool definition = false);
     int scanInteger();
     void installExpansion();
     void installRegisters();
-    std::optional<int> countAlias(const std::string& name) const;
-    int countValue(int index) const;
-    int scanCountIndex();
-    int scanCountRegister();
-    void assignCount(int index);
-    void storeCount(int index, int value);
-    void defineCount(std::string name, int index);
+    std::optional<Register> registerAlias(const std::string& name) const;
+    std::optional<Register> registerToken(const Token& token);
+    std::optional<Register> scanRegister();
+    int registerValue(Register reg) const;
+    int scanRegisterIndex();
+    void assignRegister(Register reg);
+    void storeRegister(Register reg, RegisterValue value);
+    void defineRegister(std::string name, Register reg);
+    bool scanKeyword(std::string_view keyword);
+    std::optional<int> scanDimension(int* order = nullptr);
+    static std::string dimensionText(int value);
+    std::optional<Glue> scanGlue();
+    Glue glueValue(Register reg) const;
+    static std::string glueText(const Glue& glue);
+    void arithmeticGlue(Register reg, const std::string& operation);
+    TokenList tokenListValue(Register reg) const;
+    void assignTokenList(Register reg);
     void scanOptionalEquals();
     void installPrimitives();
     void installScripting();

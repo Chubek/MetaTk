@@ -29,15 +29,38 @@ Lexer::Catcodes Lexer::defaultCatcodes(){
     return codes;
 }
 Token Lexer::next(const Catcodes& codes){
-    struct Character {std::string value;unsigned cp;std::size_t size;};
-    auto character=[&](){
-        unsigned char c=source_[position_];unsigned count=c<128?1:c<224?2:c<240?3:4;
+    struct Character {std::string value;unsigned cp;std::size_t size,columns;bool newline;};
+    auto raw=[&](std::size_t at){
+        unsigned char c=source_[at];unsigned count=c<128?1:c<224?2:c<240?3:4;
         unsigned cp=count==1?c:c&(0x7F>>count);
-        for(unsigned i=1;i<count;++i)cp=(cp<<6)|(static_cast<unsigned char>(source_[position_+i])&63);
-        if(c=='\r'&&position_+1<source_.size()&&source_[position_+1]=='\n')count=2;
-        return Character{source_.substr(position_,count),cp,count};
+        for(unsigned i=1;i<count;++i)cp=(cp<<6)|(static_cast<unsigned char>(source_[at+i])&63);
+        if(c=='\r'&&at+1<source_.size()&&source_[at+1]=='\n')count=2;
+        return Character{source_.substr(at,count),cp,count,1,c=='\r'||c=='\n'};
     };
-    auto advance=[&](const Character& c){position_+=c.size;if(c.cp=='\r'||c.cp=='\n'){++line_;column_=1;}else ++column_;};
+    auto character=[&](){
+        auto c=raw(position_);
+        auto hex=[](unsigned char ch){return ch>='0'&&ch<='9'?ch-'0':ch>='a'&&ch<='f'?ch-'a'+10:-1;};
+        // TeX getnext translates doubled superscript characters before looking
+        // up the resulting category, including within control words. Repeated
+        // translations consume source bytes, so they cannot cycle.
+        while(c.cp<256&&codes[c.cp]==7&&position_+c.size<source_.size()){
+            auto second=raw(position_+c.size);
+            auto at=position_+c.size+second.size;
+            if(second.cp!=c.cp||second.newline||at>=source_.size())break;
+            auto third=raw(at);
+            if(third.cp>=128||third.newline)break;
+            c.size+=second.size+third.size;c.columns+=2;
+            int high=hex(static_cast<unsigned char>(third.cp));
+            int low=c.size+position_<source_.size()?hex(static_cast<unsigned char>(source_[position_+c.size])):-1;
+            if(high>=0&&low>=0){c.cp=16*high+low;++c.size;++c.columns;}
+            else c.cp=third.cp<64?third.cp+64:third.cp-64;
+            c.value.clear();
+            if(c.cp<128)c.value+=static_cast<char>(c.cp);
+            else {c.value+=static_cast<char>(0xC0|(c.cp>>6));c.value+=static_cast<char>(0x80|(c.cp&63));}
+        }
+        return c;
+    };
+    auto advance=[&](const Character& c){position_+=c.size;if(c.newline){++line_;column_=1;}else column_+=c.columns;};
     auto category=[&](const Character& c){return c.cp<256?codes[c.cp]:11;};
     auto emit=[&](Token token){if(++emitted_>1500000)throw std::runtime_error("source token limit exceeded");return token;};
     while(position_<source_.size()){
@@ -48,17 +71,17 @@ Token Lexer::next(const Catcodes& codes){
         if(code==15)throw std::runtime_error("invalid category-code character at byte "+std::to_string(token.offset));
         if(code==14){
             while(position_<source_.size()){
-                auto rest=character();advance(rest);
-                if(rest.cp=='\r'||rest.cp=='\n')break;
+                auto rest=raw(position_);advance(rest);
+                if(rest.newline)break;
             }
             state_=State::NewLine;continue;
         }
         if(code==5){
             // A category-5 character terminates the physical input line,
             // even when it is not the file's newline character.
-            if(c.cp!='\r'&&c.cp!='\n')while(position_<source_.size()){
-                auto rest=character();advance(rest);
-                if(rest.cp=='\r'||rest.cp=='\n')break;
+            if(!c.newline)while(position_<source_.size()){
+                auto rest=raw(position_);advance(rest);
+                if(rest.newline)break;
             }
             auto previous=state_;state_=State::NewLine;
             if(previous==State::SkipSpaces)continue;

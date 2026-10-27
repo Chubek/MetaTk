@@ -1,5 +1,9 @@
 # MetaTeX project
 
+Read the [44-chapter MetaTeX manual](manual/README.md) for installation,
+authoring, macros, renderers, embedding, plugins, and scripting. Its marked
+examples are exercised by the `manual-examples` CTest target.
+
 **TeX82 / TeXScrape integration (new):** A genuine TeX82-to-DVI compiler is now
 implemented in `truth/TeXScrape/Working/TeX.c`. For a dependency-free build,
 use `cmake -S . -B build-tex82 -DMETATEX_TEXSCRAPE_ONLY=ON`,
@@ -103,7 +107,7 @@ versioned scene-artifact format, not arbitrary language programs.
 
 - Incremental UTF-8-preserving lexer with scoped/global `\catcode` assignments
   for character codes 0–255, active-character macros, and category-preserving
-  stored tokens. Includes escape/control word, group, comment, math delimiter,
+  stored tokens, including category-aware `^^` input notation. Includes escape/control word, group, comment, math delimiter,
   parameter, superscript, subscript and space tokens.
 - Expandable macros: `\def`, `\gdef`, `\edef`, `\xdef`, `\let`; scoped definitions; `#1`–`#9`
   undelimited and delimited arguments, literal parameter prefixes, and `#{`
@@ -111,6 +115,8 @@ versioned scene-artifact format, not arbitrary language programs.
   `\iffalse`, `\ifdefined`, `\ifnum`). Processing budget limits runaway macros.
 - Shared native expansion scanner with `\noexpand`, `\expandafter`, expanded
   `\csname` names, `\string`, `\number`, and `\romannumeral`.
+- Ordered `\aftergroup` token insertion after local state restoration, and
+  LaTeX `\newcommand`/`\renewcommand`/`\providecommand` first-argument defaults.
 - Scoped TeX82 integer registers `\count0`–`\count255`, `\countdef` aliases,
   `\the`, `\advance`, `\multiply`, `\divide`, and `\global` for these assignments
   and macro definitions. Arithmetic overflow and division by zero are diagnosed.
@@ -131,7 +137,7 @@ versioned scene-artifact format, not arbitrary language programs.
 
 - Full TeX82 primitive semantics, dimension/glue registers, glue and boxes,
   Knuth–Plass line breaking, page insertion/shipout, DVI, PostScript, EPUB,
-  TROFF IR, complete TeX input normalization and `^^` character notation.
+  TROFF IR, and complete TeX input normalization including `\endlinechar`.
 - True LaTeX kernel, .sty/.cls loading, NFSS, BibTeX/Biber, TikZ, tabular
   layout, proper floats, verbatim preserving comments, alignment mathematics,
   complete special-case token expansion, and

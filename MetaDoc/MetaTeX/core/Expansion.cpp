@@ -16,16 +16,17 @@ std::vector<Token> characters(std::string_view text,const Token& location){
 }
 }
 
-Token Engine::expanded(bool skipSpace){
+Token Engine::expanded(bool skipSpace,bool definition){
     for(;;){
         Token token=pop();
-        if(expandToken(token))continue;
+        if(token.definitionOpaque)return token;
+        if(expandToken(token,definition))continue;
         if(skipSpace&&space(token))continue;
         return token;
     }
 }
 
-bool Engine::expandToken(const Token& token){
+bool Engine::expandToken(const Token& token,bool definition){
     if(token.kind!=TokenKind::Control||token.expansionProtected)return false;
     if(const auto* macro=lookup(token.controlName())){auto copy=*macro;expand(copy);return true;}
     // Locally installed plugin commands are unexpandable, even when they shadow
@@ -72,8 +73,19 @@ bool Engine::expandToken(const Token& token){
             else insert(characters(std::to_string(catcodes_[character]),token));
         }else{
             if(internal.kind!=TokenKind::Sentinel)insert({internal});
-            int index=scanCountRegister();
-            if(index>=0)insert(characters(std::to_string(countValue(index)),token));
+            auto reg=scanRegister();
+            if(reg&&reg->index>=0){
+                if(reg->kind==RegisterKind::Tokens){
+                    auto stored=tokenListValue(*reg);
+                    auto tokens=stored?*stored:std::vector<Token>{};
+                    if(definition)for(auto& item:tokens)item.definitionOpaque=true;
+                    insert(std::move(tokens));return true;
+                }
+                int value=registerValue(*reg);
+                auto text=reg->kind==RegisterKind::Glue?glueText(glueValue(*reg)):
+                    reg->kind==RegisterKind::Dimension?dimensionText(value):std::to_string(value);
+                insert(characters(text,token));
+            }
         }
     }else if(name=="number"||name=="romannumeral"){
         int value=scanInteger();std::string result;
@@ -99,6 +111,10 @@ bool Engine::expandToken(const Token& token){
         int left=scanInteger();auto relation=expanded(true);int right=scanInteger();
         if(relation.value!="<"&&relation.value!=">"&&relation.value!="=")report("invalid comparison in \\ifnum",true);
         conditional(relation.value=="<"?left<right:relation.value==">"?left>right:relation.value=="="&&left==right);
+    }else if(name=="ifdim"){
+        auto left=scanDimension();auto relation=expanded(true);auto right=scanDimension();
+        if(relation.value!="<"&&relation.value!=">"&&relation.value!="=")report("invalid comparison in \\ifdim",true);
+        conditional(left&&right&&(relation.value=="<"?*left<*right:relation.value==">"?*left>*right:relation.value=="="&&*left==*right));
     }
     return true;
 }
@@ -117,10 +133,9 @@ int Engine::scanInteger(){
             if(character<0||character>255){report("category-code character must be 0..255",true);return 0;}
             return negative?-catcodes_[character]:catcodes_[character];
         }
-        auto alias=countAlias(token.value);
-        if(token.value=="count"||alias){
-            int index=alias?*alias:scanCountIndex();
-            int value=index<0?0:countValue(index);
+        if(auto reg=registerToken(token)){
+            if(reg->kind==RegisterKind::Tokens){report("token list cannot be used as an integer",true);return 0;}
+            int value=registerValue(*reg);
             return negative?-value:value;
         }
     }
@@ -157,7 +172,7 @@ int Engine::scanInteger(){
 
 void Engine::installExpansion(){
     for(const char* name:{"noexpand","expandafter","string","number","romannumeral","the",
-                         "iftrue","iffalse","ifdefined","ifnum","csname","else","fi"}){
+                         "iftrue","iffalse","ifdefined","ifnum","ifdim","csname","else","fi"}){
         registerCommand(name,[](Engine&){}); // Names exposed to plugins/REPL; expanded by the scanner.
         expandablePrimitives_.insert(name);
     }
