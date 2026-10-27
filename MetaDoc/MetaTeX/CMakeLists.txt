@@ -64,6 +64,13 @@ set_target_properties(metatex PROPERTIES
 set_target_properties(metatex_core metatex_latex metatex_nekotex metatex_metavect PROPERTIES
     INSTALL_RPATH "$ORIGIN")
 if(BUILD_TESTING AND METATEX_BUILD_TESTS)
+    add_executable(metatex_plugin_tests tests/plugins.cpp)
+    target_link_libraries(metatex_plugin_tests PRIVATE metatex_core metatex_dynalo)
+    add_dependencies(metatex_plugin_tests metatex_latex metatex_nekotex metatex_metavect)
+    add_test(NAME plugin-contracts COMMAND metatex_plugin_tests
+        $<TARGET_FILE:metatex_latex> $<TARGET_FILE:metatex_nekotex> $<TARGET_FILE:metatex_metavect>
+        "${CMAKE_CURRENT_BINARY_DIR}/plugin-fixtures")
+    set_tests_properties(plugin-contracts PROPERTIES TIMEOUT 30)
     add_executable(metatex_module_tests tests/modules.cpp)
     target_link_libraries(metatex_module_tests PRIVATE metatex_core Threads::Threads)
     find_file(METATEX_TEST_FONT NAMES DejaVuSans.ttf
@@ -129,6 +136,9 @@ if(BUILD_TESTING AND METATEX_BUILD_TESTS)
     add_test(NAME scripting-primitives COMMAND metatex_scripting_tests "${CMAKE_CURRENT_BINARY_DIR}/script-fixtures")
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
+        add_test(NAME plugin-integration COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/plugin_integration.py"
+            $<TARGET_FILE:metatex> "${CMAKE_CURRENT_BINARY_DIR}")
+        set_tests_properties(plugin-integration PROPERTIES TIMEOUT 60)
         add_test(NAME alternate-devices COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tests/devices.py" $<TARGET_FILE:metatex> "${CMAKE_CURRENT_SOURCE_DIR}")
         set_tests_properties(alternate-devices PROPERTIES TIMEOUT 120)
         add_test(NAME glue-tex82-oracle COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/glue_oracle.py $<TARGET_FILE:metatex> $<TARGET_FILE:texscrape>)

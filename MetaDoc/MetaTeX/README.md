@@ -132,8 +132,12 @@ versioned scene-artifact format, not arbitrary language programs.
 - Basic input inclusion, event-driven command handlers, document blocks,
   inline styles, headings, labels/references, lists and simple environments.
 - External shared library plugins: **LaTeX** (document skeleton, sectioning,
-  macros, math environments, links, figures as references, theorem definitions)
-  and **NekoTeX** (semantic notes, callouts, tips, code blocks, exercises).
+  scoped parameterized environments, starred headings, shared/section-relative
+  theorem counters, literal code, math environments, links and figure captions),
+  **NekoTeX** (multi-paragraph semantic notes, callouts, literal code/files,
+  numbered exercises and solutions), and **MetaVect** (reusable immutable scenes,
+  physical-unit sizing, aspect-preserving width/height fitting and scaling).
+  See [plugin contracts and examples](docs/PLUGINS.md).
 - TeX-style inline/display math to MathML, supporting fractions, roots,
   Greek symbols, selected operators and superscripts/subscripts.
 - HTML with escaped content; JSON semantic IR; basic text; paginated PDF,
@@ -148,7 +152,7 @@ versioned scene-artifact format, not arbitrary language programs.
   Knuth–Plass line breaking, page insertion/shipout, native DVI emission,
   and complete TeX input normalization including `\endlinechar`.
 - True LaTeX kernel, .sty/.cls loading, NFSS, BibTeX/Biber, TikZ, tabular
-  layout, proper floats, verbatim preserving comments, alignment mathematics,
+  layout, proper floats, alignment mathematics,
   complete special-case token expansion, and
   arbitrary LaTeX package compatibility.
 - LuaTeX semantics, MRuby/MicroPython bindings and the advanced `inter/*.midl` IR modules.

@@ -16,13 +16,33 @@ std::string trim(std::string s) {
 }
 std::string number(int v) {return std::to_string(v);}
 }
-Engine::Engine(){scopes_.emplace_back();commandScopes_.emplace_back();registerScopes_.emplace_back();registerAliasScopes_.emplace_back();installPrimitives();installScripting();}
+Engine::Engine(){scopes_.emplace_back();commandScopes_.emplace_back();environmentScopes_.emplace_back();registerScopes_.emplace_back();registerAliasScopes_.emplace_back();installPrimitives();installScripting();}
 void Engine::registerCommand(std::string n, Handler h){expandablePrimitives_.erase(n);registerPrimitives_.erase(n);handlers_[std::move(n)]=std::move(h);}
 void Engine::defineCommand(std::string n,Handler h){
     if(n.empty()||!h){report("invalid command definition",true);return;}
     scopes_.back().erase(n);registerAliasScopes_.back().erase(n);commandScopes_.back()[std::move(n)]=std::move(h);
 }
 void Engine::registerEnvironment(std::string n, Handler b, Handler e){environments_[std::move(n)]={std::move(b),std::move(e)};}
+void Engine::defineEnvironment(std::string n,Handler b,Handler e){
+    if(n.empty()||!b){report("invalid environment definition",true);return;}
+    environmentScopes_.back()[std::move(n)]={std::move(b),std::move(e)};
+}
+void Engine::defineTokenEnvironment(std::string name,Macro begin,std::vector<Token> end){
+    if(name.empty()){report("invalid environment definition",true);return;}
+    if(begin.parameters<0||begin.parameters>9||(begin.optionalFirst&&begin.parameters==0)){
+        report("invalid environment parameter count/default",true);return;
+    }
+    Environment env;
+    env.begin=[begin=std::move(begin)](Engine& e){e.expand(begin);};
+    env.endTokens=std::make_shared<const std::vector<Token>>(std::move(end));
+    environmentScopes_.back()[std::move(name)]=std::move(env);
+}
+const Engine::Environment* Engine::lookupEnvironment(const std::string& n)const{
+    for(auto i=environmentScopes_.rbegin();i!=environmentScopes_.rend();++i)
+        if(auto found=i->find(n);found!=i->end())return &found->second;
+    auto found=environments_.find(n);return found==environments_.end()?nullptr:&found->second;
+}
+bool Engine::hasEnvironment(const std::string& n)const{return lookupEnvironment(n)!=nullptr;}
 void Engine::report(std::string message,bool error){document_.diagnostics.push_back({error?Diagnostic::Severity::Error:Diagnostic::Severity::Warning,std::move(message),file_.string(),current_.line,current_.column});}
 Token Engine::pop(bool skipSpace) {
     while(ensureToken()) {
@@ -43,12 +63,13 @@ bool Engine::ensureToken(){
     if(!source_)return false;
     auto token=source_->next(catcodes_);
     if(token.kind==TokenKind::Sentinel)return false;
-    stream_.push_back(std::move(token));return true;
+    token.directSource=true;stream_.push_back(std::move(token));return true;
 }
 bool Engine::consume(TokenKind kind){if(peek().kind==kind){pop();return true;}return false;}
 std::vector<Token> Engine::readArgument(){
     Token t=pop(true);
     if(t.kind==TokenKind::Sentinel){report("missing required argument",true);return {};}
+    if(t.kind==TokenKind::EndGroup){insert({t});report("missing argument before closing group",true);return {};}
     if(t.kind!=TokenKind::BeginGroup)return {t};
     int depth=1;std::vector<Token> result;
     while(depth){
@@ -85,8 +106,16 @@ std::string Engine::tokensText(const std::vector<Token>& tokens) const {
 std::string Engine::readTextArgument(){return trim(tokensText(readArgument()));}
 std::string Engine::readOptionalText(std::string fallback){auto o=readOptionalArgument();return o?trim(tokensText(*o)):fallback;}
 std::string Engine::readDelimitedText(){
+    if(current_.directSource&&stream_.empty()&&source_){
+        try{return source_->readLiteralDelimited();}catch(const std::exception& ex){report(ex.what(),true);return {};}
+    }
     Token delim=pop();
+    if(delim.kind==TokenKind::Character&&delim.value=="*")delim=pop();
     if(delim.kind==TokenKind::Sentinel){report("missing delimiter",true);return {};}
+    if(delim.kind==TokenKind::Control||delim.kind==TokenKind::Space||delim.kind==TokenKind::EndLine){report("invalid literal delimiter",true);return {};}
+    if(delim.directSource&&stream_.empty()&&source_){
+        try{return source_->readLiteral(delim.value);}catch(const std::exception& ex){report(ex.what(),true);return {};}
+    }
     std::string result;bool closed=false;
     while(ensureToken()){
         Token t=pop();if(t.kind==TokenKind::Sentinel)break;
@@ -97,19 +126,52 @@ std::string Engine::readDelimitedText(){
     if(!closed)report("unterminated delimited text",true);
     return result;
 }
+bool Engine::readStar(){auto t=peek(true);if(t.kind==TokenKind::Character&&t.value=="*"){pop();return true;}return false;}
+std::string Engine::readLiteralArgument(){
+    auto opening=pop(true);
+    if(opening.kind!=TokenKind::BeginGroup){report("literal text requires a brace argument",true);return {};}
+    if(opening.directSource&&stream_.empty()&&source_&&opening.value=="{"){
+        try{return source_->readLiteral("}",true);}catch(const std::exception& ex){report(ex.what(),true);return {};}
+    }
+    insert({opening});return tokensText(readArgument());
+}
+std::string Engine::readLiteralEnvironment(const std::string& name){
+    if(!current_.directSource||!stream_.empty()||!source_){report("literal environment requires direct source input",true);return {};}
+    try{return source_->readLiteral("\\end{"+name+"}");}catch(const std::exception& ex){report(ex.what(),true);return {};}
+}
 void Engine::insert(std::vector<Token> tokens){
     if(tokens.size()>1500000-stream_.size())throw std::runtime_error("token queue limit exceeded");
-    for(auto it=tokens.rbegin();it!=tokens.rend();++it)stream_.push_front(std::move(*it));
+    for(auto it=tokens.rbegin();it!=tokens.rend();++it){it->directSource=false;stream_.push_front(std::move(*it));}
 }
 void Engine::execute(const std::vector<Token>& tokens){
+    executeTokens(tokens,scopes_.size(),envStack_.size());
+}
+void Engine::executeTokens(const std::vector<Token>& tokens,std::size_t localFloor,std::size_t environmentDepth){
     if(executionDepth_>=128)throw std::runtime_error("nested execution limit exceeded");
     // A scanner in this frame must never consume its caller's following tokens.
     auto outer=std::move(stream_);stream_.clear();++executionDepth_;
     auto outerSource=std::move(source_);source_.reset();
     auto floor=conditionalFloor_;conditionalFloor_=conditions_.size();
-    try {insert(tokens);run(true);}
-    catch(...) {stream_=std::move(outer);source_=std::move(outerSource);conditions_.resize(conditionalFloor_);conditionalFloor_=floor;--executionDepth_;throw;}
+    auto groupFloor=groupFloor_;groupFloor_=localFloor;
+    auto restoreGroups=[&](){
+        if(envStack_.size()>environmentDepth){
+            report("unclosed environment in executed argument: "+envStack_.back(),true);flush();
+            if(blockContexts_.size()>envContextDepths_[environmentDepth])blockContexts_.resize(envContextDepths_[environmentDepth]);
+            envStack_.resize(environmentDepth);envEnds_.resize(environmentDepth);envEndTokens_.resize(environmentDepth);envGroupDepths_.resize(environmentDepth);envItems_.resize(environmentDepth);
+            envContextDepths_.resize(environmentDepth);
+        }
+        if(scopes_.size()>groupFloor_){report("unclosed group in executed argument",true);
+            while(scopes_.size()>groupFloor_)endGroup();}
+        groupFloor_=groupFloor;
+    };
+    try {insert(tokens);run(true);restoreGroups();}
+    catch(...) {restoreGroups();stream_=std::move(outer);source_=std::move(outerSource);conditions_.resize(conditionalFloor_);conditionalFloor_=floor;--executionDepth_;throw;}
     stream_=std::move(outer);source_=std::move(outerSource);conditionalFloor_=floor;--executionDepth_;
+}
+void Engine::executeGrouped(const std::vector<Token>& tokens){
+    beginGroup();
+    try{execute(tokens);}catch(...){endGroup();throw;}
+    endGroup();
 }
 void Engine::executeSource(std::string source){
     Lexer scanner(std::move(source));
@@ -121,17 +183,17 @@ void Engine::executeSource(std::string source){
 }
 void Engine::beginGroup(){
     if(scopes_.size()>=1024)throw std::runtime_error("group nesting limit exceeded");
-    scopes_.emplace_back();commandScopes_.emplace_back();groupStyles_.push_back(styles_);
+    scopes_.emplace_back();commandScopes_.emplace_back();environmentScopes_.emplace_back();groupStyles_.push_back(styles_);
     registerScopes_.emplace_back();registerAliasScopes_.emplace_back();
     catcodeSaves_.emplace_back();
     afterGroups_.emplace_back();
 }
 void Engine::endGroup(){
-    if(scopes_.size()>1){
+    if(scopes_.size()>groupFloor_){
         for(auto [character,code]:catcodeSaves_.back())catcodes_[character]=code;
         catcodeSaves_.pop_back();
         auto after=std::move(afterGroups_.back());afterGroups_.pop_back();
-        scopes_.pop_back();commandScopes_.pop_back();registerScopes_.pop_back();registerAliasScopes_.pop_back();styles_=std::move(groupStyles_.back());groupStyles_.pop_back();
+        scopes_.pop_back();commandScopes_.pop_back();environmentScopes_.pop_back();registerScopes_.pop_back();registerAliasScopes_.pop_back();styles_=std::move(groupStyles_.back());groupStyles_.pop_back();
         insert(std::move(after));
     }
     else report("unmatched closing group",true);
@@ -302,6 +364,14 @@ void Engine::flush(){
 }
 void Engine::paragraph(){flush();}
 void Engine::startBlock(BlockKind kind,int level,bool ordered){flush();active_={};active_.kind=kind;active_.level=level;active_.ordered=ordered;activeValid_=true;}
+void Engine::beginBlockContext(BlockKind kind,std::string role){
+    paragraph();blockContexts_.emplace_back(kind,std::move(role));
+}
+void Engine::endBlockContext(){paragraph();if(!blockContexts_.empty())blockContexts_.pop_back();}
+void Engine::codeBlock(std::string text,std::string language){
+    startBlock(BlockKind::Code);active_.language=std::move(language);
+    addSpan(SpanKind::Code,std::move(text));paragraph();
+}
 void Engine::addGraphic(metavect::Scene scene,std::string caption,double width){
     if(!std::isfinite(width)||width<0||(width>0&&width<0.01)||width>1000000){report("invalid vector graphic width",true);return;}
     flush();Block block;block.kind=BlockKind::VectorGraphic;
@@ -310,7 +380,7 @@ void Engine::addGraphic(metavect::Scene scene,std::string caption,double width){
 }
 void Engine::addText(std::string text){
     if(text.empty())return;
-    if(!activeValid_){active_={};activeValid_=true;}
+    if(!activeValid_){active_={};if(!blockContexts_.empty()){active_.kind=blockContexts_.back().first;active_.role=blockContexts_.back().second;}activeValid_=true;}
     SpanKind kind=styles_.empty()?SpanKind::Text:styles_.back();
     if(pendingSpace_ && !active_.spans.empty() && !text.empty() && text[0]!='\n') {
         if(active_.spans.back().kind==kind&&active_.spans.back().extra.empty())active_.spans.back().text+=' ';
@@ -322,23 +392,25 @@ void Engine::addText(std::string text){
     else active_.spans.push_back({kind,std::move(text),""});
 }
 void Engine::addSpan(SpanKind kind,std::string text,std::string extra){
-    if(!activeValid_){active_={};activeValid_=true;}
+    if(!activeValid_){active_={};if(!blockContexts_.empty()){active_.kind=blockContexts_.back().first;active_.role=blockContexts_.back().second;}activeValid_=true;}
     if(pendingSpace_&&!active_.spans.empty())active_.spans.push_back({SpanKind::Text," ",""});
     pendingSpace_=false;successiveNewlines_=0;
     active_.spans.push_back({kind,std::move(text),std::move(extra)});
 }
 void Engine::addSpace(){if(activeValid_)pendingSpace_=true;}
 void Engine::styledArgument(SpanKind kind){auto tokens=readArgument();beginGroup();styles_.push_back(kind);execute(tokens);endGroup();}
-void Engine::heading(int level){
+void Engine::heading(int level){heading(level,true);}
+void Engine::heading(int level,bool numbered){
     std::vector<Token> argument=readArgument();
     flush();
-    if(level==1){stepCounter("section");counters_["subsection"]=counters_["subsubsection"]=0;lastHeadingNumber_=number(counters_["section"]);}
+    if(!numbered){} // Unnumbered headings do not replace the current reference value.
+    else if(level==1){stepCounter("section");counters_["subsection"]=counters_["subsubsection"]=0;lastHeadingNumber_=number(counters_["section"]);}
     else if(level==2){stepCounter("subsection");counters_["subsubsection"]=0;lastHeadingNumber_=number(counters_["section"])+"."+number(counters_["subsection"]);}
     else if(level==3){stepCounter("subsubsection");lastHeadingNumber_=number(counters_["section"])+"."+number(counters_["subsection"])+"."+number(counters_["subsubsection"]);}
     else lastHeadingNumber_="";
     startBlock(BlockKind::Heading,level);lastHeadingId_="sec-"+std::to_string(++headingSequence_);
     active_.id=lastHeadingId_;
-    execute(argument);flush();
+    executeGrouped(argument);flush();
 }
 void Engine::setTitle(std::string title){document_.title=std::move(title);}
 void Engine::setAuthor(std::string author){document_.author=std::move(author);}
@@ -354,23 +426,35 @@ void Engine::makeTitle(){
     }
 }
 void Engine::beginEnvironment(const std::string& name){
-    envStack_.push_back(name);beginGroup();
-    auto it=environments_.find(name);
-    if(it!=environments_.end() && it->second.begin){auto handler=it->second.begin;handler(*this);}
-    else if(name!="document")report("unknown environment: "+name);
+    auto found=lookupEnvironment(name);Environment env=found?*found:Environment{};
+    beginGroup();envStack_.push_back(name);envEnds_.push_back(env.end);envEndTokens_.push_back(env.endTokens);
+    envGroupDepths_.push_back(scopes_.size());envItems_.push_back(0);
+    envContextDepths_.push_back(blockContexts_.size());
+    if(env.begin)env.begin(*this);
+    else report("unknown environment: "+name,true);
 }
 void Engine::endEnvironment(const std::string& name){
-    if(envStack_.empty()||envStack_.back()!=name) {report("mismatched environment end: "+name,true);return;}
-    auto it=environments_.find(name);
-    if(it!=environments_.end()&&it->second.end){auto handler=it->second.end;handler(*this);}
-    else if(name!="document")report("unknown environment: "+name);
-    flush();endGroup();envStack_.pop_back();
+    auto found=std::find(envStack_.rbegin(),envStack_.rend(),name);
+    if(found==envStack_.rend()){report("mismatched environment end: "+name,true);return;}
+    auto index=envStack_.size()-1-std::distance(envStack_.rbegin(),found);
+    auto ending=envEndTokens_[index];
+    if(index+1!=envStack_.size()&&!ending){report("mismatched environment end: "+name,true);return;}
+    if(envGroupDepths_[index]<=groupFloor_){report("unbalanced group in environment: "+name,true);return;}
+    // A user-defined end body may close environments opened by its begin body.
+    // It may not escape the defining environment's own group.
+    if(ending)executeTokens(*ending,envGroupDepths_[index],index+1);
+    if(scopes_.size()!=envGroupDepths_.back()||scopes_.size()<=groupFloor_){report("unbalanced group in environment: "+name,true);return;}
+    auto handler=envEnds_.back();if(handler)handler(*this);
+    flush();if(blockContexts_.size()>envContextDepths_.back())blockContexts_.resize(envContextDepths_.back());
+    endGroup();envStack_.pop_back();envEnds_.pop_back();envEndTokens_.pop_back();envGroupDepths_.pop_back();envItems_.pop_back();envContextDepths_.pop_back();
 }
 void Engine::item(){
-    auto listIt=std::find_if(envStack_.rbegin(),envStack_.rend(),[](const auto& n){return n=="itemize"||n=="enumerate";});
+    auto isList=[](const auto& n){return n=="itemize"||n=="enumerate"||n=="description";};
+    auto listIt=std::find_if(envStack_.rbegin(),envStack_.rend(),isList);
     if(listIt==envStack_.rend()){report("\\item outside a list",true);return;}
-    int depth=(int)std::count_if(envStack_.begin(),envStack_.end(),[](const auto& n){return n=="itemize"||n=="enumerate";});
+    int depth=(int)std::count_if(envStack_.begin(),envStack_.end(),isList);
     startBlock(BlockKind::ListItem,depth, *listIt=="enumerate");
+    if(active_.ordered){active_.listNumber=++envItems_[envStack_.size()-1-std::distance(envStack_.rbegin(),listIt)];setReferenceValue(std::to_string(active_.listNumber));}
     if(auto opt=readOptionalArgument()) {addSpan(SpanKind::Bold,tokensText(*opt));addText(" ");}
 }
 void Engine::math(bool display,std::string terminator){
@@ -389,6 +473,27 @@ void Engine::math(bool display,std::string terminator){
     else addSpan(SpanKind::Math,std::move(expression));
 }
 void Engine::processMathShift(){bool display=peek().kind==TokenKind::MathShift;if(display)pop();math(display,display?"$$":"$");}
+void Engine::mathEnvironment(const std::string& name,bool numbered){
+    if(numbered){stepCounter("equation");setReferenceValue(std::to_string(counter("equation")));}
+    std::vector<Token> body;std::vector<std::string> nested;bool ended=false;
+    while(ensureToken()){
+        auto t=pop();
+        if(t.kind==TokenKind::Control&&!t.active&&t.value=="label") {label(readTextArgument());continue;}
+        if(t.kind==TokenKind::Control&&!t.active&&(t.value=="begin"||t.value=="end")){
+            auto arg=readArgument();auto env=tokensText(arg);
+            if(t.value=="end"&&nested.empty()){
+                if(env!=name)report("mismatched math environment end: "+env+" (expected "+name+")",true);
+                ended=true;break;
+            }
+            if(t.value=="begin")nested.push_back(env);
+            else if(nested.back()==env)nested.pop_back();
+            else report("mismatched nested math environment end: "+env,true);
+            body.push_back(t);body.push_back({TokenKind::BeginGroup,"{"});body.insert(body.end(),arg.begin(),arg.end());body.push_back({TokenKind::EndGroup,"}"});
+        }else body.push_back(std::move(t));
+    }
+    if(!ended)report("unterminated math environment: "+name,true);
+    startBlock(BlockKind::DisplayMath);addSpan(SpanKind::Math,tokensText(body));paragraph();endEnvironment(name);
+}
 void Engine::readInput(){
     std::string path=readTextArgument();
     if(path.empty()){report("missing input filename",true);return;}
@@ -444,6 +549,7 @@ void Engine::run(bool /*nested*/){
     while(!stopped_ && !endInput_ && ensureToken()) {
         Token t=expanded();
         if(t.kind==TokenKind::Sentinel)break;
+        current_=t;
         if(t.kind==TokenKind::Control&&t.expansionProtected)continue;
         switch(t.kind){
             case TokenKind::Control: command(t.controlName());break;
@@ -472,9 +578,11 @@ Document Engine::compileFragment(std::string source,std::filesystem::path filena
 Document Engine::compileImpl(std::string source,std::filesystem::path filename,bool reset){
     // Document-defined environments/commands must not leak into another compile.
     auto handlers=handlers_;auto environments=environments_;auto expandablePrimitives=expandablePrimitives_;auto registerPrimitives=registerPrimitives_;
-    if(reset){document_={};scopes_.front().clear();commandScopes_.front().clear();registerScopes_.front().clear();registerAliasScopes_.front().clear();counters_.clear();lastHeadingNumber_.clear();lastHeadingId_.clear();headingSequence_=0;}
+    if(reset){document_={};scopes_.front().clear();commandScopes_.front().clear();environmentScopes_.front().clear();registerScopes_.front().clear();registerAliasScopes_.front().clear();counters_.clear();lastHeadingNumber_.clear();lastHeadingId_.clear();headingSequence_=0;}
     else {document_.blocks.clear();document_.diagnostics.clear();}
     file_=std::move(filename);scopes_.resize(1);commandScopes_.resize(1);
+    environmentScopes_.resize(1);groupFloor_=1;
+    if(reset)counterParents_.clear();
     registerScopes_.resize(1);registerAliasScopes_.resize(1);globalAssignment_=false;
     // Discard any incomplete local groups left by a previous fragment/error.
     while(!catcodeSaves_.empty()){
@@ -484,6 +592,7 @@ Document Engine::compileImpl(std::string source,std::filesystem::path filename,b
     if(reset)catcodes_=Lexer::defaultCatcodes();
     conditions_.clear();conditionalFloor_=0;source_.reset();afterGroups_.clear();
     stream_.clear();envStack_.clear();styles_.clear();groupStyles_.clear();active_={};activeValid_=false;
+    envEnds_.clear();envEndTokens_.clear();envGroupDepths_.clear();envContextDepths_.clear();envItems_.clear();blockContexts_.clear();
     pendingSpace_=false;successiveNewlines_=0;operations_=0;
     includeDepth_=executionDepth_=expansionDepth_=0;stopped_=endInput_=false;current_={};
     try {source_.emplace(std::move(source));run(false);flush();}
@@ -494,8 +603,26 @@ Document Engine::compileImpl(std::string source,std::filesystem::path filename,b
     return document_;
 }
 void Engine::setCounter(const std::string& n,int v){counters_[n]=v;}
+bool Engine::hasCounter(const std::string& n)const{
+    return counters_.contains(n)||n=="section"||n=="subsection"||n=="subsubsection"||n=="equation"||n=="figure"||n=="table"||n=="footnote";
+}
+void Engine::defineCounter(const std::string& n,const std::string& parent){
+    if(n.empty()||hasCounter(n)){report("counter already defined or empty: "+n,true);return;}
+    if(!parent.empty()&&!hasCounter(parent)){report("unknown parent counter: "+parent,true);return;}
+    counters_[n]=0;if(!parent.empty())counterParents_[n]=parent;
+}
+std::string Engine::formattedCounter(const std::string& n)const{
+    std::vector<int> parts;auto name=n;
+    for(;;){parts.push_back(counter(name));auto found=counterParents_.find(name);if(found==counterParents_.end())break;name=found->second;}
+    std::string result;for(auto i=parts.rbegin();i!=parts.rend();++i){if(!result.empty())result+='.';result+=std::to_string(*i);}return result;
+}
 int Engine::counter(const std::string& n)const{auto it=counters_.find(n);return it==counters_.end()?0:it->second;}
-void Engine::stepCounter(const std::string& n){addToCounter(n,1);}
+void Engine::stepCounter(const std::string& n){
+    int before=counter(n);addToCounter(n,1);if(counter(n)==before)return;
+    std::vector<std::string> parents{n};
+    for(std::size_t i=0;i<parents.size();++i)
+        for(const auto& [child,parent]:counterParents_)if(parent==parents[i]){counters_[child]=0;parents.push_back(child);}
+}
 void Engine::addToCounter(const std::string& n,int delta){
     int value=counter(n);
     if((delta>0 && value>std::numeric_limits<int>::max()-delta) ||
@@ -506,5 +633,6 @@ void Engine::addToCounter(const std::string& n,int delta){
 }
 void Engine::label(std::string key){document_.references[std::move(key)]=lastHeadingNumber_.empty()?"1":lastHeadingNumber_;}
 void Engine::reference(std::string key){addSpan(SpanKind::Link,key,"ref:"+key);}
+void Engine::setReferenceValue(std::string value){lastHeadingNumber_=std::move(value);}
 std::filesystem::path Engine::currentFile()const{return file_;}
 }

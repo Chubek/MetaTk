@@ -52,12 +52,14 @@ std::string renderHTML(const Document& doc){
         case BlockKind::Heading:{int h=std::clamp(b.level+1,1,6);if(b.level==0)h=1;
             out<<"<h"<<h<<" id=\""<<html(b.id)<<"\">"<<t<<"</h"<<h<<">\n";break;}
         case BlockKind::Paragraph:out<<"<p>"<<t<<"</p>\n";break;
-        case BlockKind::ListItem:out<<"<div class=\"list-item\" style=\"margin-left:"<<1.4*b.level<<"rem\">"<<(b.ordered?"1. ":"• ")<<t<<"</div>\n";break;
+        case BlockKind::ListItem:out<<"<div class=\"list-item\" style=\"margin-left:"<<1.4*b.level<<"rem\">"<<(b.ordered?std::to_string(std::max(1,b.listNumber))+". ":"• ")<<t<<"</div>\n";break;
         case BlockKind::Quote:out<<"<blockquote>"<<t<<"</blockquote>\n";break;
-        case BlockKind::Code:out<<"<pre><code>"<<html(b.spans.empty()?"":b.spans[0].text)<<"</code></pre>\n";break;
+        case BlockKind::Code:
+            out<<"<pre><code";if(!b.language.empty())out<<" data-language=\""<<html(b.language)<<"\"";
+            out<<">";for(const auto& span:b.spans)out<<html(span.text);out<<"</code></pre>\n";break;
         case BlockKind::DisplayMath:out<<"<div class=\"display-math\">"<<t<<"</div>\n";break;
         case BlockKind::HorizontalRule:out<<"<hr>\n";break;
-        case BlockKind::Note:out<<"<aside class=\"note\">"<<t<<"</aside>\n";break;
+        case BlockKind::Note:out<<"<aside class=\"note\"";if(!b.role.empty())out<<" data-kind=\""<<html(b.role)<<"\"";out<<">"<<t<<"</aside>\n";break;
         case BlockKind::PageBreak:out<<"<div style=\"break-before:page\"></div>\n";break;
         case BlockKind::TableOfContents:
             out<<"<nav aria-label=\"Table of contents\"><strong>Contents</strong><ol>";
@@ -71,7 +73,7 @@ std::string renderText(const Document& doc){
     std::string out;
     for(const auto& b:doc.blocks){
         if(b.kind==BlockKind::Heading)out+=std::string(std::max(0,b.level),'#')+" ";
-        if(b.kind==BlockKind::ListItem)out+=std::string(std::max(0,b.level-1)*2,' ')+(b.ordered?"1. ":"- ");
+        if(b.kind==BlockKind::ListItem)out+=std::string(std::max(0,b.level-1)*2,' ')+(b.ordered?std::to_string(std::max(1,b.listNumber))+". ":"- ");
         for(const auto& s:b.spans){
             if(s.kind==SpanKind::Link && s.extra.rfind("ref:",0)==0){auto i=doc.references.find(s.extra.substr(4));out+=i==doc.references.end()?"??":i->second;}
             else out+=s.text;

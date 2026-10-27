@@ -27,8 +27,8 @@ cannot exceed nine.
 
 `\newcommand` diagnoses an existing name; `\renewcommand` requires an existing
 name; `\providecommand` leaves an existing definition intact after reading the
-declaration. These are the implemented forms, not the full LaTeX command
-definition system: starred declarations, robust-command machinery, and
-`xparse` specifications are not available.
+declaration. Parameter references are validated before installation. Starred
+declarations are accepted, with the same argument-scanning behavior as unstarred
+ones. Robust-command machinery and `xparse` specifications are not available.
 
 [Contents](README.md)

@@ -26,10 +26,15 @@ Named counters are a plugin-oriented facility:
 \arabic{attempts}
 ```
 
+`\newcounter{NAME}[PARENT]` declares a counter with optional parent-reset
+behavior and a `\theNAME` display command. `\refstepcounter` steps and sets the
+current label value. `\roman`/`\Roman` support 1–3999; `\alph`/`\Alph` support
+1–26. These display handlers are not expandable integer scanners.
+
 `\stepcounter` adds one. Named-counter arithmetic is checked, but the values
 are not the group-local `\count` register bank. Use `\countdef` when you need
-TeX-style scoped integer storage. Labels outside headings use the available
-current heading state or its fallback value; they do not create independent
-equation or float numbering automatically.
+TeX-style scoped integer storage. Numbered equations, theorem environments,
+figure/table captions, enumerated items and NekoTeX exercises also establish
+label values. `\pageref` still does not calculate physical page numbers.
 
 [Contents](README.md)

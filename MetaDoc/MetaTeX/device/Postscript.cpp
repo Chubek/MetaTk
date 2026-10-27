@@ -48,7 +48,7 @@ std::string renderPostScript(const Document& doc) {
         double size = heading ? (b.level <= 0 ? 22 : b.level == 1 ? 18 : 14) : b.kind == BlockKind::Code ? 10 : 11;
         double left = b.kind == BlockKind::Quote || b.kind == BlockKind::Note ? 84 : 64;
         std::string text = detail::blockText(doc, b);
-        if (b.kind == BlockKind::ListItem) text = (b.ordered ? "1. " : "* ") + text;
+        if (b.kind == BlockKind::ListItem) text = (b.ordered ? std::to_string(std::max(1,b.listNumber))+". " : "* ") + text;
         for (const auto& part : detail::textLines(text, static_cast<std::size_t>((531 - left) / (size * 0.55)))) line(part, size, heading, left);
         y -= 9;
     }

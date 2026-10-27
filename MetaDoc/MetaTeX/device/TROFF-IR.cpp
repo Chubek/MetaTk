@@ -16,7 +16,7 @@ std::string renderTroffIR(const Document& doc) {
             out << "H64000\nV" << y << "\nD l 467000 0\n"; y += 20000; continue;
         }
         auto text = detail::blockText(doc, block);
-        if (block.kind == BlockKind::ListItem) text = (block.ordered ? "1. " : "* ") + text;
+        if (block.kind == BlockKind::ListItem) text = (block.ordered ? std::to_string(std::max(1,block.listNumber))+". " : "* ") + text;
         if (block.kind == BlockKind::TableOfContents) {
             text = "Contents";
             for (const auto& h : doc.blocks) if (h.kind == BlockKind::Heading && h.level > 0) text += '\n' + detail::blockText(doc, h);

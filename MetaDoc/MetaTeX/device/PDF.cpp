@@ -55,14 +55,31 @@ std::vector<std::string> wrap(const std::string& input,std::size_t width){
 struct PagePainter {
     std::vector<std::string> pages{std::string{}};
     double y=786;
-    void addLine(std::string line,double font=11,bool bold=false,double leading=15,double left=63){
+    void addLine(std::string line,double font=11,bool bold=false,double leading=15,double left=63,bool mono=false){
         if(y-leading<55){pages.push_back({});y=786;}
         auto c=detail::vectorStream();c<<std::fixed<<std::setprecision(2)
-            <<"BT /"<<(bold?"F2":"F1")<<" "<<font<<" Tf "<<left<<" "<<y<<" Td ("<<escapePDF(line)<<") Tj ET\n";
+            <<"BT /"<<(mono?"F3":bold?"F2":"F1")<<" "<<font<<" Tf "<<left<<" "<<y<<" Td ("<<escapePDF(line)<<") Tj ET\n";
         pages.back()+=c.str();y-=leading;
     }
     void gap(double distance){y-=distance;if(y<55){pages.push_back({});y=786;}}
 };
+std::vector<std::string> literalLines(const std::string& text,std::size_t width){
+    std::vector<std::string> result;std::string line;
+    auto append=[&](char c){
+        if(line.size()>=width&&(static_cast<unsigned char>(c)&0xC0)!=0x80){result.push_back(std::move(line));line.clear();}
+        line+=c;
+    };
+    for(std::size_t i=0;i<text.size();++i){
+        char c=text[i];
+        if(c=='\r'||c=='\n'){
+            if(c=='\r'&&i+1<text.size()&&text[i+1]=='\n')++i;
+            result.push_back(std::move(line));line.clear();
+        }else if(c=='\t'){auto count=4-line.size()%4;while(count--)append(' ');}
+        else append(c);
+    }
+    if(!line.empty()||result.empty())result.push_back(std::move(line));
+    return result;
+}
 }
 std::string renderPDF(const Document& doc){
     PagePainter p;
@@ -90,9 +107,10 @@ std::string renderPDF(const Document& doc){
         else if(b.kind==BlockKind::DisplayMath){font=12;left=90;p.gap(9);}
         else if(b.kind==BlockKind::Code){font=10;leading=13;left=82;}
         else if(b.kind==BlockKind::Quote||b.kind==BlockKind::Note){left=87;}
-        else if(b.kind==BlockKind::ListItem){text=(b.ordered?"1. ":"* ")+text;left+=b.level*16;}
-        auto lines=wrap(text,static_cast<std::size_t>(std::max(25.0,(595.0-left-48)/(font*0.52))));
-        for(const auto& line:lines)p.addLine(line,font,bold,leading,left);
+        else if(b.kind==BlockKind::ListItem){text=(b.ordered?std::to_string(std::max(1,b.listNumber))+". ":"* ")+text;left+=b.level*16;}
+        auto width=static_cast<std::size_t>(std::max(25.0,(595.0-left-48)/(font*(b.kind==BlockKind::Code?0.6:0.52))));
+        auto lines=b.kind==BlockKind::Code?literalLines(text,width):wrap(text,width);
+        for(const auto& line:lines)p.addLine(line,font,bold,leading,left,b.kind==BlockKind::Code);
         if(b.kind!=BlockKind::ListItem)p.gap(b.kind==BlockKind::Paragraph?9:6);
     }
     // libHaru owns PDF resources, objects, xrefs and serialization. Its low-level
@@ -107,14 +125,16 @@ std::string renderPDF(const Document& doc){
     check(HPDF_SetInfoAttr(pdf,HPDF_INFO_CREATOR,"MetaTeX (libHaru)"));
     auto regular=HPDF_GetFont(pdf,"Helvetica","WinAnsiEncoding");
     auto bold=HPDF_GetFont(pdf,"Helvetica-Bold","WinAnsiEncoding");
-    if(!regular||!bold)throw std::runtime_error("libHaru: cannot load base fonts");
+    auto mono=HPDF_GetFont(pdf,"Courier","WinAnsiEncoding");
+    if(!regular||!bold||!mono)throw std::runtime_error("libHaru: cannot load base fonts");
     for(const auto& content:p.pages){
         auto page=HPDF_AddPage(pdf);
         if(!page)throw std::runtime_error("libHaru: cannot allocate page");
         check(HPDF_Page_SetWidth(page,595));check(HPDF_Page_SetHeight(page,842));
         const char* f1=HPDF_Page_GetLocalFontName(page,regular);
         const char* f2=HPDF_Page_GetLocalFontName(page,bold);
-        if(!f1||!f2||std::string_view(f1)!="F1"||std::string_view(f2)!="F2")
+        const char* f3=HPDF_Page_GetLocalFontName(page,mono);
+        if(!f1||!f2||!f3||std::string_view(f1)!="F1"||std::string_view(f2)!="F2"||std::string_view(f3)!="F3")
             throw std::runtime_error("libHaru: unexpected font resource names");
         auto attr=static_cast<HPDF_PageAttr>(page->attr);
         check(HPDF_Stream_WriteStr(attr->stream,content.c_str()));

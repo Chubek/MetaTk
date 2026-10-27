@@ -57,7 +57,7 @@ bool renderCairoPDF(const Document& doc,const std::filesystem::path& output){
             cairo_move_to(cr,margin,y);cairo_line_to(cr,width-margin,y);cairo_set_line_width(cr,0.6);cairo_stroke(cr);y+=15;continue;
         }
         std::string text=blockText(doc,block);
-        if(block.kind==BlockKind::ListItem)text=(block.ordered?"1. ":"• ")+text;
+        if(block.kind==BlockKind::ListItem)text=(block.ordered?std::to_string(std::max(1,block.listNumber))+". ":"• ")+text;
         if(block.kind==BlockKind::TableOfContents)text="Contents";
         if(text.empty())continue;
         int pt=11;

@@ -29,6 +29,7 @@ struct Token {
     int category = 12;
     bool definitionOpaque = false; // Scanner-only: copy from \the into an expanded definition.
     bool literalParameter = false; // Replacement storage: literal # rather than a parameter reference.
+    bool directSource = false; // Literal readers may only bypass scanning for live source tokens.
     std::string controlName() const { return active?std::string(1,'\1')+value:value; }
 };
 class Lexer {
@@ -39,6 +40,9 @@ public:
     static Catcodes defaultCatcodes();
     Token next(const Catcodes& catcodes);
     static std::vector<Token> scan(std::string_view source);
+    // Literal readers start after an already consumed opening delimiter.
+    std::string readLiteral(std::string_view terminator, bool balancedBraces = false, bool singleLine = false);
+    std::string readLiteralDelimited();
 private:
     std::string source_;
     std::size_t position_=0,line_=1,column_=1,emitted_=0;
@@ -60,6 +64,8 @@ struct Block {
     std::string id;
     std::shared_ptr<const metavect::Scene> graphic;
     double graphicWidth = 0;   // 0 = natural width; points, aspect ratio preserved
+    std::string role, language;
+    int listNumber = 0;        // 0 for unnumbered/manual IR; positive for enumerate
 };
 struct Diagnostic {
     enum class Severity { Warning, Error } severity = Severity::Warning;
@@ -91,21 +97,32 @@ public:
     void registerCommand(std::string name, Handler handler);
     void defineCommand(std::string name, Handler handler);
     void registerEnvironment(std::string name, Handler onBegin, Handler onEnd = {});
+    void defineEnvironment(std::string name, Handler onBegin, Handler onEnd = {});
+    void defineTokenEnvironment(std::string name, Macro begin, std::vector<Token> end);
+    bool hasEnvironment(const std::string& name) const;
     void report(std::string message, bool error = false);
     std::vector<Token> readArgument();
     std::optional<std::vector<Token>> readOptionalArgument();
     std::string readTextArgument();
     std::string readOptionalText(std::string fallback = {});
     std::string readDelimitedText();
+    std::string readLiteralArgument();
+    std::string readLiteralEnvironment(const std::string& name);
+    bool readStar();
     std::string tokensText(const std::vector<Token>& tokens) const;
     void execute(const std::vector<Token>& tokens);
+    void executeGrouped(const std::vector<Token>& tokens);
     void insert(std::vector<Token> tokens);
     void addText(std::string text);
     void addSpan(SpanKind kind, std::string text, std::string extra = {});
     void styledArgument(SpanKind kind);
     void heading(int level);
+    void heading(int level, bool numbered);
     void paragraph();
     void startBlock(BlockKind kind, int level = 0, bool ordered = false);
+    void beginBlockContext(BlockKind kind, std::string role = {});
+    void endBlockContext();
+    void codeBlock(std::string text, std::string language = {});
     void addGraphic(metavect::Scene scene, std::string caption, double width = 0);
     void setTitle(std::string title);
     void setAuthor(std::string author);
@@ -115,24 +132,31 @@ public:
     void endEnvironment(const std::string& name);
     void item();
     void math(bool display, std::string terminator);
+    void mathEnvironment(const std::string& name, bool numbered = false);
     void defineMacro(std::string name, Macro macro, bool global = false);
     bool hasMacro(const std::string& name) const;
     bool hasCommand(const std::string& name) const;
     std::vector<std::string> commandNames() const;
     void setCounter(const std::string& name, int value);
+    void defineCounter(const std::string& name, const std::string& parent = {});
+    bool hasCounter(const std::string& name) const;
+    std::string formattedCounter(const std::string& name) const;
     int counter(const std::string& name) const;
     void stepCounter(const std::string& name);
     void addToCounter(const std::string& name, int delta);
     void label(std::string key);
     void reference(std::string key);
+    void setReferenceValue(std::string value);
     std::filesystem::path currentFile() const;
     Document& document() { return document_; }
     const Document& document() const { return document_; }
 private:
-    struct Environment { Handler begin, end; };
+    struct Environment { Handler begin, end; std::shared_ptr<const std::vector<Token>> endTokens = nullptr; };
     std::unordered_map<std::string, Handler> handlers_;
     std::unordered_set<std::string> expandablePrimitives_;
     std::unordered_map<std::string, Environment> environments_;
+    std::vector<std::unordered_map<std::string, Environment>> environmentScopes_;
+    const Environment* lookupEnvironment(const std::string& name) const;
     std::vector<std::unordered_map<std::string, Macro>> scopes_;
     std::vector<std::unordered_map<std::string, Handler>> commandScopes_;
     enum class RegisterKind { Count, Dimension, Glue, Tokens };
@@ -154,7 +178,14 @@ private:
     Document document_;
     std::filesystem::path file_;
     std::vector<std::string> envStack_;
+    std::vector<Handler> envEnds_;
+    std::vector<std::shared_ptr<const std::vector<Token>>> envEndTokens_;
+    std::vector<std::size_t> envGroupDepths_;
+    std::vector<std::size_t> envContextDepths_;
+    std::vector<int> envItems_;
+    std::vector<std::pair<BlockKind,std::string>> blockContexts_;
     std::unordered_map<std::string,int> counters_;
+    std::unordered_map<std::string,std::string> counterParents_;
     std::vector<SpanKind> styles_;
     std::vector<std::vector<SpanKind>> groupStyles_;
     Block active_;
@@ -165,11 +196,13 @@ private:
     std::size_t headingSequence_ = 0;
     std::size_t operations_ = 0, includeDepth_ = 0, executionDepth_ = 0;
     std::size_t expansionDepth_ = 0;
+    std::size_t groupFloor_ = 1;
     bool stopped_ = false, endInput_ = false;
     Token current_;
     Token pop(bool skipSpace = false);
     bool ensureToken();
     void executeSource(std::string source);
+    void executeTokens(const std::vector<Token>& tokens, std::size_t groupFloor, std::size_t environmentFloor);
     Token peek(bool skipSpace = false);
     bool consume(TokenKind kind);
     void run(bool nested);

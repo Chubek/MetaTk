@@ -5,7 +5,7 @@
 ```text
 UTF-8 input / include
         |
-     Lexer::scan                  core/Lexer.cpp
+     Lexer::next                  core/Lexer.cpp (incremental current catcodes)
         |
    Token deque (with source coordinates)
         |
@@ -43,6 +43,12 @@ extern "C" void metatex_register_plugin(metatex::Engine* engine) {
 ```
 
 For a built-in environment, call `registerEnvironment(name, begin, end)`.
+Document-defined environments use `defineEnvironment`, whose definitions follow
+group scope. Closing handlers are captured on entry. `executeGrouped` runs a
+token argument in a local group; both execution methods protect caller groups
+and recover unclosed local environments. `beginBlockContext`/`endBlockContext`
+retain semantic roles across paragraphs; `codeBlock` retains literal text and
+language metadata. The corresponding new fields are appended to `Block`.
 The callback may start/flush document blocks. `execute()` recursively
 processes an argument through the normal token and macro engine.
 Nested execution owns a separate token queue, so argument scanners cannot read
@@ -72,10 +78,11 @@ devices consume typed paths. See [METAVECT.md](METAVECT.md).
 
 ## Deliberate design limitations
 
-The lexer currently tokenizes an entire source buffer up front using fixed
-TeX-like character classifications. For true TeX `\catcode` behavior it must
-instead provide *incremental* scanning, with a versioned category-code table
-and expanded-token control to preserve exact tokenization timing.
+The lexer scans live source incrementally using current category codes. Stored
+tokens retain their original categories. Literal readers bypass tokenization
+only for live-source tokens, maintain physical positions and share the bounded
+source buffer. Full TeX input normalization and Unicode category tables remain
+incomplete.
 
 The current layout model is a high-level sequence of blocks and styled spans,
 not TeX's box/glue/penalty/horizontal and vertical lists. A true TeX engine
@@ -85,9 +92,9 @@ are approximate: users needing correct Unicode typography should enable
 PangoCairo. Production-grade mathematical layout requires an OpenType MATH
 engine, not the current MathML conversion alone.
 
-Reserved pre-existing paths (`inter/*.midl`, legacy `reader`, `sink`, and
-`device` scaffolds) remain as supplied and must not be mistaken for
-implemented modules.
+Advanced `inter/*.midl` and TeXpresso scaffolds remain incomplete. Implemented
+reader, sink, font, Lua and alternate-device APIs are described in
+[SUBSYSTEMS.md](SUBSYSTEMS.md).
 
 ## Security and limits
 

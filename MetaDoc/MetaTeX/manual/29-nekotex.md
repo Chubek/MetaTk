@@ -12,20 +12,33 @@ plugin, using the same document model and renderers.
 \callout[Result]{The build passed.}
 ```
 
-`\note`, `\tip`, `\warning`, and `\exercise` create note blocks with labels.
+`\note`, `\tip`, `\warning`, `\important`, `\summary`, and `\solution` create
+note blocks with optional titles. Each also supports an environment form.
+`\exercise` creates a numbered note with an optional title and label value.
 `\callout[VARIANT]{BODY}` chooses a custom label, defaulting to Information.
-`\component{NAME}{BODY}` adds a bracketed component label. Their body tokens
-are executed, allowing ordinary inline commands.
+`\component{NAME}{BODY}` adds a component title. Their body tokens execute in
+a local group, allowing inline commands. Paragraphs retain their note role;
+nested notes restore the outer role. JSON stores `role`; HTML uses `data-kind`.
 
 Inline helpers include `\concept` for bold text, `\kbd` and `\inlinecode` for
 code-style spans, and `\meta` for small caps. `\separator` creates a horizontal
-rule. `\codeblock[LANGUAGE]{BODY}` creates a code block; the language argument
-is currently consumed without syntax highlighting.
+rule. `\codeblock[LANGUAGE]{BODY}` creates a literal code block; language is
+retained in JSON and HTML without syntax highlighting.
 
-Code arguments still pass through normal TeX tokenization. Comments, spaces,
-and braces are therefore not a byte-exact verbatim input mechanism. For
-external source with significant whitespace, construct a code block through
-the C++ API. NekoTeX provides document semantics, not an additional executable
-format or independent package ecosystem.
+Direct-source code preserves whitespace, comments and backslashes. Brace
+arguments require balanced literal braces. Use
+`\begin{codeblock}{LANGUAGE}...\end{codeblock}` or `\codefile[LANGUAGE]{PATH}`
+for arbitrary braces. The environment requires a language group, which may be
+empty. Files resolve relative to the current source and have a 4 MiB limit.
+PDF code uses Courier with preserved indentation. Already-tokenized macro
+arguments retain only what survived their original scan.
+
+<!-- metatex-example {"format":"nekotex","contains":"  value = 100 # preserved"} -->
+```tex
+\codeblock[python]{  value = 100 # preserved
+}
+```
+
+See [the plugin contract](../docs/PLUGINS.md) for complete syntax and limits.
 
 [Contents](README.md)

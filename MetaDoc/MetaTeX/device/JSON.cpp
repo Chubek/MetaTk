@@ -3,7 +3,7 @@
 #include <sstream>
 namespace metatex {
 namespace {
-std::string quoted(std::string_view s){
+std::string jsonString(std::string_view s){
     std::string r="\"";const char* digits="0123456789abcdef";
     for(unsigned char c:s){
         switch(c){case '"':r+="\\\"";break;case '\\':r+="\\\\";break;case '\n':r+="\\n";break;
@@ -32,19 +32,22 @@ std::string spanName(SpanKind k){
 }
 std::string renderJSON(const Document& doc){
     auto o=detail::vectorStream();
-    o<<"{\n  \"format\": \"metatex-document-v1\",\n  \"title\": "<<quoted(doc.title)
-     <<",\n  \"author\": "<<quoted(doc.author)<<",\n  \"date\": "<<quoted(doc.date)
+    o<<"{\n  \"format\": \"metatex-document-v1\",\n  \"title\": "<<jsonString(doc.title)
+     <<",\n  \"author\": "<<jsonString(doc.author)<<",\n  \"date\": "<<jsonString(doc.date)
      <<",\n  \"blocks\": [\n";
     for(std::size_t i=0;i<doc.blocks.size();++i){
         const auto& b=doc.blocks[i];
-        o<<"    {\"type\": "<<quoted(blockName(b.kind))<<", \"level\": "<<b.level
-         <<", \"ordered\": "<<(b.ordered?"true":"false")<<", \"id\": "<<quoted(b.id)<<", \"spans\": [";
+        o<<"    {\"type\": "<<jsonString(blockName(b.kind))<<", \"level\": "<<b.level
+         <<", \"ordered\": "<<(b.ordered?"true":"false")<<", \"id\": "<<jsonString(b.id)<<", \"spans\": [";
         for(std::size_t j=0;j<b.spans.size();++j){
             const auto& s=b.spans[j];
             if(j)o<<", ";
-            o<<"{\"type\": "<<quoted(spanName(s.kind))<<", \"text\": "<<quoted(s.text)<<", \"extra\": "<<quoted(s.extra)<<"}";
+            o<<"{\"type\": "<<jsonString(spanName(s.kind))<<", \"text\": "<<jsonString(s.text)<<", \"extra\": "<<jsonString(s.extra)<<"}";
         }
         o<<"]";
+        if(!b.role.empty())o<<", \"role\": "<<jsonString(b.role);
+        if(!b.language.empty())o<<", \"language\": "<<jsonString(b.language);
+        if(b.listNumber)o<<", \"listNumber\": "<<b.listNumber;
         if(b.kind==BlockKind::VectorGraphic){
             auto scene=detail::sceneOf(b);
             o<<", \"graphic\": {\"format\": \"metavect-scene-v1\", \"width\": "<<scene.width<<", \"height\": "<<scene.height
@@ -53,7 +56,7 @@ std::string renderJSON(const Document& doc){
             for(std::size_t k=0;k<scene.count;++k){const auto& p=scene.paths[k];if(k)o<<',';
                 o<<"{\"stroke\":";paint(p.stroke);o<<",\"fill\":";paint(p.fill);o<<",\"strokeWidth\":"<<p.stroke_width<<",\"commands\":[";
                 for(std::size_t n=0;n<p.count;++n){const auto& c=p.commands[n];if(n)o<<',';
-                    o<<'['<<quoted(c.op==MV_MOVE?"M":c.op==MV_LINE?"L":c.op==MV_CUBIC?"C":"Z");
+                    o<<'['<<jsonString(c.op==MV_MOVE?"M":c.op==MV_LINE?"L":c.op==MV_CUBIC?"C":"Z");
                     int count=c.op==MV_CUBIC?6:c.op==MV_CLOSE?0:2;
                     for(int v=0;v<count;++v)o<<','<<c.values[v];
                     o<<']';
@@ -64,12 +67,12 @@ std::string renderJSON(const Document& doc){
     }
     o<<"  ],\n  \"references\": {";bool first=true;
     const std::map<std::string,std::string> references(doc.references.begin(),doc.references.end());
-    for(const auto& [k,v]:references){if(!first)o<<", ";o<<quoted(k)<<": "<<quoted(v);first=false;}
+    for(const auto& [k,v]:references){if(!first)o<<", ";o<<jsonString(k)<<": "<<jsonString(v);first=false;}
     o<<"},\n  \"diagnostics\": [";
     for(std::size_t i=0;i<doc.diagnostics.size();++i){const auto& d=doc.diagnostics[i];if(i)o<<", ";
-        o<<"{\"severity\": "<<quoted(d.severity==Diagnostic::Severity::Error?"error":"warning")
-         <<", \"file\": "<<quoted(d.file)<<", \"line\": "<<d.line
-         <<", \"column\": "<<d.column<<", \"message\": "<<quoted(d.message)<<"}";
+        o<<"{\"severity\": "<<jsonString(d.severity==Diagnostic::Severity::Error?"error":"warning")
+         <<", \"file\": "<<jsonString(d.file)<<", \"line\": "<<d.line
+         <<", \"column\": "<<d.column<<", \"message\": "<<jsonString(d.message)<<"}";
     }
     o<<"]\n}\n";return o.str();
 }

@@ -86,7 +86,7 @@ std::string renderEPUB(const Document& doc) {
                 << "\"><title>" << xml(detail::blockText(doc, block)) << "</title>" << detail::svgPaths(scene) << "</svg><figcaption>" << text << "</figcaption></figure>";
             content += svg.str(); break;
         }
-        case BlockKind::ListItem: content += "<p id=\"" + id + "\">" + (block.ordered ? "1. " : "• ") + text + "</p>"; break;
+        case BlockKind::ListItem: content += "<p id=\"" + id + "\">" + (block.ordered ? std::to_string(std::max(1,block.listNumber))+". " : "• ") + text + "</p>"; break;
         case BlockKind::Paragraph: case BlockKind::DisplayMath: content += "<p id=\"" + id + "\">" + text + "</p>"; break;
         }
     }

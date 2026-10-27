@@ -13,15 +13,22 @@ Define a zero-argument environment with token bodies:
 \begin{framed}body\end{framed}
 ```
 
-The bodies are scanned when the environment is declared and executed when
-entered or exited. `\newenvironment` arguments are not currently supported;
-the optional count must be zero. Registration is engine state rather than a
-complete LaTeX environment-definition implementation, including its prefix
-and grouping subtleties.
+The bodies are scanned when declared and executed on entry/exit. Both
+`\newenvironment` and `\renewenvironment` support up to nine parameters and an
+optional first-argument default. Only the begin body may reference parameters.
+Definitions obey group scope and reset at the next full compilation.
 
-`\newtheorem{NAME}{LABEL}` installs a simple numbered heading and body
-environment. It uses a named counter and does not implement shared numbering,
-section-relative numbering, theorem styles, or automatic proof symbols.
+<!-- metatex-example {"format":"latex","text":"Left/Right: body!"} -->
+```tex
+\newenvironment{pair}[2][Left]{#1/#2: }{!}
+\begin{pair}{Right}body\end{pair}
+```
+
+`\newtheorem{NAME}{LABEL}[PARENT]` supports parent-relative numbering;
+`\newtheorem{NAME}[SHARED]{LABEL}` uses an existing counter. These two options
+are mutually exclusive. `\newtheorem*` defines an unnumbered theorem. Instances
+accept an optional title. The `proof` environment accepts an optional title and
+ends with `QED`. These are semantic quote blocks rather than a theorem-style engine.
 
 For native extensions, `registerEnvironment` takes two `Engine&` handlers.
 Handlers can create semantic blocks or execute pre-scanned token lists. Keep

@@ -1,7 +1,8 @@
 # 24 — Lists and quotations
 
-The LaTeX plugin provides `itemize` and `enumerate`. `\item` starts a list-item
-block with the nesting level and an ordered/unordered flag.
+The LaTeX plugin provides `itemize`, `enumerate`, and `description`. `\item`
+starts a list-item block with the nesting level, an ordered/unordered flag,
+and a per-list ordinal for enumeration. Nested lists number independently.
 
 <!-- metatex-example {"format":"latex","contains":"- First\n- Second"} -->
 ```tex
@@ -17,7 +18,7 @@ presentation is simple: ordered-item markers need not form LaTeX's complete
 numbering scheme, and HTML list items are styled blocks rather than a fully
 general nested-list tree. An item outside a list is an error.
 
-`quote` and `abstract` start quote-style blocks. Their end handlers finish the
+`quote`, `quotation`, and `abstract` retain quote-style blocks across paragraphs. Their end handlers finish the
 current paragraph. `center` accepts a region and separates paragraphs, but it
 does not currently enforce typographic centering. Environment names must
 match when closing; a mismatched `\end` is diagnosed.

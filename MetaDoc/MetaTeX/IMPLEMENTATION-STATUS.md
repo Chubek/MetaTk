@@ -13,7 +13,7 @@ basis; generated files and documentation are not substitutes for execution.
 | DVI parsing/validation (`device/DVI.cpp`) | **Implemented** | opcode bounds, page/stack, font and postamble verification |
 | Stream, file, pipe, mmap, descriptor and memory input/output | **Implemented for documented POSIX interfaces** | `tests/test_streams.cpp` and linked from `core/IO.cpp` |
 | Native MetaTeX C++ semantic engine | **Builds with workspace dependencies; still a subset** | Native core, plugins, CLI, and renderer tests; macro parameter scanning extended against TeXScrape's `macrocall`/`scantoks` |
-| LaTeX and NekoTeX plugins | **Pre-existing subsets, not complete formats** | Original plugin source retained |
+| LaTeX, NekoTeX and MetaVect plugins | **Expanded, verified native subsets** | `plugin-contracts`, `plugin-integration`; documented scope in `docs/PLUGINS.md` |
 | Unicode/OpenType shaping, TeX82 extensions, e-TeX, XeTeX/LuaTeX | **Not implemented in TeXScrape** | TeX82 uses an 8-bit font model |
 | Native network/IPC, font APIs, alternate outputs and Lua binding | **Implemented for documented subset APIs** | See `docs/SUBSYSTEMS.md`; real transport, font/shaping and output-device integration cases |
 | Advanced MIDL IR and QS/TeXpresso modules | **Awaiting existing language specifications** | User selected existing toolchains; compiler/grammar paths have not yet been supplied |
@@ -130,7 +130,7 @@ exact source, document IR, HTML, PDF text, errors, and scanner positions.
 
 `manual/README.md` indexes 44 authored chapters covering the native application,
 language, outputs, APIs, extension interfaces, verification, and actual limits.
-`manual-examples` validates the chapter sequence and links and compiles 37 marked
+`manual-examples` validates the chapter sequence and links and compiles 39 marked
 examples into all four CLI formats. The manual, supporting guides, and this
 status report are installed together under `share/doc/metatex`.
 
@@ -168,3 +168,31 @@ The `dimension-registers`, `glue-registers`, and `token-registers` CTest targets
 assert exact source, IR, HTML, PDF text, scoping, errors, and recovery. The
 manual's existing chapters now document these features with executable examples;
 the chapter count remains 44.
+
+## Engine and plugin strengthening
+
+Document-defined environments now have group-local definitions, captured end
+handlers, argument-frame boundaries, and reset/REPL behavior matching macros.
+Executed arguments cannot close their caller's group; unclosed local environments
+are diagnosed and their contexts recovered. Unknown environments and mismatched
+math-environment endings are errors. Literal readers preserve source whitespace,
+comments and physical positions, and distinguish live input from stored tokens.
+
+LaTeX adds parameterized/optional-default environments and redefinition, starred
+headings and declarations, shared and parent-reset theorem counters, proofs,
+named-counter formats, description lists, correct ordered-item numbering, separate
+table/figure caption counters, and direct-source verbatim. NekoTeX adds typed
+multi-paragraph note roles, environment forms, numbered exercises, solutions,
+literal code with retained language metadata, and source-relative code files.
+MetaVect adds physical units, width/height fitting, scale, scoped reusable scenes,
+and a scene environment. Definitions retain immutable geometry rather than
+reparsing it at each invocation.
+
+HTML/JSON preserve new semantic metadata. A pre-existing JSON escaping overload
+collision was fixed: literal newlines, tabs and other controls now serialize as
+valid JSON escapes. All list-rendering devices use stored
+ordinals; native PDF code blocks retain indentation and use Courier. The new
+CTest targets load all three real shared libraries and verify exact source against
+IR, HTML and PDF, nested inputs, error recovery, scoping, lifetime, compilation
+reset and output-file preservation. These changes do not establish full LaTeX,
+TeX82 TRIP, or arbitrary MetaVect-language compatibility.

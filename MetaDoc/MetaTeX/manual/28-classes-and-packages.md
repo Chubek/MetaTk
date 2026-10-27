@@ -8,8 +8,8 @@ layout engines. Other names produce a fallback warning.
 `\usepackage[OPTIONS]{NAMES}` reads a comma-separated list. Familiar names such
 as `amsmath`, `graphicx`, `hyperref`, and `geometry` are recognized because
 some associated commands have native implementations or approximations.
-Recognition does not evaluate a `.sty` file or implement every option.
-`\RequirePackage` similarly consumes its declaration without loading code.
+Recognition does not evaluate a `.sty` file or implement every option; it emits
+a native-subset warning. `\RequirePackage` uses the same checks and diagnostics.
 
 For migration, inventory the commands your document actually uses. Begin with
 simple text, headings, references, and supported math. Test each added

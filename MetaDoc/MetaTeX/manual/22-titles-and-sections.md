@@ -24,8 +24,8 @@ use the same top-level heading behavior as `\section`; they do not select a
 book-specific page layout. `\paragraph` creates a deeper heading.
 
 Optional heading arguments are consumed, but the engine does not maintain
-separate short titles for running heads. Starred section commands are not
-implemented as LaTeX's unnumbered variants. Heading numbers primarily support
+separate short titles for running heads. Starred section commands suppress
+counter advancement; they currently still appear in the TOC. Heading numbers primarily support
 reference values; visual numbering is renderer-specific.
 
 `\tableofcontents` creates a placeholder block. The HTML renderer uses it to

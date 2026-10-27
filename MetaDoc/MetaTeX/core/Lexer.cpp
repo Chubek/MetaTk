@@ -128,4 +128,37 @@ std::vector<Token> Lexer::scan(std::string_view source){
     for(;;){auto token=lexer.next(codes);if(token.kind==TokenKind::Sentinel)break;tokens.push_back(std::move(token));}
     return tokens;
 }
+std::string Lexer::readLiteral(std::string_view terminator,bool balancedBraces,bool singleLine){
+    if(terminator.empty())throw std::invalid_argument("empty literal terminator");
+    const auto start=position_;std::size_t depth=0;
+    auto advance=[&](){
+        unsigned char c=source_[position_++];
+        if(c=='\r'){
+            if(position_<source_.size()&&source_[position_]=='\n')++position_;
+            ++line_;column_=1;
+        }else if(c=='\n'){++line_;column_=1;}
+        else if((c&0xC0)!=0x80)++column_;
+    };
+    while(position_<source_.size()){
+        if(singleLine&&(source_[position_]=='\r'||source_[position_]=='\n'))break;
+        if(!depth&&source_.compare(position_,terminator.size(),terminator)==0){
+            auto result=source_.substr(start,position_-start);
+            auto end=position_+terminator.size();while(position_<end)advance();
+            state_=State::MidLine;return result;
+        }
+        if(balancedBraces){
+            if(source_[position_]=='{')++depth;
+            else if(source_[position_]=='}'&&depth)--depth;
+        }
+        advance();
+    }
+    throw std::runtime_error("unterminated literal text (expected "+std::string(terminator)+")");
+}
+std::string Lexer::readLiteralDelimited(){
+    if(position_<source_.size()&&source_[position_]=='*'){++position_;++column_;}
+    if(position_==source_.size())throw std::runtime_error("missing literal delimiter");
+    unsigned char delimiter=source_[position_];
+    if(delimiter<=32||delimiter>=127)throw std::runtime_error("literal delimiter must be a non-space ASCII character");
+    ++position_;++column_;return readLiteral(std::string(1,delimiter),false,true);
+}
 }

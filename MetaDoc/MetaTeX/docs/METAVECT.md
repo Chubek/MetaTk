@@ -34,8 +34,16 @@ path M 30 140 C 100 20 220 20 290 140;
 ```
 
 Both commands require two brace arguments: scene/filename and plain-text caption.
-`[width=POINTS]` is optional; natural scene width is the default. Width must be
-finite and in `[0.01, 1000000]`. PDF devices further shrink artwork to fit the
+Options accept comma-separated `width`, `height`, or `scale` values with whitespace
+around keys and values. Natural scene width is the default. Width/height accept
+bare PDF points, `bp`, TeX `pt`, `in`, `cm`, and `mm`; one inch is 72 PDF points
+or 72.27 TeX points. Measurements in PDF points must be finite and in
+`[0.01, 1000000]`. Height alone derives width from the aspect ratio; width and height
+together fit inside the given bounding rectangle. Unitless positive `scale`
+multiplies natural width and cannot be combined with width/height. The final
+computed width must also meet the measurement limits. Unknown/duplicate options,
+nonfinite values and trailing separators are errors.
+PDF devices further shrink artwork to fit the
 page's drawable area. Captions follow the figure through ordinary text layout
 and can continue on another page. An empty caption is permitted.
 
@@ -43,6 +51,32 @@ Scene paths are relative to the TeX file containing the command, including neste
 `\input` files. Inline scenes use MetaTeX's normal argument scanner, so TeX `%`
 comments apply. Scene numbers and paint components need no TeX escapes. Neither
 the scene nor caption argument undergoes macro expansion.
+
+## Reusable scenes and environment form
+
+```tex
+\metavectdef[width=4cm]{\badge}{metavect-scene 1 100 50; circle 50 25 20;}
+\badge{First use}
+\badge[height=18bp]{Small use}
+\badge[]{Natural-size use}
+\metavectdeffile[scale=0.5]{\diagram}{diagram.mvs}
+\diagram{Loaded once, retained as immutable geometry}
+
+\begin{metavect}[width=100,height=80]{Environment caption}
+metavect-scene 1 200 100; rect 0 0 200 100;
+\end{metavect}
+```
+
+Definitions require an unused control-sequence name, obey group scope, persist
+across REPL fragments, and reset on full compilation. Files are read at definition
+time, relative to the defining source. A use without options inherits definition
+options; an explicit option list replaces them, and `[]` requests natural size.
+Scene geometry is parsed only once and survives in document snapshots after the
+engine resets. Inline and file scenes have a 4 MiB source limit.
+
+The environment form needs LaTeX/NekoTeX's `\begin`/`\end` commands. It reads
+literal direct source after the caption through the exact `\end{metavect}` marker;
+TeX comments and macros are not interpreted inside this literal scene body.
 
 ## Scene format and integration boundary
 
