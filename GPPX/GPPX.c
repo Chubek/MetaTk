@@ -233,3 +233,136 @@ int gppx_pmatch_glob_callback(GPPX_State *s,const char *pat,const char *txt,void
 int gppx_pmatch_prefix_callback(GPPX_State *s,const char *pat,const char *txt,void *unused) {
     (void)s;(void)unused;return gppx_pmatch_prefix(pat,txt);
 }
+
+int gppx_style_apply(GPPX_State *state,const GPPX_Style *style) {
+    if (!state || !style || style->expand_strings < -1 || style->expand_strings > 1) return 1;
+    if (style->macro_style && strcmp(style->macro_style,"bare") &&
+        strcmp(style->macro_style,"dollar") && strcmp(style->macro_style,"mustache")) return 1;
+    if (style->macro_style && gppx_set_option(state,"macro_style",style->macro_style)) return 1;
+    if (style->line_comment && gppx_set_option(state,"line_comment",style->line_comment)) return 1;
+    if (style->block_open && gppx_set_option(state,"block_open",style->block_open)) return 1;
+    if (style->block_close && gppx_set_option(state,"block_close",style->block_close)) return 1;
+    return style->expand_strings == -1 ? 0 :
+        gppx_set_option(state,"expand_strings",style->expand_strings ? "true" : "false");
+}
+
+/* Two passes avoid overallocating tab_width * input_length. */
+static int layout_pass(const char *text,const GPPX_Layout *layout,char *out,size_t *length) {
+    size_t pos=0,col=0;
+    int start=1;
+    for (;*text;++text) {
+        size_t n=1;
+        char c=*text;
+        if (c=='\r' || c=='\n') {
+            if (c=='\r' && text[1]=='\n') ++text;
+            c='\n'; col=0;start=1;
+        } else {
+            if (start) {
+                n=layout->indent_spaces;
+                if (n>SIZE_MAX-pos) return 1;
+                if (out) memset(out+pos,' ',n);
+                pos+=n;start=0;
+                /* Tab stops are relative to the original line, before prefixing. */
+            }
+            n=(c=='\t' && layout->tab_width) ? layout->tab_width-col%layout->tab_width : 1;
+            if (n>SIZE_MAX-col) return 1;
+            col+=n;
+        }
+        if (n>SIZE_MAX-pos) return 1;
+        if (out) {
+            if (c=='\t' && layout->tab_width) memset(out+pos,' ',n);
+            else out[pos]=c;
+        }
+        pos+=n;
+    }
+    *length=pos;return 0;
+}
+int gppx_layout_format(const char *text,const GPPX_Layout *layout,char **output) {
+    size_t n;
+    char *out;
+    if (!output) return 1;
+    *output=NULL;
+    if (!text || !layout || layout_pass(text,layout,NULL,&n) || n==SIZE_MAX) return 1;
+    out=(char*)malloc(n+1);if (!out) return 1;
+    if (layout_pass(text,layout,out,&n)) {free(out);return 1;}
+    out[n]=0;*output=out;return 0;
+}
+int gppx_layout_callback(GPPX_State *state,const char *text,char **output,void *userdata) {
+    (void)state;
+    return gppx_layout_format(text,(const GPPX_Layout*)userdata,output);
+}
+int gppx_utf8_next(const unsigned char *bytes,size_t size,size_t *offset,uint32_t *scalar) {
+    size_t i,n,j;
+    uint32_t cp,min;
+    unsigned char c;
+    if (!bytes || !offset || !scalar || *offset>=size) return 1;
+    i=*offset;c=bytes[i];
+    if (c<0x80) {n=1;cp=c;min=0;}
+    else if (c>=0xC2 && c<=0xDF) {n=2;cp=c&0x1F;min=0x80;}
+    else if (c>=0xE0 && c<=0xEF) {n=3;cp=c&0x0F;min=0x800;}
+    else if (c>=0xF0 && c<=0xF4) {n=4;cp=c&7;min=0x10000;}
+    else return 1;
+    if (n>size-i) return 1;
+    for (j=1;j<n;++j) {
+        c=bytes[i+j];if ((c&0xC0)!=0x80) return 1;
+        cp=(cp<<6)|(c&0x3F);
+    }
+    if (cp<min || cp>0x10FFFF || (cp>=0xD800 && cp<=0xDFFF)) return 1;
+    *scalar=cp;*offset=i+n;return 0;
+}
+int gppx_utf8_validate(const unsigned char *bytes,size_t size,size_t *error_offset) {
+    size_t offset=0;
+    uint32_t cp;
+    if (error_offset) *error_offset=0;
+    if (!bytes && size) return 1;
+    while (offset<size) {
+        if (gppx_utf8_next(bytes,size,&offset,&cp)) {
+            if (error_offset) *error_offset=offset;
+            return 1;
+        }
+    }
+    if (error_offset) *error_offset=size;
+    return 0;
+}
+int gppx_utf8_load(const char *path,char **output) {
+    unsigned char *bytes;
+    size_t size,start=0;
+    if (!output) return 1;
+    *output=NULL;
+    if (gppx_reader_load_bytes(path,&bytes,&size)) return 1;
+    if (gppx_utf8_validate(bytes,size,NULL) || memchr(bytes,0,size)) {free(bytes);return 1;}
+    if (size>=3 && bytes[0]==0xEF && bytes[1]==0xBB && bytes[2]==0xBF) start=3;
+    if (start) memmove(bytes,bytes+start,size-start+1);
+    *output=(char*)bytes;return 0;
+}
+int gppx_utf8_reader_callback(GPPX_State *state,const char *path,char **output,void *userdata) {
+    (void)state;(void)userdata;return gppx_utf8_load(path,output);
+}
+int gppx_metasym_name(const char *name_space,const char *name,char **output) {
+    size_t a,b;
+    char *out;
+    if (!output) return 1;
+    *output=NULL;
+    if (!gppx_directive_valid_name(name)) return 1;
+    if (!name_space || !*name_space) {
+        *output=gppx_strdup(name);return *output ? 0 : 1;
+    }
+    if (!gppx_directive_valid_name(name_space)) return 1;
+    a=strlen(name_space);b=strlen(name);
+    if (a>SIZE_MAX-2 || b>SIZE_MAX-a-2) return 1;
+    out=(char*)malloc(a+b+2);if (!out) return 1;
+    memcpy(out,name_space,a);out[a]='_';memcpy(out+a+1,name,b+1);
+    *output=out;return 0;
+}
+int gppx_metasym_define(GPPX_State *state,const char *name_space,const char *name,const char *replacement) {
+    char *symbol;
+    int rc;
+    if (!state || !replacement || gppx_metasym_name(name_space,name,&symbol)) return 1;
+    rc=gppx_define(state,symbol,replacement);free(symbol);return rc;
+}
+int gppx_metasym_undef(GPPX_State *state,const char *name_space,const char *name) {
+    char *symbol;
+    int rc;
+    if (!state || gppx_metasym_name(name_space,name,&symbol)) return 1;
+    rc=gppx_undef(state,symbol);free(symbol);return rc;
+}

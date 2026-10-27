@@ -1,0 +1,123 @@
+#define VMWV_VERSION 1
+{
+  "format": "gppx-vmwv",
+  "version": VMWV_VERSION,
+  "id": "dalvik",
+  "name": "Dalvik",
+  "revision": "DEX base integer instructions",
+  "scope": "reference-subset",
+  "model": "register",
+  "state": {
+    "pc": "16-bit code-unit position",
+    "v": "32-bit frame registers",
+    "heap": "managed objects",
+    "result": "pending invocation result"
+  },
+  "invariants": [
+    "Wide values occupy adjacent register pairs.",
+    "Register indices are within the method register count."
+  ],
+  "operations": [
+    {
+      "name": "const/16",
+      "operands": [
+        "A",
+        "literal"
+      ],
+      "effect": "Sign-extend a 16-bit literal into v[A]."
+    },
+    {
+      "name": "move",
+      "operands": [
+        "A",
+        "B"
+      ],
+      "effect": "v[A] := v[B]."
+    },
+    {
+      "name": "add-int",
+      "operands": [
+        "A",
+        "B",
+        "C"
+      ],
+      "effect": "v[A] := v[B]+v[C] modulo 2^32."
+    },
+    {
+      "name": "sub-int",
+      "operands": [
+        "A",
+        "B",
+        "C"
+      ],
+      "effect": "v[A] := v[B]-v[C] modulo 2^32."
+    },
+    {
+      "name": "if-eq",
+      "operands": [
+        "A",
+        "B",
+        "offset"
+      ],
+      "effect": "Branch by offset code units if v[A] equals v[B]."
+    },
+    {
+      "name": "goto",
+      "operands": [
+        "offset"
+      ],
+      "effect": "Branch by the signed offset in code units."
+    },
+    {
+      "name": "return",
+      "operands": [
+        "A"
+      ],
+      "effect": "Return the single-word non-object value v[A]."
+    },
+    {
+      "name": "return-void",
+      "operands": [],
+      "effect": "Return from a void method."
+    }
+  ],
+  "example": {
+    "initial": "Three registers in an int-returning method.",
+    "steps": [
+      {
+        "op": "const/16",
+        "args": [
+          0,
+          20
+        ]
+      },
+      {
+        "op": "const/16",
+        "args": [
+          1,
+          22
+        ]
+      },
+      {
+        "op": "add-int",
+        "args": [
+          2,
+          0,
+          1
+        ]
+      },
+      {
+        "op": "return",
+        "args": [
+          2
+        ]
+      }
+    ],
+    "expected": "Caller receives int 42."
+  },
+  "references": [
+    "https://source.android.com/docs/core/runtime/dalvik-bytecode"
+  ],
+  "notes": "Symbolic operations describe selected semantics; no binary encoding or complete runtime is specified."
+}
+#undef VMWV_VERSION

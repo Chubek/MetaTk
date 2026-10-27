@@ -1,0 +1,112 @@
+#define VMWV_VERSION 1
+{
+  "format": "gppx-vmwv",
+  "version": VMWV_VERSION,
+  "id": "zendvm",
+  "name": "Zend virtual machine",
+  "revision": "PHP 8.3.0 operand subset",
+  "scope": "reference-subset",
+  "model": "register",
+  "state": {
+    "opline": "current zend_op",
+    "CV": "compiled variables",
+    "TMP": "temporary zvals",
+    "frame": "execution data",
+    "heap": "refcounted values"
+  },
+  "invariants": [
+    "Operations obey PHP type conversion and exception rules.",
+    "A zval may reference refcounted storage."
+  ],
+  "operations": [
+    {
+      "name": "ZEND_ASSIGN",
+      "operands": [
+        "destination",
+        "source"
+      ],
+      "effect": "Assign the source value to the destination variable with PHP ownership semantics."
+    },
+    {
+      "name": "ZEND_ADD",
+      "operands": [
+        "lhs",
+        "rhs",
+        "result"
+      ],
+      "effect": "Compute PHP addition and store it in result."
+    },
+    {
+      "name": "ZEND_SUB",
+      "operands": [
+        "lhs",
+        "rhs",
+        "result"
+      ],
+      "effect": "Compute PHP subtraction and store it in result."
+    },
+    {
+      "name": "ZEND_MUL",
+      "operands": [
+        "lhs",
+        "rhs",
+        "result"
+      ],
+      "effect": "Compute PHP multiplication and store it in result."
+    },
+    {
+      "name": "ZEND_JMP",
+      "operands": [
+        "target"
+      ],
+      "effect": "Set opline to target."
+    },
+    {
+      "name": "ZEND_JMPZ",
+      "operands": [
+        "condition",
+        "target"
+      ],
+      "effect": "Branch if the condition converts to false."
+    },
+    {
+      "name": "ZEND_ECHO",
+      "operands": [
+        "value"
+      ],
+      "effect": "Convert value to string and write it to PHP output."
+    },
+    {
+      "name": "ZEND_RETURN",
+      "operands": [
+        "value"
+      ],
+      "effect": "Return a value to the caller and unwind the current frame."
+    }
+  ],
+  "example": {
+    "initial": "Integer literal operands and a free temporary t0.",
+    "steps": [
+      {
+        "op": "ZEND_ADD",
+        "args": [
+          20,
+          22,
+          "t0"
+        ]
+      },
+      {
+        "op": "ZEND_RETURN",
+        "args": [
+          "t0"
+        ]
+      }
+    ],
+    "expected": "Caller receives PHP integer 42."
+  },
+  "references": [
+    "https://github.com/php/php-src/blob/php-8.3.0/Zend/zend_vm_def.h"
+  ],
+  "notes": "Symbolic operations describe selected semantics; no binary encoding or complete runtime is specified."
+}
+#undef VMWV_VERSION

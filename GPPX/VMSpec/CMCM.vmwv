@@ -1,0 +1,84 @@
+#define VMWV_VERSION 1
+{
+  "format": "gppx-vmwv",
+  "version": VMWV_VERSION,
+  "id": "cmcm",
+  "name": "Categorical Multi-Combinator Machine",
+  "revision": "Thompson and Lins, 1992",
+  "scope": "reference-subset",
+  "model": "transition",
+  "state": {
+    "term": "categorical multi-combinator expression",
+    "environment": "argument tuple",
+    "continuation": "pending applications",
+    "heap": "shared expressions"
+  },
+  "invariants": [
+    "Tuple projections must be in range.",
+    "Sharing must preserve the meaning of the original expression."
+  ],
+  "operations": [
+    {
+      "name": "constant",
+      "operands": [
+        "value"
+      ],
+      "effect": "A constant denotes itself independently of the environment tuple."
+    },
+    {
+      "name": "projection",
+      "operands": [
+        "index"
+      ],
+      "effect": "Select the indexed component of the environment tuple."
+    },
+    {
+      "name": "composition",
+      "operands": [
+        "f",
+        "g"
+      ],
+      "effect": "Apply g to the environment and then apply f to the result."
+    },
+    {
+      "name": "pairing",
+      "operands": [
+        "f",
+        "g"
+      ],
+      "effect": "Evaluate both component combinators over the same environment and construct their pair."
+    },
+    {
+      "name": "application",
+      "operands": [
+        "function",
+        "argument"
+      ],
+      "effect": "Apply the function combinator to its argument representation."
+    },
+    {
+      "name": "sharing",
+      "operands": [
+        "expression"
+      ],
+      "effect": "Retain a shared representation of an expression rather than duplicating its graph."
+    }
+  ],
+  "example": {
+    "initial": "environment=(20,42).",
+    "steps": [
+      {
+        "op": "projection",
+        "args": [
+          1
+        ]
+      }
+    ],
+    "expected": "The selected value is 42."
+  },
+  "references": [
+    "https://www.cs.kent.ac.uk/pubs/1992/114/index.html"
+  ],
+  "notes": "CMCM means Categorical Multi-Combinator Machine. These are normalized categorical semantic operations, not a transcription of the paper's instruction set or sharing algorithm."
+}
+#undef VMWV_VERSION

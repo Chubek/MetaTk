@@ -10,4 +10,8 @@
 #include "GPPX-Embed.h"
 #include "GPPX-Rewriter.h"
 #include "GPPX-PMatch.h"
+#include "GPPX-Style.h"
+#include "GPPX-Layout.h"
+#include "GPPX-UTF8Input.h"
+#include "GPPX-MetaSym.h"
 #endif

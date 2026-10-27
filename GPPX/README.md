@@ -102,3 +102,14 @@ To scan plugin directories use `gppx --plugin-dir ./build/plugins --eval
 '#wbr_upper hello'`. For a multiline REPL use `:begin` and `:end`. Configuration
 is intentionally a small YAML subset; see `driver/config.yaml` for the exact
 supported mapping/sequence conventions.
+
+### Additional examples and tooling
+
+- `build/gppx_mylang [source.my]` demonstrates a custom language front end
+  using the style, UTF-8 input and qualified-symbol helpers. With no argument,
+  it prints a built-in demonstration. See [extension APIs](docs/EXTENSIONS.md).
+- [VM reference specifications](VMSpec/README.md) expand to JSON under
+  `build/VMSpec/json/`; `GPPX_BUILD_VMSPECS=OFF` disables this build target.
+  These are documented semantic subsets, not executable VM implementations.
+- `sh addons/install.sh [--prefix VIM_RUNTIME_DIR]` installs the
+  [Vim syntax and indentation support](addons/README.md).

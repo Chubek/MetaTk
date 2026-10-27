@@ -55,3 +55,54 @@ gppx_destroy(s);
 - The plugin ABI version stays 1. Category utility additions do not alter the layout of `GPPX_HostAPI`.
 
 Runnable C conformance checks live in `tests/test_extensions.c`; the original engine and Webber integration checks live in `tests/test.cpp`.
+
+## Style and layout utilities
+
+These utilities use the existing syntax and rewriter categories; they do not
+add fields to `GPPX_HostAPI` or create new engine callback categories.
+
+`GPPX_Style` groups a macro style (`bare`, `dollar`, or `mustache`), line/block
+comment markers, and the string-expansion flag. `gppx_style_apply()` applies
+these settings to an engine. NULL string members leave settings alone;
+`expand_strings=-1` leaves that flag alone. Use 0 or 1 to disable or enable it.
+For example, `GPPX_Style style={"dollar",";","/*","*/",0};` configures explicit
+macros and semicolon line comments. Profiles reset syntax, so apply the style
+after the profile. Configuration is sequential, not transactional.
+
+`gppx_layout_format(text, &layout, &output)` normalizes CRLF and CR to LF,
+optionally expands tabs, and prefixes nonempty lines with spaces. The config
+is `GPPX_Layout {tab_width, indent_spaces}`; zero tab width preserves tabs.
+Tab stops count input bytes from the beginning of each original line, before
+adding the indentation prefix. This is not Unicode display-width calculation.
+Empty lines and the presence or absence of the final newline are preserved.
+`gppx_layout_callback` adapts it to the line-rewriter slot; keep its configuration
+alive until the engine is destroyed. Free standalone output with `gppx_free()`.
+
+## UTF-8 text input
+
+`gppx_utf8_next()` decodes one scalar from byte-counted input and advances the
+provided offset only on success. It rejects truncated and overlong sequences,
+surrogates, stray continuation bytes and scalars above U+10FFFF.
+`gppx_utf8_validate()` checks an entire buffer and optionally reports the first
+invalid sequence's offset (or the input size on success). Both accept U+0000
+as a scalar; these functions do not pass data to the preprocessor.
+
+`gppx_utf8_load()` additionally rejects embedded NUL bytes and removes one
+leading UTF-8 BOM, yielding malloc-owned text suitable for `gppx_process()`.
+Register `gppx_utf8_reader_callback` for an extension to validate files read
+through the engine's reader interface. It needs no userdata. This validates
+encoding; it does not normalize Unicode or extend the engine's ASCII macro
+identifier rules.
+
+## Qualified macro symbols
+
+`gppx_metasym_name("module", "value", &name)` constructs `module_value`, with
+strict ASCII identifier validation. NULL or empty namespaces leave the name
+unqualified. `gppx_metasym_define()` and `gppx_metasym_undef()` operate on those
+qualified names in the engine's ordinary macro table. This helper owns no
+separate state and provides no hygienic naming: `a_b` + `c` and `a` + `b_c`
+both produce `a_b_c`. Free returned names with `gppx_free()`.
+
+`examples/mylang.cpp` demonstrates style configuration, qualified macros,
+UTF-8 source loading, and a C++ custom directive. Build target `gppx_mylang`,
+then run it without arguments for a demo or with a UTF-8 source filename.

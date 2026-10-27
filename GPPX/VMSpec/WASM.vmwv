@@ -1,0 +1,102 @@
+#define VMWV_VERSION 1
+{
+  "format": "gppx-vmwv",
+  "version": VMWV_VERSION,
+  "id": "wasm",
+  "name": "WebAssembly",
+  "revision": "Core 1.0 integer subset",
+  "scope": "reference-subset",
+  "model": "stack",
+  "state": {
+    "stack": "typed operand values",
+    "locals": "function locals",
+    "labels": "structured control labels",
+    "memory": "linear memory",
+    "frames": "function activations"
+  },
+  "invariants": [
+    "Validation checks operand and block result types.",
+    "i32 arithmetic wraps modulo 2^32; invalid memory access traps."
+  ],
+  "operations": [
+    {
+      "name": "i32.const",
+      "operands": [
+        "value"
+      ],
+      "effect": "Push an i32 constant."
+    },
+    {
+      "name": "local.get",
+      "operands": [
+        "index"
+      ],
+      "effect": "Push locals[index]."
+    },
+    {
+      "name": "local.set",
+      "operands": [
+        "index"
+      ],
+      "effect": "Pop a value into locals[index]."
+    },
+    {
+      "name": "i32.add",
+      "operands": [],
+      "effect": "Pop rhs and lhs and push their i32 sum."
+    },
+    {
+      "name": "i32.sub",
+      "operands": [],
+      "effect": "Pop rhs and lhs and push their i32 difference."
+    },
+    {
+      "name": "drop",
+      "operands": [],
+      "effect": "Discard the top operand."
+    },
+    {
+      "name": "br",
+      "operands": [
+        "depth"
+      ],
+      "effect": "Branch to the enclosing label at depth, unwinding operands according to its arity."
+    },
+    {
+      "name": "return",
+      "operands": [],
+      "effect": "Return the function result values from the operand stack."
+    }
+  ],
+  "example": {
+    "initial": "A function with result i32 and no parameters.",
+    "steps": [
+      {
+        "op": "i32.const",
+        "args": [
+          20
+        ]
+      },
+      {
+        "op": "i32.const",
+        "args": [
+          22
+        ]
+      },
+      {
+        "op": "i32.add",
+        "args": []
+      },
+      {
+        "op": "return",
+        "args": []
+      }
+    ],
+    "expected": "Function returns i32 42."
+  },
+  "references": [
+    "https://www.w3.org/TR/wasm-core-1/"
+  ],
+  "notes": "Symbolic function bodies omit module sections and binary LEB128 encodings."
+}
+#undef VMWV_VERSION

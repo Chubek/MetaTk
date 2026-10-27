@@ -71,6 +71,63 @@ int main(void) {
     gppx_free(readback);
     remove(GPPX_TEST_DATA_PATH);
     REQUIRE(gppx_embed_register(state,"custom_hex",gppx_embed_hex_callback,NULL)==0);
+    /* The new helpers share engine state without changing the host ABI. */
+    {
+        GPPX_Style style={"mustache",";","/*","*/",0};
+        GPPX_Layout layout={4,2};
+        size_t offset=0,bad=0;
+        uint32_t cp=0;
+        const unsigned char utf[]={0x24,0xC2,0xA2,0xE2,0x82,0xAC,0xF0,0x90,0x8D,0x88};
+        const unsigned char invalid[][4]={{0xC0,0x80,0,0},{0xED,0xA0,0x80,0},
+            {0xF4,0x90,0x80,0x80},{0x80,0,0,0},{0xE2,0x28,0xA1,0}};
+        size_t i;
+        REQUIRE(gppx_style_apply(state,&style)==0);
+        REQUIRE(gppx_metasym_define(state,"lang","answer","42")==0);
+        REQUIRE(gppx_process(state,"{{lang_answer}} ; {{lang_answer}}\n","<style>",&out)==0);
+        REQUIRE(equals(out,"42 ; {{lang_answer}}\n"));
+        REQUIRE(gppx_metasym_undef(state,"lang","answer")==0);
+        REQUIRE(gppx_process(state,"{{lang_answer}}\n","<style>",&out)==0);
+        REQUIRE(equals(out,"lang_answer\n"));
+        REQUIRE(gppx_metasym_name(NULL,"name",&out)==0);
+        REQUIRE(equals(out,"name"));
+        REQUIRE(gppx_metasym_name("bad-name","x",&out)!=0 && !out);
+        REQUIRE(gppx_metasym_name("ok","9bad",&out)!=0 && !out);
+        style.expand_strings=2;
+        REQUIRE(gppx_style_apply(state,&style)!=0);
+        REQUIRE(gppx_style_apply(NULL,&style)!=0);
+        REQUIRE(gppx_layout_format("a\tb\r\n\r\nc\r",&layout,&out)==0);
+        REQUIRE(equals(out,"  a   b\n\n  c\n"));
+        REQUIRE(gppx_layout_format("",&layout,&out)==0);
+        REQUIRE(equals(out,""));
+        layout.tab_width=0;layout.indent_spaces=0;
+        REQUIRE(gppx_layout_format("a\tb",&layout,&out)==0);
+        REQUIRE(equals(out,"a\tb"));
+        layout.indent_spaces=SIZE_MAX;
+        REQUIRE(gppx_layout_format("x",&layout,&out)!=0 && !out);
+        layout.indent_spaces=2;
+        REQUIRE(gppx_layout_callback(state,"x",&out,&layout)==0);
+        REQUIRE(equals(out,"  x"));
+        REQUIRE(gppx_layout_format(NULL,&layout,&out)!=0 && !out);
+        REQUIRE(gppx_utf8_validate(utf,sizeof utf,&bad)==0 && bad==sizeof utf);
+        REQUIRE(gppx_utf8_next(utf,sizeof utf,&offset,&cp)==0 && cp==0x24 && offset==1);
+        REQUIRE(gppx_utf8_next(utf,sizeof utf,&offset,&cp)==0 && cp==0xA2 && offset==3);
+        REQUIRE(gppx_utf8_next(utf,sizeof utf,&offset,&cp)==0 && cp==0x20AC && offset==6);
+        REQUIRE(gppx_utf8_next(utf,sizeof utf,&offset,&cp)==0 && cp==0x10348 && offset==10);
+        REQUIRE(gppx_utf8_next(utf,sizeof utf,&offset,&cp)!=0 && offset==10);
+        for (i=0;i<sizeof invalid/sizeof invalid[0];++i)
+            REQUIRE(gppx_utf8_validate(invalid[i],4,&bad)!=0 && bad==0);
+        REQUIRE(gppx_utf8_validate(utf,sizeof utf-1,&bad)!=0 && bad==6);
+        REQUIRE(gppx_utf8_validate(NULL,0,&bad)==0 && bad==0);
+        REQUIRE(gppx_utf8_validate(NULL,1,&bad)!=0);
+        REQUIRE(gppx_sink_write_file(GPPX_TEST_DATA_PATH,"\xEF\xBB\xBF" "hello",8,0)==0);
+        REQUIRE(gppx_utf8_reader_callback(state,GPPX_TEST_DATA_PATH,&out,NULL)==0);
+        REQUIRE(equals(out,"hello"));
+        REQUIRE(gppx_sink_write_file(GPPX_TEST_DATA_PATH,blob,sizeof blob,0)==0);
+        REQUIRE(gppx_utf8_load(GPPX_TEST_DATA_PATH,&out)!=0 && !out);
+        REQUIRE(gppx_sink_write_file(GPPX_TEST_DATA_PATH,invalid[0],2,0)==0);
+        REQUIRE(gppx_utf8_load(GPPX_TEST_DATA_PATH,&out)!=0 && !out);
+        remove(GPPX_TEST_DATA_PATH);
+    }
     gppx_destroy(state);
     printf("PASS %d C extension tests\n",count);
     return 0;

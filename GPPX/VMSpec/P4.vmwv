@@ -1,0 +1,107 @@
+#define VMWV_VERSION 1
+{
+  "format": "gppx-vmwv",
+  "version": VMWV_VERSION,
+  "id": "p4",
+  "name": "Pascal P4",
+  "revision": "P4 interpreter",
+  "scope": "reference-subset",
+  "model": "stack",
+  "state": {
+    "PC": "instruction pointer",
+    "SP": "operand stack top",
+    "MP": "activation record base",
+    "EP": "stack limit",
+    "NP": "heap frontier",
+    "store": "typed memory cells"
+  },
+  "invariants": [
+    "Stack and heap must not overlap.",
+    "Static links locate lexically enclosing frames."
+  ],
+  "operations": [
+    {
+      "name": "ldc",
+      "operands": [
+        "value"
+      ],
+      "effect": "Push a typed constant onto the evaluation stack."
+    },
+    {
+      "name": "lod",
+      "operands": [
+        "level",
+        "offset"
+      ],
+      "effect": "Follow level static links and push the cell at offset."
+    },
+    {
+      "name": "str",
+      "operands": [
+        "level",
+        "offset"
+      ],
+      "effect": "Pop a value into the addressed activation-record cell."
+    },
+    {
+      "name": "adi",
+      "operands": [],
+      "effect": "Pop rhs and lhs integers; push lhs + rhs."
+    },
+    {
+      "name": "sbi",
+      "operands": [],
+      "effect": "Pop rhs and lhs integers; push lhs - rhs."
+    },
+    {
+      "name": "ujp",
+      "operands": [
+        "label"
+      ],
+      "effect": "Set PC to label."
+    },
+    {
+      "name": "fjp",
+      "operands": [
+        "label"
+      ],
+      "effect": "Pop a Boolean; jump to label only when false."
+    },
+    {
+      "name": "stp",
+      "operands": [],
+      "effect": "Stop the interpreter."
+    }
+  ],
+  "example": {
+    "initial": "Empty evaluation stack.",
+    "steps": [
+      {
+        "op": "ldc",
+        "args": [
+          20
+        ]
+      },
+      {
+        "op": "ldc",
+        "args": [
+          22
+        ]
+      },
+      {
+        "op": "adi",
+        "args": []
+      },
+      {
+        "op": "stp",
+        "args": []
+      }
+    ],
+    "expected": "Evaluation stack contains 42."
+  },
+  "references": [
+    "https://homepages.cwi.nl/~steven/pascal/"
+  ],
+  "notes": "P4 means Pascal-P4 here. Typed symbolic operands omit assembler type suffixes; procedure calls, sets and I/O are outside this subset."
+}
+#undef VMWV_VERSION

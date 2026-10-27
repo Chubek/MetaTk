@@ -1,0 +1,95 @@
+#define VMWV_VERSION 1
+{
+  "format": "gppx-vmwv",
+  "version": VMWV_VERSION,
+  "id": "forth",
+  "name": "Forth abstract execution model",
+  "revision": "Forth 2012 core words",
+  "scope": "reference-subset",
+  "model": "stack",
+  "state": {
+    "data": "data stack, top at right",
+    "return": "return stack",
+    "dictionary": "execution-token definitions",
+    "memory": "addressed cells"
+  },
+  "invariants": [
+    "Cell width is implementation-defined.",
+    "Return-stack values must be balanced before returning."
+  ],
+  "operations": [
+    {
+      "name": "LITERAL",
+      "operands": [
+        "value"
+      ],
+      "effect": "Model the runtime effect of a compiled literal by pushing value."
+    },
+    {
+      "name": "DUP",
+      "operands": [],
+      "effect": "Transform ( x -- x x )."
+    },
+    {
+      "name": "DROP",
+      "operands": [],
+      "effect": "Transform ( x -- )."
+    },
+    {
+      "name": "SWAP",
+      "operands": [],
+      "effect": "Transform ( a b -- b a )."
+    },
+    {
+      "name": "OVER",
+      "operands": [],
+      "effect": "Transform ( a b -- a b a )."
+    },
+    {
+      "name": "+",
+      "operands": [],
+      "effect": "Transform ( a b -- a+b ) with cell arithmetic."
+    },
+    {
+      "name": "-",
+      "operands": [],
+      "effect": "Transform ( a b -- a-b ) with cell arithmetic."
+    },
+    {
+      "name": "EXIT",
+      "operands": [],
+      "effect": "Return from the current colon definition."
+    }
+  ],
+  "example": {
+    "initial": "Empty data stack inside a colon definition.",
+    "steps": [
+      {
+        "op": "LITERAL",
+        "args": [
+          20
+        ]
+      },
+      {
+        "op": "LITERAL",
+        "args": [
+          22
+        ]
+      },
+      {
+        "op": "+",
+        "args": []
+      },
+      {
+        "op": "EXIT",
+        "args": []
+      }
+    ],
+    "expected": "Data stack contains 42."
+  },
+  "references": [
+    "https://forth-standard.org/standard/core"
+  ],
+  "notes": "LITERAL denotes compiled runtime behavior here; the standard word itself has compilation semantics. No particular threaded-code encoding is chosen."
+}
+#undef VMWV_VERSION

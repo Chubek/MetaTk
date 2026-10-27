@@ -1,0 +1,94 @@
+#define VMWV_VERSION 1
+{
+  "format": "gppx-vmwv",
+  "version": VMWV_VERSION,
+  "id": "som",
+  "name": "Simple Object Machine",
+  "revision": "classic SOM bytecode model",
+  "scope": "reference-subset",
+  "model": "stack",
+  "state": {
+    "pc": "bytecode index",
+    "stack": "object operands",
+    "frame": "arguments and locals",
+    "context": "lexical enclosing frame",
+    "literals": "method literal table"
+  },
+  "invariants": [
+    "Receiver is included in message-send arguments.",
+    "Non-local returns target the enclosing method context."
+  ],
+  "operations": [
+    {
+      "name": "PUSH_CONSTANT",
+      "operands": [
+        "index"
+      ],
+      "effect": "Push the object in literals[index]."
+    },
+    {
+      "name": "PUSH_LOCAL",
+      "operands": [
+        "index",
+        "context_level"
+      ],
+      "effect": "Push the indexed local from the selected lexical context."
+    },
+    {
+      "name": "POP_LOCAL",
+      "operands": [
+        "index",
+        "context_level"
+      ],
+      "effect": "Pop into the indexed local of that context."
+    },
+    {
+      "name": "DUP",
+      "operands": [],
+      "effect": "Duplicate the top object reference."
+    },
+    {
+      "name": "POP",
+      "operands": [],
+      "effect": "Discard the top object reference."
+    },
+    {
+      "name": "SEND",
+      "operands": [
+        "selector"
+      ],
+      "effect": "Look up and invoke selector on the receiver below its arguments."
+    },
+    {
+      "name": "RETURN_LOCAL",
+      "operands": [],
+      "effect": "Return the top object to the immediate caller."
+    },
+    {
+      "name": "RETURN_NON_LOCAL",
+      "operands": [],
+      "effect": "Return the top object from the lexically enclosing method."
+    }
+  ],
+  "example": {
+    "initial": "literals[0] is Integer 42.",
+    "steps": [
+      {
+        "op": "PUSH_CONSTANT",
+        "args": [
+          0
+        ]
+      },
+      {
+        "op": "RETURN_LOCAL",
+        "args": []
+      }
+    ],
+    "expected": "Caller receives the Integer object 42."
+  },
+  "references": [
+    "https://github.com/SOM-st/CSOM"
+  ],
+  "notes": "Symbolic classic SOM names; implementations with specialized or quickened bytecodes may use different layouts."
+}
+#undef VMWV_VERSION

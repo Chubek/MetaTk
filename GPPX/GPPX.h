@@ -14,4 +14,8 @@
 #include "include/GPPX-Embed.h"
 #include "include/GPPX-Rewriter.h"
 #include "include/GPPX-PMatch.h"
+#include "include/GPPX-Style.h"
+#include "include/GPPX-Layout.h"
+#include "include/GPPX-UTF8Input.h"
+#include "include/GPPX-MetaSym.h"
 #endif

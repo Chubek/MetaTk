@@ -1,0 +1,109 @@
+#define VMWV_VERSION 1
+{
+  "format": "gppx-vmwv",
+  "version": VMWV_VERSION,
+  "id": "z-machine",
+  "name": "Z-machine",
+  "revision": "version 3 arithmetic subset, standard 1.1",
+  "scope": "reference-subset",
+  "model": "stack",
+  "state": {
+    "pc": "byte address",
+    "stack": "evaluation stack",
+    "locals": "routine locals",
+    "globals": "global variables",
+    "memory": "story memory",
+    "calls": "routine frames"
+  },
+  "invariants": [
+    "Arithmetic values are 16-bit words.",
+    "Variable zero reads pop and writes push the evaluation stack."
+  ],
+  "operations": [
+    {
+      "name": "add",
+      "operands": [
+        "a",
+        "b",
+        "store"
+      ],
+      "effect": "Store the low 16 bits of signed a+b."
+    },
+    {
+      "name": "sub",
+      "operands": [
+        "a",
+        "b",
+        "store"
+      ],
+      "effect": "Store the low 16 bits of signed a-b."
+    },
+    {
+      "name": "mul",
+      "operands": [
+        "a",
+        "b",
+        "store"
+      ],
+      "effect": "Store the low 16 bits of signed a*b."
+    },
+    {
+      "name": "push",
+      "operands": [
+        "value"
+      ],
+      "effect": "Push value onto the evaluation stack."
+    },
+    {
+      "name": "pull",
+      "operands": [
+        "variable"
+      ],
+      "effect": "Pop the evaluation stack into variable, using version-3 semantics."
+    },
+    {
+      "name": "jump",
+      "operands": [
+        "offset"
+      ],
+      "effect": "Continue at the address after the instruction plus signed offset minus two."
+    },
+    {
+      "name": "ret",
+      "operands": [
+        "value"
+      ],
+      "effect": "Return value from the current routine."
+    },
+    {
+      "name": "quit",
+      "operands": [],
+      "effect": "Terminate story execution."
+    }
+  ],
+  "example": {
+    "initial": "Inside a routine with local variable 1.",
+    "steps": [
+      {
+        "op": "add",
+        "args": [
+          20,
+          22,
+          "local1"
+        ]
+      },
+      {
+        "op": "ret",
+        "args": [
+          "local1"
+        ]
+      }
+    ],
+    "expected": "Caller receives word 42."
+  },
+  "references": [
+    "https://inform-fiction.org/zmachine/standards/z1point1/sect15.html"
+  ],
+  "notes": "Story-file parsing, object trees, text encoding and interactive I/O are not included."
+}
+#undef VMWV_VERSION

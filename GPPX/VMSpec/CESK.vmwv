@@ -1,0 +1,86 @@
+#define VMWV_VERSION 1
+{
+  "format": "gppx-vmwv",
+  "version": VMWV_VERSION,
+  "id": "cesk",
+  "name": "Control Environment Store Kontinuation",
+  "revision": "call-by-value lambda calculus",
+  "scope": "reference-subset",
+  "model": "transition",
+  "state": {
+    "C": "current term or value",
+    "E": "variable-to-address map",
+    "S": "address-to-value store",
+    "K": "continuation frames"
+  },
+  "invariants": [
+    "Fresh allocation never aliases a live binding.",
+    "Closures capture environments, while values reside in the store."
+  ],
+  "operations": [
+    {
+      "name": "variable",
+      "operands": [
+        "x"
+      ],
+      "effect": "For C=x, return S[E[x]] to K; an unbound name is an error."
+    },
+    {
+      "name": "lambda",
+      "operands": [
+        "x",
+        "body"
+      ],
+      "effect": "For C=lambda x.body, return closure(x,body,E) to K."
+    },
+    {
+      "name": "application",
+      "operands": [
+        "fn",
+        "arg"
+      ],
+      "effect": "For C=(fn arg), set C=fn and push argument(arg,E) onto K."
+    },
+    {
+      "name": "argument",
+      "operands": [
+        "closure"
+      ],
+      "effect": "When fn returns closure, evaluate saved arg with a function(closure) continuation."
+    },
+    {
+      "name": "bind",
+      "operands": [
+        "value"
+      ],
+      "effect": "Allocate fresh a, store value at a, and evaluate the closure body in its environment extended with x->a."
+    },
+    {
+      "name": "halt",
+      "operands": [],
+      "effect": "A value with the empty continuation is the final answer."
+    }
+  ],
+  "example": {
+    "initial": "C=lambda x.x, E={}, S={}, K=empty.",
+    "steps": [
+      {
+        "op": "lambda",
+        "args": [
+          "x",
+          "x"
+        ]
+      },
+      {
+        "op": "halt",
+        "args": []
+      }
+    ],
+    "expected": "closure(x,x,{}) with empty continuation."
+  },
+  "references": [
+    "https://matt.might.net/articles/cesk-machines/"
+  ],
+  "notes": "Rule names are descriptive, not bytecodes. This subset omits mutation and exceptions."
+}
+#undef VMWV_VERSION

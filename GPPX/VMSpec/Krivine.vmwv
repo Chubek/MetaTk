@@ -1,0 +1,85 @@
+#define VMWV_VERSION 1
+{
+  "format": "gppx-vmwv",
+  "version": VMWV_VERSION,
+  "id": "krivine",
+  "name": "Krivine machine",
+  "revision": "weak-head call-by-name, de Bruijn indices",
+  "scope": "reference-subset",
+  "model": "transition",
+  "state": {
+    "term": "lambda term",
+    "environment": "list of argument closures",
+    "stack": "pending argument closures"
+  },
+  "invariants": [
+    "Closures contain a term and its environment.",
+    "Arguments are not evaluated before substitution."
+  ],
+  "operations": [
+    {
+      "name": "application",
+      "operands": [
+        "function",
+        "argument"
+      ],
+      "effect": "Push closure(argument,environment); continue with function in the same environment."
+    },
+    {
+      "name": "abstraction",
+      "operands": [
+        "body"
+      ],
+      "effect": "Pop an argument closure, prepend it to environment, and continue with body."
+    },
+    {
+      "name": "lookup_zero",
+      "operands": [],
+      "effect": "For term=0, replace term and environment by the first closure in environment."
+    },
+    {
+      "name": "lookup_successor",
+      "operands": [
+        "index"
+      ],
+      "effect": "For term=index+1, drop the first environment entry and continue with term=index."
+    },
+    {
+      "name": "halt",
+      "operands": [],
+      "effect": "An abstraction with an empty argument stack is in weak-head normal form."
+    }
+  ],
+  "example": {
+    "initial": "term=(lambda.0) (lambda.0), environment=[], stack=[].",
+    "steps": [
+      {
+        "op": "application",
+        "args": [
+          "lambda.0",
+          "lambda.0"
+        ]
+      },
+      {
+        "op": "abstraction",
+        "args": [
+          "0"
+        ]
+      },
+      {
+        "op": "lookup_zero",
+        "args": []
+      },
+      {
+        "op": "halt",
+        "args": []
+      }
+    ],
+    "expected": "term=lambda.0, environment=[], stack=[]."
+  },
+  "references": [
+    "https://www.classes.cs.uchicago.edu/archive/2011/fall/22100-1/papers/BRICS-RS-03-14.pdf"
+  ],
+  "notes": "Symbolic operations describe selected semantics; no binary encoding or complete runtime is specified."
+}
+#undef VMWV_VERSION

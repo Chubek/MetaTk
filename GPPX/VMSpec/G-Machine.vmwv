@@ -1,0 +1,81 @@
+#define VMWV_VERSION 1
+{
+  "format": "gppx-vmwv",
+  "version": VMWV_VERSION,
+  "id": "g-machine",
+  "name": "G-machine",
+  "revision": "Peyton Jones and Lester, Mark 1 core",
+  "scope": "reference-subset",
+  "model": "graph",
+  "state": {
+    "code": "instruction list",
+    "stack": "heap addresses, top first",
+    "heap": "number, application and global nodes",
+    "globals": "name-to-address map"
+  },
+  "invariants": [
+    "Application nodes preserve function and argument addresses.",
+    "Stack addresses refer to live heap nodes."
+  ],
+  "operations": [
+    {
+      "name": "Pushint",
+      "operands": [
+        "value"
+      ],
+      "effect": "Allocate a number node and push its address."
+    },
+    {
+      "name": "Pushglobal",
+      "operands": [
+        "name"
+      ],
+      "effect": "Push globals[name]."
+    },
+    {
+      "name": "Push",
+      "operands": [
+        "index"
+      ],
+      "effect": "Duplicate stack[index] onto the top."
+    },
+    {
+      "name": "Mkap",
+      "operands": [],
+      "effect": "Pop function then argument; allocate their application node and push its address."
+    },
+    {
+      "name": "Slide",
+      "operands": [
+        "count"
+      ],
+      "effect": "Keep the top address and discard count addresses below it."
+    },
+    {
+      "name": "Unwind",
+      "operands": [],
+      "effect": "Inspect the top node; follow application function links, or enter a saturated global, or finish at a number."
+    }
+  ],
+  "example": {
+    "initial": "heap={}, stack=[], code contains the listed operations.",
+    "steps": [
+      {
+        "op": "Pushint",
+        "args": [
+          42
+        ]
+      },
+      {
+        "op": "Unwind",
+        "args": []
+      }
+    ],
+    "expected": "Evaluation finishes at a number node containing 42."
+  },
+  "references": [
+    "https://www.microsoft.com/en-us/research/publication/implementing-functional-languages-a-tutorial/"
+  ],
+  "notes": "Mark 1 does not update redexes. Later lazy variants add Update, Pop, Eval and dump state."
+}
+#undef VMWV_VERSION

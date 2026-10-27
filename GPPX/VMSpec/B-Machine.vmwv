@@ -1,0 +1,67 @@
+#define VMWV_VERSION 1
+{
+  "format": "gppx-vmwv",
+  "version": VMWV_VERSION,
+  "id": "b-machine",
+  "name": "Wang B-machine",
+  "revision": "four-instruction non-erasing tape model",
+  "scope": "reference-subset",
+  "model": "tape",
+  "state": {
+    "pc": "zero-based instruction index",
+    "head": "integer tape position",
+    "tape": "sparse set of marked positions"
+  },
+  "invariants": [
+    "Unmarked tape positions read as zero.",
+    "Marking never erases a one.",
+    "Execution halts when pc is outside the program."
+  ],
+  "operations": [
+    {
+      "name": "L",
+      "operands": [],
+      "effect": "head := head - 1; pc := pc + 1."
+    },
+    {
+      "name": "R",
+      "operands": [],
+      "effect": "head := head + 1; pc := pc + 1."
+    },
+    {
+      "name": "M",
+      "operands": [],
+      "effect": "tape[head] := 1; pc := pc + 1."
+    },
+    {
+      "name": "J",
+      "operands": [
+        "target"
+      ],
+      "effect": "If tape[head] is marked set pc=target, otherwise increment pc."
+    }
+  ],
+  "example": {
+    "initial": "pc=0, head=0, tape is all zero.",
+    "steps": [
+      {
+        "op": "M",
+        "args": []
+      },
+      {
+        "op": "R",
+        "args": []
+      },
+      {
+        "op": "M",
+        "args": []
+      }
+    ],
+    "expected": "Halted at pc=3; cells 0 and 1 are marked; head=1."
+  },
+  "references": [
+    "Hao Wang, A Variant to Turing's Theory of Computing Machines, Journal of the ACM 4(1), 1957, pp. 63-92."
+  ],
+  "notes": "Name assumption: Wang's B-machine, not Kluge's lambda-calculus B-machine or the B-method. Change this model if another B-machine was intended."
+}
+#undef VMWV_VERSION

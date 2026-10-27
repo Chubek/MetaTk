@@ -1,0 +1,95 @@
+#define VMWV_VERSION 1
+{
+  "format": "gppx-vmwv",
+  "version": VMWV_VERSION,
+  "id": "secd",
+  "name": "SECD",
+  "revision": "call-by-value closure model",
+  "scope": "reference-subset",
+  "model": "stack",
+  "state": {
+    "S": "value stack",
+    "E": "lexical environment frames",
+    "C": "control list",
+    "D": "saved caller triples"
+  },
+  "invariants": [
+    "A closure retains its defining environment.",
+    "Stack notation places the top at the left."
+  ],
+  "operations": [
+    {
+      "name": "LDC",
+      "operands": [
+        "value"
+      ],
+      "effect": "S := value :: S."
+    },
+    {
+      "name": "LD",
+      "operands": [
+        "depth",
+        "index"
+      ],
+      "effect": "S := E[depth][index] :: S."
+    },
+    {
+      "name": "LDF",
+      "operands": [
+        "code"
+      ],
+      "effect": "S := closure(code,E) :: S."
+    },
+    {
+      "name": "AP",
+      "operands": [],
+      "effect": "Given closure(code,env) :: args :: S, save (S,E,C) on D; set S=[], E=args::env, C=code."
+    },
+    {
+      "name": "RTN",
+      "operands": [],
+      "effect": "Restore (S0,E0,C0) from D and place the callee top value on S0."
+    },
+    {
+      "name": "CONS",
+      "operands": [],
+      "effect": "Replace a :: b :: S by pair(a,b) :: S."
+    },
+    {
+      "name": "CAR",
+      "operands": [],
+      "effect": "Replace pair(a,b) :: S by a :: S."
+    },
+    {
+      "name": "CDR",
+      "operands": [],
+      "effect": "Replace pair(a,b) :: S by b :: S."
+    },
+    {
+      "name": "STOP",
+      "operands": [],
+      "effect": "Finish with the top value of S."
+    }
+  ],
+  "example": {
+    "initial": "S=[], E=[], D=[].",
+    "steps": [
+      {
+        "op": "LDC",
+        "args": [
+          42
+        ]
+      },
+      {
+        "op": "STOP",
+        "args": []
+      }
+    ],
+    "expected": "Result is 42."
+  },
+  "references": [
+    "https://arxiv.org/abs/0811.3231"
+  ],
+  "notes": "Selected conventional SECD operations; recursive environments and the J operator are omitted."
+}
+#undef VMWV_VERSION
