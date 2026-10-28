@@ -1,0 +1,11 @@
+fn sum(n) {
+    let x = 0;
+loop:
+    br n, body, end;
+body:
+    let x = x + n;
+    let n = n - 1;
+    goto loop;
+end:
+    return x;
+}
