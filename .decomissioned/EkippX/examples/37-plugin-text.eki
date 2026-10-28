@@ -1,3 +1,0 @@
-@plugin(text)
-@emitln(&reverseText(stressed))
-@emitln(&slugify(Hello, World!))

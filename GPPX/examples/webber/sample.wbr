@@ -1,7 +1,0 @@
-; Simple Webber stack VM sample
-start:
-  PUSH 4
-  PUSH 5
-  ADD
-  PRINT
-  HALT

@@ -1,2 +1,0 @@
-@config(StrictMode, true)
-@emitln($CONFIG{StrictMode})

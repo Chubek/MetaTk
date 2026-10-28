@@ -1,0 +1,37 @@
+name: Juniper
+on:
+  push:
+    paths: ['juniper/**', 'GPPX/**', 'MetaToolchain/MetaIL/**', 'CMakeLists.txt', '.github/workflows/juniper.yml']
+  pull_request:
+    paths: ['juniper/**', 'GPPX/**', 'MetaToolchain/MetaIL/**', 'CMakeLists.txt', '.github/workflows/juniper.yml']
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+        preset: [release, sanitize]
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y liblua5.4-dev libboost-dev libyaml-dev libxml2-dev
+      - name: Configure
+        working-directory: juniper
+        env:
+          CC: ${{ matrix.compiler == 'gcc' && 'gcc' || 'clang' }}
+          CXX: ${{ matrix.compiler == 'gcc' && 'g++' || 'clang++' }}
+        run: cmake --preset ${{ matrix.preset }} -DJUNIPER_WITH_METAARCH=ON
+      - run: cmake --build --preset ${{ matrix.preset }}
+        working-directory: juniper
+      - run: ctest --preset ${{ matrix.preset }}
+        working-directory: juniper
+      - name: Verify every real MetaIL rule
+        run: juniper/build/${{ matrix.preset }}/metail/metail verify
+      - name: Install and consume package
+        if: matrix.preset == 'release'
+        run: |
+          cmake --install juniper/build/release --prefix "$RUNNER_TEMP/juniper"
+          "$RUNNER_TEMP/juniper/bin/juniper" check "$RUNNER_TEMP/juniper/share/juniper/examples/Juniperfile"
+          cmake -S juniper/tests/package -B "$RUNNER_TEMP/consumer" -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/juniper"
+          cmake --build "$RUNNER_TEMP/consumer" -j4
+          METAIL_HOME="$RUNNER_TEMP/juniper/share/metail" "$RUNNER_TEMP/consumer/consumer"

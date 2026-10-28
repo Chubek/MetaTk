@@ -1,5 +1,0 @@
-#wbr_upper hello from webber
-WBR_UPPER(very cool plugin)
-unsigned char program[] = {
-#embed "sample.wbr" wbr_asm
-};

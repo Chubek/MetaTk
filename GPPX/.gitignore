@@ -1,73 +1,88 @@
-prebuilt
-
 # Prerequisites
 *.d
 
-# Compiled Object files
-*.slo
-*.lo
+# Object files
 *.o
+*.ko
 *.obj
+*.elf
+
+# Linker output
+*.ilk
+*.map
+*.exp
 
 # Precompiled Headers
 *.gch
 *.pch
 
-# Linker files
-*.ilk
-
-# Debugger Files
-*.pdb
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-*.so.*
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
+# Libraries
 *.lib
+*.a
+*.la
+*.lo
+
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
 
 # Executables
 *.exe
 *.out
 *.app
+*.i*86
+*.x86_64
+*.hex
 
-# Build directories
-build/
-Build/
-build-*/
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
 
-# CMake generated files
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
+# http://www.gnu.org/software/automake
+
+Makefile.in
+/ar-lib
+/mdate-sh
+/py-compile
+/test-driver
+/ylwrap
 Makefile
-install_manifest.txt
-compile_commands.json
+.deps
 
-# Temporary files
-*.tmp
-*.log
-*.bak
-*.swp
+# http://www.gnu.org/software/autoconf
 
-# vcpkg
-vcpkg_installed/
+/autom4te.cache
+/autoscan.log
+/autoscan-*.log
+/aclocal.m4
+/compile
+/config.guess
+/config.status
+/config.log
+/config.h.in
+/config.sub
+/configure
+/config.h
+/configure.scan
+/depcomp
+/install-sh
+/missing
+/stamp-h1
+/INSTALL
 
-# debug information files
-*.dwo
+# https://www.gnu.org/software/libtool/
 
-# test output & cache
-Testing/
-.cache/
+/ltmain.sh
 
-*dist*
-*distrib*
+# http://www.gnu.org/software/texinfo
+
+/texinfo.tex
+
+# GPP-specific
+
+doc/gpp.1
+doc/gpp.html

@@ -1,0 +1,12 @@
+% GPPX : 0.1.1
+% Name: $DOTENV("FILE_NAME")
+% Type: QoLMacros
+% cliche: QoLMacros
+
+% import "Utils/Exec.xpm"
+% import "Fab/Macros.xpm"
+% import "Shell/Adapter.xpm"
+
+#if __CPP_VERSION__ < 2.0
+	#Error "Need C++ or larger"
+#endif

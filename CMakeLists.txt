@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.24)
 project(
     MetaTk
     VERSION 0.1.0
-    LANGUAGES CXX
+    LANGUAGES C CXX
 )
 
 set(CMAKE_CXX_STANDARD 20)
@@ -64,5 +64,17 @@ endif()
 
 add_subdirectory(DSLtk)
 add_subdirectory(Parzek)
-add_subdirectory(EkippX)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/EkippX/CMakeLists.txt")
+    add_subdirectory(EkippX)
+endif()
 add_subdirectory(SExprTk)
+
+option(METATK_BUILD_JUNIPER "Build the GPPX-based Juniper intermediate language" ON)
+if(METATK_BUILD_JUNIPER)
+    if(BUILD_TESTING)
+        enable_testing()
+    endif()
+    option(JUNIPER_BUILD_TESTS "Build Juniper tests" ${BUILD_TESTING})
+    option(JUNIPER_BUILD_EXAMPLES "Build Juniper examples" ${BUILD_EXAMPLES})
+    add_subdirectory(Juniper)
+endif()

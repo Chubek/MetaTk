@@ -13,4 +13,10 @@ All three libraries have an `examples` and a `manual` directory.
 
 Please visit my [Github profile](https://github.com/Chubek). I do not always make slop, but when I do, I make sure I make the most interesting of the slop -- XX. And, I just recently began making Slopware, because Sloptastic Coding Agents just came into being, like, two months ago? I am not sure, I have lost the track of time.
 
+## Juniper
 
+[`juniper/`](juniper/README.md) provides a GPPX-based macro intermediate language
+for MetaIL and MetaArch: canonical IR, real MetaIL optimization/analysis,
+costed instruction selection, dependency-aware scheduling, and CMake build support.
+Build standalone with `cmake -S juniper -B juniper/build`, or use the root
+`METATK_BUILD_JUNIPER` option. Backend profiles are C++ values or Juniper declarations.

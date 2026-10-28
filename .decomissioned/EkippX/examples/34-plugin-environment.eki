@@ -1,3 +1,0 @@
-@plugin(environment)
-@emitln($ENV{HOME})
-@emitln(&cwd())
