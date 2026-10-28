@@ -1,0 +1,641 @@
+name: MuLIB
+version: 0.1.0
+language: C11
+header_only: true
+implementation_model: Define MULIB_IMPL_<MODULE> in exactly one translation unit before include.
+inspiration:
+- ctl (user-supplied)
+- klib (user-supplied)
+license: MIT
+module_count: 67
+modules:
+- name: vec
+  header: include/mulib-vec.h
+  manual: manual/mulib-vec.md
+  macro: MULIB_IMPL_VEC
+  purpose: An untyped, byte-stride dynamic vector with amortized growth.
+  dependencies: []
+  status: implemented
+- name: stack
+  header: include/mulib-stack.h
+  manual: manual/mulib-stack.md
+  macro: MULIB_IMPL_STACK
+  purpose: A last-in-first-out stack of fixed-stride elements.
+  dependencies: []
+  status: implemented
+- name: queue
+  header: include/mulib-queue.h
+  manual: manual/mulib-queue.md
+  macro: MULIB_IMPL_QUEUE
+  purpose: A dynamically growing FIFO queue implemented with a circular buffer.
+  dependencies: []
+  status: implemented
+- name: deque
+  header: include/mulib-deque.h
+  manual: manual/mulib-deque.md
+  macro: MULIB_IMPL_DEQUE
+  purpose: Double-ended FIFO container with a circular array.
+  dependencies: []
+  status: implemented
+- name: ring
+  header: include/mulib-ring.h
+  manual: manual/mulib-ring.md
+  macro: MULIB_IMPL_RING
+  purpose: Fixed-capacity circular buffer which refuses to overwrite unread items.
+  dependencies: []
+  status: implemented
+- name: list
+  header: include/mulib-list.h
+  manual: manual/mulib-list.md
+  macro: MULIB_IMPL_LIST
+  purpose: Intrusive doubly linked circular list with sentinel.
+  dependencies: []
+  status: implemented
+- name: bitset
+  header: include/mulib-bitset.h
+  manual: manual/mulib-bitset.md
+  macro: MULIB_IMPL_BITSET
+  purpose: Resizable bit-array with test, set, clear, and population count.
+  dependencies: []
+  status: implemented
+- name: heap
+  header: include/mulib-heap.h
+  manual: manual/mulib-heap.md
+  macro: MULIB_IMPL_HEAP
+  purpose: A binary min-heap of signed 64-bit integers.
+  dependencies: []
+  status: implemented
+- name: arena
+  header: include/mulib-arena.h
+  manual: manual/mulib-arena.md
+  macro: MULIB_IMPL_ARENA
+  purpose: Bump allocator with expandable allocation blocks.
+  dependencies: []
+  status: implemented
+- name: strbuf
+  header: include/mulib-strbuf.h
+  manual: manual/mulib-strbuf.md
+  macro: MULIB_IMPL_STRBUF
+  purpose: Dynamically growing NUL-terminated text builder.
+  dependencies: []
+  status: implemented
+- name: buffer
+  header: include/mulib-buffer.h
+  manual: manual/mulib-buffer.md
+  macro: MULIB_IMPL_BUFFER
+  purpose: Dynamically growing binary byte buffer.
+  dependencies: []
+  status: implemented
+- name: map
+  header: include/mulib-map.h
+  manual: manual/mulib-map.md
+  macro: MULIB_IMPL_MAP
+  purpose: String-keyed dictionary with owning keys and borrowed values.
+  dependencies: []
+  status: implemented
+- name: set
+  header: include/mulib-set.h
+  manual: manual/mulib-set.md
+  macro: MULIB_IMPL_SET
+  purpose: Unique set of signed 64-bit integers.
+  dependencies: []
+  status: implemented
+- name: dsu
+  header: include/mulib-dsu.h
+  manual: manual/mulib-dsu.md
+  macro: MULIB_IMPL_DSU
+  purpose: Union-find disjoint-set forest with path compression and union by rank.
+  dependencies: []
+  status: implemented
+- name: graph
+  header: include/mulib-graph.h
+  manual: manual/mulib-graph.md
+  macro: MULIB_IMPL_GRAPH
+  purpose: Directed graph with dense adjacency matrix and breadth-first search.
+  dependencies: []
+  status: implemented
+- name: rng
+  header: include/mulib-rng.h
+  manual: manual/mulib-rng.md
+  macro: MULIB_IMPL_RNG
+  purpose: Deterministic 64-bit SplitMix generator; not cryptographic.
+  dependencies: []
+  status: implemented
+- name: hash
+  header: include/mulib-hash.h
+  manual: manual/mulib-hash.md
+  macro: MULIB_IMPL_HASH
+  purpose: Fast non-cryptographic FNV-1a hashing for raw buffers and text.
+  dependencies: []
+  status: implemented
+- name: crc32
+  header: include/mulib-crc32.h
+  manual: manual/mulib-crc32.md
+  macro: MULIB_IMPL_CRC32
+  purpose: IEEE CRC-32 checksum with incremental updates.
+  dependencies: []
+  status: implemented
+- name: varint
+  header: include/mulib-varint.h
+  manual: manual/mulib-varint.md
+  macro: MULIB_IMPL_VARINT
+  purpose: Unsigned LEB128 integer encoding and bounds-checked decoding.
+  dependencies: []
+  status: implemented
+- name: endian
+  header: include/mulib-endian.h
+  manual: manual/mulib-endian.md
+  macro: MULIB_IMPL_ENDIAN
+  purpose: Explicit little- and big-endian primitive load/store helpers.
+  dependencies: []
+  status: implemented
+- name: math
+  header: include/mulib-math.h
+  manual: manual/mulib-math.md
+  macro: MULIB_IMPL_MATH
+  purpose: 'Integer arithmetic utilities: GCD, LCM and bounded integer power.'
+  dependencies: []
+  status: implemented
+- name: stats
+  header: include/mulib-stats.h
+  manual: manual/mulib-stats.md
+  macro: MULIB_IMPL_STATS
+  purpose: Streaming sample statistics using Welford numerical updates.
+  dependencies: []
+  status: implemented
+- name: sexpr
+  header: include/mulib-sexpr.h
+  manual: manual/mulib-sexpr.md
+  macro: MULIB_IMPL_SEXPR
+  purpose: A tree-based S-expression parser with atoms, lists, and deterministic rendering.
+  dependencies: []
+  status: implemented
+- name: manpage
+  header: include/mulib-manpage.h
+  manual: manual/mulib-manpage.md
+  macro: MULIB_IMPL_MANPAGE
+  purpose: An owned Linux roff manpage authoring object and section emitter.
+  dependencies: []
+  status: implemented
+- name: argparse
+  header: include/mulib-argparse.h
+  manual: manual/mulib-argparse.md
+  macro: MULIB_IMPL_ARGPARSE
+  purpose: Lightweight GNU-style options and positional arguments parser.
+  dependencies: []
+  status: implemented
+- name: microtcl
+  header: include/mulib-microtcl.h
+  manual: manual/mulib-microtcl.md
+  macro: MULIB_IMPL_MICROTCL
+  purpose: An embeddable Tcl-inspired command interpreter with a documented small builtin set.
+  dependencies: []
+  status: implemented
+- name: base64
+  header: include/mulib-base64.h
+  manual: manual/mulib-base64.md
+  macro: MULIB_IMPL_BASE64
+  purpose: RFC 4648 padded Base64 encoder and strict decoder.
+  dependencies: []
+  status: implemented
+- name: hex
+  header: include/mulib-hex.h
+  manual: manual/mulib-hex.md
+  macro: MULIB_IMPL_HEX
+  purpose: Lowercase hexadecimal encoding and case-insensitive decoding.
+  dependencies: []
+  status: implemented
+- name: utf8
+  header: include/mulib-utf8.h
+  manual: manual/mulib-utf8.md
+  macro: MULIB_IMPL_UTF8
+  purpose: UTF-8 validation and single-code-point decoding.
+  dependencies: []
+  status: implemented
+- name: url
+  header: include/mulib-url.h
+  manual: manual/mulib-url.md
+  macro: MULIB_IMPL_URL
+  purpose: URL component percent encoder and decoder.
+  dependencies: []
+  status: implemented
+- name: glob
+  header: include/mulib-glob.h
+  manual: manual/mulib-glob.md
+  macro: MULIB_IMPL_GLOB
+  purpose: Portable glob pattern matching with star and question-mark wildcards.
+  dependencies: []
+  status: implemented
+- name: sort
+  header: include/mulib-sort.h
+  manual: manual/mulib-sort.md
+  macro: MULIB_IMPL_SORT
+  purpose: Standard-library-backed generic sorting and binary lookup.
+  dependencies: []
+  status: implemented
+- name: search
+  header: include/mulib-search.h
+  manual: manual/mulib-search.md
+  macro: MULIB_IMPL_SEARCH
+  purpose: Substring finding via Knuth-Morris-Pratt with explicit byte lengths.
+  dependencies: []
+  status: implemented
+- name: rle
+  header: include/mulib-rle.h
+  manual: manual/mulib-rle.md
+  macro: MULIB_IMPL_RLE
+  purpose: Byte run-length encoding and bounded decoding.
+  dependencies: []
+  status: implemented
+- name: levenshtein
+  header: include/mulib-levenshtein.h
+  manual: manual/mulib-levenshtein.md
+  macro: MULIB_IMPL_LEVENSHTEIN
+  purpose: Levenshtein byte-string distance with two-row dynamic programming.
+  dependencies: []
+  status: implemented
+- name: semver
+  header: include/mulib-semver.h
+  manual: manual/mulib-semver.md
+  macro: MULIB_IMPL_SEMVER
+  purpose: Semantic version triplet parsing and numeric precedence comparison.
+  dependencies: []
+  status: implemented
+- name: path
+  header: include/mulib-path.h
+  manual: manual/mulib-path.md
+  macro: MULIB_IMPL_PATH
+  purpose: Portable lexical path manipulations for slash-separated paths.
+  dependencies: []
+  status: implemented
+- name: fs
+  header: include/mulib-fs.h
+  manual: manual/mulib-fs.md
+  macro: MULIB_IMPL_FS
+  purpose: Whole-file read and write helpers with explicit byte length.
+  dependencies: []
+  status: implemented
+- name: ini
+  header: include/mulib-ini.h
+  manual: manual/mulib-ini.md
+  macro: MULIB_IMPL_INI
+  purpose: Callback-based INI section and key-value line parser.
+  dependencies: []
+  status: implemented
+- name: csv
+  header: include/mulib-csv.h
+  manual: manual/mulib-csv.md
+  macro: MULIB_IMPL_CSV
+  purpose: Streaming CSV row parser for quoted comma-separated fields.
+  dependencies: []
+  status: implemented
+- name: bloom
+  header: include/mulib-bloom.h
+  manual: manual/mulib-bloom.md
+  macro: MULIB_IMPL_BLOOM
+  purpose: Bit-packed Bloom filter with configurable hash rounds.
+  dependencies: []
+  status: implemented
+- name: matrix
+  header: include/mulib-matrix.h
+  manual: manual/mulib-matrix.md
+  macro: MULIB_IMPL_MATRIX
+  purpose: Heap-allocated row-major matrix of double precision numbers.
+  dependencies: []
+  status: implemented
+- name: grid
+  header: include/mulib-grid.h
+  manual: manual/mulib-grid.md
+  macro: MULIB_IMPL_GRID
+  purpose: Two-dimensional packed grid of uniform-sized cells.
+  dependencies: []
+  status: implemented
+- name: bitmap
+  header: include/mulib-bitmap.h
+  manual: manual/mulib-bitmap.md
+  macro: MULIB_IMPL_BITMAP
+  purpose: Packed one-bit raster image with per-pixel access.
+  dependencies: []
+  status: implemented
+- name: color
+  header: include/mulib-color.h
+  manual: manual/mulib-color.md
+  macro: MULIB_IMPL_COLOR
+  purpose: RGB to HSV and HSV to RGB color-model conversion.
+  dependencies: []
+  status: implemented
+- name: uuid
+  header: include/mulib-uuid.h
+  manual: manual/mulib-uuid.md
+  macro: MULIB_IMPL_UUID
+  purpose: Formatting and parsing RFC 4122-style 128-bit UUID text.
+  dependencies: []
+  status: implemented
+- name: fraction
+  header: include/mulib-fraction.h
+  manual: manual/mulib-fraction.md
+  macro: MULIB_IMPL_FRACTION
+  purpose: Normalized signed rational numbers with checked arithmetic.
+  dependencies: []
+  status: implemented
+- name: complex
+  header: include/mulib-complex.h
+  manual: manual/mulib-complex.md
+  macro: MULIB_IMPL_COMPLEX
+  purpose: Complex arithmetic for double precision real and imaginary components.
+  dependencies: []
+  status: implemented
+- name: histogram
+  header: include/mulib-histogram.h
+  manual: manual/mulib-histogram.md
+  macro: MULIB_IMPL_HISTOGRAM
+  purpose: Histogram accumulation over a fixed numeric range.
+  dependencies: []
+  status: implemented
+- name: movingavg
+  header: include/mulib-movingavg.h
+  manual: manual/mulib-movingavg.md
+  macro: MULIB_IMPL_MOVINGAVG
+  purpose: Constant-memory fixed-window moving average over doubles.
+  dependencies: []
+  status: implemented
+- name: interpolate
+  header: include/mulib-interpolate.h
+  manual: manual/mulib-interpolate.md
+  macro: MULIB_IMPL_INTERPOLATE
+  purpose: Scalar linear interpolation and clamped interpolation.
+  dependencies: []
+  status: implemented
+- name: geometry
+  header: include/mulib-geometry.h
+  manual: manual/mulib-geometry.md
+  macro: MULIB_IMPL_GEOMETRY
+  purpose: Basic planar point geometry including distances and orientation.
+  dependencies: []
+  status: implemented
+- name: bounds
+  header: include/mulib-bounds.h
+  manual: manual/mulib-bounds.md
+  macro: MULIB_IMPL_BOUNDS
+  purpose: Axis-aligned bounding boxes and intersection utilities.
+  dependencies: []
+  status: implemented
+- name: adler32
+  header: include/mulib-adler32.h
+  manual: manual/mulib-adler32.md
+  macro: MULIB_IMPL_ADLER32
+  purpose: Adler-32 checksum with streaming seed support.
+  dependencies: []
+  status: implemented
+- name: escape
+  header: include/mulib-escape.h
+  manual: manual/mulib-escape.md
+  macro: MULIB_IMPL_ESCAPE
+  purpose: C-style escaping and unescaping of byte strings.
+  dependencies: []
+  status: implemented
+- name: text
+  header: include/mulib-text.h
+  manual: manual/mulib-text.md
+  macro: MULIB_IMPL_TEXT
+  purpose: ASCII-only whitespace trim and case conversion routines.
+  dependencies: []
+  status: implemented
+- name: replace
+  header: include/mulib-replace.h
+  manual: manual/mulib-replace.md
+  macro: MULIB_IMPL_REPLACE
+  purpose: Allocate a string with every nonoverlapping occurrence replaced.
+  dependencies: []
+  status: implemented
+- name: split
+  header: include/mulib-split.h
+  manual: manual/mulib-split.md
+  macro: MULIB_IMPL_SPLIT
+  purpose: In-place token splitting into an array of field pointers.
+  dependencies: []
+  status: implemented
+- name: env
+  header: include/mulib-env.h
+  manual: manual/mulib-env.md
+  macro: MULIB_IMPL_ENV
+  purpose: Environment variable inspection and bounded fallback copy.
+  dependencies: []
+  status: implemented
+- name: timer
+  header: include/mulib-timer.h
+  manual: manual/mulib-timer.md
+  macro: MULIB_IMPL_TIMER
+  purpose: Portable elapsed-time measurements using C11 timespec_get.
+  dependencies: []
+  status: implemented
+- name: diag
+  header: include/mulib-diag.h
+  manual: manual/mulib-diag.md
+  macro: MULIB_IMPL_DIAG
+  purpose: Small status-code-to-text mapping for library diagnostics.
+  dependencies: []
+  status: implemented
+- name: logger
+  header: include/mulib-logger.h
+  manual: manual/mulib-logger.md
+  macro: MULIB_IMPL_LOGGER
+  purpose: Simple callback-driven logging with message severity filtering.
+  dependencies: []
+  status: implemented
+- name: clamp
+  header: include/mulib-clamp.h
+  manual: manual/mulib-clamp.md
+  macro: MULIB_IMPL_CLAMP
+  purpose: Saturating arithmetic and interval clamping for signed integers.
+  dependencies: []
+  status: implemented
+- name: popcount
+  header: include/mulib-popcount.h
+  manual: manual/mulib-popcount.md
+  macro: MULIB_IMPL_POPCOUNT
+  purpose: Bit population count, leading zeros, and trailing zeros for 64-bit words.
+  dependencies: []
+  status: implemented
+- name: prime
+  header: include/mulib-prime.h
+  manual: manual/mulib-prime.md
+  macro: MULIB_IMPL_PRIME
+  purpose: Primality testing and next-prime search for 64-bit integers.
+  dependencies: []
+  status: implemented
+- name: date
+  header: include/mulib-date.h
+  manual: manual/mulib-date.md
+  macro: MULIB_IMPL_DATE
+  purpose: Gregorian leap-year and calendar-days arithmetic.
+  dependencies: []
+  status: implemented
+- name: roman
+  header: include/mulib-roman.h
+  manual: manual/mulib-roman.md
+  macro: MULIB_IMPL_ROMAN
+  purpose: Roman numeral formatting and a simple validity-checked parser.
+  dependencies: []
+  status: implemented
+project_files:
+- file: MANIFEST.yaml
+  purpose: Complete inventory of modules, manuals, examples, and supporting files.
+- file: CMakeLists.txt
+  purpose: Header-only INTERFACE CMake target, CTest suite, optional module examples.
+- file: CONTRIBUTING.md
+  purpose: Development rules, testing, style, and implementation requirements.
+- file: Doxyfile
+  purpose: Doxygen project configuration including inline header docs and module guides.
+- file: LICENSE
+  purpose: MIT terms covering original MuLIB code.
+- file: README.md
+  purpose: Project overview, implementation switches, example and API conventions.
+- file: examples/modules/adler32.c
+  purpose: Compilable isolated usage example for the adler32 module.
+- file: examples/modules/arena.c
+  purpose: Compilable isolated usage example for the arena module.
+- file: examples/modules/argparse.c
+  purpose: Compilable isolated usage example for the argparse module.
+- file: examples/modules/base64.c
+  purpose: Compilable isolated usage example for the base64 module.
+- file: examples/modules/bitmap.c
+  purpose: Compilable isolated usage example for the bitmap module.
+- file: examples/modules/bitset.c
+  purpose: Compilable isolated usage example for the bitset module.
+- file: examples/modules/bloom.c
+  purpose: Compilable isolated usage example for the bloom module.
+- file: examples/modules/bounds.c
+  purpose: Compilable isolated usage example for the bounds module.
+- file: examples/modules/buffer.c
+  purpose: Compilable isolated usage example for the buffer module.
+- file: examples/modules/clamp.c
+  purpose: Compilable isolated usage example for the clamp module.
+- file: examples/modules/color.c
+  purpose: Compilable isolated usage example for the color module.
+- file: examples/modules/complex.c
+  purpose: Compilable isolated usage example for the complex module.
+- file: examples/modules/crc32.c
+  purpose: Compilable isolated usage example for the crc32 module.
+- file: examples/modules/csv.c
+  purpose: Compilable isolated usage example for the csv module.
+- file: examples/modules/date.c
+  purpose: Compilable isolated usage example for the date module.
+- file: examples/modules/deque.c
+  purpose: Compilable isolated usage example for the deque module.
+- file: examples/modules/diag.c
+  purpose: Compilable isolated usage example for the diag module.
+- file: examples/modules/dsu.c
+  purpose: Compilable isolated usage example for the dsu module.
+- file: examples/modules/endian.c
+  purpose: Compilable isolated usage example for the endian module.
+- file: examples/modules/env.c
+  purpose: Compilable isolated usage example for the env module.
+- file: examples/modules/escape.c
+  purpose: Compilable isolated usage example for the escape module.
+- file: examples/modules/fraction.c
+  purpose: Compilable isolated usage example for the fraction module.
+- file: examples/modules/fs.c
+  purpose: Compilable isolated usage example for the fs module.
+- file: examples/modules/geometry.c
+  purpose: Compilable isolated usage example for the geometry module.
+- file: examples/modules/glob.c
+  purpose: Compilable isolated usage example for the glob module.
+- file: examples/modules/graph.c
+  purpose: Compilable isolated usage example for the graph module.
+- file: examples/modules/grid.c
+  purpose: Compilable isolated usage example for the grid module.
+- file: examples/modules/hash.c
+  purpose: Compilable isolated usage example for the hash module.
+- file: examples/modules/heap.c
+  purpose: Compilable isolated usage example for the heap module.
+- file: examples/modules/hex.c
+  purpose: Compilable isolated usage example for the hex module.
+- file: examples/modules/histogram.c
+  purpose: Compilable isolated usage example for the histogram module.
+- file: examples/modules/ini.c
+  purpose: Compilable isolated usage example for the ini module.
+- file: examples/modules/interpolate.c
+  purpose: Compilable isolated usage example for the interpolate module.
+- file: examples/modules/levenshtein.c
+  purpose: Compilable isolated usage example for the levenshtein module.
+- file: examples/modules/list.c
+  purpose: Compilable isolated usage example for the list module.
+- file: examples/modules/logger.c
+  purpose: Compilable isolated usage example for the logger module.
+- file: examples/modules/manpage.c
+  purpose: Compilable isolated usage example for the manpage module.
+- file: examples/modules/map.c
+  purpose: Compilable isolated usage example for the map module.
+- file: examples/modules/math.c
+  purpose: Compilable isolated usage example for the math module.
+- file: examples/modules/matrix.c
+  purpose: Compilable isolated usage example for the matrix module.
+- file: examples/modules/microtcl.c
+  purpose: Compilable isolated usage example for the microtcl module.
+- file: examples/modules/movingavg.c
+  purpose: Compilable isolated usage example for the movingavg module.
+- file: examples/modules/path.c
+  purpose: Compilable isolated usage example for the path module.
+- file: examples/modules/popcount.c
+  purpose: Compilable isolated usage example for the popcount module.
+- file: examples/modules/prime.c
+  purpose: Compilable isolated usage example for the prime module.
+- file: examples/modules/queue.c
+  purpose: Compilable isolated usage example for the queue module.
+- file: examples/modules/replace.c
+  purpose: Compilable isolated usage example for the replace module.
+- file: examples/modules/ring.c
+  purpose: Compilable isolated usage example for the ring module.
+- file: examples/modules/rle.c
+  purpose: Compilable isolated usage example for the rle module.
+- file: examples/modules/rng.c
+  purpose: Compilable isolated usage example for the rng module.
+- file: examples/modules/roman.c
+  purpose: Compilable isolated usage example for the roman module.
+- file: examples/modules/search.c
+  purpose: Compilable isolated usage example for the search module.
+- file: examples/modules/semver.c
+  purpose: Compilable isolated usage example for the semver module.
+- file: examples/modules/set.c
+  purpose: Compilable isolated usage example for the set module.
+- file: examples/modules/sexpr.c
+  purpose: Compilable isolated usage example for the sexpr module.
+- file: examples/modules/sort.c
+  purpose: Compilable isolated usage example for the sort module.
+- file: examples/modules/split.c
+  purpose: Compilable isolated usage example for the split module.
+- file: examples/modules/stack.c
+  purpose: Compilable isolated usage example for the stack module.
+- file: examples/modules/stats.c
+  purpose: Compilable isolated usage example for the stats module.
+- file: examples/modules/strbuf.c
+  purpose: Compilable isolated usage example for the strbuf module.
+- file: examples/modules/text.c
+  purpose: Compilable isolated usage example for the text module.
+- file: examples/modules/timer.c
+  purpose: Compilable isolated usage example for the timer module.
+- file: examples/modules/url.c
+  purpose: Compilable isolated usage example for the url module.
+- file: examples/modules/utf8.c
+  purpose: Compilable isolated usage example for the utf8 module.
+- file: examples/modules/uuid.c
+  purpose: Compilable isolated usage example for the uuid module.
+- file: examples/modules/varint.c
+  purpose: Compilable isolated usage example for the varint module.
+- file: examples/modules/vec.c
+  purpose: Compilable isolated usage example for the vec module.
+- file: examples/quickstart.c
+  purpose: End-to-end example covering the five APIs from the original request.
+- file: tests/all_headers.c
+  purpose: Single-TU all-module implementation compilation and linking check.
+- file: tests/declarations.c
+  purpose: Declaration-only all-header C and C++ inclusion check.
+- file: tests/functional.c
+  purpose: Runtime tests for parsing, containers, arithmetic, serializers, and utilities.
+- file: tests/implementation.c
+  purpose: One implementation translation unit defining all 67 module switches.
+- file: tests/smoke.c
+  purpose: Core API smoke tests with assertions.
+- file: tools/check.py
+  purpose: Standalone module example compilation and execution verifier.
