@@ -1,0 +1,582 @@
+\chapter{\code{FixedString}: Compile-Time Strings as Template Parameters}
+\label{ch:fixed-string}
+
+\section{The Problem with String Literals as Template Arguments}
+
+Almost every facility in \DSLtk{} needs a name that the compiler knows
+about: the tag of a tree node, the text of a pattern, the identifier of a
+rewrite rule, the suffix of a literal, the name of a visitor case. In C++17
+and earlier there was no way to write such a name as a template argument.
+The classical workaround -- an enumeration, a \code{char} array parameter, an
+integer constant -- either cannot hold arbitrary text or leaks an encoding
+into every call site.
+
+C++20 changed this. A template parameter may now have a \emph{class type},
+provided the type is a \emph{structural type}. A structural type is a
+literal type whose base classes and non-static data members are all public
+and non-mutable, and whose equality is defaulted. \DSLtk{} exploits this
+with a type of eleven lines, and that type is the subject of this chapter.
+
+\section{The Definition}
+
+Listing~\ref{lst:ch05-fixed} is \code{dsl::FixedString}, transcribed from
+\code{DSLtk.hpp} lines 5918--5928 without alteration.
+
+\begin{lstlisting}[style=dslcpp,caption={\code{dsl::FixedString}, from \code{DSLtk.hpp} lines 5918--5928, shown as it appears inside \code{namespace dsl}.},label={lst:ch05-fixed}]
+template <std::size_t N> struct FixedString
+{
+  char data[N]{};
+  constexpr FixedString (const char (&s)[N]) { std::copy_n (s, N, data); }
+  constexpr std::string_view
+  view () const
+  {
+    return { data, N - 1 };
+  }
+  constexpr bool operator== (const FixedString &) const = default;
+};
+\end{lstlisting}
+
+There are four members and no more. A public array of \code{N} characters, a
+converting constructor from a string literal, a \code{view()} accessor that
+exposes the text, and a defaulted equality operator. There is no
+\code{operator std::string_view}, no \code{size()}, no \code{npos}, no
+\code{operator<}. Everything the library needs, it needs from these four.
+
+\subsection{Why Each Member Is There}
+
+The array \code{char data[N]} is the payload. It is public, so the type
+satisfies the structural-type requirement; it is non-mutable, so the type is
+usable as a template argument; and it is an array rather than a pointer or a
+\code{std::string} because the value must be a compile-time constant.
+
+The constructor \code{constexpr FixedString (const char (&s)[N])} takes a
+reference to an array of exactly \code{N} characters. Because the parameter
+is a reference to an array, the length of the literal \emph{is} the template
+argument: writing \code{FixedString<4>{"abc"}} binds a four-element array,
+and writing \code{FixedString<3>{"abc"}} does not compile at all, because
+the literal \code{"abc"} is a four-element array. The \code{std::copy_n}
+copies all \code{N} characters, the terminating null included, which is why
+the constructor is written as a copy rather than as a range copy of the
+text.
+
+The accessor \code{view()} returns \code{{data, N-1}}. The \code{-1}
+discards the terminator that the constructor copied in, so the returned
+\code{std::string_view} has exactly the length of the original literal and
+no terminator of its own. The method is \code{constexpr}, so a
+\code{FixedString} can be turned into a view in a constant expression.
+
+The operator \code{operator==} is explicitly defaulted. This is not
+decoration: a structural type must have usable equality, and the defaulted
+operator compares the arrays element by element. Comparing two
+\code{FixedString}s of the same length is therefore a compile-time operation
+that the compiler can fold away. In C++20 the defaulted \code{operator==}
+also yields a rewritten \code{operator!=}, so \code{!=} is available even
+though it is not written.
+
+\subsection{How the Rules Are Satisfied}
+
+C++20 permits a class type to be used as a non-type template parameter only
+if it is a structural type. \code{FixedString} satisfies every clause of that
+requirement.
+
+Its single data member \code{data} is public and not \code{mutable}. The
+type is a literal type: it has no virtual functions, no virtual bases and no
+reference members; its constructor and its \code{view()} are
+\code{constexpr}; and its destructor is trivial. Its equality operator is
+defaulted, which is the last clause. The result is that
+\code{dsl::FixedString<4>{"abc"}} is a valid template argument, and
+\code{dsl::pattern<"[0-9]+">} is a valid type.
+
+\subsection{What the Type Deliberately Omits}
+
+The eleven lines of \code{FixedString} are best read as a list of refusals.
+There is no \code{operator std::string_view}, so a \code{FixedString}
+cannot be passed where a view is expected without an explicit
+\code{.view()}. There is no \code{size()}, so the length of the text must
+be obtained from the view. There is no \code{npos}, no
+\code{find}, no \code{substr}, no \code{empty}, and no comparison operators
+other than the defaulted \code{operator==} and the \code{operator!=} that
+C++20 synthesises from it.
+
+This austerity is deliberate. A class-type non-type template parameter
+must be a structural type, and every member that could be added has to be
+considered against that requirement: a member that made the type
+non-literal, or that added a base class or a data member with
+non-public access, would disqualify it. A \code{std::string} member would
+make the type non-literal in C++17 and earlier and is forbidden outright
+by the structural-type rules because a \code{std::string} is not a
+structural type in its own right.
+
+The result is a type that does one thing -- hold a compile-time string --
+and exposes it through exactly one operation. Every use of a
+\code{FixedString} in the library goes through \code{view()}, and the
+library's own code is a demonstration of how little is needed.
+
+\section{\texorpdfstring{\code{N}}{N} Includes the Terminator}
+
+The single most common source of confusion with \code{FixedString} is the
+meaning of \code{N}. It is the size of the \emph{buffer}, which is one more
+than the length of the text. \code{"abc"} has three characters and four
+bytes, so it produces \code{FixedString<4>}, and \code{sizeof} of that type
+is four.
+
+This is not an arbitrary convention. The constructor's parameter is
+\code{const char (&s)[N]}, and the length of a string literal's array type
+is one more than the number of characters, because the literal includes its
+terminator. Matching \code{N} to the array length is what makes the
+constructor a single, uniform signature that works for every literal.
+
+The consequence for \code{view()} is that it subtracts one. The text
+\code{"abc"} is stored in a four-byte buffer and observed as a
+three-character \code{std::string_view}.
+
+Table~\ref{tab:ch05-sizes} collects the arithmetic.
+
+\begin{table}[ht]
+\centering
+\caption{The arithmetic of \code{N} for a few literals.}
+\label{tab:ch05-sizes}
+\small
+\begin{tabular}{@{}L{0.22\textwidth}C{0.18\textwidth}C{0.20\textwidth}C{0.28\textwidth}@{}}
+\toprule
+\textbf{Literal} & \textbf{\code{N}} & \textbf{\code{sizeof}} & \code{view().size()} \\
+\midrule
+\code{"a"} & 2 & 2 & 1 \\
+\code{"abc"} & 4 & 4 & 3 \\
+\code{"[0-9]+"} & 7 & 7 & 6 \\
+\code{"the quick brown fox"} & 20 & 20 & 19 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Two Different Tags Are Two Different Types}\label{sec:ch05-different}
+
+Because \code{N} is part of the type, \code{FixedString<6>} and
+\code{FixedString<7>} are unrelated types. They cannot be compared: the
+defaulted \code{operator==} of \code{FixedString<6>} takes a
+\code{const FixedString<6>&}, and a \code{FixedString<7>} does not convert
+to it. Attempting the comparison is a hard error:
+
+\begin{lstlisting}[style=dslcmd,caption={Comparing two \code{FixedString}s of different lengths. The diagnostic is at the point of use, and it names both operand types.},label={lst:ch05-cmp}]
+error: no match for 'operator==' (operand types are
+       'const dsl::FixedString<4>' and 'const dsl::FixedString<5>')
+\end{lstlisting}
+
+This is not a limitation to be worked around; it is the property that makes
+\code{FixedString} usable as a template argument. Two template arguments
+are the same template argument only if they are the same value \emph{and}
+the same type. If the type alone were not enough to distinguish them, the
+compiler could not tell \code{pattern<"[0-9]+">} from
+\code{pattern<"[0-9]+x">}, and the pattern engine -- which is driven entirely
+by the template argument -- could not exist.
+
+The price is that you cannot compare tags of different lengths directly. The
+next section shows the standard workaround.
+
+\section{The D Port's Alternative}
+
+The structural-type machinery exists because C++20 has no other way to pass
+a string as a template argument. The D port does not need it, and the
+difference is instructive.
+
+D has template parameters that are ordinary compile-time values, and a
+string literal in D \emph{is} such a value: \code{"abc"} is an
+\code{immutable(char)[]}`. So the D port writes its tags directly:
+
+\begin{lstlisting}[style=dslcmd,caption={The D port's tags. A D string literal is already a compile-time value, so no carrier type is needed.},label={lst:ch05-dtag}]
+auto tree = node!"add"(leaf!"num"(1), leaf!"num"(2));
+\end{lstlisting}
+
+The D module still ships a \code{FixedString} -- \code{struct FixedString(string
+text)} at line 135 of \code{DSLtk.d}, with a \code{view()} method and an
+\code{enum value = text;} -- but its own module header says that
+\code{FixedString} is optional, because D string literals can be used
+directly as template arguments. The C++ port has no such option: without
+\code{FixedString}, there would be no way to write \code{dsl::leaf<"num">}
+at all.
+
+The D \code{FixedString} is also different in kind. It is a runtime struct
+holding a \code{string}, with a compile-time \code{enum value} capturing the
+text; it is not a template parameter carrier at all. The two types share a
+name and little else.
+
+\section{Comparing Two Tags at Compile Time}
+
+Because the two types cannot be compared, a comparison must go through the
+views, which are both \code{std::string_view} and therefore comparable
+regardless of the original buffer sizes. The idiom is a two-parameter
+template, and it is short enough to be worth writing down.
+
+\begin{pseudocode}[Comparing two compile-time tags]
+\textbf{function} same\_tag (A, B)\\
+\quad \textbf{if} A is a compile-time string and B is a compile-time string then\\
+\qquad \textbf{return} the views of A and B are equal\\
+\quad \textbf{otherwise}\\
+\qquad \textbf{report} \emph{not a tag comparison}
+\end{pseudocode}
+
+Listing~\ref{lst:ch05-same} is the implementation, and it works across
+different lengths because it compares \code{std::string_view} objects
+rather than the buffers.
+
+\begin{lstlisting}[style=dslcpp,caption={Comparing two compile-time tags, even when their buffer sizes differ. The function is \code{consteval}, so a comparison is only possible at compile time.},label={lst:ch05-same}]
+/// Compile-time equality of two tags, even when their lengths differ.
+template <dsl::FixedString A, dsl::FixedString B>
+consteval bool
+same_tag ()
+{
+  return A.view () == B.view ();
+}
+\end{lstlisting}
+
+Used as \code{same_tag<"abc", "abc">()} the answer is \code{true}; used as
+\code{same_tag<"abc", "abd">()} or \code{same_tag<"abc", "abcd">()} it is
+\code{false}. Note that the two template parameters have \emph{different}
+types in the second case -- \code{FixedString<4>} and
+\code{FixedString<5>} -- and the function still compiles, because the
+comparison is between views.
+
+There is a subtlety in the declaration. Writing
+\code{template <dsl::FixedString A, dsl::FixedString B>} gives the two
+parameters independent types, each with its own deduced \code{N}. Writing
+\code{template <dsl::FixedString S>} instead would give a single type
+shared by both parameters, and would force the two arguments to have the
+same length.
+
+\section{Tags as Compile-Time Programs}
+
+Two of the facilities in Table~\ref{tab:ch05-nttp} do not merely carry a tag;
+they execute a program written in it. This is the deepest use of
+\code{FixedString}, and it is worth understanding separately from the
+mechanical use as a name.
+
+\subsection{The Pattern Engine}
+
+\code{dsl::pattern<S>} is a class template parameterised by the pattern text.
+Its single public entry point is \code{matches(std::string_view)}, a
+\code{constexpr} function whose implementation is a recursive matcher over
+the pattern's characters. Because the pattern is a template argument rather
+than a run-time string, the matcher is a compile-time computation: given a
+literal pattern and a literal input, the answer is available in a
+\code{static_assert}.
+
+Listing~\ref{lst:ch05-pattern} shows the property in use. The second
+assertion is the interesting one: it asks the compiler to decide, at
+compile time, that a particular input matches a particular pattern, and the
+compiler accepts or rejects the program accordingly.
+
+\begin{lstlisting}[style=dslcpp,caption={A pattern evaluated entirely at compile time. Both assertions are decided by the compiler, not at run time.},label={lst:ch05-pattern}]
+static_assert (dsl::pattern<"[0-9]+">::matches ("12345"));
+static_assert (!dsl::pattern<"[0-9]+">::matches ("12a45"));
+\end{lstlisting}
+
+The pattern language itself is a small subset: literals, \code{.}, character
+classes with ranges, and the \code{*} and \code{+} quantifiers. Matching is
+anchored at both ends, so the whole input must be consumed. Chapter
+\ref{ch:pattern-regex} covers the engine in full.
+
+\subsection{The Byte Regular Expression}
+
+\code{dsl::StaticRegex<Source>} goes further. Its template argument is the
+text of a regular expression over bytes, and the class contains a
+\code{static constexpr auto program} member: a Thompson NFA compiled from
+the expression, built entirely in a constant expression. The compiled
+program is therefore available to the compiler as a constant, and its
+validity is checked by a \code{static_assert} inside the class
+definition:
+
+\begin{lstlisting}[style=dslcpp,caption={The compile-time NFA of \code{StaticRegex}, shown as it appears inside \code{namespace dsl}. The \code{static_assert} inside the class fires at compile time if the expression does not compile to a valid program.},label={lst:ch05-nfa}]
+template <FixedString Source> struct StaticRegex
+{
+  static constexpr auto program
+      = byte_regex_detail::Compiler<Source.view ().size () * 4
+                                    + 8>{ Source.view () }
+            .compile ();
+  static_assert (program.valid, "invalid static byte regular expression");
+  // ...
+};
+\end{lstlisting}
+
+Here the tag is not merely a name but the source of a data structure. The
+compiled program is a template-argument-driven constant, and two
+\code{StaticRegex} instantiations with different expressions are unrelated
+types with unrelated programs.
+
+\section{Lifetimes and Ownership}\label{sec:ch05-lifetimes}
+
+\code{FixedString} owns its text, in the sense that the text lives in the
+object's own \code{data} array. Two consequences follow, and both are traps.
+
+First, \code{view()} returns a \code{std::string_view} that refers to the
+object's buffer, not to a copy. The view is therefore only valid for as
+long as the \code{FixedString} does:
+
+\begin{lstlisting}[style=dslcmd,caption={A dangling view. The temporary \code{FixedString} dies at the end of the declaration, and the view points into freed memory.},label={lst:ch05-dangle}]
+auto view = dsl::FixedString<4>{"abc"}.view ();   // dangling: the
+                                                  // temporary is gone
+\end{lstlisting}
+
+The rule is the familiar one for any view-returning accessor: keep the
+owner alive, or copy. In practice this rarely bites, because a
+\code{FixedString} used as a template argument is a compile-time constant
+and the views derived from it are constants too.
+
+Second, the null-terminator convention is a property of the \emph{source},
+not a guarantee of the type. The constructor copies \code{N} characters from
+the array it is given. When the array is a string literal, the last
+character copied is the terminator, and \code{view()} drops it. When the
+array is not a literal -- say a four-character buffer with no terminator --
+the same copy happens, and \code{view()} silently drops the fourth
+character:
+
+\begin{lstlisting}[style=dslcmd,caption={A non-terminated source array. The tag reads as three characters, because \code{view()} always drops the last byte of the buffer.},label={lst:ch05-noterm}]
+char buffer[4] = { 'a', 'b', 'c', 'd' };
+dsl::FixedString<4> tag { buffer };
+// tag.view () is "abc": the 'd' is copied into the buffer and then
+// discarded by the N-1 in view ()
+\end{lstlisting}
+
+The type therefore treats the last byte of the buffer as a terminator by
+convention. Since the practical use of \code{FixedString} is with literals,
+and a literal is always terminated, this is harmless in practice; but it is
+worth knowing that the guarantee comes from the caller, not from the type.
+
+\section{Every Facility That Takes a Tag}
+
+The type exists to serve the library, and the library uses it in eighteen
+places. Table~\ref{tab:ch05-nttp} lists every one of them, with the line at
+which it is declared.
+
+\begin{table}[ht]
+\centering
+\caption{Every facility in \code{DSLtk.hpp} that takes a \code{FixedString}
+as a template argument.}
+\label{tab:ch05-nttp}
+\small
+\begin{tabular}{@{}L{0.40\textwidth}C{0.13\textwidth}L{0.37\textwidth}@{}}
+\toprule
+\textbf{Facility} & \textbf{Line} & \textbf{What the tag denotes} \\
+\midrule
+\code{dsl::pattern<S>} & 6175 & a compile-time pattern string \\
+\code{dsl::leaf<Tag>} & 6662, 6672, 6680 & the tag of a leaf node \\
+\code{dsl::node<Tag>} & 6698 & the tag of an inner node \\
+\code{AST::Mixin::make_leaf<Tag>} & 6730 & the tag of a leaf node \\
+\code{AST::Mixin::make_node<Tag>} & 6740 & the tag of an inner node \\
+\code{dsl::RewriteRule<Tag, ...>} and \code{dsl::rule<Tag>} & 6768, 6800 & the name of a rewrite rule \\
+\code{dsl::LiteralEntry<Suffix, F>} and \code{dsl::lit<Suffix>} & 7141, 7158 & the suffix of a literal \\
+\code{dsl::ProductionHandler<Id, Fn>} and \code{dsl::production<Id>} & 8103, 8116 & the identifier of a parser production \\
+\code{PEGDefinition::add_rule<S>} & 8511, 8519 & the pattern of a PEG rule \\
+\code{dsl::ASTTag<Tag>} & 9963 & the tag of a visitor case \\
+\code{dsl::VisitorCase<Tag, F>} and \code{dsl::on<Tag>} & 9967, 9981 & the tag of a visitor case \\
+\code{dsl::ASTSchema<Tag, ...>} and \code{dsl::ast_schema<Tag>} & 10062, 10067 & the tag of a schema node \\
+\code{dsl::StaticRegex<Source>} & 10363 & the text of a byte regular expression \\
+\code{BinaryStream::next<Regex>} & 10479 & the text of a token regular expression \\
+\code{dsl::CFGTerminal<Text>} & 10715 & the text of a terminal symbol \\
+\code{dsl::CFGNonterminal<Name>} & 10723 & the name of a nonterminal symbol \\
+\code{dsl::CFGProduction<LHS, ...>} & 10731 & the left-hand side of a production \\
+\code{make_cfg<Start, ...>} & 10739 & the start symbol of a grammar \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+There is also one indirect use. \code{dsl::when} takes an \code{auto}
+non-type parameter, so a pattern can be used as a dispatch key -- but the
+spelling needs care. The header's own comment above \code{dsl::pattern}
+(line 6172) shows \code{dsl::when<dsl::pattern<"[0-9]+">>(handler)}, and
+that form does not compile: \code{when}'s key parameter is declared
+\code{auto}, and a type name is not a constant expression of the deduced
+type. The pattern has to be given as a value, with braces:
+
+\begin{lstlisting}[style=dslcpp,caption={A pattern used as a dispatch key. The braces are required: the key parameter of \code{when} is declared \code{auto}, and a type name is not a constant expression.},label={lst:ch05-when}]
+auto table = dsl::match (
+    dsl::when<dsl::pattern<"[0-9]+">{}> (
+        [] (auto, std::string_view token) { return "number"; }),
+    dsl::otherwise (
+        [] (auto, std::string_view token) { return "other"; }));
+
+// table ("123", "123")  ->  "number"
+// table ("abc", "abc")  ->  "other"
+\end{lstlisting}
+
+\section{What the Tag Costs at Run Time}
+
+Here is the part that is easy to overstate. A compile-time tag does not
+remain a compile-time tag in the data structure it produces. When
+\code{dsl::leaf<"num">(42)} runs, it constructs an \code{dsl::ASTNode} whose
+member \code{tag_} is a \code{std::string}. The tag has been \emph{copied}
+into a run-time string; it is not a reference to a static buffer, and it
+does not carry its identity into the type of the node.
+
+The consequence is that \code{dsl::leaf<"a">(1)} and
+\code{dsl::leaf<"b">(1)} have exactly the same type, \code{dsl::ASTNode},
+and a tree containing them is indistinguishable, at the type level, from
+any other tree. The compile-time tag buys you two things and not a third.
+It buys you the ability to write the tag in the source without quoting
+syntax noise, and it buys you compile-time dispatch wherever the library
+dispatches on a tag -- \code{pattern}, \code{StaticRegex},
+\code{ast_schema}, \code{on}. It does not buy you a typed tree.
+
+Figure~\ref{fig:ch05-flow} draws the path a tag takes.
+
+\begin{figure}[ht]
+\centering
+\begin{dslgraph}
+  \node[dslbox, text width=31mm] (src) {\textbf{Source}\\\code{dsl::leaf<"num">(42)}};
+  \node[dslbox, text width=31mm, right=8mm of src] (fs) {\textbf{Compile time}\\\code{FixedString<4>}\\\code{{"num"}}, a structural type};
+  \node[dslbox, text width=31mm, right=8mm of fs] (inst) {\textbf{Instantiation}\\\code{leaf<Tag>}\\\code{Tag} is now a type};
+  \node[dslbox, text width=31mm, right=8mm of inst] (run) {\textbf{Run time}\\\code{ASTNode::tag_}\\\code{std::string}};
+
+  \draw[dsledge] (src) -- (fs);
+  \draw[dsledge] (fs) -- (inst);
+  \draw[dsledge] (inst) -- (run);
+  \draw[dslfeedback] (run.south) -- ++(0,-9mm) -| node[pos=0.2, below, font=\scriptsize] {the text is copied, not referenced} (fs.south);
+\end{dslgraph}
+\caption{The life of a compile-time tag. The value is fixed at compile time
+and used as a template argument; by the time the node exists at run time,
+the tag is an ordinary heap-allocated string.}
+\label{fig:ch05-flow}
+\end{figure}
+
+\subsection{A Worked Example}
+
+Listing~\ref{lst:ch05-demo} exercises all of the above in one program: the
+buffer arithmetic, the compile-time tag comparison, the fact that the tag
+survives into the tree as text, and the fact that it does not survive into
+the tree's type.
+
+\begin{lstlisting}[style=dslcpp,caption={Compile-time tags: buffer arithmetic, compile-time comparison, and the loss of tag identity at run time.},label={lst:ch05-demo}]
+#include "DSLtk.hpp"
+#include <iostream>
+#include <type_traits>
+
+/// Compile-time equality of two tags, even when their lengths differ.
+template <dsl::FixedString A, dsl::FixedString B>
+consteval bool
+same_tag ()
+{
+  return A.view () == B.view ();
+}
+
+int main ()
+{
+  constexpr dsl::FixedString<6> tag { "abcde" };
+
+  static_assert (tag.view () == "abcde");
+  static_assert (tag.view ().size () == 5);
+  static_assert (sizeof (tag) == 6);
+
+  static_assert (same_tag<"abc", "abc"> ());
+  static_assert (!same_tag<"abc", "abd"> ());
+  static_assert (!same_tag<"abc", "abcd"> ());
+
+  static_assert (dsl::pattern<"[0-9]+">::value == "[0-9]+");
+  static_assert (dsl::StaticRegex<"[a-z]+">::program.valid);
+
+  auto number = dsl::leaf<"num"> (42);
+  auto other = dsl::leaf<"other"> (42);
+
+  static_assert (std::is_same_v<decltype (number), dsl::ASTNode>);
+  static_assert (std::is_same_v<decltype (number), decltype (other)>);
+
+  std::cout << "tag.view() = " << tag.view () << "\n";
+  std::cout << "leaf tag   = " << number.tag () << "\n";
+  std::cout << "leaf value = " << number.value () << "\n";
+  std::cout << "dump       = " << number.dump () << "\n";
+}
+\end{lstlisting}
+
+The output is
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch05-demo}.},label={lst:ch05-demo-out}]
+tag.view() = abcde
+leaf tag   = num
+leaf value = 42
+dump       = (num 42)
+\end{lstlisting}
+
+The two \code{static_assert}s at the end are the interesting ones. The
+first says that \code{dsl::leaf<"num">(42)} has type \code{dsl::ASTNode};
+the second says that \code{dsl::leaf<"other">(42)} has the same type. The
+compile-time tag has done its work at compile time and left no trace in the
+type.
+
+\section{Edge Cases and Limits}
+
+\paragraph{Only string literals can be converted.}
+The constructor takes \code{const char (&s)[N]}, so the argument must be an
+array of \code{const char}. A \code{std::string}, a \code{const char*}
+variable, or a \code{std::string_view} cannot bind to it, and none of them
+is a constant expression in any case. Every tag in the library must be
+spelled as a literal.
+
+\paragraph{There is no concatenation.}
+\code{FixedString} has no \code{operator+} and no way to build a new tag
+from two existing tags at compile time. A tag that must be composed at
+compile time -- say, a node tag derived from a user-supplied prefix -- has
+to be written out in full at each use site, or assembled with a constexpr
+function that returns a \code{std::array} and then converted, which the
+constructor does not accept.
+
+\paragraph{There is no way to change the length of a tag.}
+\code{N} is fixed by the type. A tag of one length cannot be copied into a
+tag of another length without a conversion that does not exist.
+
+\paragraph{The view is the only accessor.}
+\code{FixedString} provides \code{view()} and nothing else. There is no
+\code{operator std::string_view}, so \code{std::string_view sv = tag;}
+does not compile and you must write \code{tag.view()}. There is no
+\code{size()}, so \code{tag.view().size()} is the way to get the length.
+There is no \code{npos}, and there is no \code{operator<} or
+\code{operator<=>}, so tags cannot be ordered -- only compared for
+equality.
+
+\paragraph{Equality is only available between tags of the same length.}
+As Section~\ref{sec:ch05-different} showed, this is a compile-time error
+rather than a run-time false. The workaround is to compare views, as in
+Listing~\ref{lst:ch05-same}.
+
+\paragraph{Each literal length is a distinct type, and there are many of
+them.}
+Every distinct literal in a program produces a distinct
+\code{FixedString} specialisation, and every specialisation is a distinct
+type the compiler must instantiate. A program that uses hundreds of distinct
+tags instantiates hundreds of small classes. The cost is small -- an
+\code{int}-sized object and a defaulted comparison each -- but it is not
+zero, and it is one of the reasons the header's compile time is dominated
+by the expression templates and the parser combinators rather than by the
+tags.
+
+\paragraph{The tag is copied, and the copy owns its memory.}
+As Figure~\ref{fig:ch05-flow} showed, the text ends up in a
+\code{std::string}. Each node in a tree owns its own copy of its tag.
+For a tree of a million nodes with a four-character tag, that is a million
+small heap allocations -- although the small-string optimisation usually
+keeps them inside the node itself.
+
+\paragraph{A non-terminated source array loses its last byte.}
+As Section~\ref{sec:ch05-lifetimes} showed, \code{view()} always discards
+the last byte of the buffer. Constructing a \code{FixedString} from a
+non-terminated array therefore silently drops that byte. Only string
+literals, which are always terminated, are safe inputs.
+
+\paragraph{The view borrows from the owner.}
+\code{view()} returns a view into the object's own buffer. A view taken
+from a temporary \code{FixedString} dangles. This is the usual
+view-semantics contract, and it is the one place where \code{FixedString}
+behaves like a run-time type rather than a compile-time one.
+
+\paragraph{The compile-time tag does not survive into the type of the tree.}
+If you need a tree whose node types are known to the compiler, the library
+does not provide it. The \code{ast_schema} facility (line 10062) is the
+closest thing: it describes a tree's shape at compile time and uses it to
+generate a matching run-time tree and to check that a visitor covers every
+tag. But the tree itself remains an untyped \code{dsl::ASTNode}.
+
+\section{What Comes Next}
+
+The library's smallest type is now open. You know why \code{FixedString}
+exists, what the standard requires of it, what it costs, and where it is
+used. Chapter~\ref{ch:feature-tags} turns to the mechanism that carries
+these tags into a DSL: the feature tag, its nested mixin, and the ways a
+feature can inject members -- including operators -- into the class that
+derives from \code{dsl::DSL}.

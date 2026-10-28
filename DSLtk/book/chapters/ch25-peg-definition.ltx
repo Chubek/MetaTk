@@ -1,0 +1,898 @@
+\chapter{The PEG Definition Grammar: Rules and Channels}
+\label{ch:peg-definition}
+
+\section{What a PEG Definition Is}
+
+A parsing expression grammar, in the classical sense, is a grammar in which
+every production is written as an expression: a sequence, an ordered choice, a
+repetition, a lookahead, or a reference to another production. The defining
+property of the family is that ordered choice \emph{never} backtracks once it
+has committed, which removes the exponential blow-up that a context-free
+grammar suffers from on ambiguous input. It is a pleasant thing to program
+against, and it is the right tool for the large majority of languages that are
+not deliberately ambiguous.
+
+\DSLtk{} ships a PEG subsystem, and it is worth being precise about what that
+subsystem is, because it is not what a reader who has seen the literature
+would expect. The subsystem occupies lines 8123 to 8884 of
+\code{DSLtk.hpp} and divides into two layers. The first layer, which this
+chapter covers, is the \emph{definition} layer: a flat, ordered set of
+patterns, each attached to a channel and optionally to a semantic action,
+together with a driver that walks the input left to right and fires the first
+pattern that matches at each position. The second layer, covered in
+\chapref{ch:peg-combinators}, wraps the ordinary \code{dsl::Parser}
+machinery of \chapref{ch:parser-core} in strict PEG semantics and gives you
+sequence, ordered choice, repetition and lookahead as first-class
+combinators.
+
+The single most important fact about the definition layer is this: a rule is
+\emph{not} a production. It is not a string of the form
+\code{"name <- expr"}, and it is not a callable that is invoked on the
+remaining input. It is a \emph{compile-time pattern string} written in a
+small regular-expression subset, and the pattern is matched against the
+input at the current position as a prefix. The rule set, taken together, is
+therefore a \emph{lexer}, not a grammar: it decides what the next token is,
+and it does so by trying each rule in declaration order and taking the first
+one that matches. Structure above the token level -- nesting, recursion,
+precedence -- is not expressible here, and Chapter~\ref{ch:peg-combinators}
+and Chapter~\ref{ch:peg-semantic-values} exist precisely to explain what to
+do about that.
+
+This design has one large advantage and one large cost, and both are worth
+stating up front. The advantage is that the whole definition layer is a
+single linear scan over the rules at each position, with no backtracking and
+no recursion, so it is linear in the length of the input times the number of
+rules, and it never risks a stack overflow. The cost is that the expressive
+power of a rule is exactly the expressive power of a regular expression
+subset, and a user who reaches for \code{PEGDefinition} expecting to write a
+grammar will find themselves writing a tokenizer instead. The examples that
+ship with the toolkit, in the \code{examples} directory of the source tree,
+are a good illustration: \code{23-peg-definition.cpp} declares a rule per
+token kind, and the semantic actions print the tokens.
+
+\section{Channels}
+
+A channel is a named logical stream that matches are routed into. The type is
+small enough to describe in full:
+
+\begin{lstlisting}[style=dslcpp,caption={The channel type and the two built-in channels, transcribed from \code{DSLtk.hpp} lines 8147--8165.},label={lst:ch25-channel}]
+struct PEGChannel
+{
+  std::string name{ "@DEFAULT" };
+
+  constexpr bool operator== (const PEGChannel &) const = default;
+
+  bool
+  is_ignore () const noexcept
+  {
+    return name == "@IGNORE";
+  }
+};
+
+inline const PEGChannel PEGIgnoreChannel{ "@IGNORE" };
+inline const PEGChannel PEGDefaultChannel{ "@DEFAULT" };
+\end{lstlisting}
+
+A default-constructed \code{PEGChannel} is named \code{"@DEFAULT"}, so a rule
+that is never configured belongs to the default channel. The equality operator
+is defaulted, which means two channels are equal exactly when their names are
+equal; nothing else distinguishes them. In particular there is no channel
+identifier, no channel registry, and no way to ask a definition which
+channels it uses -- \code{PEGDefinition} has no \code{channels()} method.
+
+The only channel with behaviour attached to it is \code{"@IGNORE"}. The
+predicate \code{is_ignore()} tests for that name by string comparison, and
+the streaming matcher of \chapref{ch:peg-combinators} uses it to decide
+which rules to swallow silently. Every other channel is a pure label: it is
+recorded in the match, and it is what the matcher's \code{only},
+\code{include} and \code{exclude} filters compare against.
+
+Custom channels are created with \code{new_peg_channel}, and the function
+validates its argument:
+
+\begin{lstlisting}[style=dslcpp,caption={Transcribed from \code{DSLtk.hpp} lines 8176--8183. \code{new_peg_channel} refuses any name that does not begin with \code{@}.},label={lst:ch25-newchannel}]
+inline PEGChannel
+new_peg_channel (std::string_view name)
+{
+  if (name.empty () || name.front () != '@')
+    throw std::invalid_argument (
+        "dsl::new_peg_channel: channel names must begin with '@'");
+  return PEGChannel{ std::string (name) };
+}
+\end{lstlisting}
+
+The \code{@} prefix is a namespace convention for the channel name space. It
+keeps user channels from colliding with the two built-in names, and it makes
+the reserved space obvious in a grammar that is read by other people. The
+price is that the function throws, and because the check lives in a free
+function rather than in a constructor, the exception escapes from the call
+that creates the channel rather than from some later use of it. A grammar
+that computes channel names at run time must therefore either validate
+them itself or accept that a bad name aborts the parse setup with
+\code{std::invalid_argument}. Because \code{new_peg_channel} takes a
+\code{std::string_view} and copies it into a \code{std::string}, the returned
+channel owns its name and stays valid for as long as it is held.
+
+\section{The Pattern Language}
+
+The pattern language is implemented by \code{peg_detail::CompiledPattern}, a
+small struct with a vector of atoms and two status fields
+(\code{DSLtk.hpp}, lines 8218 to 8368). Each atom records whether it is the
+wildcard, a character class or a literal, the class body, and a quantifier
+character. The compiler, \code{CompiledPattern::compile}, is a flat scanner:
+it walks the pattern once, emits one atom per literal, per wildcard and per
+character class, and attaches a quantifier to an atom when one immediately
+follows it. There is no recursion in the compiler and no tree of any kind in
+the result, which is why the pattern language is so small.
+
+Table~\ref{tab:ch25-pattern} is the complete syntax.
+
+\begin{table}[ht]
+\centering
+\caption{The pattern language accepted by \code{CompiledPattern}. The
+compiler is a single left-to-right scan; there is no notion of a group, an
+alternative, or a nested quantifier.}
+\label{tab:ch25-pattern}
+\small
+\begin{tabular}{@{}L{0.16\textwidth}L{0.29\textwidth}L{0.40\textwidth}@{}}
+\toprule
+\textbf{Construct} & \textbf{Matches} & \textbf{Notes} \\
+\midrule
+\code{c} & the literal character \code{c} & Any character that is not a
+metacharacter is a literal, including \code{|}, \code{(}, \code{)} and
+and a backslash. \\
+\code{.} & any one character & Matches a newline as readily as a letter.
+There is no "any but newline" option. \\
+\code{[abc]} & one character from the set & The class ends at the first
+\code{]}. A \code{]} elsewhere in the class is not expressible. \\
+\code{[a-z0-9]} & one character from a range & A range is recognised when
+the middle of three consecutive characters is \code{-}. A trailing \code{-}
+is a literal. \\
+\code{[^abc]} & one character \emph{not} in the set & Only a
+\code{^} in the first position negates; elsewhere it is an ordinary
+class member. \\
+\code{*} & zero or more of the preceding atom & Greedy. It never gives back
+characters it has already consumed. \\
+\code{+} & one or more of the preceding atom & Greedy, and it fails outright
+if it matches nothing. \\
+\code{?} & zero or one of the preceding atom & Greedy: it takes the
+character when one is available. \\
+\code{!} & the preceding atom must \emph{not} match here & Zero-width
+negative lookahead. The atom is not consumed. \\
+\code{^} & nothing & Accepted and ignored. \\
+\code{$} & nothing & Accepted and ignored. \\
+\midrule
+\code{|} & the literal character \code{|} & There is no alternation in a
+rule pattern. Alternation is expressed by the rule set, which is tried in
+order. \\
+\code{(} \code{)} & the literal characters & There is no grouping. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Two of those rows deserve emphasis, because both are places where the
+shipped code differs from what the notation suggests.
+
+The first is the treatment of \code{^} and \code{$}. They are accepted
+and silently discarded by the compiler. The reason is that a rule is always
+matched at the current position of the input and never searches forward, so
+the anchors carry no information; a pattern that begins with \code{^}
+behaves exactly like the same pattern without it. This is worth knowing
+because it means a pattern copied from a conventional regular expression will
+behave differently from the way it looks: \code{"^[a-z]+$"} is
+not "a whole word", it is "a run of letters", and it will happily match the
+first three letters of \code{"abc"}.
+
+The second is the absence of escape sequences. The compiler has no notion of a
+tab escape, a digit escape, a word escape or a newline escape: a backslash is
+an ordinary class member or an ordinary literal. The consequence is that the
+C++ spelling of a pattern and the pattern itself are not the same string. The
+pattern that matches whitespace has to be written in the C++ source as
+\texttt{"[ \textbackslash t\textbackslash n]+"} -- a literal in which
+\texttt{\textbackslash t} denotes a real tab character and
+\texttt{\textbackslash n} a real newline -- because that is what has to reach
+the compiler. Writing the doubled spelling
+\texttt{"[ \textbackslash\textbackslash t\textbackslash\textbackslash n]+"} in the
+source, by contrast, produces the eight-character pattern
+\texttt{[ \textbackslash\textbackslash t\textbackslash\textbackslash n]+}, whose class
+body is the five characters space, backslash, \code{t}, backslash, \code{n};
+that class matches a space, a backslash, the letter \code{t} or the letter
+\code{n}, and nothing else.
+
+This is not a hypothetical. The shipped example
+\code{23-peg-definition.cpp} writes its whitespace rule with the
+doubled spelling, which is the broken one. Run against its own sample input,
+that example
+prints \code{skip_ws:2} where a single space was expected, and then
+\code{id:hen} where the word \code{then} was expected: the rule consumed the
+space and the \code{t} of \code{then}, and the identifier rule matched what
+was left. The same example's derived grammar prints \code{num:0} followed by
+\code{id:x10} for the input \code{0x10}, because the parent's number rule
+matches the leading \code{0} before the derived hexadecimal rule is ever
+consulted. Both effects are the subject of this chapter; they are properties
+of the shipped code, not of a hypothetical.
+
+The third row of Table~\ref{tab:ch25-pattern} that deserves comment is the
+one about greediness. The matching function \code{match_at} of
+\code{CompiledPattern} is a greedy prefix match: it walks the atoms in
+order, and for a \code{*} or \code{+} atom it consumes as many characters
+as it can and never retreats. So the pattern
+\code{"a+ab"} does not match \code{"aab"}, because the \code{a+} swallows
+both \code{a}s and the trailing \code{ab} then fails. The \code{*} branch of
+\code{dsl::pattern<>} backtracks and this one does not; the two engines are
+similar but not identical, and the difference is observable.
+
+The compiler reports one kind of error. If a \code{[} is not closed by a
+\code{]}, the result has \code{valid} set to false and \code{error} set to
+\code{"unterminated character class"}. The pattern is not otherwise
+interpreted.
+
+\section{Rules}
+
+A rule is a compiled pattern plus a set of mutable behaviours.
+\code{PEGRule} is a plain aggregate with no invariants and no private state,
+and every member can be changed after the rule has been created.
+
+\begin{table}[ht]
+\centering
+\caption{The members of \code{PEGRule} (\code{DSLtk.hpp}, lines 8410--8447).}
+\label{tab:ch25-rule}
+\small
+\begin{tabular}{@{}L{0.21\textwidth}L{0.19\textwidth}L{0.45\textwidth}@{}}
+\toprule
+\textbf{Member} & \textbf{Type} & \textbf{Meaning} \\
+\midrule
+\code{pattern_text} & \code{std::string} & The pattern exactly as it was
+supplied, kept for diagnostics and for the \code{pattern_text} label that
+\code{peg_rule} reports on failure. \\
+\code{compiled} & \code{CompiledPattern} & The compiled form. Public, so a
+caller may inspect the atoms, but there is no supported way to recompile it
+in place. \\
+\code{semantic_action} & \code{PEGSemanticAction} & A
+\code{std::function<void(PEGMatch&)>}, invoked when the rule matches. See
+\chapref{ch:peg-semantic-values}. \\
+\code{channel} & \code{PEGChannel} & The channel the match is routed into.
+Defaults to \code{"@DEFAULT"}. \\
+\code{must_fail} & \code{bool} & Turns the rule into a negative rule: it
+succeeds only where the pattern does \emph{not} match. \\
+\code{fire_on_neg} & \code{bool} & When the rule is negated, still run its
+semantic action on the negated success. \\
+\code{if_succeed} & \code{PEGRule *} & A second rule to attempt at the
+same position once this one has matched. \\
+\code{order} & \code{std::size_t} & The declaration order, assigned by the
+definition that created the rule. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Two of these members are unusual enough to deserve a paragraph each.
+
+\code{must_fail} implements the negative rule. The method that does the
+work is \code{try_match}, and its behaviour for a negated rule is not the
+obvious one:
+
+\begin{lstlisting}[style=dslcpp,caption={Transcribed from \code{DSLtk.hpp} lines 8424--8435. \code{PEGRule::try_match}. A negated rule succeeds by consuming exactly one character, so that a tokenizing parse always makes progress.},label={lst:ch25-trymatch}]
+std::optional<std::size_t>
+try_match (std::string_view text, std::size_t pos) const
+{
+  if (must_fail)
+    {
+      if (compiled.match_at (text, pos))
+        return std::nullopt;
+      return pos < text.size () ? std::optional<std::size_t> (pos + 1)
+                                : std::nullopt;
+    }
+  return compiled.match_at (text, pos);
+}
+\end{lstlisting}
+
+Read it carefully. For a negated rule, \code{try_match} returns
+\code{std::nullopt} when the pattern \emph{does} match -- that is, the
+negated rule fails exactly where its pattern succeeds. When the pattern does
+not match, the negated rule succeeds, and it succeeds by consuming exactly
+one character. That is a design decision rather than a natural consequence:
+a rule that consumed nothing would leave the driver in a loop, so the negated
+rule eats one character to guarantee progress. The practical consequence is
+that a negated rule is a \emph{one-character scanner}, not a zero-width
+assertion. If you want to assert that the next character is not a digit, a
+negated rule will consume that character for you, and you must be prepared
+for it.
+
+The second unusual member is \code{if_succeed}. It is a pointer to another
+rule that is attempted at the \emph{same} position as the rule that owns it,
+immediately after that rule has matched and its action has run. If the
+second rule also matches, its action runs as well. The pointer is followed
+exactly one level deep: the second rule's own \code{if_succeed} is ignored.
+
+The rule also has one piece of sugar. The call operator is overloaded, so a
+rule can be turned into a match arm by calling it with a callback:
+
+\begin{lstlisting}[style=dslcpp,caption={Transcribed from \code{DSLtk.hpp} lines 8438--8446. The call operator on \code{PEGRule} builds a matcher arm that binds the rule to a callback.},label={lst:ch25-arm}]
+template <typename Fn>
+peg_detail::PEGArm
+operator() (Fn &&fn) const
+{
+  peg_detail::PEGArm arm;
+  arm.rule = const_cast<PEGRule *> (this);
+  arm.action = std::forward<Fn> (fn);
+  return arm;
+}
+\end{lstlisting}
+
+This is what makes the streaming matcher of \chapref{ch:peg-combinators}
+readable: pushing a rule with a callback is the natural spelling of "try
+this rule next".
+
+\section{Grammars}
+
+\code{PEGDefinition} is the container. It holds a pointer to an optional
+parent definition, a vector of local rules, and a counter used to assign
+declaration order. Two free functions create definitions:
+\code{create_peg_definition()} returns a root definition, and
+\code{derive_peg_definition(parent)} returns a child whose parent rules
+remain visible.
+
+The interesting method is \code{rules()}:
+
+\begin{lstlisting}[style=dslcpp,caption={Transcribed from \code{DSLtk.hpp} lines 8528--8537. \code{PEGDefinition::rules()} flattens the inheritance chain into one ordered list.},label={lst:ch25-rules}]
+std::vector<const PEGRule *>
+rules () const
+{
+  std::vector<const PEGRule *> out;
+  if (parent)
+    out = parent->rules ();
+  for (const auto &r : local_rules_)
+    out.push_back (&r);
+  return out;
+}
+\end{lstlisting}
+
+The flattening is parent first, then local. That single sentence explains
+most of the surprising behaviour of derived grammars. Because the parent
+rules come first in the ordered choice, a derived rule can only ever be
+reached where none of the parent's rules match. A derived rule that
+duplicates a parent rule's pattern is therefore dead code, and the
+shadowing that the class documentation promises -- "may add new rules or
+shadow parent behavior without mutating the parent" -- does not happen
+through the ordered choice at all. It can only happen if the parent's rule
+fails where the child's would succeed, which is a much weaker claim.
+
+There is a second, smaller inheritance problem. The declaration order counter
+\code{next_order_} is a member of the definition, so a derived definition
+starts counting again from zero. The \code{order} field of a rule is
+therefore only comparable among rules that came from the same definition. It
+is a useful debugging aid, not a global precedence key.
+
+Rules are added with \code{add_rule}, which comes in two flavours:
+
+\begin{lstlisting}[style=dslcpp,caption={Transcribed from \code{DSLtk.hpp} lines 8511--8524. The two forms of \code{add_rule}. The pattern is a compile-time \code{FixedString}, so it must be a string literal.},label={lst:ch25-addrule}]
+template <FixedString S, typename Fn>
+PEGRule &
+add_rule (Fn &&action)
+{
+  return emplace_rule (S.view (),
+                       PEGSemanticAction (std::forward<Fn> (action)));
+}
+
+template <FixedString S>
+PEGRule &
+add_rule ()
+{
+  return emplace_rule (S.view (), PEGSemanticAction{});
+}
+\end{lstlisting}
+
+The pattern is a template argument, which means it must be a string literal
+known at compile time; there is no way to add a rule whose pattern is
+computed at run time. The return value is a reference to the stored rule,
+and \code{emplace_rule} assigns its \code{order} as it goes:
+
+\begin{lstlisting}[style=dslcpp,caption={Transcribed from \code{DSLtk.hpp} lines 8620--8634. \code{emplace_rule} compiles the pattern, rejects an invalid one, and assigns the declaration order.},label={lst:ch25-emplace}]
+PEGRule &
+emplace_rule (std::string_view pat, PEGSemanticAction action)
+{
+  PEGRule r;
+  r.pattern_text = std::string (pat);
+  r.compiled = peg_detail::CompiledPattern::compile (pat);
+  if (!r.compiled.valid)
+    throw std::invalid_argument ("dsl::PEGDefinition::add_rule: "
+                                 + r.compiled.error + " in pattern '"
+                                 + r.pattern_text + "'");
+  r.semantic_action = std::move (action);
+  r.order = next_order_++;
+  local_rules_.push_back (std::move (r));
+  return local_rules_.back ();
+}
+\end{lstlisting}
+
+Note that the compile happens eagerly, at the moment the rule is added, and
+that an invalid pattern throws \code{std::invalid_argument} immediately
+rather than at parse time. That is a good property: a grammar with a broken
+pattern fails at construction.
+
+Note also what \code{emplace_rule} returns: a reference into the vector of
+rules that the definition holds. Adding another rule may reallocate that
+vector, and a reallocation invalidates every reference and pointer into
+it. The comment above \code{add_rule}
+claims that the reference "stays valid as long as rules are only appended",
+and that claim is false. Section~\ref{sec:ch25-limits} returns to this
+point, because it is the sharpest edge in the whole subsystem.
+
+\section{Diagnostics}
+
+\code{PEGParseResult} is the outcome of a parse. It holds a success flag, the
+offset at which the parse stopped, the line and column of that offset, and a
+message.
+
+\begin{table}[ht]
+\centering
+\caption{The accessors of \code{PEGParseResult} (\code{DSLtk.hpp}, lines
+8452--8491). All of them are read-only views over the same four fields.}
+\label{tab:ch25-result}
+\small
+\begin{tabular}{@{}L{0.27\textwidth}L{0.21\textwidth}L{0.37\textwidth}@{}}
+\toprule
+\textbf{Accessor} & \textbf{Returns} & \textbf{Meaning} \\
+\midrule
+\code{ok()} & \code{bool} & True when the whole input was consumed. \\
+\code{failed()} & \code{bool} & The negation of \code{ok()}. \\
+\code{error_offset()} & \code{std::size_t} & The byte offset at which the
+parse stopped. \\
+\code{error_line()} & \code{std::size_t} & The one-based line of that
+offset. \\
+\code{error_column()} & \code{std::size_t} & The one-based column of that
+offset. \\
+\code{error_message()} & \code{std::string_view} & A human-readable
+description; empty on success. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The line and column are computed by \code{peg_detail::line_col_at}, a
+function that walks the text from the beginning counting newlines. It is
+called once per match and once per failure, and it is therefore quadratic in
+the length of the input for a long token stream. For a source of a few
+thousand characters this is irrelevant; for a large file it is the first
+thing you would want to replace.
+
+The failure messages the driver produces are fixed strings. There are exactly
+two of them, and they are worth quoting in full because they are the only
+diagnostics a user gets: \code{"PEG rule matched empty input; refusing to
+loop"} and \code{"no PEG rule matched at offset N"}. There is no list of
+what was expected at the failure point, which is the one diagnostic feature
+that the parser core of \chapref{ch:parser-core} has and the PEG definition
+layer lacks.
+
+\section{The Ordered-Choice Loop}
+
+The driver itself is transcribed from \code{DSLtk.hpp} lines 8546 to 8617. The
+following pseudocode is that code with the control flow flattened.
+
+\begin{pseudocode}[Tokenizing with ordered choice]
+\textbf{function} tokenize (definition, text)\\
+\quad rules = definition.rules() \quad // parent rules first, then local\\
+\quad pos = 0\\
+\quad \textbf{while} pos < length(text) \textbf{do}\\
+\qquad matched = false\\
+\qquad \textbf{for each} rule r \textbf{in} rules \textbf{in} order \textbf{do}\\
+\qquad\quad end = r.try\_match(text, pos)\\
+\qquad\quad \textbf{if} end is empty \textbf{then} \textbf{continue}\\
+\qquad\quad \textbf{if} r is positive \textbf{and} end = pos \textbf{then}\\
+\qquad\qquad \textbf{fail} ("PEG rule matched empty input; refusing to loop")\\
+\qquad\quad matched = true\\
+\qquad\quad \textbf{if} r is positive \textbf{or} r.fire\_on\_neg \textbf{then}\\
+\qquad\qquad m = PEGMatch(text[pos .. end), pos, end, r, r.channel)\\
+\qquad\qquad \textbf{if} r has an action \textbf{then} r.action(m)\\
+\qquad\quad \textbf{if} r.if\_succeed is not empty \textbf{then}\\
+\qquad\qquad e = r.if\_succeed.try\_match(text, pos)\\
+\qquad\qquad \textbf{if} e is not empty \textbf{then}\\
+\qquad\qquad\quad run the action of r.if\_succeed at the same position\\
+\qquad\quad pos = end\\
+\qquad\quad \textbf{break} \quad // ordered choice: the first success wins\\
+\qquad \textbf{if} not matched \textbf{then}\\
+\qquad\quad \textbf{fail} ("no PEG rule matched at offset " + pos)\\
+\quad \textbf{return} success at pos
+\end{pseudocode}
+
+Figure~\ref{fig:ch25-loop} draws the same control flow.
+
+\begin{figure}[ht]
+\centering
+\begin{dslgraph}
+  \node[dslnode] (start) {\texttt{pos = 0}};
+  \node[dsldecision, below=11mm of start] (more) {input left?};
+  \node[dslterm, left=32mm of more] (done) {success};
+
+  \node[dslbox, below=11mm of more] (loop) {for each rule \texttt{r}\\\texttt{in} declaration order};
+  \node[dsldecision, below=13mm of loop] (try) {\texttt{r.try\_match}\\\texttt{succeeded?}};
+  \node[dslterm, right=34mm of try] (fail) {failure:\\"no PEG rule matched\\at offset N"};
+
+  \node[dsldecision, below=13mm of try] (zero) {positive rule\\\texttt{and} zero width?};
+  \node[dslterm, left=32mm of zero] (looperr) {failure:\\"matched empty input;\\refusing to loop"};
+
+  \node[dslbox, below=11mm of zero] (fire) {build the \texttt{PEGMatch};\\fire the semantic action};
+  \node[dslbox, below=11mm of fire] (adv) {\texttt{pos = end};\quad \texttt{break}};
+
+  \draw[dsledge] (start) -- (more);
+  \draw[dsledge] (more) -- node[right, font=\scriptsize] {yes} (loop);
+  \draw[dsledge] (more) -- node[above, font=\scriptsize] {no} (done);
+  \draw[dsledge] (loop) -- (try);
+  \draw[dsledge] (try) -- node[right, font=\scriptsize] {yes} (zero);
+  \draw[dsledge] (zero) -- node[right, font=\scriptsize] {no} (fire);
+  \draw[dsledge] (fire) -- (adv);
+
+  \draw[dslfeedback] (try.west) -- ++(-13mm,0) |- node[left, font=\scriptsize] {no: the next rule} (loop.west);
+  \draw[dsledgedash] (try.east) -- node[above, font=\scriptsize] {exhausted} (fail.west);
+  \draw[dsledge] (zero.west) -- node[below, font=\scriptsize] {yes} (looperr.east);
+  \draw[dslfeedback] (adv.east) -- ++(27mm,0) |- node[below, font=\scriptsize] {the next token} (more.east);
+\end{dslgraph}
+\caption{The ordered-choice loop of \code{PEGDefinition::parse}. The rules
+are tried in declaration order at each position; the first success wins and
+the cursor advances to the end of the match. There is no backtracking across
+positions: a rule that fails at one position is simply never reconsidered at
+another.}
+\label{fig:ch25-loop}
+\end{figure}
+
+Four properties of this loop are worth stating explicitly, because they are
+the difference between a PEG and a backtracking regular expression matcher.
+
+First, the choice is \emph{local}. Each rule is tried at the current
+position only. If rule three matches at position ten and rule one would have
+matched at position ten had it been tried first, rule one never gets its
+chance, because rule three came first in the list.
+
+Second, the choice is \emph{ordered by declaration}. The order of the
+\code{add_rule} calls is the precedence order of the grammar. This is why
+the shipped example puts its keyword rules before its identifier rule, and
+why putting \code{"[a-zA-Z_][a-zA-Z_0-9]*"} first would shadow every
+keyword.
+
+Third, there is no backtracking across positions. If the chosen rule turns
+out to be wrong in a wider context, the driver does not go back and try
+another rule; the rule set has already committed.
+
+Fourth, a zero-width positive match is treated as a fatal error rather than
+an infinite loop. The check is made before the action fires, so a rule whose
+pattern can match the empty string -- \code{"a*"}, \code{"[a-z]?"}, or the
+empty pattern itself -- aborts the parse with the message "PEG rule matched
+empty input; refusing to loop" rather than hanging. This is a guard against
+a mistake, and it is a good one, but note that it aborts the whole parse
+rather than skipping the rule.
+
+\section{A Worked Example}
+
+Listing~\ref{lst:ch25-grammar} is a complete program. It builds a small
+tokenizing grammar for a toy assignment language, prints the rules in
+ordered-choice order, parses a sample sentence, and then shows what happens
+when the input contains a character that no rule accepts.
+
+\begin{lstlisting}[style=dslcpp,caption={A tokenizing PEG grammar with two channels. The \code{@IGNORE} rule swallows whitespace; the \code{@KEYWORD} rule tags keywords.},label={lst:ch25-grammar}]
+#include "DSLtk.hpp"
+
+#include <iostream>
+#include <string>
+#include <vector>
+
+namespace
+{
+struct Token
+{
+  std::string kind;
+  std::string text;
+  std::size_t line{ 1 };
+  std::size_t column{ 1 };
+  bool ignored{ false };
+};
+
+void
+record (std::vector<Token> &sink, char const *kind, dsl::PEGMatch &m)
+{
+  sink.push_back (Token{ kind, std::string (m.value), m.line, m.column,
+                         m.ignored });
+}
+
+/// The pattern compiler understands no escape sequences, so a pattern
+/// that contains a real tab prints with a real tab.  Show it escaped.
+std::string
+show (std::string_view s)
+{
+  std::string out;
+  for (char c : s)
+    {
+      if (c == '\t')
+        out += "\\t";
+      else if (c == '\n')
+        out += "\\n";
+      else
+        out += c;
+    }
+  return out;
+}
+} // namespace
+
+int
+main ()
+{
+  std::vector<Token> tokens;
+
+  auto grammar = dsl::create_peg_definition ();
+
+  // The reference returned by add_rule is valid only until the next
+  // add_rule call, so every rule is configured in its own scope.
+  {
+    auto &ws = grammar.add_rule<"[ \t\n]+"> (
+        [&tokens] (dsl::PEGMatch &m) { record (tokens, "space", m); });
+    ws.channel = dsl::PEGIgnoreChannel;
+  }
+  {
+    auto &kw = grammar.add_rule<"let"> (
+        [&tokens] (dsl::PEGMatch &m) { record (tokens, "keyword", m); });
+    kw.channel = dsl::new_peg_channel ("@KEYWORD");
+  }
+  {
+    grammar.add_rule<"[a-zA-Z_][a-zA-Z_0-9]*"> (
+        [&tokens] (dsl::PEGMatch &m) { record (tokens, "ident", m); });
+  }
+  {
+    grammar.add_rule<"[0-9]+"> (
+        [&tokens] (dsl::PEGMatch &m) { record (tokens, "number", m); });
+  }
+  {
+    grammar.add_rule<"+"> (
+        [&tokens] (dsl::PEGMatch &m) { record (tokens, "op", m); });
+  }
+  {
+    grammar.add_rule<"="> (
+        [&tokens] (dsl::PEGMatch &m) { record (tokens, "op", m); });
+  }
+
+  std::cout << "visible rules in ordered-choice order:\n";
+  for (const dsl::PEGRule *r : grammar.rules ())
+    std::cout << "  #" << r->order << "  \"" << show (r->pattern_text)
+              << "\"  channel=" << r->channel.name << "\n";
+
+  auto result = grammar.parse ("let x = 12 + y");
+
+  std::cout << "\ntokens of \"let x = 12 + y\":\n";
+  for (const Token &t : tokens)
+    if (!t.ignored)
+      std::cout << "  " << t.kind << " \"" << t.text << "\"  at " << t.line
+                << ":" << t.column << "\n";
+
+  std::cout << "\nparse " << (result.ok () ? "succeeded" : "failed")
+            << ", offset " << result.offset << "\n";
+
+  auto bad = grammar.parse ("let x = ;");
+  std::cout << "parse of \"let x = ;\" " << (bad.ok () ? "succeeded" : "failed")
+            << " at line " << bad.error_line () << " column "
+            << bad.error_column () << ": " << bad.error_message () << "\n";
+
+  auto derived = dsl::derive_peg_definition (grammar);
+  {
+    auto &hex = derived.add_rule<"0x[0-9a-fA-F]+"> (
+        [&tokens] (dsl::PEGMatch &m) { record (tokens, "hex", m); });
+    (void) hex;
+  }
+  std::cout << "\nderived grammar sees " << derived.rules ().size ()
+            << " rules (6 inherited, 1 local)\n";
+
+  tokens.clear ();
+  auto dr = derived.parse ("0x1f");
+  std::cout << "derived parse of \"0x1f\" "
+            << (dr.ok () ? "succeeded" : "failed") << ":\n";
+  for (const Token &t : tokens)
+    if (!t.ignored)
+      std::cout << "  " << t.kind << " \"" << t.text << "\"\n";
+
+  return 0;
+}
+\end{lstlisting}
+
+The output is shown in Listing~\ref{lst:ch25-grammar-out}.
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch25-grammar}.},label={lst:ch25-grammar-out}]
+visible rules in ordered-choice order:
+  #0  "[ \t\n]+"  channel=@IGNORE
+  #1  "let"  channel=@KEYWORD
+  #2  "[a-zA-Z_][a-zA-Z_0-9]*"  channel=@DEFAULT
+  #3  "[0-9]+"  channel=@DEFAULT
+  #4  "+"  channel=@DEFAULT
+  #5  "="  channel=@DEFAULT
+
+tokens of "let x = 12 + y":
+  keyword "let"  at 1:1
+  ident "x"  at 1:5
+  op "="  at 1:7
+  number "12"  at 1:9
+  op "+"  at 1:12
+  ident "y"  at 1:14
+
+parse succeeded, offset 14
+parse of "let x = ;" failed at line 1 column 9: no PEG rule matched at offset 8
+
+derived grammar sees 7 rules (6 inherited, 1 local)
+derived parse of "0x1f" succeeded:
+  number "0"
+  ident "x1f"
+\end{lstlisting}
+
+Three features of the output deserve comment.
+
+The \code{space} tokens are recorded but not printed, because the
+\code{@IGNORE} channel sets the \code{ignored} flag on the match. Note that
+the definition layer \emph{does} deliver the ignored match to the semantic
+action: the action runs, and it is the action's own responsibility to ignore
+it. This is different from the streaming matcher of
+\chapref{ch:peg-combinators}, which swallows \code{@IGNORE} matches
+silently, without running any action at all.
+
+The failure message is the fixed string described above, and the line and
+column point one past the offending character: the semicolon is at column
+nine, and the offset is eight.
+
+The derived grammar demonstrates the shadowing problem. The hexadecimal rule
+is declared in the child, but the parent's number rule comes first in the
+flattened order, so \code{"0"} is matched as a number and the hexadecimal
+rule never fires; \code{"x1f"} is then matched as an identifier. The derived
+grammar is not wrong, and it does not crash -- it simply cannot extend the
+parent's coverage of the input, only its coverage of the gaps. To tokenise
+hexadecimal literals you must either put the hexadecimal rule in the root
+grammar, ahead of the number rule, or accept that the number rule will win.
+
+\section{Negated Rules and Follow-up Rules}
+
+Listing~\ref{lst:ch25-negated} is a second, smaller program that exercises
+the two less common members of \code{PEGRule}. A negated rule fires where its
+pattern does not match, and \code{if_succeed} runs a second rule at the same
+position.
+
+\begin{lstlisting}[style=dslcpp,caption={A negated rule and an \code{if_succeed} follow-up rule. The negated rule consumes exactly one character, which is why it swallows the equals sign.},label={lst:ch25-negated}]
+#include "DSLtk.hpp"
+
+#include <iostream>
+
+int
+main ()
+{
+  auto grammar = dsl::create_peg_definition ();
+
+  {
+    auto &ws = grammar.add_rule<"[ \t\n]+"> ([] (dsl::PEGMatch &) {});
+    ws.channel = dsl::PEGIgnoreChannel;
+  }
+  {
+    grammar.add_rule<"let"> (
+        [] (dsl::PEGMatch &m) { std::cout << "  keyword \"" << m.value << "\"\n"; });
+  }
+  {
+    grammar.add_rule<"[a-z]+"> (
+        [] (dsl::PEGMatch &m) { std::cout << "  word \"" << m.value << "\"\n"; });
+  }
+  {
+    grammar.add_rule<"[0-9]+"> (
+        [] (dsl::PEGMatch &m) { std::cout << "  number \"" << m.value << "\"\n"; });
+  }
+  {
+    auto &neg = grammar.add_rule<"[0-9]"> (
+        [] (dsl::PEGMatch &m)
+        { std::cout << "  not a digit: \"" << m.value << "\"\n"; });
+    neg.must_fail = true;
+    neg.fire_on_neg = true;
+  }
+
+  // All rules exist; only now is it safe to wire pointers together.
+  auto visible = grammar.rules ();
+  const_cast<dsl::PEGRule *> (visible[1])->if_succeed
+      = const_cast<dsl::PEGRule *> (visible[2]);
+
+  auto result = grammar.parse ("let x = 7");
+  std::cout << "parse " << (result.ok () ? "succeeded" : "failed")
+            << " at offset " << result.offset << "\n";
+  return 0;
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch25-negated}.},label={lst:ch25-negated-out}]
+  keyword "let"
+  word "let"
+  word "x"
+  not a digit: "="
+  number "7"
+parse succeeded at offset 9
+\end{lstlisting}
+
+The second line of the output is the \code{if_succeed} rule firing: after
+the keyword rule matched \code{"let"}, the word rule was attempted at the
+same position, matched \code{"let"} again, and ran its own action. The
+fourth line is the negated rule: it matched where its pattern \code{"[0-9]"}
+did not, and it consumed the equals sign as it did so.
+
+\section{Edge Cases and Limits}
+\label{sec:ch25-limits}
+
+The definition layer is small, and its limits are sharp.
+
+\paragraph{Rule references dangle.}
+This is the most serious defect in the subsystem and it is worth stating
+without qualification. \code{add_rule} returns a reference to an element of
+a \code{std::vector<PEGRule>}, and the next \code{add_rule} call may
+reallocate that vector, which invalidates every reference and pointer into
+it. The comment above \code{add_rule} claims otherwise, but the code does
+not deliver it. A minimal reproduction is four lines:
+
+\begin{lstlisting}[style=dslcpp,caption={A fragment. A dangling rule reference. The second and third \code{add_rule} calls reallocate the vector and invalidate \code{first}; the program then reads freed memory.},label={lst:ch25-dangle}]
+auto grammar = dsl::create_peg_definition ();
+auto &first = grammar.add_rule<"a"> ([] (dsl::PEGMatch &) {});
+grammar.add_rule<"b"> ([] (dsl::PEGMatch &) {});
+grammar.add_rule<"c"> ([] (dsl::PEGMatch &) {});
+std::cout << first.pattern_text << "\n";   // undefined behaviour
+\end{lstlisting}
+
+The safe pattern is the one used throughout this chapter: configure each rule
+in its own scope immediately after adding it, and take pointers to rules only
+after the last \code{add_rule} call, using \code{rules()}. The shipped
+\code{24-peg-matcher.cpp} does not follow this pattern; it holds
+\code{PEGRule} references across further \code{add_rule} calls and then
+feeds them to the streaming matcher, which is why that example prints a
+stream of unknown characters instead of tokens. The example compiles, runs,
+and produces no diagnostic of any kind.
+
+\paragraph{There is no alternation, no grouping, and no recursion inside a
+rule.} The pattern language of Table~\ref{tab:ch25-pattern} is the whole of
+it. A rule that needs to match either of two things must be two rules, and
+the ordered choice between them is decided by declaration order rather than
+by the pattern.
+
+\paragraph{There are no escape sequences.} A backslash is an ordinary
+character. To match a tab, the pattern must contain a real tab, which in a
+C++ string literal means a single backslash followed by \code{t}.
+
+\paragraph{Rule patterns are compile-time constants.} The pattern is a
+\code{FixedString} template argument, so it must be a string literal. There
+is no API for adding a rule with a run-time pattern.
+
+\paragraph{The layer is a lexer, not a grammar.} There is no way to express
+nesting, and therefore no way to build a tree with it. See
+\chapref{ch:peg-semantic-values} for what can be done instead.
+
+\paragraph{A zero-width rule aborts the parse.} A pattern that can match
+nothing -- \code{"a*"}, \code{"[a-z]?"}, or the empty pattern -- makes the
+driver fail with "PEG rule matched empty input; refusing to loop" the first
+time it is reached. The action of such a rule never runs, because the
+zero-width check precedes the action.
+
+\paragraph{Diagnostics are minimal.} There are exactly two failure messages,
+neither of which names the rules that were tried or the character that
+stopped the parse. The line and column are computed by a linear scan from
+the start of the text for every match, so a long input costs a quadratic
+amount of work in the diagnostics alone.
+
+\paragraph{The \code{@IGNORE} channel is a convention, not an enforcement.}
+In the definition layer, a rule on \code{@IGNORE} still runs its semantic
+action and still reports its match. Only the streaming matcher treats the
+channel as an instruction to suppress output.
+
+\paragraph{Ordered choice cannot be revisited.} A rule that is tried and
+fails at a position is not reconsidered at that position after some later
+rule has matched, and nothing in the driver backtracks across positions. A
+grammar whose rules overlap must be ordered so that the more specific rule
+comes first, and there is no diagnostic that warns you when you get it
+wrong.
+
+\section{Closing}
+
+The PEG definition layer is a fast, allocation-light tokenizer with an
+ordered rule set, a channel per rule, and a callback per match. It is a
+genuinely useful facility, but it is a facility for a narrower job than its
+name suggests, and the narrower job is the one the shipped code implements.
+Its two sharp edges are the dangling rule reference and the absence of escape
+processing in the pattern compiler; both are avoidable with two lines of
+discipline.
+
+For the cases where a real grammar is needed, the toolkit provides a second
+layer: the PEG combinators, which give sequence, ordered choice, repetition
+and lookahead over the ordinary parser core, and a streaming matcher whose
+arms are tried in the order you supply them. That layer is the subject of
+\chapref{ch:peg-combinators}, and the semantic values that both layers
+produce are the subject of \chapref{ch:peg-semantic-values}.

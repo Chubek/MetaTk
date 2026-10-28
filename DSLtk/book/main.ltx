@@ -1,0 +1,285 @@
+% main.ltx -- "DSLtk: The Definitive Guide"
+%
+% A forty-two chapter book on the DSLtk header-only DSL construction
+% toolkit, centred on DSLtk/DSLtk.hpp (the C++20 implementation) with the
+% DSLtk/DSLtk.d port treated as the secondary subject.
+%
+% Build with:   make          (uses latexmk)
+%         or use the dependency-aware latexmk invocation in the Makefile.
+
+\documentclass[11pt, a4paper, oneside, openany, fleqn]{report}
+
+\RequirePackage{iftex}
+\RequirePackage{etoolbox}
+\usepackage{xcolor}
+\usepackage{amsmath,amsthm,mathtools}
+
+\newbool{HasUnicode}
+\newbool{HasLua}
+
+\ifTUTeX
+  \usepackage{fontspec}
+  \usepackage{unicode-math}
+  \booltrue{HasUnicode}
+  \setmainfont{TeX Gyre Pagella}
+  \setsansfont{TeX Gyre Heros}
+  \setmonofont{DejaVu Sans Mono}[Scale=0.85]
+  \setmathfont{texgyrepagella-math.otf}
+\else
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{newtxtext,newtxmath}
+\fi
+
+\ifLuaTeX
+  \booltrue{HasLua}
+  \usepackage{luacode}
+\fi
+
+% ---------------------------------------------------------------------------
+%  Colours used by macros.ltx
+% ---------------------------------------------------------------------------
+
+\definecolor{notebg}{HTML}{EEF4FB}
+\definecolor{notefg}{HTML}{3C6EA5}
+\definecolor{warnbg}{HTML}{FBF0EC}
+\definecolor{warnfg}{HTML}{A5502A}
+\definecolor{tipbg}{HTML}{EFF7EF}
+\definecolor{tipfg}{HTML}{48794B}
+\definecolor{csbg}{HTML}{F6F1FB}
+\definecolor{csfg}{HTML}{6B4C9A}
+\definecolor{featbg}{HTML}{F3F6F7}
+\definecolor{featfg}{HTML}{46606B}
+\definecolor{codebg}{HTML}{F7F7F4}
+\definecolor{codefg}{HTML}{B8B8AE}
+\definecolor{nodebg}{HTML}{EEF1F3}
+\definecolor{nodefg}{HTML}{455A63}
+\definecolor{decisionbg}{HTML}{FDF3DC}
+\definecolor{termbg}{HTML}{EDF5EC}
+\definecolor{edgefg}{HTML}{5C6B72}
+\definecolor{groupbg}{HTML}{FAFAF7}
+\definecolor{groupfg}{HTML}{A8AFA2}
+\definecolor{keywordcolor}{HTML}{7C3F98}
+\definecolor{commentcolor}{HTML}{6F7B6B}
+\definecolor{stringcolor}{HTML}{9A5B2A}
+\definecolor{typecolor}{HTML}{1F5E77}
+
+% ---------------------------------------------------------------------------
+%  Packages
+% ---------------------------------------------------------------------------
+
+\usepackage{xcolor}
+\usepackage{calc,graphicx,adjustbox}
+\usepackage{tcolorbox}
+\tcbuselibrary{skins,breakable}
+\usepackage{geometry}
+\usepackage{setspace}
+\usepackage{parskip}
+\usepackage{array,booktabs,longtable}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,shapes.geometric,fit,backgrounds}
+\usepgflibrary{arrows.meta}
+\usepackage{listings}
+\usepackage{xparse,xspace}
+\providecommand{\tightlist}{\setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setlength{\emergencystretch}{3em}
+\usepackage[backend=bibtex,style=authoryear,sorting=nyt]{biblatex}
+\addbibresource{references.bib}
+\usepackage{hyperref}
+\usepackage{xurl}
+\pdfstringdefDisableCommands{\def\code#1{\detokenize{#1}}\def\api#1{\detokenize{#1}}\def\DSLtk{DSLtk}\def\cpp{C++}\def\cstd{C++20}\def\dlang{D}}
+\usepackage[nameinlink,noabbrev]{cleveref}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=notefg,
+  urlcolor=notefg,
+  citecolor=csfg,
+  pdftitle={DSLtk: The Definitive Guide},
+  pdfauthor={A source-based study of DSLtk},
+  pdfsubject={Domain-Specific Language construction with DSLtk}
+}
+
+\setstretch{1.08}
+\geometry{margin=1in}
+\setlength{\parskip}{4pt plus 1pt minus 1pt}
+
+\input{macros.ltx}
+
+% ---------------------------------------------------------------------------
+%  Theorem-like environments used by the technical chapters
+% ---------------------------------------------------------------------------
+
+\newtheorem{contract}{Contract}
+\newtheorem{invariant}{Invariant}
+\newtheorem{property}{Property}
+\newtheorem{warning}{Warning}
+
+% ---------------------------------------------------------------------------
+%  Title
+% ---------------------------------------------------------------------------
+
+\title{\Huge\textbf{DSLtk}\\[6pt]
+       \LARGE The Definitive Guide\\[4pt]
+       \large Building Domain-Specific Languages in \cstd{} and \dlang{}}
+\author{A source-based study of DSLtk}
+\date{First Edition \textbullet\ October 2026}
+
+\begin{document}
+
+\hypersetup{pageanchor=false}
+\maketitle
+\hypersetup{pageanchor=true}
+
+\begin{center}
+\begin{minipage}{0.88\textwidth}
+\small
+\textbf{About this book.}\;
+DSLtk is a header-only toolkit for constructing Domain-Specific Languages.
+Its C++ implementation lives in a single file, \texttt{DSLtk.hpp}, and its D
+port in a single module, \texttt{DSLtk.d}.  This book explains what those two
+files contain, how the twenty-six feature tags fit together, how to
+compose the facilities into a working language, and how to extend them.
+Implementation descriptions refer to the supplied source snapshot.
+Five case studies close the book, with companion executable programs.
+\end{minipage}
+\end{center}
+
+\tableofcontents
+\listoffigures
+\listoftables
+
+\bigskip
+\hrule
+\bigskip
+
+% ---------------------------------------------------------------------------
+%  Part one -- orientation
+% ---------------------------------------------------------------------------
+
+\input{chapters/ch01-introduction.ltx}
+\input{chapters/ch02-getting-started.ltx}
+\input{chapters/ch03-architecture.ltx}
+
+% ---------------------------------------------------------------------------
+%  Part two -- the C++ foundation
+% ---------------------------------------------------------------------------
+
+\input{chapters/ch04-crtp-foundation.ltx}
+\input{chapters/ch05-fixed-string.ltx}
+\input{chapters/ch06-feature-tags.ltx}
+
+% ---------------------------------------------------------------------------
+%  Part three -- enum reflection
+% ---------------------------------------------------------------------------
+
+\input{chapters/ch07-enum-reflection.ltx}
+
+% ---------------------------------------------------------------------------
+%  Part four -- data flow and pattern matching
+% ---------------------------------------------------------------------------
+
+\input{chapters/ch08-pipeline.ltx}
+\input{chapters/ch09-operators.ltx}
+\input{chapters/ch10-pattern-match.ltx}
+\input{chapters/ch11-pattern-regex.ltx}
+
+% ---------------------------------------------------------------------------
+%  Part five -- abstract syntax trees
+% ---------------------------------------------------------------------------
+
+\input{chapters/ch12-astnode.ltx}
+\input{chapters/ch13-leaf-and-node.ltx}
+\input{chapters/ch14-traversal.ltx}
+
+% ---------------------------------------------------------------------------
+%  Part six -- rewriting
+% ---------------------------------------------------------------------------
+
+\input{chapters/ch15-rewrite.ltx}
+\input{chapters/ch16-rewrite-sets.ltx}
+
+% ---------------------------------------------------------------------------
+%  Part seven -- expression templates
+% ---------------------------------------------------------------------------
+
+\input{chapters/ch17-expression-templates.ltx}
+
+% ---------------------------------------------------------------------------
+%  Part eight -- functional utilities
+% ---------------------------------------------------------------------------
+
+\input{chapters/ch18-custom-literals.ltx}
+\input{chapters/ch19-memoization-and-lazy.ltx}
+\input{chapters/ch20-maybe-and-result.ltx}
+
+% ---------------------------------------------------------------------------
+%  Part nine -- parsing
+% ---------------------------------------------------------------------------
+
+\input{chapters/ch21-parser-core.ltx}
+\input{chapters/ch22-primitive-parsers.ltx}
+\input{chapters/ch23-parser-diagnostics.ltx}
+\input{chapters/ch24-task-pipeline.ltx}
+
+% ---------------------------------------------------------------------------
+%  Part ten -- parsing expression grammars
+% ---------------------------------------------------------------------------
+
+\input{chapters/ch25-peg-definition.ltx}
+\input{chapters/ch26-peg-combinators.ltx}
+\input{chapters/ch27-peg-semantic-values.ltx}
+
+% ---------------------------------------------------------------------------
+%  Part eleven -- equality saturation
+% ---------------------------------------------------------------------------
+
+\input{chapters/ch28-sexpressions.ltx}
+\input{chapters/ch29-egraphs.ltx}
+
+% ---------------------------------------------------------------------------
+%  Part twelve -- boundaries and visitors
+% ---------------------------------------------------------------------------
+
+\input{chapters/ch30-codecs-and-io.ltx}
+\input{chapters/ch31-visitors.ltx}
+
+% ---------------------------------------------------------------------------
+%  Part thirteen -- binary streams, grammars, preprocessing
+% ---------------------------------------------------------------------------
+
+\input{chapters/ch32-static-regex.ltx}
+\input{chapters/ch33-cfg-earley.ltx}
+\input{chapters/ch34-preprocessor.ltx}
+
+% ---------------------------------------------------------------------------
+%  Part fourteen -- graphs and terms
+% ---------------------------------------------------------------------------
+
+\input{chapters/ch35-directed-graphs.ltx}
+\input{chapters/ch36-terms-and-reduction.ltx}
+
+% ---------------------------------------------------------------------------
+%  Part fifteen -- the D toolkit
+% ---------------------------------------------------------------------------
+
+\input{chapters/ch37-d-toolkit.ltx}
+
+% ---------------------------------------------------------------------------
+%  Part sixteen -- case studies
+% ---------------------------------------------------------------------------
+
+\input{chapters/ch38-case-units.ltx}
+\input{chapters/ch39-case-query.ltx}
+\input{chapters/ch40-case-config.ltx}
+\input{chapters/ch41-case-saturation.ltx}
+\input{chapters/ch42-case-binary.ltx}
+
+% ---------------------------------------------------------------------------
+%  Bibliography
+% ---------------------------------------------------------------------------
+
+\nocite{dsltk-source,magic_enum,dlangspec,earley,thompson,egg}
+\printbibliography[heading=bibintoc,title={Sources and Further Reading}]
+
+\end{document}

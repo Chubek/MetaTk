@@ -1,0 +1,409 @@
+\chapter{Case Study I: A Units and Physics
+DSL}
+\label{ch:case-units}\label{c38-case-study-i-a-units-and-physics-dsl}
+
+\section{The problem: a number is not yet a
+quantity}\label{c38-the-problem-a-number-is-not-yet-a-quantity}
+
+The first case study builds a small physical-units language. Its
+external input is a length spelling such as \code{1.5km}; its internal
+meaning is a length in metres; and its final computation divides that
+length by a duration to produce a speed. The notation is intentionally
+small so the representation and validation decisions remain visible. It
+demonstrates how DSLtk can help at the syntax boundary while application
+types enforce a domain invariant.
+
+A raw \code{long double} cannot distinguish distance from duration.
+Multiplying one number by a suffix-dependent factor converts a scale,
+but it does not prevent adding metres to seconds later. The application
+therefore introduces
+\texttt{Quantity\textless{}LengthExponent,TimeExponent\textgreater{}}.
+Its value is a base-unit magnitude, and its template parameters describe
+the dimensions. \texttt{Quantity\textless{}1,0\textgreater{}} is length,
+\texttt{Quantity\textless{}0,1\textgreater{}} is duration, and
+\texttt{Quantity\textless{}1,-1\textgreater{}} is speed.
+
+This dimension model belongs to the case study, not to DSLtk's public
+API. The toolkit provides the suffix table, fixed byte recognizer,
+result carrier, and pipeline wrapper. The application supplies
+dimensional algebra and the accepted spelling policy. Keeping that
+division explicit avoids suggesting that registering a suffix
+automatically creates a complete units system.
+
+\section{Requirements and deliberately bounded
+scope}\label{c38-requirements-and-deliberately-bounded-scope}
+
+The parser accepts unsigned decimal magnitudes, optionally with a
+fractional part, followed by \code{km} or \code{m}. It requires digits
+before the decimal point and, when a point is present, digits after it.
+It does not accept exponent notation, a leading sign, whitespace, or
+alternate spellings. Those choices make the accepted language easy to
+specify and test. Supporting more forms would be an explicit grammar
+extension.
+
+Kilometres are converted to metres by multiplying by one thousand.
+Metres are already in the base scale. Duration is constructed through a
+native C++ literal operator with suffix \code{_s}, so the example also
+contrasts a registered runtime suffix with host-language literal syntax.
+The final speed is printed in metres per second. No formatting registry
+or automatic unit selection is needed for this application.
+
+The quantity type supports addition only for the same pair of
+dimensions. Division subtracts dimension exponents and rejects a zero
+denominator. It does not attempt dimensional roots, affine temperature
+conversion, uncertainty propagation, or arbitrary unit-system
+conversion. These omissions are useful design boundaries: the
+implementation can state exactly which algebra it supports instead of
+claiming a general physical modeling framework.
+
+{\def\LTcaptype{none} % do not increment counter
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.3333}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.3333}}
+  >{\raggedright\arraybackslash}p{(\linewidth - 4\tabcolsep) * \real{0.3333}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Concern
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Mechanism
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Owner
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\bottomrule\noalign{}
+\endlastfoot
+Whole spelling validation & \code{StaticRegex} & DSLtk recognizer plus
+application pattern \\
+Suffix dispatch & \code{LiteralSet} & DSLtk \\
+Metre conversion & Numeric handler & Application \\
+Dimensional type & \texttt{Quantity\textless{}L,T\textgreater{}} &
+Application \\
+Failure branch & \texttt{Result\textless{}Length,Error\textgreater{}} &
+DSLtk with application payloads \\
+Value flow & \code{wrap} and \code{pipe} & DSLtk \\
+\end{longtable}
+}
+
+\section{Why validation precedes suffix
+conversion}\label{c38-why-validation-precedes-suffix-conversion}
+
+\code{LiteralSet::parse} finds a matching suffix and passes the
+preceding text to \code{std::stold}. The call does not request and check
+the position at which numeric conversion stopped. A malformed prefix
+containing a valid initial number can therefore be accepted more
+permissively than the language intends. The case study first validates
+the entire input with \code{StaticRegex}, then invokes the suffix table
+only after the spelling is known to be in the accepted language.
+
+This is not redundant parsing. The recognizer establishes a lexical
+contract; the numeric converter establishes a representable magnitude. A
+spelling can be lexically valid but numerically out of range, so
+conversion still needs error handling. The function catches conversion
+exceptions and returns an error payload rather than leaking an
+implementation-specific exception through the public parse interface.
+
+After conversion, the function checks finiteness. This excludes values
+that cannot be treated as ordinary finite physical magnitudes. The
+external parser already excludes negative spellings, while directly
+constructed quantities remain ordinary application values. A broader
+system would decide whether negative distances, signed displacements,
+and positive durations are different domain types or runtime policies.
+Dimensional consistency alone does not answer those semantic questions.
+
+\section{Suffix priority is part of the
+language}\label{c38-suffix-priority-is-part-of-the-language}
+
+The suffix table registers \code{km} before \code{m}. Both are textual
+suffixes of \code{1.5km}, but the intended longest meaningful unit is
+kilometres. DSLtk uses first matching registration order, not automatic
+longest-suffix selection. Putting the short suffix first would leave
+\code{1.5k} as the numeric prefix and would interact badly with
+permissive prefix conversion.
+
+The whole-input regex knows which unit spellings are accepted, but it
+does not choose which registered handler the suffix table invokes. The
+two pieces must agree. This is a useful integration lesson:
+independently valid components can still implement the wrong combined
+policy if their priority rules differ. The executable checks include a
+concrete kilometre input so the intended registration order is
+exercised.
+
+Adding \code{cm} later requires reviewing both the regex alternatives
+and the registration order. An application could centralize the
+vocabulary in another representation to reduce duplication, but that is
+an additional abstraction worth introducing only when the unit set
+grows. For two suffixes, the explicit table is easy to audit and
+demonstrates the actual DSLtk contract clearly.
+
+\section{Type-level arithmetic and value-level
+arithmetic}\label{c38-type-level-arithmetic-and-value-level-arithmetic}
+
+The addition overload accepts two quantities with exactly the same
+dimension parameters. The compiler therefore rejects addition between
+length and duration before any runtime magnitude is inspected. The
+division overload accepts two dimension pairs and returns the pairwise
+difference. This is the dimensional law for division expressed as a
+return type.
+
+The value-level operation still divides two floating-point magnitudes. A
+correct return type does not guarantee freedom from overflow, underflow,
+or rounding. The example deliberately uses values with an exact simple
+result, 1500 divided by 120, to keep verification focused on the
+integration contracts. A production numeric library would choose and
+document tolerances, rounding behavior, and exceptional magnitude
+policy.
+
+The zero-denominator check illustrates the boundary. The type system
+proves that length divided by time has speed dimensions. It cannot prove
+that a runtime duration is nonzero merely from its dimension type. The
+operation therefore performs a runtime check and throws
+\code{domain_error} for zero. Static and dynamic validation complement
+each other rather than compete.
+
+\section{Error types should preserve role
+information}\label{c38-error-types-should-preserve-role-information}
+
+The parse function returns
+\texttt{Result\textless{}Length,Error\textgreater{}}, where \code{Error}
+contains a message string. Success and error have distinct C++ types,
+which avoids the snapshot's duplicate-type variant problem. The wrapper
+also makes the API's roles clear: an error is not merely another string
+that could be confused with a successful textual result.
+
+The current C++ result interface does not expose a direct error
+accessor. The example only needs to test \code{is_err} before extracting
+a successful quantity. A richer command-line interface could use an
+application result type with structured error access or observe errors
+through a suitable mapping operation. The case study does not invent a
+nonexistent \texttt{Result::error()} method to make a listing look
+convenient.
+
+At the boundary, there are three rejection categories: invalid spelling,
+nonfinite magnitude, and conversion range failure. The messages remain
+small because the main goal is dimensional integration. A user-facing
+parser could add the original spelling, expected suffix set, and a
+location. Those diagnostic additions would not change the quantity
+algebra.
+
+\section{The executable
+implementation}\label{c38-the-executable-implementation}
+
+The complete program is maintained in \code{projects/units/main.cpp}.
+The listing is included directly from that file so the typeset example
+and the compiled artifact have one source. Build it with
+\code{make build/units} and run \code{./build/units} from
+\code{DSLtkBook}.
+
+\lstinputlisting[style=dslcpp,caption={Case study I: validated suffix parsing and dimensioned arithmetic.},label={lst:case-units}]{projects/units/main.cpp}
+
+The \code{Units} host selects \code{Pipeline} and \code{CustomLiterals}.
+Its static literal table is consumed by the mixin's \code{parse_literal}
+convenience member. The quantity types do not need to inherit from
+\code{DSL}; they remain small ordinary domain values. The pipe passes a
+parsed length to a callable that divides by the native duration literal
+and returns a speed.
+
+This arrangement shows why feature composition need not spread
+throughout every domain type. The host groups convenient interface
+operations, while the domain values preserve their own simple
+invariants. In particular, the quantity type does not become dependent
+on a parser, error formatter, or external input owner merely because one
+route for constructing it uses DSLtk.
+
+\section{Execution trace and checked
+evidence}\label{c38-execution-trace-and-checked-evidence}
+
+The input \code{1.5km} first matches the complete byte pattern. The
+literal table selects \code{km}, converts the prefix \code{1.5}, and
+returns the magnitude 1500. The application wraps that value in a length
+quantity. The pipeline divides it by a duration of 120 seconds, and the
+return type becomes \texttt{Quantity\textless{}1,-1\textgreater{}}. The
+resulting magnitude is 12.5.
+
+\begin{lstlisting}[style=dslcmd,caption={Notation, algorithm, or output}]
+1500 m / 120 s = 12.5 m/s
+\end{lstlisting}
+
+The program contains a static assertion checking the speed type, a value
+assertion checking the magnitude, rejection checks for \code{1junkm} and
+\code{km}, and an exception check for division by zero. These tests
+cover different boundaries. A type assertion alone would not catch a
+kilometre factor of one hundred; a numeric assertion alone would not
+prove the result carries speed dimensions; a happy-path parse alone
+would not detect permissive acceptance of trailing junk.
+
+The checks are intentionally independent of the implementation where
+possible. The expected conversion is stated as a known physical scale,
+and the invalid spellings are chosen from outside the language contract.
+There is no benchmark claim attached to the pipeline. The example
+demonstrates correctness and composition, not measured superiority over
+a direct function call.
+
+\section{Extending the design
+thoughtfully}\label{c38-extending-the-design-thoughtfully}
+
+A natural extension is to add multiplication so speed times duration
+yields length. Another is to introduce mass as a third exponent and
+derive force or energy. These changes extend the dimensional algebra,
+while new suffixes extend the parser vocabulary. Keeping those axes
+separate prevents a large unit table from becoming entangled with every
+arithmetic overload.
+
+Affine units such as Celsius require a different treatment because
+conversion involves an offset as well as a scale. Adding temperatures is
+not the same operation as adding temperature differences. A
+dimension-only quantity type does not encode that distinction. This is
+an example of a domain requirement that should change the representation
+rather than be hidden inside a clever suffix handler.
+
+Finally, consider serialization. A persisted quantity should record a
+stable unit convention or explicit dimensions rather than rely on the
+diagnostic output string. The codec adapters from Chapter 30 can carry
+that policy, but they will not choose it automatically. The case study's
+central lesson is that DSLtk supplies useful construction mechanisms
+while the application must still preserve the domain distinctions that
+make its language meaningful.
+
+\section{Designing a larger numeric
+boundary}\label{c38-designing-a-larger-numeric-boundary}
+
+The spelling \code{1.5km} carries three kinds of information: a decimal
+magnitude, a scale, and a dimension. The present parser resolves all
+three at one boundary and returns only a base-unit length. That is a
+good representation for calculation, because later arithmetic does not
+need to repeatedly inspect the original suffix. It is a less complete
+representation for editing, where the user may want the original
+spelling preserved exactly. An editor could therefore retain both the
+semantic quantity and a separate source record.
+
+Those two records should not compete for authority. The semantic value
+is what arithmetic consumes; the source record explains where that value
+came from. If a user changes the spelling, parsing produces a new
+quantity. If an optimization changes the value, a formatter produces a
+new spelling under an explicit display policy. Treating the original
+text as the live numeric value would make every operation responsible
+for parsing and lifetime checks.
+
+Locale is another boundary worth making explicit. The whole-input
+pattern uses an ASCII decimal point. \code{std::stold} follows the
+conversion behavior of its underlying library and locale. Applications
+that change the process locale should verify that their lexical policy
+and numeric conversion remain aligned. A locale-independent numeric
+conversion routine is preferable when the language promises the same
+interpretation on every machine. The example runs under the ordinary
+initial C locale and makes no internationalized number-entry promise.
+
+A good acceptance table includes both nearby valid and nearby invalid
+spellings. \code{0m}, \code{12m}, and \code{12.5m} exercise zero,
+integers, and fractions. \code{.5m}, \code{12.m}, \code{-1m}, and
+\code{1e3m} are rejected under this grammar even though some
+general-purpose numeric parsers accept them. \code{1.5km} tests
+overlapping suffixes, while \code{1.5KM} confirms case sensitivity. A
+large run of digits tests the distinction between lexical validity and
+representability. These are language-policy cases, not arbitrary
+malformed strings chosen only to exercise an exception branch.
+
+The finite-value check after conversion does not establish all numeric
+properties an application might require. A measurement system may reject
+values below its resolution or above an instrument's range. A simulator
+may permit signed displacements while a billing system requires
+nonnegative travelled distance. Those policies should be expressed in
+domain constructors or validation functions rather than conflated with
+the parser's choice of suffixes. The same quantity algebra can then
+serve several validated inputs.
+
+\section{Deriving laws for extension
+tests}\label{c38-deriving-laws-for-extension-tests}
+
+Suppose multiplication is added. Its dimension rule adds exponents, so
+\texttt{Quantity\textless{}1,-1\textgreater{}} multiplied by
+\texttt{Quantity\textless{}0,1\textgreater{}} yields
+\texttt{Quantity\textless{}1,0\textgreater{}}. The type-level statement
+can be checked with a compile-time assertion without choosing any
+magnitudes. A separate value-level test can multiply the computed speed
+by the original duration and compare the resulting magnitude with the
+distance. These tests address different parts of the implementation and
+should remain separate in the test description.
+
+Floating-point round trips usually need tolerances. Choosing one
+requires a scale model: a fixed absolute tolerance is sensible near
+zero, while a relative tolerance is useful over large magnitude ranges.
+Combining both can avoid rejecting harmless rounding while still
+detecting an incorrect conversion factor. The exact numbers used in the
+current program make direct equality practical, but that choice should
+not be copied indiscriminately into a larger numeric system.
+
+Dimensionless quantities also deserve an explicit policy. Dividing two
+lengths produces \texttt{Quantity\textless{}0,0\textgreater{}}, not
+automatically a raw floating-point number. Keeping the wrapper preserves
+a consistent arithmetic interface and allows future metadata, while an
+explicit extraction operation can provide the scalar where a
+host-language API requires it. An implicit conversion would be
+convenient but could discard distinctions accidentally during overload
+resolution. The preferred choice depends on how broadly quantities
+interoperate with untyped numeric code.
+
+Finally, a units registry should be tested as data. Every registered
+suffix needs a documented dimension and scale, and every overlap needs a
+priority decision. A table-driven acceptance test can verify that a
+newly added short suffix does not capture existing longer forms. This is
+especially important because the lexical regex and suffix-dispatch table
+currently duplicate the vocabulary. The example keeps both small enough
+to inspect; a larger system can generate both from a common
+specification while retaining the same whole-spelling and dimensional
+contracts.
+
+\section{Implementation map and
+review}\label{c38-implementation-map-and-review}
+
+The following diagram summarizes the chapter's central dependency or
+state transition. Arrows denote logical dependence, not elapsed time or
+measured performance. The contracts below separate what the library
+provides from the conditions that the application must establish.
+
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\node[dslsmall] (n0) {Length spelling};
+\node[dslsmall, right=5mm of n0] (n1) {Suffix conversion};
+\draw[dsledge] (n0) -- (n1);
+\node[dslsmall, right=5mm of n1] (n2) {Typed quantity};
+\draw[dsledge] (n1) -- (n2);
+\node[dslsmall, right=5mm of n2] (n3) {Speed};
+\draw[dsledge] (n2) -- (n3);
+\end{tikzpicture}
+\caption{Case study I places dimensional meaning above numeric literal parsing.}
+\label{fig:atlas-38}
+\end{figure}
+\begin{table}[htbp]
+\centering\small
+\begin{tabular}{L{0.28\linewidth}L{0.61\linewidth}}
+\toprule Contract & Interpretation \\
+\midrule
+Input & The entire spelling is validated before conversion. \\
+Dimensions & Division subtracts length and time exponents. \\
+Failure & Distinct success and error types fit the C++ Result contract. \\
+\bottomrule
+\end{tabular}
+\caption{Implementation contracts for this chapter.}
+\label{tab:atlas-38}
+\end{table}
+\begin{pseudocode}[Operational summary]
+\textbf{1.} Match the accepted length spelling.\\
+\textbf{2.} Resolve the suffix to a base-unit value.\\
+\textbf{3.} Construct a dimensioned length.\\
+\textbf{4.} Reject division by a zero duration.\\
+\textbf{5.} Compute and report a dimensioned speed.
+\end{pseudocode}
+
+\subsection{Review questions}\label{c38-review-questions}
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\item
+  How would temperature offsets change the conversion model?
+\item
+  What is the distinction between dimensional validity and physical
+  plausibility?
+\end{enumerate}

@@ -1,0 +1,626 @@
+\chapter{Getting Started: Build, Install, First Programs}
+\label{ch:getting-started}
+
+\section{What \DSLtk{} Is}
+
+\DSLtk{} is a toolkit for *building* domain-specific languages, not a
+library for *using* one. That distinction matters, because it determines
+everything else about the project: the size of the artefact, the shape of its
+API, and the amount of ceremony a new language costs you to stand up. The
+entire C++ implementation of \DSLtk{} is one file, \code{DSLtk.hpp}, which is
+12,024 lines long. The D implementation, \code{DSLtk.d}, is one module of
+3,904 lines. There is no separate source file to compile, no static library to
+build, no shared object to install, and no code generation step. To use
+\DSLtk{} you copy one header into your include tree and you are done.
+
+The implementation targets \cstd{}. This is not a stylistic preference. The
+central trick of the library -- passing a string literal as a template
+argument, so that \code{dsl::leaf<"num">} produces a tree node whose tag is
+known to the compiler -- requires class-type non-type template parameters,
+which were only standardised in C++20. The library also leans on concepts in
+real constraints and in \code{requires}-expressions, on \code{constexpr}
+lambdas, and on the brace of standard-library headers that accompany the
+modern language. A toolchain that advertises C++20 support will do; one that
+does not will not even parse the header.
+
+The library has no third-party dependencies. This is worth stating precisely,
+because it is unusual for a project of this size. The header embeds the
+complete public headers of \code{magic_enum} version 0.9.8 between the marker
+comments \code{BEGIN DSLTK EMBEDDED MAGIC_ENUM} at line 403 and
+\code{END DSLTK EMBEDDED MAGIC_ENUM} at line 5816. Those roughly 5,400 lines of
+vendored code provide the enum-reflection machinery, and \DSLtk{} re-exports
+the whole of it under the \code{dsl} namespace at lines 5826 through 5870.
+There is therefore no \code{magic_enum} include to add, no \code{find_package}
+to write, and no version skew to manage: \code{dsl::enum_name},
+\code{dsl::enum_cast}, \code{dsl::enum_entries} and the rest work the
+moment you include \code{DSLtk.hpp}, because they are already inside it.
+
+The only optional external dependency in the whole project is Lua, and even
+that is opt-in twice over: you must define the macro \code{DSLTK_ENABLE_LUA}
+before including the header, and you must supply the Lua headers and link the
+Lua library yourself. Section~\ref{sec:lua-bridge} covers that.
+
+\section{A First Program}
+
+The smallest useful \DSLtk{} program is a \code{struct} that inherits from
+\code{dsl::DSL<Derived, Features...>} and names the features it wants. The
+template's first parameter is the deriving type itself -- the curiously
+recurring template pattern -- and the remaining parameters are feature tags.
+Listing~\ref{lst:ch02-first} is a complete, compilable program that uses two
+features: \code{dsl::Pipeline}, which contributes a static \code{wrap} factory
+for lifting a value into a chain of transformations, and \code{dsl::Operators},
+which contributes a static \code{make_pred} factory for turning a lambda into
+a named predicate.
+
+\begin{lstlisting}[style=dslcpp,caption={A first \DSLtk{} program: a \code{MathDSL} built from the \code{Pipeline} and \code{Operators} features.},label={lst:ch02-first}]
+#include "DSLtk.hpp"
+#include <iostream>
+
+struct MathDSL : dsl::DSL<MathDSL, dsl::Pipeline, dsl::Operators> {};
+
+int main () {
+  auto total = MathDSL::wrap (5)
+             | dsl::pipe ([] (int x) { return x + 3; })
+             | dsl::pipe ([] (int x) { return x * 2; });
+
+  auto positive = MathDSL::make_pred ([] (int x) { return x > 0; });
+
+  std::cout << "total = " << total << "\n";
+  std::cout << "positive(total) = " << (positive (total) ? "yes" : "no") << "\n";
+}
+\end{lstlisting}
+
+Compiling and running it produces
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch02-first}.},label={lst:ch02-first-out}]
+total = 16
+positive(total) = yes
+\end{lstlisting}
+
+Three things are worth noticing. First, the pipeline is written with the
+ordinary \code{|} operator, and the stages are ordinary lambdas; \DSLtk{}
+supplies the plumbing, not a new syntax. Second, the value never leaves the
+integer domain: \code{wrap} returns the value unchanged and each \code{pipe}
+stage produces a new value, so the chain reads left to right and evaluates
+right to left exactly as a hand-written fold would. Third, the DSL type
+itself is empty. \code{MathDSL} declares no data members and no member
+functions; everything it offers comes from the features it names. This is the
+central design claim of the library, and Chapter~\ref{ch:crtp-foundation}
+takes it apart in detail.
+
+\section{Obtaining and Installing the Library}
+
+\subsection{Copying the Header}
+
+Because \DSLtk{} is header-only, installation can be as simple as copying
+\code{DSLtk.hpp} into your project's include directory. A typical layout is
+a vendored \code{third_party/DSLtk/DSLtk.hpp} plus a single include path
+entry. There is nothing to link against and nothing to build. The cost of the
+library is paid once per translation unit that includes the header, at compile
+time; there is no link step and no runtime library.
+
+The header begins with a \code{#pragma once} guard at line 374, so double
+inclusion within a translation unit is free. The standard-library headers it
+pulls in (twenty-one of them, lines 376 through 397) have their own include
+guards.
+
+\subsection{Building with \code{g++} Directly}
+
+The fastest way to check that a toolchain is usable is to compile a small
+program with \code{-std=c++20} and nothing else:
+
+\begin{lstlisting}[style=dslcmd,caption={Verifying that the header compiles with a bare compiler invocation. The \code{-I} flag points at the directory that holds \code{DSLtk.hpp}.},label={lst:ch02-verify}]
+g++ -std=c++20 -I DSLtk example.cpp -o example
+./example
+\end{lstlisting}
+
+The \code{-std=c++20} flag is not optional. If you omit it, the compiler
+defaults to an older dialect and the first error you will see mentions
+\code{concept}, \code{requires} or \code{std::same_as}, because the library
+uses all three. If you add the flag and still see an error about
+\code{DSLtk.hpp: No such file or directory}, the problem is the include path
+rather than the standard.
+
+\subsection{The CMake Package}
+
+The project ships a CMake package. \code{DSLtk/CMakeLists.txt} declares a
+single \code{INTERFACE} library target named \code{DSLtk}:
+
+\begin{lstlisting}[style=dslcmd,caption={The \code{INTERFACE} target and its usage requirements, from \code{DSLtk/CMakeLists.txt} lines 5--14.},label={lst:ch02-cmake-target}]
+add_library(DSLtk INTERFACE)
+
+target_include_directories(DSLtk
+    INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>
+        $<INSTALL_INTERFACE:include>
+)
+
+target_compile_features(DSLtk INTERFACE cxx_std_20)
+\end{lstlisting}
+
+An \code{INTERFACE} target carries no build rules of its own. It exists to
+propagate usage requirements -- here, an include directory and the
+\code{cxx_std_20} compile feature -- to whatever links against it. Because
+the requirement is expressed as a compile feature rather than a raw flag, a
+consumer that already compiles as C++23 or C++26 will keep its own dialect:
+CMake treats \code{cxx_std_20} as a minimum, not an override.
+
+The install rules copy \code{DSLtk.hpp} and \code{DSLtk.d} into the include
+directory, and export the target into a package configuration under
+\code{lib/cmake/DSLtk} together with a \code{pkg-config} file. The intended
+workflow is therefore
+
+\begin{lstlisting}[style=dslcmd,caption={The intended configure, build and install sequence. See the caveat in Section~\ref{sec:cmake-caveat}.},label={lst:ch02-cmake}]
+cmake -S DSLtk -B build
+cmake --build build
+cmake --install build --prefix /usr/local
+\end{lstlisting}
+
+followed, in a consuming project, by
+
+\begin{lstlisting}[style=dslcmd,caption={Consuming the installed package.},label={lst:ch02-consume}]
+find_package(DSLtk REQUIRED)
+target_link_libraries(my_app PRIVATE DSLtk::DSLtk)
+\end{lstlisting}
+
+The exported target is namespaced \code{DSLtk::DSLtk}, the conventional
+spelling for a target exported from a package named \code{DSLtk}. After the
+install, the header sits at \code{include/DSLtk.hpp} and can be included as
+\code{#include <DSLtk.hpp>}.
+
+\subsection{A Caveat About the Shipped \code{CMakeLists.txt}}\label{sec:cmake-caveat}
+
+The instructions above describe the design of the CMake package, but the
+\code{CMakeLists.txt} as shipped does not configure cleanly on a current
+CMake. Three defects prevent the documented sequence from running as written,
+and it would be dishonest to present the workflow without them.
+
+First, the file contains no \code{cmake_minimum_required} call. CMake 4
+removed compatibility with projects that omit it, so configuration fails
+outright with \emph{``No cmake\_minimum\_required command is present''}. The
+remedy is a single line at the top of the file, for example
+\code{cmake_minimum_required(VERSION 3.16)}.
+
+Second, the file never includes the \code{GNUInstallDirs} module, yet it uses
+\code{CMAKE_INSTALL_INCLUDEDIR} at line 30,
+\code{CMAKE_INSTALL_BINDIR} at line 80 and
+\code{CMAKE_INSTALL_LIBDIR} at line 98. All three variables are empty
+without that module, so \code{install(...)} is rejected with \emph{``install
+FILES given no DESTINATION''}. Adding \code{include(GNUInstallDirs)} resolves
+it, and the install then places \code{DSLtk.hpp} and \code{DSLtk.d} under
+\code{include/} exactly as intended.
+
+Third, the option \code{DSLtk_BUILD_GENERATOR} defaults to \code{ON} and
+builds a parser generator from
+\code{generator/DSLtk-ParserGenerator.d}. That source file is not present in
+the shipped tree, so the default build fails at the compile step even when the
+first two problems are fixed. Passing
+\code{-DDSLtk_BUILD_GENERATOR=OFF} avoids it.
+
+With those three adjustments the package behaves exactly as advertised: the
+install lays down \code{include/DSLtk.hpp}, \code{include/DSLtk.d},
+\code{lib/cmake/DSLtk/DSLtkConfig.cmake},
+\code{lib/cmake/DSLtk/DSLtkTargets.cmake} and \code{lib/pkgconfig/DSLtk.pc},
+and a consumer that calls \code{find_package(DSLtk)} and links
+\code{DSLtk::DSLtk} compiles and runs against the installed header.
+
+\subsection{The D Build}
+
+The D port is a single module, \code{DSLtk.d}, with no dependency beyond
+Phobos. It has been exercised with LDC, DMD and GDC. The module header
+documents the command that runs the embedded test suite:
+
+\begin{lstlisting}[style=dslcmd,caption={Running the D module's embedded unit tests, as documented in the \code{DSLtk.d} header.},label={lst:ch02-dtest}]
+ldc2 -unittest -main DSLtk.d -of=dsltk-test
+./dsltk-test
+\end{lstlisting}
+
+The output is a single line, \emph{``1 modules passed unittests''}. The DMD
+and GDC spellings are \code{dmd -unittest -main DSLtk.d -of=dsltk-test} and
+\code{gdc -unittest -main DSLtk.d -o dsltk-test} respectively.
+
+Ordinary D programs import the module and use the \code{DSL!} mixin template,
+which is the D counterpart of the C++ CRTP base class:
+
+\begin{lstlisting}[style=dslcmd,caption={A D program that uses the \code{DSL!} mixin. The D port takes D string literals directly as template arguments, so \code{FixedString} is optional there.},label={lst:ch02-dhello}]
+import DSLtk;
+import std.stdio : writeln;
+
+struct BasicDSL { mixin DSL!(Pipeline, Operators); }
+
+void main()
+{
+    auto result = BasicDSL.wrap(5)
+        | pipe((int x) => x + 3)
+        | pipe((int x) => x * 2);
+    writeln(result);
+}
+\end{lstlisting}
+
+Compiled with \code{ldc2 -I/path/to/DSLtk hello.d DSLtk.d -of=hello}, it
+prints \code{16} -- the same value as the C++ program in
+Listing~\ref{lst:ch02-first}, which is the first sign that the two ports are
+kept in step. Chapter~\ref{ch:d-toolkit} covers the D composition mechanism
+in full; Chapter~\ref{ch:architecture} compares it with the C++ one.
+
+\section{Diagnosing the First Build Failure}
+
+Almost every first-time failure with \DSLtk{} has one of three causes, and
+it is worth having them in mind before the first compile.
+
+\paragraph{The wrong language standard.}
+If the diagnostic mentions \code{concept}, \code{requires} or
+\code{std::same_as}, the compiler is not in C++20 mode. The flag is
+\code{-std=c++20} for GCC and Clang, \code{/std:c++20} for MSVC, and
+\code{-std=c++2a} for older GCC releases that predate the final name.
+
+\paragraph{The wrong include path.}
+If the compiler reports that it cannot find \code{DSLtk.hpp}, the header is
+not where the compiler is looking. Check the \code{-I} flag, or, with
+CMake, check that the target actually links the \code{DSLtk} interface
+target. This is the single most common mistake in a CMake project: adding
+\code{include_directories} for a target that links \code{DSLtk::DSLtk}
+does not help, because the include directory is a usage requirement of the
+interface target and is inherited only by targets that link it.
+
+\paragraph{A compiler without class-type non-type template parameters.}
+If the standard is right and the include path is right, and the diagnostic
+mentions \code{DSLtk.hpp} and a template argument that looks like a string,
+the toolchain does not implement C++20's class-type non-type template
+parameters. This is a real possibility: some compilers advertised C++20
+support before the class-type NTTP feature was finished. The diagnostic is
+characteristically ugly, and the fix is to upgrade the compiler rather than
+to work around the library.
+
+There is one further difficulty that is not a fault but a consequence of the
+design. Because \DSLtk{} is template-heavy, a mistake in your own code
+produces a wall of instantiation traceback rather than a single tidy
+message. Two habits help. Build the smallest program that reproduces the
+problem, away from the rest of your code; the bundled examples are a good
+baseline for this. And read the \emph{first} error in the output rather
+than the last: the first is the cause, and everything after it is
+cascade.
+
+\section{The Bundled Examples}
+
+The \code{DSLtk/examples} directory contains twenty-six C++ programs and one D
+program. They are short, self-contained, and each one isolates a single
+facility, which makes them the right reference when you want to see how one
+API is used without reading a chapter. Table~\ref{tab:ch02-examples} lists
+them.
+
+\begin{table}[ht]
+\centering
+\caption{The bundled example programs, in file-name order.}
+\label{tab:ch02-examples}
+\small
+\begin{tabular}{@{}L{0.30\textwidth}L{0.63\textwidth}@{}}
+\toprule
+\textbf{File} & \textbf{What it demonstrates} \\
+\midrule
+\code{01-basic-usage.cpp} & The \code{Pipeline} and \code{Operators} features: a wrapped value run through two pipe stages and tested against two predicates. \\
+\code{02-fixed-strings.cpp} & Compile-time tags: a leaf and an inner node built with \code{leaf<>} and \code{node<>}, then dumped. \\
+\code{03-pattern-simple.cpp} & A hand-written classifier, kept as the baseline against which the compile-time patterns are compared. \\
+\code{04-pattern-classes.cpp} & \code{dsl::pattern<>} with character classes, separating integers from words. \\
+\code{05-parser-basics.cpp} & The primitive parser: \code{ch('a') & ch('b')} run through \code{run_parser}. \\
+\code{06-parser-composition.cpp} & \code{satisfy} plus the repetition operator, parsing a word and reporting its length. \\
+\code{07-parser-optional-repeat-choice.cpp} & \code{optional} and repetition combined to parse a signed integer. \\
+\code{08-ast-creation.cpp} & Building a two-leaf AST node with \code{node<>}. \\
+\code{09-ast-traversal.cpp} & Recursive traversal of \code{ASTNode::children()} counting every node. \\
+\code{10-rewrite-basics.cpp} & A single rewrite rule that eliminates double negation. \\
+\code{11-rewrite-composition.cpp} & Two rules in a \code{rewrite_set}, applied until a fixpoint is reached. \\
+\code{12-expression-templates.cpp} & The \code{ExprTemplates} feature building a lazy tree from \code{a + b * c - a}. \\
+\code{13-evaluation-flow.cpp} & \code{Result<double, string>} with \code{map} and \code{unwrap_or}. \\
+\code{14-small-calculator-dsl.cpp} & A miniature calculator AST dumped as an S-expression. \\
+\code{15-tokenize-parse-integration.cpp} & Token classification driven by compile-time patterns. \\
+\code{16-diagnostics-errors.cpp} & The \code{labeled} combinator and the position reported in a parse error. \\
+\code{17-compiletime-runtime-tradeoffs.cpp} & \code{memoize} and \code{Lazy<T>} side by side. \\
+\code{18-mini-dsl.cpp} & A user DSL combining \code{Pipeline} and \code{CustomLiterals} to parse \code{"2.5_km"}. \\
+\code{19-pattern-match.cpp} & \code{dsl::match} with \code{when<>} and \code{otherwise<>}, over both enum values and patterns. \\
+\code{20-monadic.cpp} & \code{Maybe<T>} chaining and \code{flat_map}, plus the free \code{map} and \code{filter} over \code{std::optional}. \\
+\code{21-task-pipeline.cpp} & \code{dsl::Task} chains over a shared \code{TaskState}. Does not compile as shipped; see Section~\ref{sec:ch02-example-21}. \\
+\code{22-peg-combinators.cpp} & The PEG combinators \code{peg_seq}, \code{peg_choice}, \code{peg_many1}, \code{peg_and} and \code{peg_not}. \\
+\code{23-peg-definition.cpp} & A \code{PEGDefinition} with named rules, an ignore channel, and a derived grammar. \\
+\code{24-peg-matcher.cpp} & \code{peg_new_matcher} driving rules against a token stream with a wildcard fallback. \\
+\code{25-enum-reflection.cpp} & Enum reflection, flags enums, \code{enum_switch}, and the enum-indexed containers. \\
+\code{26-equality-saturation.cpp} & E-graph saturation over S-expression rules, with \code{sexpr_grammar} and \code{StaticRegex}. \\
+\code{26-equality-saturation.d} & The D counterpart of the equality-saturation example. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Twenty-five of the twenty-six C++ examples compile and run against the
+shipped header on GCC 16 and Clang 22. The exception is
+\code{21-task-pipeline.cpp}, and the reason is instructive rather than
+merely a bug in the example. The example declares
+\code{using Result = dsl::Result<std::string, std::string>}, but
+\code{dsl::Result<T, E>} stores its payload in a \code{std::variant<T, E>} and
+guards its error constructor with \code{requires (!std::same_as<T, E>)}
+(line 7550). A variant may contain repeated alternatives, and the indexed
+\code{from_ok}/\code{from_err} factories can construct this result. Its
+type-based queries cannot select a unique alternative, however, so normal
+result inspection fails to instantiate. Distinct payload types avoid that
+defect in application results. The shipped task types hard-code the
+duplicate-type specialization; Chapter~\ref{ch:task-pipeline} explains the
+additional task-state constraints.
+
+\section{The Three-Tier Wrapper Idiom}
+
+The header's own quick-start comment recommends a three-tier arrangement, and
+it is the arrangement this book assumes throughout. The bottom tier is the
+toolkit itself, \code{DSLtk.hpp}, which knows nothing about your domain. The
+middle tier is a wrapper header, conventionally \code{mydsl.hpp}, which
+includes the toolkit and defines your DSL type along with any domain-specific
+vocabulary. The top tier is your application, which includes only the wrapper
+header and never mentions \DSLtk{} at all.
+
+Figure~\ref{fig:ch02-three-tier} draws the arrangement and the include
+edges that connect it.
+
+\begin{figure}[ht]
+\centering
+\begin{dslgraph}
+  \node[dsllarge] (toolkit) {Tier 1\\\code{DSLtk.hpp}\\the toolkit: features,\\value types, free functions};
+  \node[dsllarge, below=13mm of toolkit] (wrapper) {Tier 2\\\code{mydsl.hpp}\\the wrapper header: includes\\the toolkit, defines\\your DSL type};
+  \node[dsllarge, below=13mm of wrapper] (app) {Tier 3\\\code{main.cpp}, \code{lib/*.cpp}\\the application: includes\\only \code{mydsl.hpp}};
+
+  \draw[dsledge] (toolkit) -- node[right, font=\scriptsize, align=left] {\texttt{\#include "DSLtk.hpp"}:\\(toolkit into wrapper)} (wrapper);
+  \draw[dsledge] (wrapper) -- node[right, font=\scriptsize, align=left] {\texttt{\#include "mydsl.hpp"}:\\(wrapper into application)} (app);
+
+  \draw[dslfeedback] (app.east) -- ++(18mm,0) |- node[pos=0.25, right, font=\scriptsize] {never includes} (toolkit.east);
+\end{dslgraph}
+\caption{The three-tier wrapper arrangement. The toolkit knows nothing of the
+domain; the wrapper is the only file that sees both the toolkit and the
+domain; the application sees only the wrapper.}
+\label{fig:ch02-three-tier}
+\end{figure}
+
+The value of this arrangement is not aesthetic. Because the application never
+names \code{dsl::} anything, the surface of your language is exactly what you
+put in the wrapper, and you can change it without touching a single call
+site. Because the toolkit appears in exactly one translation unit's include
+graph, its compile-time cost is paid once rather than once per user of your
+language. And because the dependency arrow between tier 3 and tier 1 does not
+exist, tier 3 cannot accidentally acquire a dependency on \DSLtk{}'s internal
+shapes.
+
+The wrapper header in Listing~\ref{lst:ch02-wrapper} is the entire middle
+tier for the \code{MathDSL} of Listing~\ref{lst:ch02-first}.
+
+\begin{lstlisting}[style=dslcpp,caption={The middle tier. This is the only file in the project that includes \code{DSLtk.hpp}.},label={lst:ch02-wrapper}]
+#pragma once
+
+#include "DSLtk.hpp"
+
+namespace maths {
+
+/// The domain language: a pipeline of transformations over integers.
+struct MathDSL : dsl::DSL<MathDSL, dsl::Pipeline, dsl::Operators>
+{
+  /// Lifts an integer into the language.
+  static constexpr int
+  square (int x)
+  {
+    return x * x;
+  }
+};
+
+} // namespace maths
+\end{lstlisting}
+
+\section{A Recipe: Wrapping a Raw Lambda as a DSL Feature}
+
+The most common thing a new DSL author wants to do is take a function that
+already exists and give it a name that means something in the domain. The
+library makes this a two-line exercise, and it is worth spelling the recipe
+out because it recurs throughout the book.
+
+The recipe has four steps: name the operation, choose the layer at which it
+should live, wrap the implementation, and expose it. The procedure below states the recipe.
+
+\begin{pseudocode}[Wrapping a raw lambda as a DSL feature]
+\textbf{procedure} wrap\_as\_feature (name, layer, lambda)\\
+\quad \textbf{if} layer = \code{namespace} then\\
+\qquad \textbf{return} free function \code{name} delegating to lambda\\
+\quad \textbf{if} layer = \code{mixin} then\\
+\qquad define feature tag \code{Tag}\\
+\qquad define nested \code{Mixin<Derived>} for \code{Tag}\\
+\qquad \qquad add member forwarding to lambda\\
+\qquad \textbf{return} tag \code{Tag}\\
+\quad \textbf{if} layer = \code{member} then\\
+\qquad \textbf{return} member function of \code{Derived} delegating to lambda
+\end{pseudocode}
+
+The choice of layer is the interesting part. A \emph{namespace-scope} free
+function is the default and the most common: it lives in \code{dsl} (or in
+your own namespace) and is reachable from anywhere. A \emph{mixin} member is
+appropriate when the operation is only meaningful for a particular DSL, or
+when it needs to inject an operator that must not leak into the global
+namespace. A \emph{member} of the derived class is appropriate when the
+operation is intrinsic to the domain and should read as part of the language's
+vocabulary.
+
+For example, the pipeline stage in Listing~\ref{lst:ch02-first} can be
+promoted to a named domain operation with no more than the code in
+Listing~\ref{lst:ch02-stage}. The stage remains an ordinary lambda wrapped in
+\code{dsl::pipe}; what changes is that the domain now has a word for it.
+
+\begin{lstlisting}[style=dslcpp,caption={A named pipeline stage, continuing the \code{maths::MathDSL} of Listing~\ref{lst:ch02-wrapper}. The lambda is unchanged; only its packaging is.},label={lst:ch02-stage}]
+namespace maths {
+
+/// A named stage: doubling a value.
+inline auto
+double_it ()
+{
+  return dsl::pipe ([] (int x) { return x * 2; });
+}
+
+} // namespace maths
+
+auto total = maths::MathDSL::wrap (5)
+           | maths::double_it ()
+           | dsl::pipe ([] (int x) { return x + 3; });
+\end{lstlisting}
+
+Chapter~\ref{ch:feature-tags} develops this recipe into the general
+mechanism, including how to inject an operator through a hidden friend
+without polluting the global namespace.
+
+\section{Enum Reflection for Free}
+
+The embedded \code{magic_enum} block means enum reflection is available
+without any additional include or link step.
+Listing~\ref{lst:ch02-enum} uses it.
+
+\begin{lstlisting}[style=dslcpp,caption={Enum reflection with no dependency and no separate include.},label={lst:ch02-enum}]
+#include "DSLtk.hpp"
+#include <iostream>
+
+enum class Token { Number = -1, Identifier = 2, End = 7 };
+
+int main () {
+  static_assert (dsl::enum_count<Token> () == 3);
+  static_assert (dsl::enum_name<Token::Identifier> () == "Identifier");
+
+  for (auto [value, name] : dsl::enum_entries<Token> ())
+    std::cout << dsl::enum_integer (value) << " -> " << name << "\n";
+}
+\end{lstlisting}
+
+The output is
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch02-enum}.},label={lst:ch02-enum-out}]
+-1 -> Number
+2 -> Identifier
+7 -> End
+\end{lstlisting}
+
+Note that the enumerator values need not be contiguous and need not start at
+zero; \code{magic_enum} uses compiler introspection while scanning a bounded
+configured range, by default minus 128 through 127. The \code{dsl} namespace also re-exports the
+\code{containers}, \code{customize}, \code{bitwise_operators},
+\code{iostream_operators}, \code{istream_operators} and
+\code{ostream_operators} sub-namespaces of \code{magic_enum} at lines
+5826--5832, so the whole library is reachable under a single prefix. Chapter
+\ref{ch:enum-reflection} covers the details, including the
+\code{customize::enum_range} specialisation that turns an enum into a flags
+enum.
+
+\section{The Optional Lua Bridge}
+\label{sec:lua-bridge}
+
+The preprocessor shipped with \DSLtk{} supports macros, includes, conditionals
+and a scripting hook. The scripting hook is where Lua comes in, and it is
+strictly optional. Two conditions must both hold before any Lua code is
+compiled: the macro \code{DSLTK_ENABLE_LUA} must be defined, and the Lua
+headers must be reachable. At line 399 the header guards its Lua include
+with exactly that condition:
+
+\begin{lstlisting}[style=dslcmd,caption={The Lua include is conditional on a user-supplied macro.},label={lst:ch02-lua-include}]
+#if defined(DSLTK_ENABLE_LUA)
+#include <lua.hpp>
+#endif
+\end{lstlisting}
+
+When the macro is defined, the header additionally defines
+\code{dsl::lua_script_hook} at line 11348, a factory that takes a
+\code{lua_State *} and returns the \code{std::function} the preprocessor
+calls for a \code{#lua} directive. The caller owns the Lua state; the hook
+restores the Lua stack top on the way out and translates a script failure into
+a \code{std::runtime_error}. Listing~\ref{lst:ch02-lua} wires it up.
+
+\begin{lstlisting}[style=dslcpp,caption={Enabling and using the Lua bridge. The macro must be defined before the header is included, and the Lua library must be linked by the caller.},label={lst:ch02-lua}]
+#define DSLTK_ENABLE_LUA
+#include "DSLtk.hpp"
+#include <iostream>
+#include <lua.hpp>
+
+int main ()
+{
+  lua_State *state = luaL_newstate ();
+  luaL_openlibs (state);
+
+  dsl::Preprocessor preprocessor;
+  preprocessor.script = dsl::lua_script_hook (state);
+
+  std::cout << preprocessor.process ("#lua return 'answer: ' .. 42\n");
+
+  lua_close (state);
+}
+\end{lstlisting}
+
+The output is \code{answer: 42}. Without the macro the code does not compile
+at all, because \code{lua.hpp} is never included and
+\code{dsl::lua_script_hook} does not exist; that is the correct behaviour
+for a header-only library that must not drag a scripting runtime into every
+program that uses it. Chapter~\ref{ch:preprocessor} covers the preprocessor
+properly.
+
+\section{Edge Cases and Limits}
+
+The first day of work with \DSLtk{} is usually spent on build problems, so it
+is worth being precise about the ones that the shipped code actually
+produces.
+
+\paragraph{The language standard is not negotiable.}
+\cstd{} is required, and specifically the class-type non-type template
+parameter support that C++20 introduced. A toolchain that parses C++20 but
+does not implement class-type NTTPs will reject \code{dsl::leaf<"tag">} and
+\code{dsl::pattern<"...">}. If you are unsure, compile a two-line program
+that instantiates \code{dsl::FixedString<4>{"abc"}} before you blame the
+library.
+
+\paragraph{The shipped CMake package does not configure as shipped.}
+As set out in Section~\ref{sec:cmake-caveat}, the missing
+\code{cmake_minimum_required}, the missing \code{GNUInstallDirs} include and
+the absent generator source each break the documented CMake workflow
+independently. Until they are fixed, copy the header, or apply the three
+corrections yourself.
+
+\paragraph{Predicate composition does not compile.}
+\code{dsl::Predicate} provides \code{operator&}, \code{operator|} and
+\code{operator!} at lines 6013, 6023 and 6031, and the header's documentation
+advertises them. They do not build. Each operator returns
+\code{Predicate{ ... }} from inside a member function of \code{Predicate},
+where the injected-class-name \code{Predicate} denotes the current
+specialisation \code{Predicate<F>} rather than the class template. No
+class-template argument deduction therefore takes place, and the generic
+lambda that was meant to become the new callable cannot be converted to
+\code{F}. The workaround is to compose predicates yourself -- a two-line
+lambda -- or to keep the predicates separate and combine their results with
+\code{&&}, as Listing~\ref{lst:ch02-first} does. Chapter~\ref{ch:operators}
+returns to this in detail.
+
+\paragraph{One bundled example does not compile.}\label{sec:ch02-example-21}
+\code{21-task-pipeline.cpp} instantiates \code{dsl::Result<std::string,
+std::string>}, whose type-based queries fail to instantiate. See
+Chapter~\ref{ch:task-pipeline}.
+
+\paragraph{The header is large and included in full.}
+\DSLtk{} is a single 12,024-line header with twenty-one standard-library
+includes. Every translation unit that includes it parses all of it, even if
+it uses two features. In a large project, the mitigation is the three-tier
+arrangement for interface organization. A wrapper still includes the toolkit
+in every translation unit that uses it; it does not itself reduce parsing
+work. Precompiled headers or a compiled facade can address that cost.
+The instantiation-heavy parts
+are the expression templates and the parser combinators, because they
+generate many distinct types; if compile time becomes a problem, confine the
+heavy DSL usage to a small number of translation units.
+
+\paragraph{There is no separate build artefact to debug.}
+Because there is no library, there is no ABI to preserve and no version to
+match. The cost of that convenience is that every consumer recompiles when
+the header changes, and that two translation units compiled against different
+versions of \DSLtk{} may disagree about a type. Pin the header in your
+version control and upgrade it deliberately.
+
+\section{What Comes Next}
+
+You now have a compiling \DSLtk{} program, a working installation path for
+both language ports, and a catalogue of twenty-six small examples that
+isolate each facility. Chapter~\ref{ch:architecture} opens the black box:
+it maps the physical structure of \code{DSLtk.hpp}, distinguishes the two
+kinds of feature the library defines, and lays out the layering that the
+remaining chapters follow.

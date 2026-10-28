@@ -1,0 +1,592 @@
+\chapter{The Operators Feature: Predicate Composition}
+\label{ch:operators}
+
+\section{Why conditions should be values}
+
+A rule engine, a validator, a rewriter, a lexer: most of the machinery of a
+domain-specific language is a pile of conditions. ``Accept the token if it
+is an identifier and it is not a keyword.'' ``Rewrite the node if it is a
+binary application whose left child is a literal.'' ``Reject the input if
+the span is empty and the offset is zero.'' Written directly, each of these
+is a lambda that is immediately called, and the conditions cannot be
+combined, stored, tested, or reused.
+
+The operators feature exists to make a condition a \emph{value}. It
+provides a wrapper, \api{dsl::Predicate}, that holds a boolean-returning
+callable and offers three ways to build larger conditions from smaller
+ones: conjunction, disjunction and negation. Once a condition is a value,
+it can be stored in a container, returned from a function, captured by a
+lambda, or combined with others into a single larger condition. This is the
+difference between a rule engine that has to be rewritten when the rules
+change shape and one that does not.
+
+\section{The data model}
+
+The feature occupies two small pieces of \texttt{DSLtk.hpp}: the
+\code{Predicate} template at lines 6000--6036 and the factory
+\code{dsl::predicate} at lines 6044--6049. The template is
+
+\begin{lstlisting}[style=dslcpp]
+template <typename F> struct Predicate
+{
+  F fn;
+  explicit constexpr Predicate (F f) : fn (std::move (f)) {}
+};
+\end{lstlisting}
+
+The design is minimal to the point of austerity, and each of the three
+choices in that snippet earns its place.
+
+The callable is stored \emph{by value}, in a public member named
+\code{fn}. Storing by value means a predicate owns its condition, so it can
+be copied, moved, stored in a container and returned from a function without
+any lifetime subtleties. Making the member public is a pragmatic choice:
+the wrapper is a thin veneer, and a user who needs to reach the underlying
+callable --- to inspect a captured value, say --- can do so without a
+friend declaration or an accessor.
+
+The constructor is \code{explicit}, so a predicate is never produced by an
+accidental conversion from a callable. This matters because
+\code{Predicate} participates in overload resolution through its member
+operators: an implicit converting constructor would make almost any
+callable look like a predicate and would produce surprises in code that
+combines predicates with other things.
+
+The constructor is \code{constexpr}, which means a predicate can be built
+during constant evaluation. A \code{static constexpr} member of a DSL class
+can therefore be a predicate, and the compiler can fold the whole thing
+away.
+
+The factory is
+
+\begin{lstlisting}[style=dslcpp]
+template <typename F>
+constexpr auto
+predicate (F &&f)
+{
+  return Predicate<std::decay_t<F>>{ std::forward<F> (f) };
+}
+\end{lstlisting}
+
+As in the pipeline feature, the decay is what makes the type of a predicate
+depend on what it computes rather than on how it was spelled. A predicate
+built from a lambda lvalue, a lambda rvalue or a function reference all have
+the same type, and therefore compose with each other.
+
+The call operator forwards:
+
+\begin{lstlisting}[style=dslcpp]
+template <typename T>
+constexpr bool
+operator() (T &&v) const
+{
+  return fn (std::forward<T> (v));
+}
+\end{lstlisting}
+
+Because it takes a forwarding reference and forwards, a condition may
+accept its argument by value, by const reference or by rvalue reference, and
+the wrapper does not care which.
+
+\section{The three operators}
+
+\begin{notebox}[The operators live on the predicate]
+\code{dsl::Operators::Mixin} defines \emph{no} operators. It adds a
+single static factory, \code{make_pred}, and nothing else. The
+conjunction, disjunction and negation are member operators of
+\code{Predicate} itself, so they are available to every predicate whether
+or not the user has inherited the feature tag.
+\end{notebox}
+
+The three operators are:
+
+\begin{lstlisting}[style=dslcpp]
+template <typename G>
+constexpr auto
+operator& (Predicate<G> other) const
+{
+  return Predicate{ [a = fn, b = other.fn] (auto &&v)
+                      { return a (v) && b (v); } };
+}
+
+template <typename G>
+constexpr auto
+operator| (Predicate<G> other) const
+{
+  return Predicate{ [a = fn, b = other.fn] (auto &&v)
+                      { return a (v) || b (v); } };
+}
+
+constexpr auto
+operator!() const
+{
+  return Predicate{ [a = fn] (auto &&v) { return !a (v); } };
+}
+\end{lstlisting}
+
+Each operator returns a \emph{new} predicate. The composition is
+eagerly described but lazily executed: the composed predicate stores the
+two operands and evaluates them only when it is called. The conjunction
+operator captures the left callable as \code{a} and the right as \code{b},
+and the body is \code{a(v) && b(v)}; because \code{&&} is the built-in
+short-circuiting operator, the right condition is not evaluated at all when
+the left one is false. The same holds for the disjunction operator and
+\code{||}. The negation operator captures a single callable and applies the
+built-in \code{!}.
+
+\begin{property}[Short-circuiting]
+The composed predicate evaluates its left operand first and evaluates its
+right operand only if the left operand did not already determine the result.
+The number of evaluations of the underlying conditions is therefore a
+function of the value being tested, not only of the shape of the
+composition.
+\end{property}
+
+The three operators use the built-in \cpp{} spellings, and in \cpp{} those
+spellings are not bound to \code{bool}. An overloaded \code{operator!} may
+return any type, so a class can define a negation that yields a class
+rather than a truth value. \DSLtk{}'s \code{Predicate} does exactly that:
+\code{!p} is a predicate, not a \code{bool}. This is worth contrasting with
+the D port, where the situation is reversed. In D, the \code{!} operator
+always produces a \code{bool}, whatever the operand's type, so a D
+predicate cannot be negated with \code{!}. The D port therefore uses
+\code{~ p} --- the bitwise complement operator, which
+preserves the operand's type --- and additionally provides a
+\code{negated()} method. \DSLtk{}'s C++ \code{Predicate} has neither
+\code{negated()} nor any other named negation: \code{!} is the only
+negation, and it works because \cpp{} lets a class define what \code{!}
+means for it.
+
+The C++ \code{Predicate} also has no \code{operator bool}. A predicate
+cannot be used directly in an \code{if} condition; it must be called. That
+is a deliberate restriction, and it has a good reason: an implicit
+conversion to \code{bool} would be a narrowing conversion that a reader
+could not see, and the value of the predicate is a function of the argument
+it is applied to, not a property of the predicate itself.
+
+\section{What the feature tag adds}
+
+The tag \api{dsl::Operators} (lines 6143--6158) has a mixin containing
+one static member function:
+
+\begin{lstlisting}[style=dslcpp]
+template <typename F>
+static constexpr auto
+make_pred (F &&f)
+{
+  return dsl::predicate (std::forward<F> (f));
+}
+\end{lstlisting}
+
+\code{make_pred} is a thin, named wrapper over the free function
+\code{dsl::predicate}. Its purpose is discoverability: a user who has
+inherited \code{dsl::Operators} can find the factory by looking at the
+class, and a DSL can present the factory as part of its own vocabulary.
+The \DSLtk{} header's own comment shows the intended use:
+
+\begin{lstlisting}[style=dslcpp]
+struct MyDSL : dsl::DSL<MyDSL, dsl::Operators> {};
+
+auto rule = MyDSL::make_pred ([] (int x) { return x > 0; })
+          & MyDSL::make_pred ([] (int x) { return x < 100; });
+\end{lstlisting}
+
+The last line does not compile as the header is shipped; the section that
+follows explains why and what to do about it.
+
+\section{A defect in the shipped composition operators}
+
+\begin{warnbox}[The shipped operators do not compose out of the box]
+As shipped, \code{p & q}, \code{p | q} and \code{!p} fail to compile when
+\code{Predicate}'s callable is a closure type. The reason is a
+class-template-argument-deduction subtlety in the three operator bodies,
+explained below. The workaround is to erase the callable to a type the
+composed lambda converts to, most simply \code{std::function<bool(int)>}.
+\end{warnbox}
+
+Each of the three operators ends with a return statement of the form
+
+\begin{lstlisting}[style=dslcpp]
+return Predicate{ [a = fn, b = other.fn] (auto &&v) { ... } };
+\end{lstlisting}
+
+The author clearly intended class template argument deduction to deduce
+\code{Predicate} from the braced lambda. It does not. Inside the class
+template \code{Predicate}, the name \code{Predicate} is the
+\emph{injected-class-name} of the current instantiation, which denotes
+\code{Predicate<F>} --- the instantiation in which the operator is being
+defined --- and not the primary template. A braced-init-list naming a
+class that is not a template-name is therefore not subject to deduction at
+all: the compiler tries to construct a \code{Predicate<F>} from the
+composed lambda, and fails, because a closure type is not convertible to
+\code{F}.
+
+The diagnosis is confirmed by the diagnostic itself, which reports
+``no matching function for call to
+\code{Predicate<F>::Predicate(<brace-enclosed initializer list>)}'' rather
+than anything about deduction.
+
+The operators are not entirely unusable. They compile exactly when the
+composed lambda is convertible to \code{F}, because in that case the
+construction \code{Predicate<F>(lambda)} succeeds and the composed callable
+is stored, type-erased, in the \code{fn} member. A user who wants
+composition has two options.
+
+The first is to erase the callable to a type-erased function. This is the
+approach taken by the listing below:
+
+\begin{lstlisting}[style=dslcpp]
+using IntPredicate = dsl::Predicate<std::function<bool (int)>>;
+\end{lstlisting}
+
+A captureless lambda converts to \code{std::function<bool(int)>}, and so
+does the composed lambda, so the construction succeeds. The cost is that
+each predicate now holds a \code{std::function}, which may allocate.
+
+The second is to define a small callable wrapper of one's own --- one with
+a template constructor that accepts any callable --- and to instantiate
+\code{Predicate} with that wrapper. The wrapper is then the erased type,
+and the same reasoning applies.
+
+The remaining sections describe the intended semantics, which are exactly
+those of the source, and which the two workarounds deliver.
+
+\section{Composition trees and evaluation}
+
+The three operators build a tree. \code{p & q | !r} is grouped by the
+built-in precedence rules, in which \code{&} binds more tightly than
+\code{|}, so the expression is \code{(p & q) | (!r)}. Figure~\ref{fig:pred-tree}
+shows the resulting tree.
+
+\begin{figure}[htbp]
+\begin{dslgraph}
+    \node[dslsmall] (root) {\code{p} \& \code{q} \code{|} \code{!r}};
+    \node[dslsmall, below left=of root] (andn) {and};
+    \node[dslsmall, below right=of root] (notn) {not};
+    \node[dslsmall, below=of andn] (p) {\code{p}};
+    \node[dslsmall, right=of p] (q) {\code{q}};
+    \node[dslsmall, below=of notn] (r) {\code{r}};
+    \draw[dsledge] (root) -- (andn);
+    \draw[dsledge] (root) -- (notn);
+    \draw[dsledge] (andn) -- (p);
+    \draw[dsledge] (andn) -- (q);
+    \draw[dsledge] (notn) -- (r);
+\end{dslgraph}
+  \caption{The composition tree of \code{p} \& \code{q} \code{|} \code{!r}.
+  The root is a disjunction; its left child is a conjunction of the leaves
+  \code{p} and \code{q}, and its right child is the negation of the leaf
+  \code{r}.}
+  \label{fig:pred-tree}
+\end{figure}
+
+The evaluation of such a tree is the obvious one, and
+The pseudocode block that follows states it in a form that makes the
+short-circuiting explicit.
+
+\begin{pseudocode}[Evaluating a composed predicate]
+\textbf{function} \code{eval}(node, v)\\
+\quad \textbf{if} node is a leaf f \textbf{then}\\
+\qquad \textbf{return} \code{f(v)}\\
+\quad \textbf{if} node is a conjunction (a, b) \textbf{then}\\
+\qquad \textbf{if} \code{eval(a, v)} is false \textbf{then}\\
+\qquad\qquad \textbf{return} false\\
+\qquad \textbf{return} \code{eval(b, v)}\\
+\quad \textbf{if} node is a disjunction (a, b) \textbf{then}\\
+\qquad \textbf{if} \code{eval(a, v)} is true \textbf{then}\\
+\qquad\qquad \textbf{return} true\\
+\qquad \textbf{return} \code{eval(b, v)}\\
+\quad \textbf{if} node is a negation a \textbf{then}\\
+\qquad \textbf{return} not \code{eval(a, v)}
+\end{pseudocode}
+
+Because the composed predicate is a single closure, the tree is not walked
+recursively at run time; the nesting is realised in the structure of the
+closure's call operator. A conjunction whose left child is itself a
+conjunction becomes a closure that calls another closure, and the call
+stack grows with the depth of the tree. This is the price of the
+representation, and it is small: the depth of a hand-written rule set is
+rarely more than a handful.
+
+\section{The cost of composition}
+
+Each composition allocates a \emph{new closure type}. The result of
+\code{p & q} is a \code{Predicate} whose callable is a fresh lambda type
+that captures a copy of \code{p}'s callable and a copy of \code{q}'s
+callable. The result of \code{(p & q) & r} is a third fresh type that
+captures a copy of the composed closure --- which itself contains copies of
+\code{p} and \code{q} --- and a copy of \code{r}'s callable.
+
+Two consequences follow. The first is that the storage of a composed
+predicate grows linearly in the number of leaves, because each level
+copies its children. The second is that the composed predicate's \emph{type}
+is unique: there is no way to write a function that accepts
+``any composition of \code{p} and \code{q}'' without erasing the type, which
+is precisely why the workaround in the listing below erases to
+\code{std::function}.
+
+Note also that composition is left-deep for a chain of conjunctions.
+\code{a & b & c} groups as \code{(a & b) & c}, so the intermediate
+composition is copied into the next level. A right-deep arrangement would
+copy less, but the language's associativity rules decide this, not the
+user.
+
+\section{Predicates as values}
+
+Because a predicate is an ordinary object, it can be stored. This is the
+property that distinguishes the feature from a bag of lambdas, and it is
+what makes a rule table possible:
+
+\begin{lstlisting}[style=dslcpp]
+std::vector<std::pair<std::string, std::function<bool (int)>>> rules;
+rules.emplace_back ("positive", RuleDSL::positive);
+rules.emplace_back ("even", RuleDSL::even);
+\end{lstlisting}
+
+A predicate can equally be returned from a function, captured by a lambda,
+or stored in a member of a DSL class. The type of the stored object is
+whatever the erasure target is; with a fixed callable type the vector
+would hold a vector of \code{Predicate<F>} and would be homogeneous, which
+is often exactly what a rule table wants.
+
+\section{Predicates and the match table}
+
+The \chapref{ch:pattern-match} facility dispatches on a \emph{key}. It is
+natural to ask whether a predicate can serve as a match guard, that is, as
+the key of a \code{dsl::when<>} clause. The answer in the shipped code is
+no, and the reason is worth recording.
+
+\code{dsl::when<Key, F>} takes its key as a non-type template parameter, so
+the key must be a constant expression of a structural type. A
+\code{constexpr} predicate does satisfy those requirements, and
+\code{dsl::when<p>(handler)} compiles. But the clause never matches.
+\code{WhenClause::try_invoke} knows exactly two ways to recognise a key:
+if the key's type has a static \code{matches} member taking a
+\code{std::string_view}, that member is called; otherwise the key is
+compared with \code{operator==} against the clause's key. A predicate has
+neither a static \code{matches} member nor an \code{operator==}, so the
+comparison branch is not even instantiated, \code{try_invoke} returns
+\code{false}, and the dispatch falls through to the next clause --- and
+ultimately to \code{otherwise}, or to the runtime error if there is none.
+
+So the two facilities are disjoint. A predicate is a value that is applied
+to an argument; a match key is a constant that is compared against. A user
+who wants a guard-like behaviour must either use a \code{dsl::pattern<>}
+key, which the match table does understand, or apply the predicate to the
+dispatched value inside the handler.
+
+\section{Filters and transformations}
+
+A predicate is a \emph{filter}: it answers a yes-or-no question about a
+value and produces nothing. A transformation produces a new value from an
+old one, and the pipeline feature of \chapref{ch:pipeline} is the
+corresponding tool.
+
+The distinction is worth keeping sharp, because the two compose along
+different axes. A pipeline is a chain: each stage consumes the previous
+stage's output, and the chain has a definite order. A predicate
+composition is a tree: the leaves are independent conditions about the same
+argument, and the tree has no order of application beyond the precedence
+rules.
+
+The practical difference shows up when the question is ``which of these
+conditions holds?''. A pipeline answers that by running stages until one
+fails. A predicate tree answers it by combining the conditions with
+disjunction, which evaluates every leaf that is not short-circuited away.
+For a rule engine that must report \emph{all} the reasons a value was
+rejected, a disjunction of predicates is the wrong tool: it stops at the
+first true leaf. A vector of predicates, each evaluated independently, is
+the right one.
+
+\section{A worked example}
+
+Listing~\ref{lst:operators-complete} builds a small rule DSL, prints a
+truth table over an integer domain, and stores the rules in a container.
+Because of the defect described above, the composed predicates use the
+type-erased \code{IntPredicate} alias, while the single predicates use the
+factory directly.
+
+\begin{lstlisting}[style=dslcpp, caption={A complete program that composes
+predicates over an integer domain and prints the truth table. The composed
+predicates use a type-erased callable so that the shipped composition
+operators can be used.},
+label={lst:operators-complete}]
+#include "DSLtk.hpp"
+
+#include <functional>
+#include <iostream>
+#include <string>
+#include <utility>
+#include <vector>
+
+// ---------------------------------------------------------------------------
+//  The feature tag contributes only a named factory.
+// ---------------------------------------------------------------------------
+struct RuleDSL : dsl::DSL<RuleDSL, dsl::Operators>
+{
+  static constexpr auto positive
+      = dsl::predicate ([] (int x) { return x > 0; });
+  static constexpr auto even
+      = dsl::predicate ([] (int x) { return x % 2 == 0; });
+};
+
+// ---------------------------------------------------------------------------
+//  A type-erased predicate.  The composed operators build a new Predicate
+//  from a composed lambda, so the callable type must be one that the
+//  composed lambda converts to.
+// ---------------------------------------------------------------------------
+using IntPredicate = dsl::Predicate<std::function<bool (int)>>;
+
+int
+main ()
+{
+  //  Single predicates need no erasure.
+  auto positive = RuleDSL::positive;
+  auto even = RuleDSL::even;
+  auto via_mixin = RuleDSL::make_pred ([] (int x) { return x < 10; });
+
+  std::cout << "positive(4)  = " << positive (4) << '\n';
+  std::cout << "even(4)      = " << even (4) << '\n';
+  std::cout << "via_mixin(4) = " << via_mixin (4) << '\n';
+
+  //  Composed predicates.
+  IntPredicate p { std::function<bool (int)> ([] (int x) { return x > 0; }) };
+  IntPredicate q { std::function<bool (int)> ([] (int x) { return x % 2 == 0; }) };
+
+  auto both = p & q;
+  auto either = p | q;
+  auto not_p = !p;
+
+  std::cout << "\n  x    p    q   p&q  p|q  !p\n";
+  for (int x = -3; x <= 3; ++x)
+    {
+      std::cout << " " << x << "    " << (p (x) ? 1 : 0) << "    "
+                << (q (x) ? 1 : 0) << "    " << (both (x) ? 1 : 0) << "    "
+                << (either (x) ? 1 : 0) << "    " << (not_p (x) ? 1 : 0)
+                << '\n';
+    }
+
+  //  Predicates are ordinary values: they can be stored.
+  std::vector<std::pair<std::string, std::function<bool (int)>>> rules;
+  rules.emplace_back ("positive", positive);
+  rules.emplace_back ("even", even);
+  for (auto const &[name, pred] : rules)
+    std::cout << name << "(4) = " << pred (4) << '\n';
+}
+\end{lstlisting}
+
+The program prints
+
+\begin{lstlisting}[style=dslcpp]
+positive(4)  = 1
+even(4)      = 1
+via_mixin(4) = 1
+
+  x    p    q   p&q  p|q  !p
+ -3    0    0    0    0    1
+ -2    0    1    0    1    1
+ -1    0    0    0    0    1
+ 0    0    1    0    1    1
+ 1    1    0    0    1    0
+ 2    1    1    1    1    0
+ 3    1    0    0    1    0
+positive(4) = 1
+even(4) = 1
+\end{lstlisting}
+
+\begin{table}[htbp]
+  \centering
+  \begin{tabular}{@{}L{0.14\textwidth}L{0.30\textwidth}L{0.44\textwidth}@{}}
+    \toprule
+    \textbf{Operator} & \textbf{Semantics} & \textbf{Short-circuit behaviour} \\
+    \midrule
+    \code{operator&} &
+    Conjunction. Returns a predicate that holds \code{a(v) && b(v)}. &
+    The right condition is evaluated only if the left one is true. The
+    composed predicate is built eagerly; the conditions are evaluated
+    lazily, when the composed predicate is called. \\
+    \code{operator|} &
+    Disjunction. Returns a predicate that holds \code{a(v) || b(v)}. &
+    The right condition is evaluated only if the left one is false. \\
+    \code{operator!} &
+    Negation. Returns a predicate that holds \code{!a(v)}. &
+    Not applicable: there is only one operand, and it is always
+    evaluated. \\
+    \bottomrule
+  \end{tabular}
+  \caption{The three composition operators of \code{dsl::Predicate}. Note
+  that \code{operator|} here is a \emph{member} of the predicate and has
+  nothing to do with the pipeline operator of \chapref{ch:pipeline}; the two
+  live in the same namespace and mean different things.}
+  \label{tab:predicate-operators}
+\end{table}
+
+\section{Edge cases and limits}
+
+\begin{itemize}
+\item \textbf{There is no \code{operator bool}.} A predicate cannot be
+used directly as a condition; it must be called. There is also no
+\code{operator==}, so two predicates cannot be compared, and a predicate
+cannot be a key of an associative container without an additional wrapper.
+
+\item \textbf{There is no \code{negated()} method.} In the C++ port,
+\code{!} is the only negation, and it works because \cpp{} allows a class
+to define what \code{!} means. The D port, whose \code{!} always yields a
+\code{bool}, must use \code{~} or \code{negated()} instead.
+
+\item \textbf{Composition requires an erasure or a workaround.} As
+described above, the shipped operator bodies do not compile with a closure
+type as the callable. The composition operators work with a type-erased
+callable, or with a user-defined callable wrapper.
+
+\item \textbf{Composition nests.} Each operator returns a new object whose
+callable contains copies of its operands' callables. A composition of
+$n$ leaves therefore stores $n$ callable copies, and a left-deep chain of
+$n$ leaves has call depth $n$. Deeply nested rule sets should be
+flattened by hand.
+
+\item \textbf{Precedence follows the built-in rules.} \code{&} binds
+tighter than \code{|}, and both are left-associative. A user who intends
+\code{p & (q | r)} must parenthesise, because
+\code{p & q | r} means \code{(p & q) | r}. Parentheses are cheap;
+use them.
+
+\item \textbf{There is no disjunction of a predicate with a raw
+callable.} Both operands of \code{&} and \code{|} must be predicates. A
+user who wants to mix in a bare lambda must wrap it with
+\code{dsl::predicate} first.
+
+\item \textbf{Short-circuiting can surprise.} Because the right condition
+is not evaluated when the left one decides the result, a condition with a
+side effect --- a predicate that logs, say --- will not be called in every
+case. Predicates with side effects are a bad idea in any case, but the
+short-circuiting makes the surprise concrete.
+
+\item \textbf{No integration with the match table.} A predicate cannot be
+used as the key of a \code{dsl::when<>} clause; see the discussion above.
+
+\item \textbf{No integration with the rewrite rules.} The rewrite feature
+of \chapref{ch:rewrite} has its own rule representation. A predicate may be
+used inside a rewrite's guard by capturing it in the rule's lambda, but it
+is not a first-class part of the rule syntax.
+
+\item \textbf{The D port differs in spelling.} In D, a single
+\code{opBinary} member handles both binary operators and chooses between
+them by comparing the operator string at run time; the negation uses
+\code{opUnary("~")}. The C++ port uses three separate member overloads,
+selected at compile time, so the run-time comparison of the operator name
+has no C++ counterpart.
+\end{itemize}
+
+\section{Closing}
+
+The operators feature turns a condition into a value and gives that value
+three ways to grow. Its design is right in almost every particular --- the
+callable is owned, the constructor is explicit and constexpr, the
+composition is lazy and short-circuiting --- and the one defect, the
+inability to compose closure-typed predicates out of the box, is a
+localised problem with a documented workaround.
+
+The next chapter moves from values to dispatch. \chapref{ch:pattern-match}
+introduces \api{dsl::match}, \api{dsl::when} and \api{dsl::otherwise}, the
+facility that selects a handler by comparing a runtime key against a table
+of compile-time keys.

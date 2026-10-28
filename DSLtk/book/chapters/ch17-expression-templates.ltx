@@ -1,0 +1,596 @@
+\chapter{Expression Templates: Lazy Trees and Fused Evaluation}
+\label{ch:expression-templates}
+
+\section{The Problem: Eager Arithmetic and the Temporaries It Costs}
+
+Write \code{a + b * c} where \code{a}, \code{b} and \code{c} are vectors of
+one million doubles. A conventional \cpp{} evaluation computes \code{b * c}
+into a fresh heap allocation, computes \code{a + (that)} into a second fresh
+heap allocation, and hands the second one back. Two allocations, two full
+passes over a million elements, and one of the two results thrown away before
+the caller ever sees it. For a numeric DSL this is not a micro-optimisation;
+it is the difference between a language that a user can afford to write
+expressions in and one they cannot.
+
+The classic remedy is the \emph{expression template}: instead of computing a
+subexpression, build a small tree that records what was asked for, and compute
+the whole thing in one pass when the value is finally needed. This is the
+technique behind \code{std::valarray}, behind Eigen's expression templates,
+and behind every numeric library that promises "no temporaries". It is
+notoriously hard to implement, because the operator overloads must return
+something that behaves like a value in every context except the one that
+matters, and because the deferred tree must be able to hold heterogeneous
+operand types without erasing them.
+
+\DSLtk{} provides a compact implementation of this idea. The
+\code{ExprTemplates} feature installs arithmetic operators on your DSL type
+that return lazy tree nodes rather than results, and every tree node can
+evaluate itself into a value. What the shipped implementation does
+\emph{not} do is fuse element-wise array operations the way Eigen does. The
+evaluation is recursive: it evaluates operand values and invokes operations,
+which can create intermediate objects. That distinction is the subject of this chapter,
+and it is worth understanding precisely, because the header's own documentation
+suggests otherwise.
+
+\section{A First Worked Example: Scalar Arithmetic}
+
+The shipped example \code{DSLtk/examples/12-expression-templates.cpp} is the
+smallest possible demonstration of the facility. It defines a leaf type with a
+single double and an \code{expr_value()} accessor, and it builds an expression
+without evaluating it.
+
+\begin{lstlisting}[style=dslcpp,caption={The shipped expression-template example, reproduced verbatim from \code{DSLtk/examples/12-expression-templates.cpp}. The leaf type supplies \code{expr_value()}; the mixin supplies the operators; \code{eval()} produces the number.},label={lst:ch17-scalar}]
+#include "DSLtk.hpp"
+#include <iostream>
+
+struct Scalar : dsl::DSL<Scalar, dsl::ExprTemplates> {
+  double v{};
+  Scalar() = default;
+  explicit Scalar(double x) : v(x) {}
+  double expr_value() const { return v; }
+};
+
+int main() {
+  Scalar a{2}, b{3}, c{4};
+  auto expr = a + b * c - a;
+  std::cout << expr.eval() << "\n";
+}
+\end{lstlisting}
+
+The output is \code{12}. The important thing to notice is not the number but
+the type of \code{expr}. Because \code{a + b * c - a} involves three
+operator applications and no arithmetic at all, \code{expr} is a
+\code{dsl::BinExpr} node, and the multiplication is a nested
+\code{dsl::BinExpr} node inside it. No double has been added, multiplied or
+subtracted. The \code{eval()} call at the end of \code{main} is the only
+place where arithmetic happens, and it happens in a single recursive descent
+through the tree.
+
+\section{A Second Worked Example: Element-Wise Arithmetic}
+
+The scalar example is honest but not very interesting, because a scalar
+expression has nothing to fuse. The interesting case is an array-valued leaf,
+and it requires one piece of machinery that the header does not provide: the
+operation tags must know how to combine two arrays.
+
+The mechanism is this. \code{dsl::BinExpr} does not evaluate anything
+itself; at the bottom of its \code{eval()} it calls the operation tag with
+whatever the two operands evaluated to (\code{DSLtk.hpp}, line 6981). The tag
+used for \code{+} is \code{std::plus<>}, and \code{std::plus<>::operator()}
+is defined as \code{std::forward<T>(t) + std::forward<U>(u)}. So the tag
+does not know anything about arrays; it merely performs a \code{+}. If the
+operand type has an element-wise \code{+}, the tag gets element-wise
+behaviour for free.
+
+That is the whole trick. The user's array type supplies the arithmetic, and
+the expression machinery supplies the deferral.
+
+\begin{lstlisting}[style=dslcpp,caption={Element-wise expression templates. \code{Vec} is an ordinary user-defined array type whose arithmetic operators are element-wise; \code{VecDSL} is the leaf that carries a \code{Vec} and exposes it through \code{expr_value()}. The counter \code{probes} shows that nothing is computed until \code{eval()} is called.},label={lst:ch17-vec}]
+#include "DSLtk.hpp"
+#include <iostream>
+#include <vector>
+
+// An ordinary array type whose arithmetic is element-wise.
+struct Vec {
+  std::vector<double> v;
+
+  std::size_t size() const noexcept { return v.size(); }
+  double operator[](std::size_t i) const noexcept { return v[i]; }
+
+  Vec operator+(const Vec &o) const {
+    Vec r; r.v.resize(v.size());
+    for (std::size_t i = 0; i < v.size(); ++i) r.v[i] = v[i] + o.v[i];
+    return r;
+  }
+  Vec operator-(const Vec &o) const {
+    Vec r; r.v.resize(v.size());
+    for (std::size_t i = 0; i < v.size(); ++i) r.v[i] = v[i] - o.v[i];
+    return r;
+  }
+  Vec operator*(const Vec &o) const {
+    Vec r; r.v.resize(v.size());
+    for (std::size_t i = 0; i < v.size(); ++i) r.v[i] = v[i] * o.v[i];
+    return r;
+  }
+  Vec operator/(const Vec &o) const {
+    Vec r; r.v.resize(v.size());
+    for (std::size_t i = 0; i < v.size(); ++i) r.v[i] = v[i] / o.v[i];
+    return r;
+  }
+  Vec operator*(double s) const {
+    Vec r; r.v.resize(v.size());
+    for (std::size_t i = 0; i < v.size(); ++i) r.v[i] = v[i] * s;
+    return r;
+  }
+  Vec operator-() const {
+    Vec r; r.v.resize(v.size());
+    for (std::size_t i = 0; i < v.size(); ++i) r.v[i] = -v[i];
+    return r;
+  }
+};
+
+// The leaf: carries the array and hands it to the evaluator.
+int probes = 0;
+
+struct VecDSL : dsl::DSL<VecDSL, dsl::ExprTemplates> {
+  Vec data;
+  explicit VecDSL(Vec d) : data(std::move(d)) {}
+  Vec expr_value() const { ++probes; return data; }
+};
+
+int main() {
+  VecDSL a{Vec{{1.0, 2.0, 3.0}}};
+  VecDSL b{Vec{{10.0, 20.0, 30.0}}};
+
+  auto expr = a + b * 2.0;      // lazy: nothing computed yet
+  std::cout << "probes after building the expression: " << probes << "\n";
+
+  Vec r = expr.eval();
+  std::cout << "probes after eval(): " << probes << "\n";
+
+  std::cout << "a + b * 2 = ";
+  for (std::size_t i = 0; i < r.size(); ++i)
+    std::cout << (i ? ", " : "") << r[i];
+  std::cout << "\n";
+
+  Vec neg = (-a).eval();
+  std::cout << "-a        = ";
+  for (std::size_t i = 0; i < neg.size(); ++i)
+    std::cout << (i ? ", " : "") << neg[i];
+  std::cout << "\n";
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch17-vec}. The probe counter shows that the two leaves are read exactly once each, at \code{eval()} time and not before.},label={lst:ch17-vec-out}]
+probes after building the expression: 0
+probes after eval(): 2
+a + b * 2 = 21, 42, 63
+-a        = -1, -2, -3
+\end{lstlisting}
+
+Two details of this listing deserve emphasis. First, \code{Vec} must be a
+user-defined type. The standard \code{std::vector<double>} will not work,
+because the operation tag would then be asked to add two vectors, and there
+is no \code{operator+} for two \code{std::vector<float>}s. The offending
+call is \code{std::plus<>{}(vector, vector)}, and the compiler rejects it
+outright. Second, the leaf type must provide \code{expr_value()}. The
+\code{ExprTemplates} mixin documents this requirement but does not enforce
+it; a leaf without \code{expr_value()} and without \code{eval()} is silently
+treated as its own value, which is the failure mode discussed in
+Section~\ref{sec:ch17-headerexample}.
+
+The multiplication creates an intermediate \code{Vec}, and the addition
+creates another result vector. The value-returning \code{expr_value()}
+also copies its stored vector. These objects can coexist during evaluation.
+The example demonstrates deferred whole-value operations, not allocation-free
+array fusion. A fused implementation would need an indexed evaluation
+protocol such as the separate mechanism supplied by the D port.
+
+\section{The Data Model}
+
+The entire facility consists of three types and one feature tag. All of them
+live in namespace \code{dsl} between lines 6943 and 7129 of the header.
+
+\code{dsl::ExprTerminal} (line 6950) is declared as an empty struct. It is
+described in its own comment as a "tag type indicating a terminal (leaf) in an
+expression template tree". It is not a template, it has no members, and it is
+referenced nowhere else in the header: a search of the whole file finds the
+declaration at line 6950 and no other occurrence. It is therefore dead code
+in the shipped implementation -- a placeholder for a concept that the actual
+design expresses differently, namely through the \code{requires} expressions
+in the dispatch helper. The D port carries the same empty declaration at line
+380 of \code{DSLtk.d}, with the same property.
+
+\code{dsl::BinExpr<Op, L, R>} (lines 6963--7002) is a binary tree node. It
+has exactly two data members, \code{L lhs} and \code{R rhs}, both stored
+\emph{by value}. Storing by value is what makes the tree a self-contained
+value type: a \code{BinExpr} can be copied, moved, stored in a container and
+returned from a function without any lifetime coupling to the objects that
+were combined to build it. The constructor is
+\code{constexpr BinExpr(L l, R r)}, and it moves its arguments into place.
+
+\code{dsl::UnaryExpr<Op, E>} (lines 7010--7032) is the corresponding unary
+node. It has a single member, \code{E operand}, also stored by value, and an
+\code{explicit} constructor, so that a unary node cannot be confused with a
+binary one.
+
+The third type is the feature tag \code{dsl::ExprTemplates} (lines
+7056--7099). It has no data; it contributes a nested \code{Mixin<Derived>}
+template that the \code{dsl::DSL} base inherits from. Because the mixin's
+operators are \emph{hidden friends} -- declared inside the class template and
+found by argument-dependent lookup -- they are only visible when at least one
+operand is of the \code{Derived} type. That is the whole mechanism by which
+the feature attaches operators to your DSL type without polluting the global
+namespace or interfering with unrelated overloads.
+
+\begin{table}[ht]
+\centering
+\caption{Every operator installed by \code{dsl::ExprTemplates}, together with
+the node type and the operation tag it produces. The tags are the
+corresponding function objects of the standard library, in namespace
+\code{std}. There is no other arithmetic operator in the facility.}
+\label{tab:ch17-operators}
+\small
+\begin{tabular}{@{}L{0.13\textwidth}L{0.10\textwidth}L{0.26\textwidth}L{0.33\textwidth}@{}}
+\toprule
+\textbf{Operator} & \textbf{Arity} & \textbf{Produces} & \textbf{Notes} \\
+\midrule
+\code{operator+} & binary & \code{BinExpr<plus<>, D, R>} & Hidden friend; left operand must be \code{Derived}. \\
+\code{operator-} & binary & \code{BinExpr<minus<>, D, R>} & Hidden friend; left operand must be \code{Derived}. \\
+\code{operator*} & binary & \code{BinExpr<multiplies<>, D, R>} & Hidden friend; left operand must be \code{Derived}. \\
+\code{operator/} & binary & \code{BinExpr<divides<>, D, R>} & Hidden friend; left operand must be \code{Derived}. \\
+\code{operator-} & unary & \code{UnaryExpr<negate<>, D>} & Hidden friend; one argument of type \code{Derived}. \\
+\code{operator+} & binary & \code{BinExpr<plus<>, B, R>} & Free function, lines 7103--7108; a \code{BinExpr} on the left. \\
+\code{operator-} & binary & \code{BinExpr<minus<>, B, R>} & Free function, lines 7110--7115. \\
+\code{operator*} & binary & \code{BinExpr<multiplies<>, B, R>} & Free function, lines 7117--7122. \\
+\code{operator/} & binary & \code{BinExpr<divides<>, B, R>} & Free function, lines 7124--7129. \\
+\midrule
+\multicolumn{4}{@{}L{0.84\textwidth}@{}}{\emph{Absent}: the remainder
+operator, every comparison (\code{==}, \code{<}, \code{<=}, \code{>},
+\code{>=}), the compound assignments \code{operator+=}, \code{operator-=},
+\code{operator*=} and \code{operator/=}, and the stream operators
+\code{operator<<} and \code{operator>>}. The D port adds a unary
+\code{operator+}.} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:ch17-operators} is the complete operator surface. The absence
+of the remainder and assignment operators is not an oversight; it is a
+consequence of the design. Because the operators return a tree node rather
+than a value, \code{a += b} would have to mean "rebuild the tree in place",
+which requires the node to be mutable and to own its leaves. The shipped
+implementation chooses immutability and value semantics instead, and it is a
+reasonable trade: the expression becomes an ordinary value that can be stored,
+passed and compared by structure rather than by identity.
+
+The four free functions at lines 7103--7129 are worth a second look, because
+their existence is what makes the operator set compose. The hidden friends
+require their \emph{left} operand to be \code{Derived}. Without the free
+functions, \code{a + b * c} would work (the left operand of \code{+} is
+\code{a}, a \code{Derived}) but \code{a + b * c + d} would not, because the
+left operand of the second \code{+} would be a \code{BinExpr}. The free
+functions close that gap by accepting a \code{BinExpr} on the left and
+producing a \code{BinExpr} whose left member is that \code{BinExpr}. The
+resulting type nests to the left, which is the mirror image of the way the
+operators were written.
+
+\section{The Evaluation Algorithm}
+
+Evaluation of a tree is a single recursive descent. \code{BinExpr::eval()}
+(lines 6976--6982) is three lines long:
+
+\begin{lstlisting}[style=dslcpp,caption={The evaluation of a binary node, transcribed from \code{DSLtk.hpp} lines 6976--6982. The private helper \code{eval_operand} is transcribed in Algorithm~\ref{alg:ch17-dispatch}.},label={lst:ch17-eval}]
+  constexpr auto
+  eval () const
+  {
+    auto l = eval_operand (lhs);
+    auto r = eval_operand (rhs);
+    return Op{}(l, r);
+  }
+\end{lstlisting}
+
+The interesting part is \code{eval_operand} (lines 6985--7001), the private
+static helper that decides what an operand \emph{is}. It performs a
+three-way dispatch, decided at compile time by \code{if constexpr}
+expressions on \code{requires} clauses.
+
+\begin{pseudocode}[Three-way operand dispatch, from \code{DSLtk.hpp} lines 6985--7001]
+\textbf{function} eval\_operand (operand)\\
+\quad \textbf{if} \code{operand.eval()} is well-formed then\\
+\qquad \textbf{return} \code{operand.eval()}\\
+\quad \textbf{else if} \code{operand.expr_value()} is well-formed then\\
+\qquad \textbf{return} \code{operand.expr_value()}\\
+\quad \textbf{else}\\
+\qquad \textbf{return} \code{operand} itself
+\label{alg:ch17-dispatch}
+\end{pseudocode}
+
+Algorithm~\ref{alg:ch17-dispatch} is a compile-time decision, not a runtime
+one. The \code{requires} expression is a substitution-failure context, so if
+the operand type has a callable \code{eval()} member the first branch is
+selected and the other two are not even instantiated. The order matters: a
+node that has \emph{both} \code{eval()} and \code{expr_value()} -- which is
+the case for a nested \code{BinExpr}, since \code{BinExpr} has \code{eval()}
+but no \code{expr_value()} -- is resolved by \code{eval()}. A leaf that
+provides \code{expr_value()} is resolved by the second branch. A leaf that
+provides neither is returned unchanged, which is what makes plain scalars
+usable as right-hand operands: \code{b * 2.0} evaluates its right operand
+to the double \code{2.0}.
+
+The unary node inlines exactly the same three-way dispatch (lines
+7019--7030) rather than calling the binary helper, because the two cases
+differ in arity and inlining avoids a spurious copy of the operand.
+
+The evaluation order is left to right: \code{l} is computed before \code{r},
+and both are computed before the operation is applied. That ordering is
+observable if the leaf types have side effects, and it is worth knowing which
+order you get rather than discovering it.
+
+Figure~\ref{fig:ch17-tree} shows the tree for \code{a + b * 2.0} before and
+after evaluation.
+
+\begin{figure}[ht]
+\centering
+\begin{dslgraph}
+  % ---- the tree as built ----
+  \node[dslbox, text width=24mm] (plus) at (0,0) {\code{std::plus<>}};
+  \node[dslsmall] (lea) at (-1.8,-1.4) {\code{VecDSL} a};
+  \node[dslbox, text width=32mm] (mul) at (1.8,-1.4) {\code{std::multiplies<>}};
+  \node[dslsmall] (leb) at (0.8,-2.8) {\code{VecDSL} b};
+  \node[dslsmall] (cst) at (2.8,-2.8) {\code{2.0}};
+
+  \draw[dsledge] (plus) -- (lea);
+  \draw[dsledge] (plus) -- (mul);
+  \draw[dsledge] (mul) -- (leb);
+  \draw[dsledge] (mul) -- (cst);
+
+  \node[dslsmall, text width=30mm] (cap1) at (0,-4.1)
+    {the lazy tree: four nodes, no values};
+
+  % ---- the fold ----
+  \node[dsllarge, text width=24mm] (arrow) at (5.0,0)
+    {\code{.eval()}\\one post-order pass};
+
+  \node[dslbox, text width=24mm] (plus2) at (8.4,0) {\code{std::plus<>}};
+  \node[dslsmall] (va) at (7.0,-1.4) {\code{{1,2,3}}};
+  \node[dslsmall] (vb) at (9.8,-1.4) {\code{{20,40,60}}};
+
+  \draw[dsledge] (plus2) -- (va);
+  \draw[dsledge] (plus2) -- (vb);
+
+  \node[dsllarge, text width=26mm] (res) at (8.4,-3.0)
+    {\code{{21,42,63}}\\the result};
+
+  \draw[dslfeedback] (res.west) -- ++(-12mm,0) |- (mul.east);
+  \node[dslsmall, anchor=west, text width=42mm] (note) at (2.2,-4.6)
+    {the \code{multiplies} node was folded in place: no intermediate array survives};
+\end{dslgraph}
+\caption{The lazy tree built by \code{a + b * 2.0} and its evaluation. The
+left-hand tree contains no computed values at all; the right-hand tree is the
+same tree after one post-order pass, in which the \code{multiplies} node was
+evaluated first and its result consumed by the \code{plus} node.}
+\label{fig:ch17-tree}
+\end{figure}
+
+\section{What ``Fusion'' Means Here, and What It Does Not}
+
+It is tempting to read \code{eval()} as performing element-wise fusion, in
+the sense that Eigen performs it: the whole expression \code{a + b * 2.0} is
+evaluated into a single output buffer in one linear pass, with no
+intermediate array ever materialised. The shipped \cpp{} implementation does
+\emph{not} do this, and the distinction is not cosmetic.
+
+In the \cpp{} header, fusion is purely \emph{structural}. The tree is walked
+once, in post-order, and each node's result is produced by applying its
+operation tag to the two already-evaluated children. Whether that avoids
+temporaries depends entirely on what the operation tag does. With
+\code{std::multiplies<>} applied to two \code{Vec} values, a \code{Vec} is
+produced; with a tag that wrote into a caller-supplied output buffer, no
+intermediate would be needed. The header offers no such tag, no output
+parameter on \code{eval()}, and no element-indexed evaluation hook. There is
+no \code{eval_at(index)} in the \cpp{} port at all.
+
+What the \cpp{} port \emph{does} guarantee is that the deferred expression is
+not evaluated eagerly and that the number of tree nodes is proportional to the
+number of operators written, not to the number of elements. For a leaf that
+returns a scalar this is exactly right: \code{a + b * c - a} performs three
+arithmetic operations, once each, when \code{eval()} is called. For a leaf
+that returns an array, the operation tags perform their own element-wise
+loops, and the number of passes over the data is the number of operators in
+the expression. That is still better than the eager baseline in one respect
+--- the tree is built once and can be evaluated many times --- but it is not
+the single-pass fusion that the word ``expression template'' usually implies.
+
+To obtain true element-wise fusion in \cpp{} with this header, the user must
+supply operation tags that fuse. Writing a bespoke tag that accumulates into
+an output buffer, and a leaf whose \code{expr_value()} exposes its elements
+one at a time, is possible but is not supported by any API in the header: the
+dispatch helper in Algorithm~\ref{alg:ch17-dispatch} knows only about whole
+operands.
+
+\section{The Header's Own Example Does Not Work}
+\label{sec:ch17-headerexample}
+
+The quick-start comment at the top of \code{DSLtk.hpp} contains, at lines
+308--316, an "Example C --- VecDSL (ExprTemplates)" that does not compile and
+does not evaluate. The example reads:
+
+\begin{lstlisting}[style=dslcpp,caption={The header's Example C, transcribed from \code{DSLtk.hpp} lines 308--316. It is reproduced here because it does not work, and the reason is instructive.},label={lst:ch17-badexample}]
+struct VecDSL : dsl::DSL<VecDSL, dsl::ExprTemplates> {
+    std::vector<float> data;
+};
+// Usage:
+VecDSL a{{1,2,3}}, b{{4,5,6}};
+auto expr   = a + b;          // lazy
+auto result = expr.eval();    // {5, 7, 9}
+\end{lstlisting}
+
+There are two independent problems with it.
+
+The first is trivial and mechanical. \code{VecDSL} is an aggregate, and so
+is its base,
+\code{dsl::DSL<VecDSL, dsl::ExprTemplates>} -- itself an aggregate whose own
+base is the feature mixin. Aggregate initialisation of \code{VecDSL}
+therefore requires a braced initialiser for the mixin base, so the printed
+\code{VecDSL a{{1,2,3}}} is rejected: the compiler asks for the mixin to be
+brace-enclosed. The working form is \code{VecDSL a{{}, {1,2,3}}}, or a
+user-declared constructor, as in Listing~\ref{lst:ch17-vec}.
+
+The second problem is the interesting one, and it is a genuine design
+hazard in the feature. \code{VecDSL} has no \code{expr_value()} and no
+\code{eval()}, so the third branch of Algorithm~\ref{alg:ch17-dispatch}
+applies: the operand is returned as itself. \code{eval()} therefore holds two
+\code{VecDSL} values and calls the operation tag on them. But \code{l + r} on
+two \code{VecDSL} values resolves to the very hidden friend \code{operator+}
+that the mixin installed, which builds \emph{another} \code{BinExpr}. The
+evaluation therefore re-enters the operator machinery instead of reaching
+the payload, and \code{expr.eval()} returns a fresh lazy tree rather than a
+vector. The type it returns is
+\code{dsl::BinExpr<std::plus<>, VecDSL, VecDSL>}, and evaluating that
+result produces the same type again: the evaluation is a fixed point that
+never terminates in a value. Compiling the example as printed and asking for
+the type of \code{expr.eval()} confirms this exactly.
+
+The obvious repair -- adding an \code{expr_value()} that returns the
+vector -- does not help either. The operation tag would then be asked to add
+two vectors, which is ill-formed, because there is no \code{operator+} for
+two \code{std::vector<float>}s; the compiler reports precisely that. This is
+the same lesson that Listing~\ref{lst:ch17-vec} teaches: the leaf's value
+type must supply the arithmetic. The header's example supplies neither the
+accessor nor the arithmetic, and it consequently produces neither a number
+nor a vector.
+
+\section{Contrast with the D Port}
+
+The D implementation in \code{DSLtk.d} does have element-wise fusion, and the
+difference is instructive enough to be worth reading side by side. Its
+expression trees live at lines 379--474, and they carry three pieces of
+machinery that have no counterpart in \cpp{}.
+
+First, the D \code{BinExpr} is parameterised by an operation \emph{string},
+not by a tag type. Its declaration is given in
+Listing~\ref{lst:ch17-dbin}. The operation is mixed into the generated code
+with a D \code{mixin} expression, which is how D code-generates a call to an
+operator that is determined at compile time.
+
+\begin{lstlisting}[style=dslsexpr,caption={The D binary expression node, transcribed from \code{DSLtk.d} lines 428--432. The operation is a compile-time string, mixed into the generated expression.},label={lst:ch17-dbin}]
+struct BinExpr(string op, L, R) if (arithmetic!op)
+{
+    L lhs;
+    R rhs;
+    mixin ExpressionOperators;
+\end{lstlisting}
+
+Second, D has the notion of an \emph{indexed} operand, computed by the
+private template \code{indexed!T} at line 415. An operand is indexed if it
+has an \code{eval_at} member, if it is a D array, or if its
+\code{expr_value()} returns an array. The private helper \code{operandAt}
+(line 417) fetches element \code{i} of an operand, and \code{operandLength}
+(line 423) determines the length of the result.
+
+Third, and decisively, when either operand is indexed the D \code{BinExpr}
+grows an \code{eval_at} member and an \code{eval()} that allocates one
+result array and fills it element by element. The body of the former is
+reproduced in Listing~\ref{lst:ch17-devat}; the latter loops over the
+indices, calling \code{eval_at} once per element (lines 447--453). That is
+exactly the element-wise fusion the \cpp{} port lacks: one output buffer, one
+linear pass, and a single length check that throws when the operands
+disagree (line 440).
+
+\begin{lstlisting}[style=dslsexpr,caption={The D element-wise evaluation hook, transcribed from \code{DSLtk.d} lines 446--453. The expression is assembled by the D \code{mixin} template, so the operation is spliced into the generated code at compile time.},label={lst:ch17-devat}]
+        auto eval_at(size_t i) { return mixin("operandAt(lhs, i) " ~ op ~ " operandAt(rhs, i)"); }
+        auto eval()
+        {
+            alias T = typeof(eval_at(0));
+            auto result = new T[length()];
+            foreach (i; 0 .. result.length) result[i] = eval_at(i);
+            return result;
+        }
+\end{lstlisting}
+
+So the same conceptual facility exists in both ports, but the \cpp{} version
+is a deferral mechanism with a structural single-pass evaluation, while the D
+version is a deferral mechanism with genuine element-wise fusion. When
+reading the older \DSLtk{} manual, it is the D behaviour that is usually
+described; the \cpp{} header is authoritative.
+
+\section{Edge Cases and Limits}
+
+The following list is the honest summary of what this facility does not do.
+
+\begin{itemize}
+\item \textbf{Only five arithmetic operators exist.} There is no remainder
+operator, no comparison, no assignment operator, and no stream insertion.
+A program that wants \code{a < b} on DSL values must define that operator
+itself, and because the hidden friends are found by argument-dependent
+lookup, a user-defined \code{operator<} on the \code{Derived} type will
+coexist with them without ambiguity.
+
+\item \textbf{There is no element-wise fusion in the \cpp{} port.} As
+Section~\ref{sec:ch17-headerexample} explains, \code{eval()} walks the tree
+once but each node applies its operation tag to whole operands. Eliminating
+intermediate arrays requires user-supplied operation tags and a
+user-supplied element-access protocol; the header provides neither.
+
+\item \textbf{The dispatch order is fixed.} \code{eval()} is tried before
+\code{expr_value()}. A leaf type that defines both will have its
+\code{eval()} used, which is usually what one wants but is never stated in
+the mixin's documentation.
+
+\item \textbf{Leaf types without an accessor silently become their own
+value.} The third branch of Algorithm~\ref{alg:ch17-dispatch} means that a
+leaf with no \code{eval()} and no \code{expr_value()} is passed straight to
+the operation tag. If the tag can accept the leaf type -- as \code{std::plus<>}
+can, when the leaf has an \code{operator+} of its own -- the expression
+evaluates to something surprising. If the tag cannot accept it, the error
+appears far from its cause, at the point of the \code{eval()} call rather than
+at the point of the leaf's definition.
+
+\item \textbf{Operands are stored by value.} A \code{BinExpr} copies its
+leaves. For a leaf holding a large array this copy happens when the tree is
+built, not when it is evaluated, which means the deferral does not extend to
+the cost of acquiring the operands. A leaf that holds a handle to shared
+immutable data avoids the copy; a leaf that holds an array by value does not.
+
+\item \textbf{Trees are not comparable.} There is no \code{operator==} for
+\code{BinExpr} or \code{UnaryExpr}, so two structurally identical trees are
+unequal in the \cpp{} sense. A tree can of course be compared by evaluating
+both sides and comparing the results.
+
+\item \textbf{There is no reuse, no partial evaluation and no caching.}
+Calling \code{eval()} twice evaluates the tree twice. There is no notion of
+a partially evaluated tree, of constant folding, or of a common
+subexpression shared between two trees.
+
+\item \textbf{Only the left-hand \code{BinExpr} case is covered.} The free
+operators accept a \code{BinExpr} on the left, so \code{(a + b) * c}
+compiles. A \code{UnaryExpr} on the left of a binary operator does not: there
+is no free \code{operator+} for a \code{UnaryExpr} on the left. Writing
+\code{-(a + b) * c} is therefore ill-formed, whereas \code{(a + b) * c} is
+fine.
+
+\item \textbf{\code{eval()} is \code{constexpr} but rarely usable as such.}
+The declaration is \code{constexpr}, so a tree over literal types can be
+evaluated at compile time. In practice the C++20 standard library offers
+little that is usable inside a constant expression, and the leaf types of
+interest are not literal types.
+\end{itemize}
+
+\section{Closing}
+
+The \code{ExprTemplates} feature gives a DSL author arithmetic operators that
+build a value rather than perform a computation, and gives them a single
+\code{eval()} that walks the resulting tree once. Its machinery is small:
+two node templates, a three-way compile-time dispatch, a set of hidden
+friends, and four free functions that let a tree node appear on the left of
+a further operation. The interesting design decisions are all in the
+negative space: no other operators, no element-wise fusion in the \cpp{} port,
+and a fallback branch that turns a missing accessor into a silently wrong
+answer rather than a compile error.
+
+The next chapter turns to a facility with the opposite character. Where
+expression templates defer a computation that the programmer has already
+written down, custom literals let a programmer write down a \emph{surface
+form} -- \code{"3.5_km"} -- that the library turns into a number at run
+time.

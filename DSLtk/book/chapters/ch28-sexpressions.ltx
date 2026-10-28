@@ -1,0 +1,581 @@
+\chapter{S-Expressions: Reader, Printer, and Rule Notation}
+\label{ch:sexpressions}
+
+A rewrite system needs a surface syntax. Rules must come from somewhere: a
+configuration file, a test fixture, a literate program, a command-line
+argument, an editor buffer. If the syntax of a rule is baked into the
+compiler, the compiler owns a grammar that every user of the library must
+agree on. If the syntax is a plain string of parentheses, the library owns
+almost nothing and the user owns everything, including the decision of
+whether rules are written in Lisp, in Scheme, in a domain-specific notation
+that happens to be parenthesised, or in some entirely unrelated surface
+syntax of their own devising.
+
+DSLtk resolves this tension with the S-expression. It is the smallest
+interchange language that can carry a tree of atoms, and it is exactly
+large enough to carry a rewrite rule, a grammar production, and a term. The
+library provides a reader for it, a printer for it, a bridge to the
+\code{ASTNode} tree of \chapref{ch:astnode}, and a small notation for
+rules that is shared with the equality-saturation machinery of
+\chapref{ch:egraphs}. This chapter describes that layer in full, because
+everything downstream---the e-graph, the rule notation, the equality
+observers---is expressed in it.
+
+The single most important thing to understand about the DSLtk S-expression is
+that it is \emph{not} a tagged union, and that quoting is a first-class
+property of the value rather than something the printer infers. Those two
+facts drive almost every design decision in the rest of this chapter.
+
+\section{The data model}
+
+\api{dsl::SExpr} is a plain aggregate with four public data members
+(\texttt{DSLtk.hpp}, line 9142). The following listing is an abridged
+excerpt: it shows the data members only, and the two factories and the
+printer follow them in the header.
+
+\begin{lstlisting}[style=dslcpp,caption={The four data members of \code{SExpr}.},label=lst:sexpr-struct]
+struct SExpr
+{
+  bool is_atom = true;
+  std::string text;
+  std::vector<SExpr> items;
+  bool quoted = false;
+  // ...
+};
+\end{lstlisting}
+
+The type is a \emph{tagged struct, not a variant}. There is no
+\code{std::variant}, no \code{std::optional} of a list, and no
+\code{std::visit}. A value is an atom if \code{is_atom} is true and a list
+otherwise; the list's elements live in \code{items} and the atom's spelling
+lives in \code{text}. This is worth stating plainly because the natural
+instinct, coming from a modern C++ background, is to reach for a variant and
+then to be surprised that the code does not compile. It is also worth
+stating that \code{is_atom} is a \emph{data member, not a method}. It
+reads as \code{expr.is_atom}, not \code{expr.is_atom()}. A
+\code{!is_atom} member means the value is a list.
+
+Because the type is an aggregate, the two factories are \emph{static member
+functions} rather than constructors, and the aggregate initialisation they
+perform is visible in the source:
+
+\begin{lstlisting}[style=dslcpp,caption={The two factories, showing the auto-escalation rule.},label=lst:sexpr-factories]
+static SExpr
+atom (std::string text, bool quoted = false)
+{
+  if (text.empty ())
+    quoted = true;
+  for (unsigned char c : text)
+    quoted |= c <= ' ' || c == '(' || c == ')' || c == '"' || c == ';'
+              || c == '\\';
+  return { true, std::move (text), {}, quoted };
+}
+static SExpr
+list (std::vector<SExpr> items)
+{
+  return { false, {}, std::move (items), false };
+}
+\end{lstlisting}
+
+The \code{atom} factory performs \emph{auto-escalation}: the caller may ask
+for an unquoted atom, but the factory overrides the request and forces
+\code{quoted} to true whenever the text is empty or contains any byte that
+is less than or equal to a space, or one of \code{(}, \code{)}, \code{"},
+\code{;}, or \texttt{\textbackslash}. The reason is mechanical: an unquoted atom
+is printed bare, and an atom printed bare cannot contain a delimiter without
+changing the meaning of the output. Rather than silently producing a
+string that will not read back as the same value, the factory guarantees
+the round-trip property \code{parse_sexpr (e.dump ()).dump () == e.dump ()}
+for every value it can build. The \code{list} factory always produces an
+unquoted list, because a list's quoting is a property of its elements.
+
+The \code{quoted} flag carries a second, semantic meaning that the printer
+and the rule machinery both rely on: \emph{a quoted atom is data, never a
+pattern variable}. The rule notation of \secref{sec:rule-notation} uses
+atoms whose text begins with a question mark as pattern variables. A bare
+\code{?x} therefore denotes a metavariable, while \code{"?x"} denotes the
+two-character string \code{?x}. The distinction is recorded in the data
+member and survives every round trip through the reader, the printer, and
+the equality graph.
+
+The equality operator is \code{operator== (const SExpr &) const = default},
+so it compares all four members. Values built through the normal factories
+preserve their meaningful atom/list and quoting distinctions. Values that
+differ only in quoting are not equal: \code{SExpr::atom
+("x")} and \code{SExpr::atom ("x", true)} are distinct S-expressions, even
+though their printed forms differ as well. There is no explicit \code{operator!=};
+the defaulted \code{==} supplies it in \cpp{}20, but it is the four-field
+comparison that matters, not the absence of a spelling.
+
+\begin{table}[htbp]
+\centering
+\caption{The public surface of the S-expression layer.}
+\label{tab:sexpr-api}
+\begin{tabular}{@{}L{34mm}L{52mm}L{26mm}@{}}
+\toprule
+\textbf{Entity} & \textbf{Shape} & \textbf{Role} \\
+\midrule
+\code{SExpr} & aggregate: \code{is_atom}, \code{text}, \code{items}, \code{quoted} & one node of a tree \\
+\code{SExpr::atom} & \code{static SExpr atom (std::string, bool = false)} & build an atom, auto-escalating \\
+\code{SExpr::list} & \code{static SExpr list (std::vector<SExpr>)} & build a list \\
+\code{SExpr::dump} & \code{std::string dump () const} & print in canonical form \\
+\code{SExpr::operator==} & defaulted & structural identity, quoting included \\
+\code{parse_sexpressions} & \code{std::vector<SExpr> (std::string_view)} & read every form in a text \\
+\code{parse_sexpr} & \code{SExpr (std::string_view)} & read exactly one form \\
+\code{ast_to_sexpr} & \code{SExpr (const ASTNode &)} & tree to interchange form \\
+\code{sexpr_to_ast} & \code{ASTNode (const SExpr &)} & interchange form to tree \\
+\code{sexpr_rule} & \code{ERewriteRule (const SExpr &)} & one rule from one form \\
+\code{sexpr_rules} & \code{std::vector<ERewriteRule> (std::string_view)} & rules from a whole file \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Printing}
+
+The printer is a single member function, \code{dump}, and it is worth
+reading closely because its output is the canonical text form that the
+reader is expected to invert. A list is printed as a parenthesised,
+space-separated sequence: \code{(a b c)}. An atom is printed bare when it is
+safe and double-quoted when it is not. The decision is made twice, once at
+construction time by the auto-escalation rule and once at print time, and
+the two agree because the print-time test is the same predicate
+(\texttt{DSLtk.hpp}, lines 9178--9181): quote the atom if it was flagged, if
+it is empty, or if it contains a byte that is at most a space, or one of
+\code{(}, \code{)}, \code{"}, \code{;}, or \texttt{\textbackslash}.
+
+Inside the quotes, five characters are escaped: newline becomes
+\texttt{\textbackslash n}, carriage return becomes \texttt{\textbackslash r}, tab
+becomes \texttt{\textbackslash t}, a double quote becomes
+\texttt{\textbackslash"}, and a backslash becomes \texttt{\textbackslash\textbackslash}.
+Every other byte, including a byte with the high bit set, is emitted
+verbatim. Note that the escape set is exactly the set the reader accepts,
+which is what makes the printer and the reader inverses of one another.
+
+Two consequences deserve emphasis. First, the printer always quotes an
+atom that was constructed as quoted, even when the text would be perfectly
+safe unquoted: \code{SExpr::atom ("?x", true).dump ()} yields
+\code{"?x"}, not \code{?x}. This is deliberate. The quoted flag is
+semantic, and a printer that silently dropped it would turn a data atom
+into a pattern variable on the next read. Second, an atom that was not
+flagged but whose text would be unsafe is quoted at print time anyway,
+which is a belt-and-braces measure for values that were built by aggregate
+initialisation rather than by the factory.
+
+\begin{lstlisting}[style=dslsexpr,caption=Canonical printed forms.,label=lst:sexpr-dumps]
+;; bare atoms stay bare
+(add a 0)          ; the list (add a 0)
+mul                ; the atom mul
+;; atoms that need quoting get it
+"a b"              ; the atom a<space>b
+""                 ; the empty atom
+"a;b"              ; the atom a;s
+"a\\b"             ; the atom a\b
+;; the quoted flag survives
+"?x"               ; data, not a variable
+?x                 ; a variable
+\end{lstlisting}
+
+\section{The reader}
+
+Reading is the job of \api{dsl::sexpr_detail::Reader}, a small struct
+holding a \code{std::string_view source} and a \code{std::size_t pos}
+(\texttt{DSLtk.hpp}, line 9213). The struct is in a \code{sexpr_detail}
+namespace, which is the library's convention for machinery that is
+deliberately not part of the public interface; the public entry points are
+free functions that construct a reader and drive it.
+
+The reader has three member functions. \code{skip()} consumes whitespace
+and comments. \code{error()} throws. \code{read (depth)} consumes exactly
+one S-expression and returns it.
+
+\code{skip()} treats any byte at most a space as whitespace, and treats a
+semicolon as the start of a line comment that runs to the end of the line.
+There are \emph{no block comments}: there is no \texttt{\#} form, no nested
+comment syntax, and no way to comment out a region. The reason is that the
+S-expression notation is meant to be embedded inside other host languages,
+where \texttt{\#} is frequently already spoken for, and where a line comment
+is the one form that cannot be confused with the host's own syntax.
+
+\code{error()} throws \code{std::invalid_argument} with a message of the
+form \code{S-expression at N: ...}, where \code{N} is the reader's current
+offset into the source. The offset is the position of the offending byte,
+which for a nested failure is the position at which the reader was when it
+detected the problem, not necessarily the position of the outermost
+unbalanced parenthesis. This is a deliberate trade: the message identifies
+the point of failure precisely, and the reader does not maintain a stack of
+open parentheses to report the enclosing context.
+
+\code{read (depth)} is the heart of the reader. It is recursive, and the
+\code{depth} parameter is a guard rather than a hint: if \code{depth}
+exceeds 512 the reader raises \code{nesting limit exceeded}. The counter
+starts at zero for a top-level form, so a source containing 513 levels of
+nested parentheses is rejected, while 512 levels are accepted. The limit
+exists because the reader recurses on the C++ stack, and an unbounded
+nesting limit would turn a malformed or hostile input into a stack
+overflow, which is a crash rather than a diagnosable error.
+
+The reader dispatches on the next significant byte. A \code{(} opens a
+list: the reader consumes it and then loops, reading sub-expressions until
+it encounters a \code{)}, which it consumes and returns as a list. Running
+out of input inside a list raises \code{unterminated list}. A \code{"}
+opens a quoted atom, which is read until the closing quote with the escape
+rules described below. Anything else begins a bare atom, which runs until
+whitespace, a \code{(}, a \code{)}, or a \code{;}. A \code{)} encountered
+where an expression was expected raises \code{unexpected ')'}.
+
+The quoted-atom reader recognises exactly five escapes: \texttt{\textbackslash n},
+\texttt{\textbackslash r}, \texttt{\textbackslash t}, \texttt{\textbackslash\textbackslash},
+and \texttt{\textbackslash"}. A backslash at the very end of the source raises
+\code{unfinished escape}; a backslash followed by anything else raises
+\code{unknown escape}. A quoted atom that is never closed raises
+\code{unterminated quoted atom}.
+
+One point deserves a warning, because the notation it contradicts is
+ubiquitous in Lisp-family languages: \textbf{the \code{'} quote form is not
+supported}. Writing \code{'x} does not produce the atom \code{x} quoted;
+it produces the bare atom \code{'x}, because a single quote is not a
+delimiter and the bare-atom scanner simply consumes it as an ordinary
+byte. This is not an oversight in the reader but a consequence of the
+grammar: the reader has exactly two ways to write an atom, a bare one and
+a double-quoted one.
+
+\begin{figure}[htbp]
+\centering
+\begin{dslgraph}
+  \node[dsldecision] (start) at (0,0) {start of\\a form};
+  \node[dslbox] (skip) at (0,-1.4) {skip whitespace\\and \code{;} comments};
+  \node[dsldecision] (c1) at (0,-3.0) {next byte\\is \code{(} ?};
+  \node[dslbox] (list) at (-3.6,-4.5) {read a list:\\until \code{)}};
+  \node[dsldecision] (c2) at (3.6,-4.5) {next byte\\is \code{"} ?};
+  \node[dslbox] (quoted) at (1.6,-6.3) {read a\\quoted atom};
+  \node[dslbox] (bare) at (5.6,-6.3) {read a\\bare atom};
+  \node[dslterm] (done) at (3.6,-8.0) {return\\one form};
+  \node[dsllarge, fill=warnbg] (guard) at (-3.6,-8.0) {guards:\\depth beyond 512\\input exhausted\\stray close paren};
+
+  \draw[dsledge] (start) -- (skip);
+  \draw[dsledge] (skip) -- (c1);
+  \draw[dsledge] (c1) -- node[above, font=\scriptsize] {yes} (list);
+  \draw[dsledge] (c1) -- node[above, font=\scriptsize] {no} (c2);
+  \draw[dsledge] (c2) -- node[above, font=\scriptsize] {yes} (quoted);
+  \draw[dsledge] (c2) -- node[above, font=\scriptsize] {no} (bare);
+  \draw[dsledge] (list) -- (done);
+  \draw[dsledge] (quoted) -- (done);
+  \draw[dsledge] (bare) -- (done);
+  \draw[dsledgedash] (guard) -- (list);
+  \draw[dsledgedash] (guard) -- (quoted);
+\end{dslgraph}
+\caption{The reader as a state machine. Each form is recognised by its first
+significant byte; the two guards on the left are the only places where the
+reader can fail before it has produced a value.}
+\label{fig:sexpr-reader}
+\end{figure}
+
+\begin{pseudocode}[Read one S-expression]
+\textbf{function} read (reader, depth)\\
+\quad if depth is greater than 512 then\\
+\qquad raise \emph{nesting limit exceeded}\\
+\quad skip whitespace and \code{;} comments\\
+\quad if the source is exhausted then\\
+\qquad raise \emph{expected expression}\\
+\quad if the next byte is \code{)} then\\
+\qquad raise \emph{unexpected ')'}\\
+\quad if the next byte is \code{(} then\\
+\qquad consume it\\
+\qquad repeat\\
+\qquad\qquad skip whitespace and comments\\
+\qquad\qquad if the source is exhausted then\\
+\qquad\qquad\qquad raise \emph{unterminated list}\\
+\qquad\qquad if the next byte is \code{)} then\\
+\qquad\qquad\qquad consume it and return the list\\
+\qquad\qquad append read (reader, depth plus one) to the items\\
+\quad if the next byte is \code{"} then\\
+\qquad consume it and read characters until the closing quote\\
+\qquad\qquad apply the five escapes; reject any other escape\\
+\qquad return a quoted atom\\
+\quad otherwise\\
+\qquad scan bytes until space, \code{(}, \code{)}, or \code{;}\\
+\qquad return a bare atom
+\end{pseudocode}
+
+\section{The public parsing functions}
+
+Two free functions expose the reader. \api{parse_sexpressions} takes a
+\code{std::string_view} and returns a \code{std::vector<SExpr>}: it reads
+every form in the text, in order, and returns an empty vector for an empty
+or comment-only input. \api{parse_sexpr} takes the same argument and
+returns a single \code{SExpr}; if the text does not contain exactly one
+form it throws \code{std::invalid_argument} whose message is
+\emph{expected exactly one S-expression}. The distinction matters: \code{parse_sexpressions} is the
+entry point for a file of rules or a file of top-level forms, while
+\code{parse_sexpr} is the entry point for a value that is expected to be a
+single tree, such as the left-hand side of a rewrite.
+
+Neither function owns its argument. Both take a \code{std::string_view},
+so a caller may pass a string literal, a \code{std::string}, or a slice of
+a larger buffer, and the S-expressions that come back own their own
+storage: the reader copies the text of each atom into a fresh
+\code{std::string}, so the result outlives the source buffer. That is one
+reason the reader's input is a view but the output is not.
+
+\begin{lstlisting}[style=dslcpp,caption=Reading S-expressions and printing them back.,label=lst:sexpr-roundtrip]
+#include "DSLtk.hpp"
+#include <iostream>
+#include <string>
+
+int
+main ()
+{
+  const std::string source = R"(
+; A tiny program in the interchange language.
+(define (square x) (* x x))
+(print (square 7))
+(print "a quoted atom")
+)";
+
+  std::cout << "== read and print back ==\n";
+  for (const auto &form : dsl::parse_sexpressions (source))
+    std::cout << "  " << form.dump () << "\n";
+
+  std::cout << "\n== quoting is a data member ==\n";
+  auto pattern = dsl::parse_sexpr ("(mul (add ?x 0) 1)");
+  const auto &variable = pattern.items[1].items[1];
+  std::cout << "  ?x text        : " << variable.text << "\n";
+  std::cout << "  ?x quoted?     : " << std::boolalpha << variable.quoted << "\n";
+  auto literal = dsl::SExpr::atom ("?x", true);
+  std::cout << "  \"?x\" quoted?   : " << literal.quoted << "\n";
+  std::cout << "  equal?         : " << (variable == literal) << "\n";
+  std::cout << "  auto-escalated : " << dsl::SExpr::atom ("a b").dump () << "\n";
+
+  std::cout << "\n== exactly one form ==\n";
+  try
+    {
+      (void) dsl::parse_sexpr ("(a) (b)");
+    }
+  catch (const std::exception &ex)
+    {
+      std::cout << "  " << ex.what () << "\n";
+    }
+  return 0;
+}
+\end{lstlisting}
+
+The output of \lstref{lst:sexpr-roundtrip} is:
+
+\begin{lstlisting}[style=dslcmd,caption=Output of \lstref{lst:sexpr-roundtrip}.]
+== read and print back ==
+  (define (square x) (* x x))
+  (print (square 7))
+  (print "a quoted atom")
+
+== quoting is a data member ==
+  ?x text        : ?x
+  ?x quoted?     : false
+  "?x" quoted?   : true
+  equal?         : false
+  auto-escalated : "a b"
+
+== exactly one form ==
+  expected exactly one S-expression
+\end{lstlisting}
+
+\section{The bridge to \code{ASTNode}}
+
+Two functions translate between the interchange form and the value-type tree
+of \chapref{ch:astnode}. \api{ast_to_sexpr} maps a leaf to a two-element
+list \code{(tag value)} and an inner node to \code{(tag child ...)},
+with the tag as the head atom (\texttt{DSLtk.hpp}, line 9332). The
+conversion is therefore total: every \code{ASTNode} has an S-expression
+form, and the form is unambiguous, because a leaf is always a two-element
+list whose second element is an atom.
+
+\api{sexpr_to_ast} is the inverse, and it is where the asymmetry of the
+representation shows. The implementation is at \texttt{DSLtk.hpp}, line
+9343. The head of the list must be an atom. A list whose head is itself a
+list is rejected: the adapter throws \code{std::invalid_argument}, and the
+message is \emph{AST S-expression requires an atom head}.
+
+A two-element list whose second element is an atom is interpreted as a
+leaf, and every other list is interpreted as an inner node whose children
+are the recursively converted tail.
+
+The ambiguity is real and unavoidable: a two-element list
+\code{(num 1)} could mean the leaf \code{num} with value \code{1} or the
+inner node \code{num} with one child, the atom \code{1}. The bridge
+resolves it in favour of the leaf reading, which matches the convention
+that leaves are tagged with a value and inner nodes are tagged with
+children. A user who needs the other reading must keep the S-expression
+rather than round-tripping through \code{ASTNode}. The older prose in the
+DSLtk manual says the same thing and it is worth repeating: the
+interchange model and the tree model are not isomorphic, and the bridge is a
+convenience, not a bijection.
+
+\begin{table}[htbp]
+\centering
+\caption{The syntax the reader accepts.}
+\label{tab:sexpr-syntax}
+\begin{tabular}{@{}L{30mm}L{62mm}@{}}
+\toprule
+\textbf{Form} & \textbf{Meaning} \\
+\midrule
+\code{(} & opens a list; the matching \code{)} closes it \\
+\code{)} & closes a list; a stray one is an error \\
+\code{"} & opens a quoted atom; the matching \code{"} closes it \\
+\code{;} & begins a comment that runs to the end of the line \\
+whitespace & any byte at most a space separates atoms \\
+\texttt{\textbackslash n} & newline inside a quoted atom \\
+\texttt{\textbackslash r} & carriage return inside a quoted atom \\
+\texttt{\textbackslash t} & tab inside a quoted atom \\
+\texttt{\textbackslash\textbackslash} & a literal backslash inside a quoted atom \\
+\texttt{\textbackslash"} & a literal double quote inside a quoted atom \\
+anything else & an ordinary byte of a bare atom \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{The rule notation}
+\label{sec:rule-notation}
+
+The same interchange language carries rewrite rules, and the notation is
+deliberately small. A rule is one of three shapes:
+
+\begin{lstlisting}[style=dslsexpr,caption=The three accepted rule shapes.,label=lst:rule-shapes]
+(rewrite name lhs rhs)   ; a named rule
+(= lhs rhs)              ; an anonymous equality, named "="
+(=> lhs rhs)             ; an anonymous equality, named "=>"
+\end{lstlisting}
+
+\api{sexpr_rule} accepts either a parsed \code{SExpr} or a
+\code{std::string_view} that it parses itself, and returns an
+\api{ERewriteRule}, which is the triple \code{\{ std::string name; SExpr lhs,
+rhs; \}}. The two anonymous forms take their name from the operator text, so
+\code{(= lhs rhs)} yields a rule named \code{=} and \code{(=> lhs rhs)} one
+named \code{=>}. The named form requires the second element to be an atom,
+which supplies the rule's name; a name that happens to look like a
+variable is nevertheless accepted as a name, since names are never
+interpreted.
+
+Any other shape raises \code{std::invalid_argument} whose message is
+\emph{rule syntax is (rewrite name lhs rhs) or (= lhs rhs)}. In particular, a four-element
+list whose head is \code{rewrite} but whose second element is not an atom
+is rejected, and so is a three-element list whose head is neither \code{=}
+nor \code{=>}.
+
+\api{sexpr_rules} parses a whole file: it reads every form in the text and
+converts each one into a rule, so a rule file is a sequence of rule forms
+with no enclosing parentheses of their own.
+
+\subsection{Variables and validation}
+
+A pattern variable is an unquoted atom whose text begins with \code{?} and
+is at least two characters long. The helper \api{is_pattern_variable}
+(\texttt{DSLtk.hpp}, line 9370) encodes exactly that:
+
+\begin{lstlisting}[style=dslcpp,caption=What counts as a pattern variable.,label=lst:is-pattern-variable]
+inline bool
+is_pattern_variable (const SExpr &term)
+{
+  return term.is_atom && !term.quoted && term.text.size () > 1
+         && term.text[0] == '?';
+}
+\end{lstlisting}
+
+Three conditions matter. The atom must not be quoted, which is how
+\code{"?x"} is kept as data. The text must be longer than one character, so
+a bare \code{?} is an ordinary atom and not a variable. And the text must
+begin with \code{?}. Nothing else is special: \code{?x-1} is a variable
+name, and two occurrences of \code{?x} in one pattern denote the same
+variable.
+
+The validator \api{validate_eterm} walks a term and collects its
+variables. It rejects two things. A list whose head is not an atom is
+invalid, and a list whose head \emph{is} a pattern variable is also
+invalid: both raise \code{std::invalid_argument} whose message is
+\emph{e-graph term requires a literal operator head}. The head of a term is its operator name, and
+operators are literal: an e-graph node is keyed by an operator string, so
+there is no way to represent a node whose operator is chosen by a match.
+Variables may nevertheless occupy any complete term position, including
+the entire left-hand side, so \code{(= ?x ?x)} is a legal, if degenerate,
+rule.
+
+After both sides are validated, the rule constructor checks that every
+variable occurring on the right-hand side also occurs on the left-hand
+side. If not, it raises \code{std::invalid_argument} whose message is
+\emph{unbound RHS variable X}, where \code{X} is the offending variable's text. The check
+is not merely syntactic tidiness. A right-hand variable that the
+left-hand side never binds has no meaning: the matcher would have to
+invent a binding for it, and different implementations invent different
+ones. Rejecting the rule at construction time turns a silent misbehaviour
+into an immediate, precisely located error.
+
+\begin{lstlisting}[style=dslcpp,caption={Parsing and validating rules. The fragment assumes the includes of \lstref{lst:sexpr-roundtrip}.},label=lst:sexpr-rules]
+auto rules = dsl::sexpr_rules ("(rewrite add-zero (add ?x 0) ?x)\n"
+                                "(= (mul ?x 1) ?x)\n");
+for (const auto &rule : rules)
+  std::cout << rule.name << " : " << rule.lhs.dump () << " => "
+            << rule.rhs.dump () << "\n";
+
+try
+  {
+    (void) dsl::sexpr_rule ("(= (add ?x 0) ?y)");
+  }
+catch (const std::exception &ex)
+  {
+    std::cout << ex.what () << "\n";   // unbound RHS variable ?y
+  }
+\end{lstlisting}
+
+\begin{notebox}[The rule set is not an operator table]
+The rule notation shares its \emph{grammar} with the interchange language
+but not its \emph{alphabet}. The heads \code{rewrite}, \code{=}, and
+\code{=>} are reserved in rule position only; they remain ordinary atoms
+everywhere else, including in the left-hand and right-hand sides of a rule.
+A term whose operator is literally named \code{=} is perfectly legal, which
+is exactly the sort of corner that a separate, richer rule language would
+have had to forbid.
+\end{notebox}
+
+\section{Edge cases and limits}
+
+The following behaviours are worth stating explicitly, because each of them
+is a place where a reader might reasonably expect a different answer.
+
+\begin{itemize}
+\item \textbf{No \code{'} quote.} \code{'x} reads as the bare atom
+  \code{'x}. There is no mechanism in the grammar for it, and adding one
+  would have required choosing between the Lisp \code{'} and the Scheme
+  \code{'} semantics.
+\item \textbf{No block comments.} Only \code{;} line comments exist. A
+  \texttt{\#} is an ordinary atom character.
+\item \textbf{Depth 512.} A form nested 513 levels deep is rejected with
+  \emph{nesting limit exceeded}. The limit protects the C++ stack, since
+  the reader recurses once per level.
+\item \textbf{Five escapes only.} An unknown escape is an error, not a
+  literal. There is no hexadecimal or octal escape syntax.
+\item \textbf{Exactly one form.} \code{parse_sexpr} refuses a text with
+  zero forms or with two or more, and the error message does not say which
+  case occurred.
+\item \textbf{Comments inside a form.} Because \code{skip()} is called
+  between every element of a list, a comment may appear anywhere a
+  whitespace may appear, including between the head of a list and its
+  first element.
+\item \textbf{Empty lists.} \code{()} is a valid S-expression and a valid
+  list, but it is \emph{not} a valid e-graph term, because a term must
+  have a literal operator head.
+\item \textbf{Quoting is not canonicalised.} A quoted atom prints quoted
+  even when quoting is unnecessary, and an unquoted atom whose text is
+  unsafe prints quoted. Both behaviours are stable under re-reading, so a
+  printed form always reads back to an equal value.
+\item \textbf{Atoms are copied.} The reader takes a view but produces owned
+  strings, so results outlive their source; conversely, reading a very
+  large text allocates a \code{std::string} per atom.
+\end{itemize}
+
+\section{Conclusion}
+
+The S-expression layer is small enough to read in one sitting and
+opinionated enough to be worth reading. Its two load-bearing decisions are
+that a value is a tagged struct rather than a variant, and that quoting is
+data. Everything else in this chapter follows from those. The next chapter
+takes the rule notation of \secref{sec:rule-notation} and gives it an
+execution model: an equality graph in which every rule application adds
+information rather than replacing a tree.

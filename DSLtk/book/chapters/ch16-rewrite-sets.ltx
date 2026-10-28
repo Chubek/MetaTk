@@ -1,0 +1,626 @@
+\chapter{Rewrite Sets and Fixpoint Optimization}
+\label{ch:rewrite-sets}
+
+\section{One rule is not a rewriting system}
+
+A single rule, as \chapref{ch:rewrite} described, is a transformation
+applied at one place in a tree. A \emph{rewriting system} is something
+else: a collection of rules applied repeatedly until the tree stops
+changing. The difference matters for two reasons.
+
+First, a transformation that appears local is rarely local. Eliminating a
+double negation may expose a constant expression; folding a constant
+expression may expose a redundant multiplication; removing a redundant
+multiplication may make an enclosing rule applicable that was not
+applicable before. None of these rules needs to know about the others,
+but the \emph{composition} needs to be iterated.
+
+Second, the interesting question about a rewriting system is not what it
+does to one node but what it does to a whole tree, repeatedly, until
+nothing more can be done. That is a fixpoint computation, and it has its
+own failure modes: it may not terminate, and it may terminate at a point
+the user did not expect.
+
+\DSLtk{} implements the fixpoint loop in \api{RewriteSet}, declared at
+line 6821 of \texttt{DSLtk.hpp}. The class is small --- one public data
+member for the rules, one public data member for the iteration budget, one
+constructor, one public method, and one private helper --- and it is the
+only part of the toolkit that imposes an order on the user's rules.
+
+\section{A worked example}
+
+The program below normalises a small boolean expression and reports how
+many passes the fixpoint loop needed. It then demonstrates three
+properties of the engine: that every matching rule fires within a single
+pass, that a rule can create a redex that only an \emph{earlier} rule can
+match, and that the iteration budget is exhausted silently.
+
+\begin{lstlisting}[style=dslcpp,caption={Boolean normalisation with a rewrite set, and three demonstrations of the engine's behaviour.},label={lst:rewriteset-demo}]
+#include "DSLtk.hpp"
+#include <iostream>
+#include <string>
+#include <string_view>
+
+using dsl::ASTNode;
+
+bool
+tag_is (ASTNode const &n, std::string_view t)
+{
+  return !n.is_leaf () && n.tag () == t;
+}
+
+bool
+is_lit (ASTNode const &n, std::string_view t)
+{
+  return n.is_leaf () && n.tag () == "lit" && n.value () == t;
+}
+
+// A rule that never fires, but counts how many times the root is examined.
+// The root is examined exactly once per pass, so this is a pass counter.
+int passes = 0;
+auto count_passes
+    = dsl::rule<"count-passes"> (
+        [] (ASTNode const &n) {
+          if (n.tag () == "expr")
+            ++passes;
+          return false;
+        },
+        [] (ASTNode const &n) { return n; });
+
+// not(true) -> false ; not(false) -> true
+auto not_literal
+    = dsl::rule<"not-literal"> (
+        [] (ASTNode const &n) {
+          return tag_is (n, "not") && n.size () == 1 && n.child (0).is_leaf ()
+                 && n.child (0).tag () == "lit"
+                 && (n.child (0).value () == "true" || n.child (0).value () == "false");
+        },
+        [] (ASTNode const &n) {
+          return dsl::leaf<"lit"> (n.child (0).value () == "true" ? "false" : "true");
+        });
+
+// and(x, true) -> x ; and(true, x) -> x
+auto and_true
+    = dsl::rule<"and-true"> (
+        [] (ASTNode const &n) {
+          return tag_is (n, "and") && n.size () == 2
+                 && (is_lit (n.child (0), "true") || is_lit (n.child (1), "true"));
+        },
+        [] (ASTNode const &n) {
+          return is_lit (n.child (0), "true") ? n.child (1) : n.child (0);
+        });
+
+// and(x, false) -> false ; and(false, x) -> false
+auto and_false
+    = dsl::rule<"and-false"> (
+        [] (ASTNode const &n) {
+          return tag_is (n, "and") && n.size () == 2
+                 && (is_lit (n.child (0), "false") || is_lit (n.child (1), "false"));
+        },
+        [] (ASTNode const &) { return dsl::leaf<"lit"> ("false"); });
+
+// or(x, false) -> x ; or(false, x) -> x
+auto or_false
+    = dsl::rule<"or-false"> (
+        [] (ASTNode const &n) {
+          return tag_is (n, "or") && n.size () == 2
+                 && (is_lit (n.child (0), "false") || is_lit (n.child (1), "false"));
+        },
+        [] (ASTNode const &n) {
+          return is_lit (n.child (0), "false") ? n.child (1) : n.child (0);
+        });
+
+// or(x, true) -> true ; or(true, x) -> true
+auto or_true
+    = dsl::rule<"or-true"> (
+        [] (ASTNode const &n) {
+          return tag_is (n, "or") && n.size () == 2
+                 && (is_lit (n.child (0), "true") || is_lit (n.child (1), "true"));
+        },
+        [] (ASTNode const &) { return dsl::leaf<"lit"> ("true"); });
+
+// not(not(x)) -> x
+auto double_not
+    = dsl::rule<"double-not"> (
+        [] (ASTNode const &n) {
+          return tag_is (n, "not") && n.size () == 1 && tag_is (n.child (0), "not")
+                 && n.child (0).size () == 1;
+        },
+        [] (ASTNode const &n) { return n.child (0).child (0); });
+
+int
+main ()
+{
+  auto rules = dsl::rewrite_set (count_passes, not_literal, and_true, and_false,
+                                 or_false, or_true, double_not);
+
+  ASTNode tree = dsl::node<"expr"> (
+      dsl::node<"and"> (dsl::node<"or"> (dsl::leaf<"lit"> ("true"),
+                                         dsl::leaf<"lit"> ("false")),
+                        dsl::node<"not"> (dsl::leaf<"lit"> ("false"))));
+
+  std::cout << "before : " << tree.dump () << '\n';
+  ASTNode after = rules.apply (tree);
+  std::cout << "after  : " << after.dump () << '\n';
+  std::cout << "passes : " << passes << '\n';
+
+  // Every matching rule fires in the same pass: "a" -> "b" -> "c".
+  auto a_to_b = dsl::rule<"a-to-b"> (
+      [] (ASTNode const &n) { return n.tag () == "a"; },
+      [] (ASTNode const &) { return dsl::leaf<"b"> (0); });
+  auto b_to_c = dsl::rule<"b-to-c"> (
+      [] (ASTNode const &n) { return n.tag () == "b"; },
+      [] (ASTNode const &) { return dsl::leaf<"c"> (0); });
+  auto chain = dsl::rewrite_set (a_to_b, b_to_c);
+  std::cout << "chain  : " << chain.apply (dsl::leaf<"a"> (0)).dump () << '\n';
+
+  // A rule whose output creates a redex for an *earlier* rule needs a
+  // second pass of the outer fixpoint loop.
+  passes = 0;
+  auto one_to_done = dsl::rule<"one-to-done"> (
+      [] (ASTNode const &n) { return n.tag () == "one"; },
+      [] (ASTNode const &) { return dsl::leaf<"done"> (0); });
+  auto two_to_one = dsl::rule<"two-to-one"> (
+      [] (ASTNode const &n) { return n.tag () == "two"; },
+      [] (ASTNode const &n) { return dsl::node<"one"> (n.child (0)); });
+  auto late = dsl::rewrite_set (count_passes, one_to_done, two_to_one);
+  std::cout << "late   : " << late.apply (dsl::node<"expr"> (dsl::node<"two"> (dsl::leaf<"three"> (0)))).dump ()
+            << '\n';
+  std::cout << "passes : " << passes << '\n';
+
+  // Silent truncation: the budget is exhausted and the last tree is returned.
+  auto bump = dsl::rule<"bump"> (
+      [] (ASTNode const &n) { return n.is_leaf () && n.tag () == "num"; },
+      [] (ASTNode const &n) { return dsl::leaf<"num"> (std::stoi (n.value ()) + 1); });
+  auto looping = dsl::rewrite_set (bump);
+  looping.max_iterations = 4;
+  std::cout << "trunc  : " << looping.apply (dsl::node<"expr"> (dsl::leaf<"num"> (0))).dump ()
+            << '\n';
+  return 0;
+}
+\end{lstlisting}
+
+The output is
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:rewriteset-demo}.},label={lst:rewriteset-demo-out}]
+before : (expr (and (or (lit true) (lit false)) (not (lit false))))
+after  : (expr (lit true))
+passes : 2
+chain  : (c 0)
+late   : (expr (done 0))
+passes : 3
+trunc  : (expr (num 4))
+\end{lstlisting}
+
+\section{The set type}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}L{5.6cm}C{1.0cm}L{6.4cm}@{}}
+\toprule
+\textbf{Member} & \textbf{Line} & \textbf{Semantics} \\
+\midrule
+\code{std::tuple<Rules...> rules}
+  & 6823
+  & The rules, in the order they were given. A public data member, so a
+    user can inspect the list but not change its type. \\
+\code{std::size_t max_iterations = 100}
+  & 6824
+  & The iteration budget. A public, \emph{non-static} member, so it can be
+    changed on a set the user owns. \\
+\code{explicit constexpr} \newline \code{RewriteSet(Rules... rs)}
+  & 6826
+  & Constructs the set, moving the rules into the tuple. \\
+\code{ASTNode apply(ASTNode root) const}
+  & 6834
+  & Runs the fixpoint loop. The tree is taken \emph{by value}; the result
+    is returned by value. \\
+\code{std::pair<bool, ASTNode>} \newline \code{rewrite_once(const ASTNode&) const}
+  & 6850
+  & One bottom-up pass. \emph{Private}: a user cannot run a single pass
+    through the public interface. \\
+\bottomrule
+\end{tabular}
+\caption{The complete interface of \api{RewriteSet}.}
+\label{tab:rewriteset-api}
+\end{table}
+
+Two of these deserve comment.
+
+\code{max_iterations} is a non-static member with an in-class initialiser.
+It is therefore per-object state, not a class-wide constant, and a user
+can raise or lower it:
+
+\begin{lstlisting}[style=dslcpp,caption={Raising the iteration budget.},label={lst:raise-budget}]
+auto rules = dsl::rewrite_set (my_rule);
+rules.max_iterations = 1000;
+auto result = rules.apply (tree);
+\end{lstlisting}
+
+\code{apply} takes its tree \emph{by value}. This is the copy cost of
+\chapref{ch:astnode} in its most visible form: the caller's tree is
+copied into the parameter, and the result is copied out again. A user who
+wants to rewrite a tree in place must write
+\code{tree = rules.apply (std::move (tree))}, and even then the engine
+copies internally, because the fixpoint loop must keep the previous
+version of the tree around to compare against.
+
+The factory \api{rewrite_set} (line 6899) is a deduction helper of the
+same shape as \api{rule}:
+
+\begin{lstlisting}[style=dslcpp,caption={The set factory, verbatim from the header.},label={lst:rewriteset-factory}]
+template <typename... Rules>
+constexpr auto
+rewrite_set (Rules &&...rs)
+{
+  return RewriteSet<std::decay_t<Rules>...>{ std::forward<Rules> (rs)... };
+}
+\end{lstlisting}
+
+Because the rules are deduced with \code{std::decay_t}, a set built from
+lvalues and a set built from rvalues have the same type. Because the
+order of the template arguments is the order of the arguments, the type
+of the set records the rule list and its order, as
+\chapref{ch:rewrite} explained.
+
+\section{The single pass}
+
+The heart of the engine is the private helper \api{rewrite_once} at line
+6850. It is a post-order walk: the children are rewritten first, the node
+is rebuilt from the rewritten children, and then the rules are tried
+against the rebuilt node.
+
+\begin{pseudocode}[One bottom-up pass]
+\textbf{function} rewrite\_once (n)\\
+\quad changed \code{<-} false\\
+\quad new\_children \code{<-} empty vector\\
+\quad \textbf{if} n is not a leaf \textbf{then}\\
+\qquad \textbf{for} c \textbf{in} n.children \textbf{do}\\
+\qquad\quad (did, rewritten) \code{<-} rewrite\_once (c)\\
+\qquad\quad changed \code{<-} changed \textbf{or} did\\
+\qquad\quad append rewritten to new\_children\\
+\quad \textbf{if} n is a leaf \textbf{then}\\
+\qquad current \code{<-} n\\
+\quad \textbf{else}\\
+\qquad current \code{<-} ASTNode (n.tag, move (new\_children))\\
+\quad \textbf{for} r \textbf{in} rules \textbf{do}\\
+\qquad \textbf{if} r.try\_apply (current) \emph{has a value} \textbf{then}\\
+\qquad\quad current \code{<-} that value\\
+\qquad\quad changed \code{<-} true\\
+\quad \textbf{return} (changed, current)
+\end{pseudocode}
+
+Four properties of this pass are worth stating one at a time.
+
+\paragraph{The pass is bottom-up.}
+The children are rewritten before the node itself is examined. This has
+an important consequence: a rule that matches a parent whose children have
+just been rewritten sees the \emph{rewritten} children. A rule that
+recognises \code{add(num 1, num 2)} fires in the same pass in which the
+two numbers were folded --- provided the folding rule comes first in the
+rule list, or provided the fold happens at a deeper level. Bottom-up
+ordering is what makes a single pass able to accomplish a great deal.
+
+\paragraph{The rebuilt node drops the value of an inner node.}
+The reconstruction is written as
+
+\begin{lstlisting}[style=dslcpp,caption={The reconstruction performed by \api{rewrite_once}.},label={lst:rebuild}]
+ASTNode current
+    = n.is_leaf () ? n : ASTNode{ n.tag (), std::move (new_children) };
+\end{lstlisting}
+
+For a leaf the whole node is copied, value included. For an inner node
+the tag and the new children are used, and the inner-node constructor
+leaves the value empty. In practice this is unobservable, because an inner
+node cannot have a non-empty value through the public API in the first
+place --- but it is worth knowing that the rebuild is not a
+field-by-field copy.
+
+\paragraph{Every matching rule fires, in order.}
+The rule loop is a fold over the tuple, and the fold evaluates all of its
+elements. There is no \code{break} and no short-circuit: if three rules
+match the current node, all three fire, and the second and third see the
+node produced by the first. This is the mechanism behind the \code{chain}
+line of Listing~\ref{lst:rewriteset-demo}: the rule that turns \code{"a"}
+into \code{"b"} fires, and then the rule that turns \code{"b"} into
+\code{"c"} fires on the result, so the final answer is \code{"(c 0)"} in a
+single pass.
+
+\paragraph{The pass reports whether anything changed.}
+The boolean in the returned pair is set when a rule fires --- and it is set
+when a rule fires, \emph{not} when a rule produces a different node. A
+rule whose transformer returns the node it was given still counts as a
+change. This is the conservative choice, and it is what makes the
+fixpoint loop safe in the presence of a rule that is idempotent but not
+identity-preserving.
+
+\section{The fixpoint loop}
+
+\begin{pseudocode}[The outer fixpoint loop]
+\textbf{function} apply (root)\\
+\quad \textbf{for} i \code{<-} 0 \textbf{to} max\_iterations - 1 \textbf{do}\\
+\qquad (changed, result) \code{<-} rewrite\_once (root)\\
+\qquad \textbf{if} changed is false \textbf{then}\\
+\qquad\quad \textbf{return} result\\
+\qquad root \code{<-} move (result)\\
+\quad \textbf{return} root
+\end{pseudocode}
+
+The loop runs until a \emph{whole pass} reports no change. That is a
+stronger statement than "no rule fired on the root": a pass that changes
+a leaf deep in the tree reports a change even though the root is
+untouched, and the loop continues.
+
+\figref{fig:fixpoint-loop} draws the loop.
+
+\begin{figure}[htbp]
+\begin{dslgraph}
+  \node[dslbox] (start) {\code{apply(root)}\\the tree, by value};
+  \node[dslbox, text width=44mm, below=8mm of start] (pass)
+    {\code{rewrite_once(root)}\\one bottom-up pass};
+  \node[dsldecision, below=8mm of pass, text width=26mm] (test)
+    {did the pass report\\a change?};
+
+  \node[dslbox, below=10mm of test, xshift=-34mm] (done)
+    {\code{return result}\\the fixpoint};
+  \node[dslbox, text width=44mm, below=10mm of test, xshift=34mm] (move)
+    {\code{root = std::move(result)}\\next iteration};
+  \node[dslbox, below=8mm of move] (budget)
+    {another iteration\\available?};
+
+  \draw[dsledge] (start) -- (pass);
+  \draw[dsledge] (pass) -- (test);
+  \draw[dsledge] (test) -- node[above] {no} (done);
+  \draw[dsledge] (test) -- node[above] {yes} (move);
+  \draw[dsledge] (move) -- (budget);
+  \draw[dslfeedback] (budget.east) to[out=0, in=0] node[right] {yes} (pass.east);
+  \draw[dsledge] (budget.south) |- node[below] {no} (done.south);
+\end{dslgraph}
+\caption{The fixpoint loop. A pass that reports no change ends the loop; a
+pass that reports a change is repeated until the budget is exhausted, at
+which point the last tree is returned without any diagnostic.}
+\label{fig:fixpoint-loop}
+\end{figure}
+
+\subsection{The pass and the loop are different things}
+
+The distinction between the inner pass and the outer loop is easy to
+blunder, so it is worth making concrete.
+
+The inner pass is bottom-up and fires every rule that matches. It
+therefore handles most transformations in one go: a constant folded deep
+in the tree is visible to its parent in the same pass, and a parent whose
+child was just rewritten is tested against the rewritten child.
+
+The outer loop exists for the cases the inner pass cannot reach. A rule
+that produces a node matching an \emph{earlier} rule in the list is the
+canonical case. In Listing~\ref{lst:rewriteset-demo} the \code{late}
+demonstration is exactly that: the rule set contains \code{one-to-done}
+followed by \code{two-to-one}. A tree \code{(two (three))} is rewritten in
+the first pass to \code{(one (three))}, because \code{two-to-one} fires
+and \code{one-to-done} did not match --- it ran first, on a node tagged
+\code{"two"}. Only in the second pass does \code{one-to-done} match, and
+the third pass confirms that nothing more changes. The output records
+three passes, and that count is exactly right: the pass that reports no
+change is counted too.
+
+The same reasoning applies to rules whose output creates a redex at a
+\emph{higher} level of the tree. Bottom-up ordering means the parent is
+tested after the child in the same pass, so a rule that creates a parent
+redex is normally caught immediately. But a rule whose output moves a
+redex \emph{upward} --- a rule that wraps its result in a new node, say ---
+can expose a redex that did not exist before, and the outer loop is what
+catches it.
+
+\subsection{Copies}
+
+Every pass copies the tree. The reconstruction of the node copies the
+rewritten children into a fresh vector, and the vector's elements are
+copied into the new node. The cost of one pass over an \(N\)-node tree is
+therefore \(O(N)\) node copies in the best case and \(O(N \cdot d)\), where
+\(d\) is the average depth, in the worst case, because each node's
+children are copied once per ancestor that is rebuilt.
+
+The cost of the whole fixpoint computation is that per pass, multiplied by
+the number of passes. A rule set that converges in three passes over a
+thousand-node tree performs on the order of three thousand node
+allocations --- which is the dominant cost of a rewriting phase, and the
+reason the in-place traversal of \chapref{ch:traversal} is worth
+considering for hot paths.
+
+\section{The silent truncation}
+
+The loop has a budget, and exceeding it is not an error. When
+\code{max_iterations} is exhausted, \api{apply} returns the tree produced
+by the last pass --- no exception, no diagnostic, no flag, no return code.
+The \code{trunc} line of Listing~\ref{lst:rewriteset-demo} shows this: a
+rule that increments a numeric leaf by one can never reach a fixpoint, so
+the loop runs its four iterations and returns a tree whose leaf is
+\code{4} instead of stopping.
+
+\begin{warnbox}[Non-convergence is invisible]
+Because there is no diagnostic, a user who writes a non-terminating rule
+set sees a plausible-looking result and no indication that the budget was
+exhausted. The only reliable defences are to design the rules so that
+each one strictly decreases a well-founded measure, and to check the
+result against what the rules were supposed to achieve. If the budget is
+the binding constraint, raise it:
+\code{rules.max_iterations = 1000;} works, because the member is public
+and non-static.
+\end{warnbox}
+
+Two failure modes deserve separate mention.
+
+The first is a rule whose transformer returns its input unchanged. Such a
+rule fires, the pass reports a change, and the fixpoint loop runs to
+exhaustion --- producing exactly the same tree at every iteration, and
+returning it without complaint. The engine cannot distinguish "changed
+but identically" from "changed", because the change flag records that a
+rule fired, not that the result differs.
+
+The second is a pair of rules that undo each other: \code{a} becomes
+\code{b} and \code{b} becomes \code{a}. This does not loop forever within
+a pass, because the fold stops after the rules have each been tried once
+--- but it does change the tree on every pass, so the outer loop never
+reaches a fixpoint and the budget is exhausted. The two rules are tried in
+the order they appear in the list, and the last one to fire wins.
+
+\section{No merge, no concatenation}
+
+There is no \code{operator+} on \api{RewriteSet}, no \code{merge}, no
+\code{concat}, and no way to combine two sets. The rule list is fixed at
+construction, in the type and in the tuple.
+
+A user who wants the union of two sets must write one set with all the
+rules:
+
+\begin{lstlisting}[style=dslcpp,caption={Combining rule sets by writing one set.},label={lst:combine-sets}]
+auto combined = dsl::rewrite_set (rule_a, rule_b, rule_c, rule_d);
+// there is no combined = set_one + set_two;
+\end{lstlisting}
+
+This is a consequence of the type-level encoding rather than an
+oversight: since the set's type records its rules, two sets can only be
+combined if the result is a third set, and the toolkit does not define
+what the order of the combined rules should be. The eager answer --- write
+the union out --- is also the answer that preserves the property that
+matters most: the order of the rules is the order of the arguments, and
+that order is visible in the source.
+
+\section{Bottom-up, top-down, and saturation}
+
+Three strategies for transforming a tree are worth contrasting, because
+\DSLtk{} implements the first and offers the third.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}L{2.9cm}L{3.85cm}L{3.85cm}L{3.85cm}@{}}
+\toprule
+\textbf{Aspect}
+  & \textbf{Bottom-up (\api{RewriteSet})}
+  & \textbf{Top-down (user-written)}
+  & \textbf{Saturation (\api{EGraph})} \\
+\midrule
+Order
+  & children first
+  & parent first
+  & ordered passes retaining alternatives \\
+Search space
+  & one tree
+  & one tree
+  & a set of equivalent terms \\
+Output
+  & one resulting tree
+  & one resulting tree
+  & a minimum-node representative \\
+Rules
+  & predicate and transformer
+  & predicate and transformer
+  & \code{(rewrite name lhs rhs)} with \code{?variables} \\
+Termination
+  & bounded by \code{max_iterations}
+  & by the user's discipline
+  & by \code{SaturationLimits} \\
+Reporting
+  & none; silent truncation
+  & none
+  & \code{SaturationResult} with a stop reason \\
+Cost
+  & \(O(\text{passes} \times N)\) copies
+  & \(O(\text{passes} \times N)\) copies
+  & grows with the number of e-nodes \\
+Best at
+  & normalisation and simplification
+  & goal-directed, local rewrites
+  & optimisation under competing rewrites \\
+\bottomrule
+\end{tabular}
+\caption{Three transformation strategies. DSLtk supplies bottom-up rewriting
+and equality saturation; top-down traversal can be implemented by the user.}
+\label{tab:rewrite-strategies}
+\end{table}
+
+A top-down rewriter is one the user writes: it tests a node, and if the
+node matches, it transforms it and does not descend into the children;
+otherwise it descends. The advantage is precision --- the rewriter stops
+as soon as it has what it wanted --- and the disadvantage is that a
+transformation which creates a new opportunity higher up the tree is
+missed, unless the user writes the recursion to loop.
+
+Equality saturation, in \chapref{ch:egraphs}, takes a third route
+entirely. Instead of transforming one tree, it maintains a set of terms
+that are all equal to the original, adding a new term for every match of
+every rule and never deleting any. The search is exhaustive by
+construction, and the final answer is extracted by choosing the cheapest
+representative. The price is that the set of terms grows, and that the
+extraction step needs a cost function.
+
+The distinction to keep in mind is that the rewrite set is a
+\emph{normaliser}: it searches for a single tree in which no rule applies.
+Saturation is an \emph{optimiser}: it searches for the best tree among
+all the ones the rules can reach. They answer different questions, and
+\chapref{ch:case-saturation} builds a case study that uses both.
+
+\section{Edge cases and limits}
+
+\paragraph{The budget is silent.}
+There is no error, no exception, no flag, and no way to ask a set whether
+its last run converged. \api{RewriteSet} has no state beyond
+\code{max_iterations}, so it cannot remember that it ran out of budget.
+
+\paragraph{The budget counts passes, not depth.}
+\code{max_iterations} bounds the number of passes over the tree. It does
+nothing about the depth of a single pass, so a deep tree can still
+overflow the stack, as \chapref{ch:traversal} explained.
+
+\paragraph{The change flag is conservative.}
+A rule that fires counts as a change even if it produced an identical
+node. A rule set that is idempotent but not identity-preserving will
+therefore exhaust the budget rather than converge.
+
+\paragraph{Rules are tried in list order, and all of them.}
+There is no priority, no specificity ordering, and no first-match-wins
+semantics. A later rule sees the output of an earlier one. Two rules that
+both match and both transform produce a result determined purely by
+their order in the argument list.
+
+\paragraph{The tree is copied in and copied out.}
+\api{apply} takes its argument by value and returns by value. A caller
+who rewrites a large tree pays for at least two full copies of it.
+
+\paragraph{One pass at a time is not available.}
+\api{rewrite_once} is private. A user who wants to observe the
+intermediate trees --- to print them, to count them, to impose their own
+budget --- cannot, and must either reimplement the pass or infer the
+behaviour from the final result.
+
+\paragraph{No diagnostics.}
+There is no rule-tracing facility, no log of which rules fired, and no
+counter of how many times each rule fired. The counting rule of
+Listing~\ref{lst:rewriteset-demo} is a user-written substitute, and it
+works only because a rule can capture a reference and inspect the node it
+is given.
+
+\paragraph{No parallelism.}
+The pass is a sequential recursion over a tuple of rules. The rules
+themselves may be called concurrently if the user arranges it, but the
+engine offers nothing.
+
+\paragraph{An empty rule set is legal.}
+\code{dsl::rewrite_set()} produces a set with no rules. Its
+\code{apply} performs one pass, reports no change, and returns the tree
+unchanged --- a copy of the input, in fact.
+
+\section{Closing}
+
+\api{RewriteSet} is the whole rewriting machinery of \DSLtk{}: a tuple of
+rules, a budget, and a loop that repeats a bottom-up pass until a pass
+reports no change. Its design decisions are all visible in its behaviour:
+children are rewritten before their parents, every matching rule fires,
+the rules are tried in the order they were written, and the loop stops
+when nothing changes --- or when the budget runs out, which it does
+without saying so. The alternative strategies are set up in
+\tabref{tab:rewrite-strategies} and developed in \chapref{ch:egraphs} and
+\chapref{ch:case-saturation}; the next chapter leaves the AST subsystem
+entirely and turns to the expression templates of
+\chapref{ch:expression-templates}.

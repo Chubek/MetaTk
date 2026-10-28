@@ -1,0 +1,565 @@
+\chapter{Custom Literals: Registering Suffixes}
+\label{ch:custom-literals}
+
+\section{Two Ways to Write a Literal}
+
+A units language wants to write \code{3.5_km} and mean three and a half
+kilometres. There are two entirely different mechanisms that can make that
+work, and the distinction between them is the distinction between a
+\emph{registered} suffix and a \emph{native} user-defined literal.
+
+A native user-defined literal is part of the \cpp{} language. The programmer
+writes \code{operator""_km(long double)} in a namespace, and the compiler
+resolves the token \code{3.5_km} by ordinary overload resolution at the
+point where the token is written. The resolution happens once, during
+translation, and the result is a constant expression. The suffix is a
+property of the \emph{token}, not of the text.
+
+A registered suffix is a run-time facility. The programmer registers a
+string such as \code{"_km"} together with a handler, and later hands the
+library a \code{std::string_view} containing \code{"3.5_km"}. The library
+finds the suffix by comparing the tail of the string against the registered
+suffixes, converts the remaining prefix to a number, and calls the handler.
+The resolution happens once per call, at run time, and the suffix is a
+property of the \emph{text}.
+
+\DSLtk{} provides both routes, and its own quick-start comment recommends
+the native form when true literal syntax is what is wanted. The registered
+route exists because a DSL frequently has to read literals from a
+configuration file, a command line, or a token stream, where no compile-time
+token is available at all.
+
+\section{A Worked Example}
+
+Listing~\ref{lst:ch18-units} is a complete program that uses both routes in
+the same translation unit. Three suffixes are \emph{registered}, so that
+strings arriving at run time can be interpreted; the same three suffixes are
+also declared as \emph{native} literals, so that a literal written directly
+in the source is resolved by the compiler.
+
+\begin{lstlisting}[style=dslcpp,caption={A units DSL with three registered suffixes and three native user-defined literals. The registered set is consulted by \code{parse_literal}, which the \code{CustomLiterals} mixin adds as a static member; the native literals are resolved by the compiler at the point of use.},label={lst:ch18-units}]
+#include "DSLtk.hpp"
+#include <iostream>
+#include <stdexcept>
+
+// ---------------------------------------------------------------
+// A DSL with three *registered* suffixes.
+// ---------------------------------------------------------------
+struct UnitsDSL : dsl::DSL<UnitsDSL, dsl::CustomLiterals>
+{
+  static constexpr auto literals = dsl::literal_set (
+      dsl::lit<"_km"> ([] (long double v) { return v * 1000.0L; }),
+      dsl::lit<"_m"> ([] (long double v) { return v; }),
+      dsl::lit<"_cm"> ([] (long double v) { return v / 100.0L; }));
+};
+
+// ---------------------------------------------------------------
+// A *native* user-defined literal, in an inline namespace.
+// ---------------------------------------------------------------
+inline namespace unit_literals
+{
+  constexpr long double operator""_km (long double v) { return v * 1000.0L; }
+  constexpr long double operator""_m (long double v) { return v; }
+  constexpr long double operator""_cm (long double v) { return v / 100.0L; }
+}
+
+int main ()
+{
+  std::cout.precision (10);
+
+  // Registered suffixes: a runtime scan over a string.
+  std::cout << "parse_literal(\"3.5_km\")  = "
+            << UnitsDSL::parse_literal ("3.5_km") << "\n";
+  std::cout << "parse_literal(\"2_m\")    = "
+            << UnitsDSL::parse_literal ("2_m") << "\n";
+  std::cout << "parse_literal(\"50_cm\")  = "
+            << UnitsDSL::parse_literal ("50_cm") << "\n";
+
+  // Native user-defined literals: resolved by the compiler.
+  std::cout << "3.5_km (native)          = " << 3.5_km << "\n";
+  std::cout << "2.0_m (native)          = " << 2.0_m << "\n";
+
+  // Failure mode 1: nothing matched.
+  try
+    {
+      UnitsDSL::parse_literal ("7_furlong");
+    }
+  catch (const std::runtime_error &e)
+    {
+      std::cout << "runtime_error: " << e.what () << "\n";
+    }
+
+  // Failure mode 2: the numeric prefix is not a number.
+  try
+    {
+      UnitsDSL::parse_literal ("abc_km");
+    }
+  catch (const std::invalid_argument &)
+    {
+      std::cout << "invalid_argument thrown by std::stold\n";
+    }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch18-units}. The registered and the native route agree on all three suffixes, because the handlers were written to agree; nothing enforces that they must.},label={lst:ch18-units-out}]
+parse_literal("3.5_km")  = 3500
+parse_literal("2_m")    = 2
+parse_literal("50_cm")  = 0.5
+3.5_km (native)          = 3500
+2.0_m (native)          = 2
+runtime_error: dsl::LiteralSet::parse: no suffix matched for '7_furlong'
+invalid_argument thrown by std::stold
+\end{lstlisting}
+
+The two mechanisms are entirely independent. Nothing checks that the
+registered set and the native literal set agree, and nothing stops a program
+from registering a suffix that has no native counterpart, or from writing a
+native literal whose suffix is not registered. A disciplined DSL keeps the
+two in step by hand, or by generating one from the other; \DSLtk{} offers no
+mechanism for doing so.
+
+\section{The Data Model}
+
+The facility consists of two types, two factories, and one feature tag.
+
+\code{dsl::LiteralEntry<Suffix, F>} (lines 7141--7147) is one registered
+suffix. Its first template parameter is a \code{FixedString}, so the suffix
+text is fixed at compile time; its second is the handler type. The entry
+holds the handler by value in a member named \code{handler}, and exposes the
+suffix through a \emph{static} member
+\code{static constexpr std::string_view suffix}. The static is not an
+oversight: every entry of a given suffix type shares the same string, and
+the set does not need to store it per instance.
+
+\code{dsl::LiteralSet<Entries...>} (lines 7177--7229) is the set. It holds a
+\code{std::tuple<Entries...>}, so the number of registered suffixes and
+their types are fixed at compile time. The only member function is
+\code{parse}, which is \code{const} and returns \code{long double}.
+
+\code{dsl::lit<Suffix>(f)} (lines 7158--7163) is the factory for an entry.
+It takes the handler by forwarding reference and decays it, so that the
+entry's type is
+\code{LiteralEntry<Suffix, std::decay_t<F>>}.
+The companion factory \code{dsl::literal_set(...)} (lines 7240--7245) builds
+the set, decaying each entry in turn, and so returns
+\code{LiteralSet<std::decay_t<Entries>...>}.
+
+\code{dsl::CustomLiterals} (lines 7265--7281) is the feature tag. Its
+mixin contributes a single \emph{static} member function,
+\code{parse_literal(std::string_view)}, guarded by the constraint
+\code{requires requires \{ Derived::literals; \}}. The guard means the
+member exists only when the deriving type actually has a \code{literals}
+member; a DSL that names the feature but supplies no set simply does not
+get the function, and the error appears at the point of the missing member
+rather than as a link failure.
+
+\begin{table}[ht]
+\centering
+\caption{The complete public surface of the custom-literal facility. Every
+entry is in namespace \code{dsl}; the feature mixin is the one member that
+appears on the deriving type.}
+\label{tab:ch18-api}
+\small
+\begin{tabular}{@{}L{0.30\textwidth}L{0.62\textwidth}@{}}
+\toprule
+\textbf{Entity} & \textbf{Description} \\
+\midrule
+\code{lit<Suffix>(f)} & Factory for one registered suffix. \code{Suffix} is a \code{FixedString}, so the suffix text is a compile-time constant; \code{f} is the handler, called as \code{f(long double)}. \\
+\code{literal_set(e...)} & Factory for a set. The entries are stored in a \code{std::tuple}, so the set's size and the types of its handlers are fixed at compile time. \\
+\code{LiteralEntry<S,F>} & One registered suffix. Public members: \code{handler} (the callable) and the static \code{suffix}, a \code{std::string_view}. \\
+\code{LiteralSet<E...>} & The set. Public member: \code{entries}, the \code{std::tuple}. Public method: \code{parse(std::string_view)} returning \code{long double}. \\
+\code{CustomLiterals} & Feature tag. Adds the static \code{parse_literal(std::string_view)} to the deriving type, provided that the deriving type has a \code{literals} member. \\
+\code{FixedString<N>} & The class-type non-type template parameter used for suffixes. Defined at line 5918; \code{view()} yields the \code{std::string_view}. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:ch18-api} is the whole surface. There is no visitor, no
+registry keyed by string at run time, no way to add a suffix after the set
+has been constructed, and no way to enumerate the registered suffixes other
+than by inspecting the tuple.
+
+\section{The Resolution Algorithm}
+
+\code{LiteralSet::parse} is short, and its behaviour is entirely determined
+by four lines. The header expresses it with \code{std::apply} over the
+tuple, and a comma fold over the pack; the effect is a fold over the
+entries in declaration order.
+
+\begin{lstlisting}[style=dslcpp,caption={The body of \code{LiteralSet::parse}, transcribed from \code{DSLtk.hpp} lines 7192--7228. The comma fold in \code{std::apply} evaluates every entry's lambda in turn; each lambda returns immediately if a match has already been found.},label={lst:ch18-parse}]
+  long double
+  parse (std::string_view input) const
+  {
+    long double result = 0.0L;
+    bool found = false;
+
+    std::apply (
+        [&] (const auto &...e)
+          {
+            (
+                [&]
+                  {
+                    if (found)
+                      return;
+                    auto suf = e.suffix;
+                    if (input.size () > suf.size ()
+                        && input.substr (input.size () - suf.size ()) == suf)
+                      {
+                        auto num_str
+                            = input.substr (0, input.size () - suf.size ());
+                        long double num = std::stold (std::string (num_str));
+                        result = e.handler (num);
+                        found = true;
+                      }
+                  }(),
+                ...);
+          },
+        entries);
+
+    if (!found)
+      {
+        throw std::runtime_error (
+            std::string ("dsl::LiteralSet::parse: no suffix matched for '")
+            + std::string (input) + "'");
+      }
+    return result;
+  }
+\end{lstlisting}
+
+Algorithm~\ref{alg:ch18-resolve} restates the procedure without the
+template machinery. The points that matter are these.
+
+\begin{pseudocode}[Resolving a suffix in a literal set]
+\textbf{function} resolve (set, input)\\
+\quad found := false\\
+\quad \textbf{for each} entry \textbf{in} set.entries, in declaration order do\\
+\qquad \textbf{if} found \textbf{then continue}\\
+\qquad suffix := entry.suffix\\
+\qquad \textbf{if} length (input) > length (suffix) \textbf{and}\\
+\qquad\qquad tail (input, length (suffix)) = suffix \textbf{then}\\
+\qquad\qquad prefix := input without its last length (suffix) characters\\
+\qquad\qquad number := std::stold (prefix)\\
+\qquad\qquad result := entry.handler (number)\\
+\qquad\qquad found := true\\
+\quad \textbf{if not} found \textbf{then}\\
+\qquad \textbf{raise} runtime\_error ("dsl::LiteralSet::parse: no suffix matched")\\
+\quad \textbf{return} result
+\label{alg:ch18-resolve}
+\end{pseudocode}
+
+First, the suffix test is a plain tail comparison. There is no regular
+expression, no tokenisation, and no notion of a numeric token; the test is
+\code{input.size () > suf.size () && input.substr (input.size () - suf.size ()) == suf}.
+The strict inequality is a design decision with a visible consequence: the
+input must be strictly longer than the suffix, so a bare suffix with no
+numeric prefix never matches. The input \code{"_km"} therefore raises the
+"no suffix matched" error rather than being read as the number zero.
+
+Second, the scan is over the tuple in declaration order, and the
+\emph{first} entry whose suffix matches wins. This is not obvious from the
+source, because the comma fold in \code{std::apply} evaluates \emph{every}
+entry's lambda rather than stopping at the first match. The early exit is
+achieved by the guard at the top of each lambda: \code{if (found) return;}.
+The net effect is first-match-wins, and the guard makes the fold's
+evaluation order observable only in the cost, not in the result.
+
+Third, the numeric prefix is converted with \code{std::stold}, and the
+handler is applied to the resulting number, not to the string. The handler's
+argument is always a \code{long double}.
+
+Fourth, and slightly surprisingly, \code{parse} always returns a
+\code{long double}, whatever the handler returns. The result variable is
+declared as \code{long double result = 0.0L;} and the handler's return value
+is assigned into it. A handler that returns \code{int} or \code{double} is
+converted; a handler that returns something not convertible to
+\code{long double} is a compile error.
+
+Figure~\ref{fig:ch18-scan} draws the scan for the input \code{"3.5_km"}
+against a set whose first entry is \code{"_km"}.
+
+\begin{figure}[ht]
+\centering
+\begin{dslgraph}
+  \node[dsllarge, text width=30mm] (inp) at (-5.0,0)
+    {the input\\\code{"3.5_km"}};
+
+  \node[dslbox, text width=36mm] (e1) at (0.0,1.3)
+    {entry 1: \code{"_km"}\\tail is \code{"_km"}:\\matches, so this\\entry is chosen};
+  \node[dslbox, text width=36mm] (e2) at (0.0,0.0)
+    {entry 2: \code{"_m"}\\never reached};
+  \node[dslbox, text width=36mm] (e3) at (0.0,-1.3)
+    {entry 3: \code{"_cm"}\\never reached};
+
+  \draw[dsledge] (inp.east) -- (e1.west);
+  \draw[dsledge] (inp.east) -- (e2.west);
+  \draw[dsledge] (inp.east) -- (e3.west);
+  \draw[dsledgedash] (e1.south) -- (e2.north);
+  \draw[dsledgedash] (e2.south) -- (e3.north);
+  \node[dslsmall, text width=36mm] (scan) at (0.0,-2.4)
+    {the scan stops at the first match};
+
+  \node[dsllarge, text width=38mm] (res) at (5.8,0)
+    {prefix \code{"3.5"}\\via \code{std::stold}: \code{3.5}\\handler: \code{3500}};
+  \draw[dsledge] (e1.east) -- (res.west);
+\end{dslgraph}
+\caption{The suffix scan performed by \code{LiteralSet::parse}. The input is
+compared against each registered suffix in declaration order; the first
+match wins and the remaining entries are not consulted. The numeric prefix
+is converted with \code{std::stold} and handed to the matching handler.}
+\label{fig:ch18-scan}
+\end{figure}
+
+\section{Failure Modes}
+\label{sec:ch18-failures}
+
+Every failure of the facility is an exception, and the exceptions are
+precisely specified by what the underlying standard-library functions throw.
+Table~\ref{tab:ch18-failures} enumerates them.
+
+\begin{table}[ht]
+\centering
+\caption{Every outcome of \code{LiteralSet::parse}, with the registered set
+holding the kilometre, metre and centimetre suffixes. The exception types are
+those of the underlying standard-library calls and are not wrapped.}
+\label{tab:ch18-failures}
+\small
+\begin{tabular}{@{}L{0.26\textwidth}L{0.34\textwidth}L{0.32\textwidth}@{}}
+\toprule
+\textbf{Input} & \textbf{Outcome} & \textbf{Exception} \\
+\midrule
+\code{"3.5_km"} & \code{3500} & none \\
+\code{"2_m"} & \code{2} & none \\
+\code{"3.5"} & no suffix matched & \code{std::runtime_error} \\
+\code{"_km"} & no suffix matched & \code{std::runtime_error} \\
+\code{"7_furlong"} & no suffix matched & \code{std::runtime_error} \\
+\code{"abc_km"} & numeric prefix is not a number & \code{std::invalid_argument} \\
+\code{"1e9999_km"} & number out of range for \code{long double} & \code{std::out_of_range} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The message of the "no suffix matched" error is fixed by the header and
+names the offending input:
+\code{"dsl::LiteralSet::parse: no suffix matched for '7_furlong'"}. The
+other two exceptions are \emph{not} wrapped. They arrive from
+\code{std::stold} unchanged, which means a caller cannot distinguish them
+by type from a \code{dsl::}-specific failure, but can by message: the
+standard library's \code{std::invalid_argument} from \code{stold} carries
+only the name of the function.
+
+One more subtlety is worth spelling out, because it is easy to trip over.
+\code{std::stold} does not require the whole string to be a number. It
+performs the longest valid conversion and ignores whatever follows. So
+\code{std::stold("3.5_")} is \code{3.5}, not an error, and
+\code{std::stold("3.5x")} is also \code{3.5}. The only case in which
+\code{std::invalid_argument} is thrown is when \emph{no} conversion is
+possible at all, as with \code{"abc"}. This has a practical consequence for
+suffix sets whose suffixes overlap: if \code{"km"} is registered before
+\code{"_km"}, then the input \code{"3.5_km"} matches \code{"km"} first,
+the numeric prefix becomes \code{"3.5_"}, and \code{std::stold} silently
+returns \code{3.5} instead of failing. The result is a plausible number
+derived from the wrong suffix.
+
+\section{Registered Suffix or Native Literal?}
+
+The header's own quick-start comment shows both in Example~A (lines
+273--288): a \code{UnitsDSL} with a registered set, and an inline namespace
+containing \code{operator""_km} and \code{operator""_m}. Table~\ref{tab:ch18-compare}
+sets the two mechanisms side by side.
+
+\begin{table}[ht]
+\centering
+\caption{Registered suffixes and native user-defined literals, compared.}
+\label{tab:ch18-compare}
+\small
+\begin{tabular}{@{}L{0.22\textwidth}L{0.35\textwidth}L{0.35\textwidth}@{}}
+\toprule
+\textbf{Aspect} & \textbf{Registered suffix} & \textbf{Native literal} \\
+\midrule
+When resolved & at run time, on each call & at compile time, during translation \\
+Input & a \code{std::string_view} & a token in the source \\
+Matching & tail comparison against a compile-time-known set & overload resolution on the literal's type and value \\
+Failure & an exception at run time & a compile error \\
+Cost & a scan over the registered entries & nothing \\
+Reach & any string, from a file or a command line & only text written in the source \\
+Suffix set & extensible per DSL, at compile time & fixed by the overloads visible at the point of use \\
+Return type & always \code{long double} & whatever the literal operator returns \\
+\midrule
+\multicolumn{3}{@{}L{0.92\textwidth}@{}}{\emph{Reserved suffixes}: the
+standard reserves a family of suffixes for future standardisation, including
+the string suffix \code{s} and the SI prefixes. Suffixes such as
+\code{"_km"}, \code{"_m"} and \code{"_cm"} are free to use.} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The practical difference is best understood in terms of where the text comes
+from. A native literal is available only where the programmer writes the
+token; a configuration file that contains the line \code{distance = 3.5_km}
+offers no token for the compiler to resolve. That is the situation the
+registered facility exists for, and it is why \DSLtk{} provides it at all.
+
+There are two further differences that surprise people.
+
+The first is that a native literal for a \code{long double} parameter applies
+only to \emph{floating-point} literals. The token \code{2.0_m} resolves
+against \code{operator""_m(long double)}, but the token \code{2_m} does
+not: for an integer literal the compiler looks for an overload taking
+\code{unsigned long long}, and if it finds none the literal is an error.
+Writing \code{2_m} therefore requires a second overload with an integral
+parameter, which is not something the header provides.
+
+The second is that a native literal is a constant expression. It can be used
+in a \code{constexpr} context, in a template argument, in an array bound,
+and in a \code{static_assert}. A registered suffix produces a value at run
+time and can be used in none of those places.
+
+The D port offers the same two mechanisms with the same split. Its
+\code{literal_set} and \code{lit} are at lines 486--499 of \code{DSLtk.d},
+its \code{CustomLiterals} mixin adds \code{static real parse_literal} at
+line 112, and its exception message reads
+\code{"DSLtk.LiteralSet.parse: no suffix matched for '...'"} rather than the
+\cpp{} spelling. The D implementation returns at the first match directly,
+using a \code{static foreach} loop, so it does not share the \cpp{} quirk of
+evaluating every entry's lambda; the observable semantics are the same.
+
+\section{Why the Suffix Is a Compile-Time Constant}
+
+The suffix text is a template argument of type \code{FixedString}, and that
+single design decision has consequences in both directions.
+
+On the favourable side, the set of candidate suffixes is fixed when the
+program is compiled. The scan of Algorithm~\ref{alg:ch18-resolve} walks a
+tuple whose length and whose element types are both known to the compiler,
+so there is no dynamic dispatch through a registry, no string comparison
+against a list built at run time, and no possibility of a handler being
+registered after the set was constructed. The cost of the scan is therefore
+a handful of string comparisons against compile-time constants, and the
+compiler can unroll it.
+
+The suffix text is also part of the \emph{type}. \code{LiteralEntry<"_km",
+F>} and \code{LiteralEntry<"_m", F>} are different types, and the same
+handler type may appear under several suffixes without any of them being
+confused for another. A program that wants to know, at compile time, which
+suffix an entry carries can ask the type.
+
+On the unfavourable side, the suffix cannot come from a configuration file.
+A tool that lets its user define \code{"_furlong"} at run time cannot use
+this facility for that suffix, because there is no way to build a
+\code{LiteralEntry} whose \code{FixedString} is not known when the program
+is translated. The facility is for suffixes that are part of the language,
+which is exactly what a DSL wants; it is not for suffixes that are part of
+a deployment.
+
+\section{Composing the Literal Set with Other Features}
+
+The \code{CustomLiterals} mixin contributes a single static member and
+nothing else, so it composes with the other features in the ordinary way:
+the mixins are independent bases, and a DSL may name as many as it likes.
+The shipped example \code{18-mini-dsl.cpp} combines the literal facility
+with the pipeline feature, and it is worth reading because it shows the
+mixins doing independent jobs.
+
+\begin{lstlisting}[style=dslcpp,caption={The shipped example \code{18-mini-dsl.cpp}, reproduced verbatim. The literal set and the pipeline are independent features of the same DSL type; the literal set is consulted by the static \code{parse_literal}, and the pipeline then transforms the value it produced.},label={lst:ch18-mini}]
+#include "DSLtk.hpp"
+#include <iostream>
+
+struct MiniDSL : dsl::DSL<MiniDSL, dsl::Pipeline, dsl::CustomLiterals> {
+  static constexpr auto literals = dsl::literal_set(
+      dsl::lit<"_km">([](long double v) { return v * 1000.0L; }),
+      dsl::lit<"_m">([](long double v) { return v; }));
+};
+
+int main() {
+  auto meters = MiniDSL::parse_literal("2.5_km");
+  auto shown = MiniDSL::wrap(meters) | dsl::pipe([](long double x) { return x + 10.0L; });
+  std::cout << shown << "\n";
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch18-mini}. The registered suffix converts 2.5 kilometres to 2500 metres, and the pipeline stage then adds ten.},label={lst:ch18-mini-out}]
+2510
+\end{lstlisting}
+
+Two details of this example are worth pointing out. The value that
+\code{parse_literal} produces is a \code{long double}, not an \code{int}
+and not a user-defined unit type; the pipeline stage therefore has to
+accept a \code{long double}, and the unit information is lost as soon as
+the suffix has been resolved. A DSL that wants to keep the unit would need
+a handler that returns a unit-tagged type, but \code{parse} would then have
+to convert that type to a \code{long double}, and it does not. The facility
+as shipped normalises every literal to a plain number.
+
+Second, the suffix strings in the example are written without a leading
+space and are matched by a plain tail comparison, which means that the
+suffix \code{"_m"} would also match a string ending in the letters
+\code{"_m"} anywhere, and the suffix \code{"m"} would match almost
+anything. The convention of beginning every suffix with an underscore is
+not enforced by the library, but it is what keeps the tail comparison
+unambiguous in practice.
+
+\section{Edge Cases and Limits}
+
+\begin{itemize}
+\item \textbf{The suffix must be strictly shorter than the input.} The test
+is \code{input.size () > suf.size ()}, not \code{>=}. A suffix with no
+numeric prefix never matches, and the resulting error is the generic "no
+suffix matched" one rather than a diagnostic about a missing number.
+
+\item \textbf{An empty suffix matches everything.} \code{dsl::lit<"">} is
+accepted by the compiler; the C++ port performs no check on the suffix
+length. Since the tail of any non-empty input of length zero is the empty
+string, such an entry matches the first entry position and its handler is
+applied to the whole input. The D port does check: \code{dsl::lit} in
+\code{DSLtk.d} carries a \code{static assert(suffix.length > 0)}.
+
+\item \textbf{Overlapping suffixes are resolved by declaration order, not by
+length.} Nothing sorts the entries, and nothing prefers the longest match.
+Registering \code{"km"} before \code{"_km"} changes the meaning of
+\code{"3.5_km"}, as Section~\ref{sec:ch18-failures} showed. The safe
+convention is to register longer suffixes first, or to give every suffix a
+distinct leading delimiter.
+
+\item \textbf{Trailing rubbish in the numeric prefix is silently ignored.}
+\code{std::stold} accepts a valid numeric prefix followed by anything. The
+header does not validate that the whole prefix was consumed.
+
+\item \textbf{The return type is fixed.} \code{parse} returns
+\code{long double}. A handler that computes an integer, a rational, or a
+quantity with a unit will be truncated to a \code{long double}, silently.
+
+\item \textbf{There is no thread-safety story and no shared state.} A
+\code{LiteralSet} is an immutable value once constructed; two threads may
+call \code{parse} on the same set concurrently without harm, provided the
+handlers themselves are re-entrant.
+
+\item \textbf{Handlers are stored by value.} A \code{LiteralSet} owns copies
+of its handlers. A handler that captures a large object by value is copied
+into the set, and the set itself is copied whenever it is copied.
+
+\item \textbf{The feature mixin adds only a static member.} There is no
+non-static overload, no instance-level \code{parse_literal}, and no way to
+install a set at run time. The set is a \code{static constexpr} member of
+the deriving type, which means the handlers must be constant-initialisable.
+
+\item \textbf{A native literal cannot be applied to a string.} The
+registered facility accepts arbitrary text, including text with whitespace
+or a unit spelled out in full; a native literal can only ever be a numeric
+token followed by its suffix.
+\end{itemize}
+
+\section{Closing}
+
+The custom-literal facility is small and easy to use: register a suffix and
+a handler, build a set, and hand strings to it. Its limitations are equally
+clear. Resolution is a linear scan at run time, matching is a tail
+comparison with no notion of numeric tokens, the result is always a
+\code{long double}, and every failure is an exception inherited from the
+standard library. For a DSL that must read units out of a configuration
+file, it is exactly the right tool; for a DSL whose literals appear in
+source code, the native user-defined literal is both simpler and strictly
+more capable.
+
+The next chapter turns from the surface syntax of numbers to the timing of
+computations: how to make an expensive function run once, and how to defer
+an expensive construction until something actually needs it.

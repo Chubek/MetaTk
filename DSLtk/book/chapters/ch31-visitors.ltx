@@ -1,0 +1,629 @@
+\chapter{AST-Derived Visitors}
+\label{ch:visitors}
+
+A tree needs a way to be traversed, and a tagged tree needs a way to be
+traversed \emph{according to its tags}. A simple recursive walk that
+visits every node is easy to write and rarely what a language
+implementer wants, because almost every interesting operation on a
+syntax tree is a different operation per node kind: a type checker
+computes a type for an expression, an evaluator computes a value, a
+formatter prints, a constant folder folds. Each of these is a function
+from a node to a result, and each of them must decide, for every node it
+meets, which of its several behaviours applies.
+
+That decision is a dispatch, and the classic way to express it in C++ is
+the \code{std::variant} plus a chain of \code{std::visit} overloads, or,
+when the tags are an enumeration, a \code{switch}. Both are effective and
+both are closed: the set of node kinds is fixed at the point where the
+dispatch is written, and adding a new kind means editing every dispatch
+site in the program. For a language that is still being designed, that
+coupling is a real cost.
+
+DSLtk's answer is to make the visitor a \emph{derived} object. A user
+supplies a schema---a description of which tags exist---and a set of
+cases, one per tag, and the library builds a visitor that dispatches on
+the tag. The schema may be given at run time, as a prototype
+\code{ASTNode}, or at compile time, as a type, in which case the
+exhaustiveness of the case set is checked by the compiler rather than at
+run time. The same visitor, the same traversal, and the same
+\code{walk} function serve both.
+
+\section{Data model}
+
+The vocabulary is four types and three functions.
+
+\code{ASTTag} is the smallest of them: a wrapper around a compile-time
+tag that exposes it as a \code{std::string_view}
+(\texttt{DSLtk.hpp}, line 9963).
+
+\begin{lstlisting}[style=dslcpp,caption=The tag wrapper and the case holder.,label=lst:visitor-tag-case]
+template <FixedString Tag> struct ASTTag
+{
+  static constexpr auto value = Tag.view ();
+};
+
+template <FixedString Tag, class F> struct VisitorCase
+{
+  static constexpr auto tag = Tag.view ();
+  F fn;
+  template <class Node>
+  void
+  invoke (Node &node)
+  {
+    if constexpr (std::invocable<F &, ASTTag<Tag>, Node &>)
+      std::invoke (fn, ASTTag<Tag>{}, node);
+    else
+      std::invoke (fn, node);
+  }
+};
+\end{lstlisting}
+
+\code{VisitorCase} holds the handler and knows how to call it. The
+\code{if constexpr} is the whole of the handler-shape flexibility: if the
+handler can be called with a compile-time tag as well as the node, it is
+called that way, and otherwise it is called with the node alone. A handler
+that wants to know which tag it is handling may therefore write
+
+\begin{lstlisting}[style=dslcpp,caption={Two handler shapes, as they appear inside a function that builds a visitor.},label=lst:visitor-handlers]
+#include "DSLtk.hpp"
+#include <iostream>
+
+void
+build (dsl::ASTNode &tree)
+{
+  auto visitor = dsl::compile_visitor (
+      tree, dsl::on<"num"> ([] (dsl::ASTNode &n) { std::cout << n.value () << "\n"; }),
+      dsl::on<"add"> ([] (dsl::ASTTag<"add"> tag, dsl::ASTNode &) { std::cout << tag.value << "\n"; }));
+  visitor.visit (tree);
+}
+
+int
+main ()
+{
+  dsl::ASTNode tree ("add", { dsl::ASTNode ("num", "1") });
+  build (tree);
+}
+\end{lstlisting}
+
+and the second form is particularly useful when a single generic handler
+is registered for several tags, since the tag is then available as a
+compile-time constant.
+
+The factory that produces a case is \api{on}. There is no
+\code{visitor_case}: the tag is a template argument of \code{on}, and
+\code{on<Tag>(fn)} returns a \code{VisitorCase<Tag, std::decay_t<F>>}
+holding the handler. The spelling is short because the case is named far
+more often than it is constructed, and because a reader who sees
+\code{on<"num">} in a list of handlers understands immediately that the
+list is a dispatch table.
+
+\code{on} decays the handler type, so a lambda, a function pointer, and
+a stateful functor are all accepted, and each keeps its own type in the
+resulting tuple. That matters because the tuple's element types are
+exactly what the dispatch compares: \code{VisitorCase::tag} is a
+\code{std::string_view} derived from the template argument, so the tag
+of a case is available without instantiating the handler at all.
+
+\code{VisitOrder} is a two-valued enumeration, \code{Preorder} and
+\code{Postorder}, that says whether a node is visited before or after its
+children. \code{ASTVisitor} is the visitor itself: a tuple of cases plus
+the list of tags the schema uses. The listing is an abridged excerpt: the
+dispatch and traversal members follow the constructor in the header.
+
+\begin{lstlisting}[style=dslcpp,caption=The visitor and its runtime factory.,label=lst:visitor-class]
+template <class... Cases> class ASTVisitor
+{
+  std::tuple<Cases...> cases_;
+  std::vector<std::string> tags_;
+  void
+  collect (const ASTNode &node)
+  {
+    if (std::find (tags_.begin (), tags_.end (), node.tag ()) == tags_.end ())
+      tags_.emplace_back (node.tag ());
+    for (const auto &child : node.children ())
+      collect (child);
+  }
+
+public:
+  ASTVisitor (const ASTNode &schema, Cases... cases)
+      : cases_ (std::move (cases)...)
+  {
+    collect (schema);
+    for (const auto &tag : tags_)
+      if (!((tag == Cases::tag) || ...))
+        throw std::invalid_argument ("visitor lacks a handler for " + tag);
+  }
+  // ... visit and walk
+};
+\end{lstlisting}
+
+The constructor does two things. It walks the schema and collects the
+distinct tags it contains, in the order of first occurrence in a
+depth-first traversal. It then checks that every collected tag has a
+corresponding case, and throws \code{std::invalid_argument} whose message is
+\emph{visitor lacks a handler for}, followed by the offending tag if one does not. The error message names
+the offending tag, which is usually enough to identify the missing
+handler immediately.
+
+\begin{table}[htbp]
+\centering
+\caption{The public surface of the visitor subsystem.}
+\label{tab:visitor-api}
+\small
+\begin{tabular}{@{}L{38mm}L{52mm}L{26mm}@{}}
+\toprule
+\textbf{Entity} & \textbf{Shape} & \textbf{Role} \\
+\midrule
+\code{ASTTag<Tag>} & \code{static constexpr auto value} & the compile-time tag, as a view \\
+\code{VisitorCase<Tag,F>} & holds \code{F fn} & one tag and its handler \\
+\code{on<Tag>(fn)} & returns a \code{VisitorCase} & the case factory \\
+\code{VisitOrder} & \code{Preorder}, \code{Postorder} & traversal order \\
+\code{ASTVisitor<Cases...>} & tuple of cases, vector of tags & the visitor \\
+\code{ASTVisitor::visit} & \code{void visit (node)} & dispatch on one node \\
+\code{ASTVisitor::walk} & \code{void walk (node, order)} & recursive traversal \\
+\code{derive_visitor} & \code{(schema, cases...)} & runtime factory \\
+\code{ASTSchema<Tag, Children...>} & \code{tag}, \code{children} & a compile-time schema \\
+\code{ast_schema<Tag>(...)} & returns an \code{ASTSchema} & the schema factory \\
+\code{visitor_detail::covered} & \code{constexpr bool covered ()} & compile-time coverage test \\
+\code{visitor_detail::tree} & \code{ASTNode tree ()} & materialise a schema as a tree \\
+\code{compile_visitor} & two overloads & build a visitor from a schema \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Dispatch and traversal}
+
+\code{visit} is the dispatch. It first checks that the node's tag is one
+the schema knows, and throws \code{std::invalid_argument} whose message is
+\emph{node tag is outside visitor schema} if it is not. It then applies a fold over the
+tuple of cases and invokes the \emph{first} case whose tag matches the
+node's tag. Exactly one case runs; the \code{invoked} flag guarantees it
+even if two cases carried the same tag, in which case the one registered
+first wins.
+
+\code{walk} is the traversal. In preorder it visits the node and then
+recurses into the children; in postorder it recurses first and visits
+afterwards. The default is preorder. There is no \code{visit_all}: the
+name would be redundant next to \code{walk}, and the library has only one
+traversal.
+
+\begin{pseudocode}[Dispatch on tag]
+\textbf{function} visit (visitor, node)\\
+\quad if the node's tag is not among the schema's tags then\\
+\qquad raise \emph{node tag is outside visitor schema}\\
+\quad for each case in registration order do\\
+\qquad\qquad if the case's tag equals the node's tag then\\
+\qquad\qquad\qquad invoke the case with the node\\
+\qquad\qquad\qquad return
+\end{pseudocode}
+
+\begin{figure}[htbp]
+\centering
+\begin{dslgraph}
+  \node[dslbox] (walk) at (0,0) {\code{walk (node, order)}\\recurses over the children};
+  \node[dslbox] (visit) at (0,-1.6) {\code{visit (node)}\\looks up the tag};
+  \node[dsldecision] (known) at (0,-3.3) {tag in the\\schema?};
+  \node[dslbox, fill=warnbg, draw=warnfg] (throw) at (4.2,-3.3) {throw\\\emph{node tag is outside visitor schema}};
+  \node[dslbox] (scan) at (0,-5.2) {scan the cases\\in registration order};
+  \node[dslbox] (first) at (0,-6.9) {first case whose\\tag matches};
+  \node[dslbox, text width=36mm] (invoke) at (0,-8.6) {\code{VisitorCase::invoke}};
+  \node[dsldecision] (shape) at (0,-10.3) {handler takes\\a tag too?};
+  \node[dslsmall] (two) at (-3.0,-12.1) {\code{fn (tag, node)}};
+  \node[dslsmall] (one) at (3.0,-12.1) {\code{fn (node)}};
+
+  \draw[dsledge] (walk) -- (visit);
+  \draw[dsledge] (visit) -- (known);
+  \draw[dsledge] (known) -- node[above, font=\scriptsize] {no} (throw);
+  \draw[dsledge] (known) -- node[left, font=\scriptsize] {yes} (scan);
+  \draw[dsledge] (scan) -- (first);
+  \draw[dsledge] (first) -- (invoke);
+  \draw[dsledge] (invoke) -- (shape);
+  \draw[dsledge] (shape) -- node[above, font=\scriptsize] {yes} (two);
+  \draw[dsledge] (shape) -- node[above, font=\scriptsize] {no} (one);
+\end{dslgraph}
+\caption{The dispatch chain. A tag outside the schema is rejected before
+any handler runs; a tag inside it selects exactly one case, and the case
+adapts itself to the shape of the handler it holds.}
+\label{fig:visitor-dispatch}
+\end{figure}
+
+\section{Two kinds of schema}
+
+The runtime schema is a prototype \code{ASTNode}. It is a tree whose
+shape does not matter---only its set of tags does---and the natural way
+to build one is with the \code{node<>} and \code{leaf<>} factories of
+\chapref{ch:leaf-and-node}. The visitor's constructor walks the prototype
+and collects the tags, so the prototype's arities and values are
+irrelevant. A prototype that says \code{(add (num 0))} is enough to
+declare that the language has the tags \code{add} and \code{num}, even
+though every real \code{add} node in the language has two children.
+
+The compile-time schema is a type. \api{ASTSchema} records a tag and a
+tuple of child schema types, and \api{ast_schema} builds one:
+
+\begin{lstlisting}[style=dslcpp,caption=The compile-time schema type and its factory.,label=lst:ast-schema]
+template <FixedString Tag, class... Children> struct ASTSchema
+{
+  static constexpr auto tag = Tag.view ();
+  using children = std::tuple<Children...>;
+};
+
+template <FixedString Tag, class... Children>
+constexpr auto
+ast_schema (Children...)
+{
+  return ASTSchema<Tag, Children...>{};
+}
+\end{lstlisting}
+
+There is no \code{schema} function; the factory is called
+\code{ast_schema}, with the tag as its first template argument.
+
+The compile-time schema carries strictly more information than the
+runtime one, because it knows the arity of every node as well as its
+tag. That extra information is what makes the compile-time check
+possible. The predicate \api{visitor_detail::covered} is a
+\code{constexpr bool} function that is true if and only if the schema's
+own tag has a case and every child schema is recursively covered
+(\texttt{DSLtk.hpp}, line 10075):
+
+\begin{lstlisting}[style=dslcpp,caption=The compile-time coverage predicate.,label=lst:covered]
+template <class Schema, class... Cases>
+constexpr bool
+covered ()
+{
+  constexpr bool own = ((Schema::tag == Cases::tag) || ...);
+  return own &&
+         []<std::size_t... I> (std::index_sequence<I...>)
+           {
+             return (
+                 covered<std::tuple_element_t<I, typename Schema::children>,
+                         Cases...> ()
+                 && ...);
+           }(std::make_index_sequence<
+               std::tuple_size_v<typename Schema::children>>{});
+}
+\end{lstlisting}
+
+Because it is a \code{constexpr} function, it can be used in a
+\code{static_assert} by a user, and the library uses it in exactly that
+way. \api{compile_visitor} has two overloads. The first takes a schema
+\emph{type}, performs the check, and then derives the runtime visitor
+from a materialised tree:
+
+\begin{lstlisting}[style=dslcpp,caption={The two overloads of \code{compile_visitor}.},label=lst:compile-visitor]
+template <class Schema, class... Cases>
+auto
+compile_visitor (Schema, Cases &&...cases)
+{
+  static_assert (visitor_detail::covered<Schema, std::decay_t<Cases>...> (),
+                 "visitor must handle every schema tag");
+  return derive_visitor (visitor_detail::tree<Schema> (),
+                         std::forward<Cases> (cases)...);
+}
+
+template <class... Cases>
+auto
+compile_visitor (const ASTNode &schema, Cases &&...cases)
+{
+  return derive_visitor (schema, std::forward<Cases> (cases)...);
+}
+\end{lstlisting}
+
+The second overload takes a runtime prototype and performs no compile-time
+check; the coverage requirement is then enforced at run time by the
+visitor's constructor, which throws.
+
+The helper \api{visitor_detail::tree} materialises a runtime
+\code{ASTNode} from a compile-time schema, recursively. It exists so that
+the schema-typed overload of \code{compile_visitor} can reuse the
+runtime visitor's tag-collection machinery instead of duplicating it. The
+materialised tree is a prototype: it is never visited.
+
+\subsection{Choosing between them}
+
+The runtime prototype is the right choice when the schema is not known
+until run time---when it is loaded from a file, when it is the result of
+a previous parse, or when the same visitor code must serve several
+languages. It costs nothing beyond a run-time check, and the check is
+made once, when the visitor is constructed.
+
+The compile-time schema is the right choice when the language is fixed
+and the exhaustiveness of the visitor is a correctness property of the
+program. It turns a missing handler from a run-time exception into a
+compilation error, which is the difference between a bug found in
+testing and a bug found before the program runs. It also makes the
+missing-handler failure impossible to reach at run time at all, because
+the program does not compile.
+
+The cost of the compile-time path is that the schema must be written out
+as types, and that the library's \code{ast_schema} vocabulary is
+deliberately minimal: it records a tag and a list of child schemas, and
+nothing else. It is not a grammar, it does not enforce arity at run time,
+and it does not know which children are optional. A language whose nodes
+have variable arity is still perfectly describable---the schema simply
+lists the arity of one representative node---but the schema is a
+description of the tag vocabulary first and a description of the shape
+second.
+
+\begin{notebox}[There is no \code{is_exhaustive}]
+It is tempting to look for a trait that answers ``does this visitor
+handle every tag of this schema?''. There is no such public function. On
+the compile-time path, the question is answered by the
+\code{static_assert} inside \code{compile_visitor}, and a user who wants
+to ask it independently can call
+\code{visitor_detail::covered<Schema, Cases...>()} directly. On the
+runtime path, the question is answered by the constructor, which throws.
+Both mechanisms are exhaustive by construction: there is no way to
+construct a visitor that is missing a handler for a schema tag without
+the program failing, at compile time or at run time.
+\end{notebox}
+
+\section{A worked example}
+
+\begin{lstlisting}[style=dslcpp,caption=Compile-time and runtime visitors over the same tree.,label=lst:visitor-example]
+#include "DSLtk.hpp"
+#include <iostream>
+#include <string>
+
+using namespace dsl;
+
+// ---- compile-time schema --------------------------------------------------
+constexpr auto numSchema = ast_schema<"num"> ();
+constexpr auto addSchema = ast_schema<"add"> (numSchema, numSchema);
+
+void
+handleNum (ASTNode &)
+{
+}
+void
+handleAdd (ASTNode &)
+{
+}
+
+using NumCase = decltype (on<"num"> (&handleNum));
+using AddCase = decltype (on<"add"> (&handleAdd));
+
+static_assert (visitor_detail::covered<decltype (addSchema), NumCase, AddCase> (),
+                "the add schema is covered by the num and add cases");
+static_assert (!visitor_detail::covered<decltype (addSchema), NumCase> (),
+                "the num case alone does not cover the add schema");
+
+int
+main ()
+{
+  // ---- compile-time path ------------------------------------------------
+  auto visitor = compile_visitor (addSchema,
+                                  on<"add"> ([] (ASTNode &n) { std::cout << "  add -> " << n.size () << " children\n"; }),
+                                  on<"num"> ([] (ASTNode &n) { std::cout << "  num -> " << n.value () << "\n"; }));
+
+  ASTNode tree ("add", { ASTNode ("num", "1"), ASTNode ("num", "2") });
+
+  std::cout << "preorder:\n";
+  visitor.walk (tree, VisitOrder::Preorder);
+  std::cout << "postorder:\n";
+  visitor.walk (tree, VisitOrder::Postorder);
+
+  // A handler may also ask for the compile-time tag.
+  auto tagged = compile_visitor (addSchema,
+                                 on<"add"> ([] (ASTTag<"add"> tag, ASTNode &) { std::cout << "  handler for " << tag.value << "\n"; }),
+                                 on<"num"> ([] (ASTNode &n) { std::cout << "  leaf " << n.value () << "\n"; }));
+  tagged.visit (tree);
+
+  // ---- runtime path -----------------------------------------------------
+  ASTNode prototype ("add", { ASTNode ("num", "1"), ASTNode ("num", "2") });
+  auto runtimeVisitor = compile_visitor (prototype,
+                                         on<"add"> ([] (ASTNode &) { std::cout << "  r-add\n"; }),
+                                         on<"num"> ([] (ASTNode &) { std::cout << "  r-num\n"; }));
+  runtimeVisitor.walk (tree);
+
+  // ---- the two failure modes -------------------------------------------
+  try
+    {
+      ASTVisitor<AddCase> incomplete (prototype, on<"add"> (&handleAdd));
+    }
+  catch (const std::exception &ex)
+    {
+      std::cout << "missing case: " << ex.what () << "\n";
+    }
+
+  try
+    {
+      ASTNode foreign ("mul", { ASTNode ("num", "1"), ASTNode ("num", "2") });
+      visitor.visit (foreign);
+    }
+  catch (const std::exception &ex)
+    {
+      std::cout << "foreign tag: " << ex.what () << "\n";
+    }
+  return 0;
+}
+\end{lstlisting}
+
+The output is:
+
+\begin{lstlisting}[style=dslcmd,caption=Output of \lstref{lst:visitor-example}.]
+preorder:
+  add -> 2 children
+  num -> 1
+  num -> 2
+postorder:
+  num -> 1
+  num -> 2
+  add -> 2 children
+  handler for add
+  r-add
+  r-num
+  r-num
+missing case: visitor lacks a handler for num
+foreign tag: node tag is outside visitor schema
+\end{lstlisting}
+
+The two failure modes at the end of the program are the two ways a visitor
+can be wrong, and they are different in kind. The first is a visitor that
+was built from a schema it does not fully handle; on the runtime path
+this is a \code{std::invalid_argument} thrown from the constructor, and
+on the compile-time path the same program would not have compiled at all.
+The second is a node whose tag the schema never mentioned; this is always
+a run-time error, because the node comes from data rather than from the
+type system, and no static check can see it.
+
+\section{Visitors in the wider toolkit}
+
+A visitor is rarely the only thing a language needs, and it is worth
+placing it among the other facilities of the toolkit, because the
+combination is where the design pays off.
+
+The rewrite feature of \chapref{ch:rewrite} and the e-graph of
+\chapref{ch:egraphs} both operate on trees, and both are naturally
+followed by a semantic pass. A bottom-up rewriter of
+\chapref{ch:rewrite-sets} produces one tree; a visitor interprets it. An
+equality-saturated pipeline produces a set of equivalent trees and
+extracts one; a visitor interprets that one, and the \code{when_equal}
+observer of the e-graph is the natural place to trigger it. The visitor
+is the component that turns a tree into a result, and it is the
+component that most often needs to be exhaustive, because a semantic pass
+that silently ignores one kind of node produces wrong answers rather
+than errors.
+
+The compile-time schema is therefore not a curiosity. For a language
+whose semantic passes are written by several people over several months,
+the guarantee that every pass handles every kind of node is worth
+having at the price of writing the schema down.
+
+The PEG subsystem of \chapref{ch:peg-semantic-values} produces trees
+whose tags are grammar nonterminals and whose leaves are tokens. Those
+tags are not known when the grammar is written, and they are not a
+closed set that a user enumerates by hand; a grammar may contain
+nonterminals that no pass cares about. This is precisely the situation
+in which the \emph{runtime} schema is the better choice: the prototype
+is the tree that the grammar produced, and the visitor's constructor
+checks coverage against it at the moment the visitor is built. The
+library's own example
+(\texttt{examples/26-equality-saturation.cpp}) uses exactly this
+arrangement, with a one-tag schema derived from a leaf.
+
+The two schema kinds are thus not competing designs but two ends of a
+spectrum. The compile-time schema is right when the vocabulary is fixed
+and known in advance; the runtime schema is right when the vocabulary is
+discovered. A program that must handle both---a fixed core language plus
+an extensible set of plug-in node kinds---can use the runtime path for
+the extensible part and accept that the check happens when the visitor is
+constructed rather than when it is compiled.
+
+\section{Cost and the open/closed trade-off}
+
+The dispatch is a linear scan. \code{visit} applies a fold over the tuple
+of cases and compares the node's tag with each case's tag in turn, so a
+visitor with \code{N} cases costs \code{O(N)} tag comparisons per node,
+and \code{O(N)} string comparisons in the worst case, since the tags are
+\code{std::string_view}s rather than integers. There is also a
+\code{std::find} over the schema's tag list to validate the node's tag,
+which is another linear scan. A visitor over a tree of \code{V} nodes
+therefore costs \code{O(V * N)} tag comparisons.
+
+For a language with a handful of node kinds this is irrelevant. It
+becomes noticeable only for a language with dozens of tags visited over
+millions of nodes, and even then the constant factor is small, because
+the comparisons are between short string views. There is a second,
+smaller cost that is worth mentioning: the \code{std::find} that checks
+the node's tag against the schema's tag list is also linear, and it runs
+once per node in addition to the case scan. A visitor over a tree of
+\code{V} nodes therefore pays roughly \code{2V} linear scans in total,
+which for a schema of a dozen tags and a tree of a million nodes is a
+few tens of millions of string comparisons---measurable, but not usually
+the bottleneck. The alternative---a \code{switch} on an enumeration---is
+genuinely faster, and the library does not offer it, for a reason worth
+stating: the tag vocabulary in DSLtk is a set of strings, and the whole
+point of the schema mechanism is that the vocabulary is described as
+data rather than as an enumeration in the source. A user who wants the
+\code{switch} can have it by writing their own dispatch over their own
+enumeration, and the visitor is convenient precisely because it does not
+require one.
+
+There is also a cost in the number of instantiations. Each distinct
+visitor is a distinct \code{ASTVisitor} type, and each distinct
+combination of cases produces a new instantiation of the dispatch fold.
+A program that constructs visitors in a loop with a runtime-varying
+number of cases will therefore generate code slowly; a program that
+builds a fixed set of visitors at start-up will not notice. This is the
+usual price of a template-based approach, and it is worth remembering
+when the visitor is used as a general-purpose dispatch rather than as a
+compile-time dispatch table.
+
+The open/closed trade-off is the classic one, and DSLtk resolves it in
+favour of \emph{closed}. A visitor is closed over the set of tags it was
+given. Adding a new tag to a schema without adding a matching case is
+therefore an error: a compilation failure on the compile-time path, and a
+\code{std::invalid_argument} thrown from the constructor on the runtime
+path. The alternative---an open visitor with a default case---would let
+the program run and silently do nothing for the new tag, which is a
+worse failure, because a language that grows a node kind usually grows it
+in a way that \emph{some} semantic pass must handle.
+
+The price of closure is that a visitor cannot be reused across two
+languages with different tag sets, and that a pass that genuinely does
+not care about some tag must still write a case for it. The library
+offers no default case and no way to opt out of the requirement. For the
+common case---a semantic pass over one language---this is exactly right,
+and a user who needs an open visitor can write one in twenty lines, using
+\code{node.tag ()} directly.
+
+\section{Edge cases and limits}
+
+\begin{itemize}
+\item \textbf{The schema is a tag vocabulary, not a grammar.} Its
+  arities and its leaf values are ignored by the visitor. The
+  compile-time schema records arities, but the check it supports is
+  about tag coverage, not about arity.
+\item \textbf{Exactly one case fires.} If two cases carry the same tag,
+  the one registered first wins and the other is never called. There is
+  no diagnostic for this.
+\item \textbf{Handlers may mutate the tree.} A handler receives a
+  mutable reference and may change a node's children. The traversal
+  iterates over the live child vector rather than over a snapshot, so a
+  handler that changes the children of a node that is currently being
+  traversed invalidates the traversal's iterators. In preorder the
+  handler for a node runs before that node's children are visited, so
+  replacing a node's children is well defined; in postorder the handler
+  for a node runs after its children have been visited, so the same
+  replacement is safe. Mutating an \emph{ancestor's} child list from a
+  descendant's handler is not safe in either order.
+\item \textbf{The node type is deduced, so const trees are possible.} The
+  visitor is generic over the node type, and a \code{const ASTNode} is
+  visited successfully provided the handlers themselves accept a
+  \code{const ASTNode &}. A handler that requires a mutable node cannot
+  be applied to a const tree, and the failure is a compile error in the
+  handler's own instantiation rather than a diagnostic from the
+  visitor.
+\item \textbf{The tag is a string.} Dispatch compares string views, so
+  the cost of a comparison depends on the length of the common prefix,
+  and two tags that differ only in case are different tags.
+\item \textbf{The compile-time check is about coverage only.} A schema
+  whose arities do not match the trees it will visit still compiles; the
+  visitor does not check arity at run time either.
+\item \textbf{\code{compile_visitor} needs the right overload.} A
+  schema type selects the checked overload; an \code{ASTNode} selects
+  the unchecked one. Passing something that is neither produces a
+  confusing error from deep inside the \code{covered} predicate rather
+  than a helpful one.
+\item \textbf{No visitors over non-trees.} The traversal is defined in
+  terms of \code{tag ()} and \code{children ()}, so a node type that
+  offers those two members can be visited, but the visitor's own
+  constructor insists on an \code{ASTNode} schema.
+\end{itemize}
+
+\section{Conclusion}
+
+The visitor subsystem is a small piece of machinery with a large
+ambition: to let a language's semantic passes be written as a list of
+per-tag handlers, and to let the compiler check that the list is
+complete. The two schema kinds serve the two situations in which that
+check is available, and they share the same runtime visitor, the same
+traversal, and the same handler shapes.
+
+For the equality-saturated pipelines of \chapref{ch:egraphs}, a visitor
+is the natural downstream consumer: the e-graph produces a representative
+tree, and a visitor interprets it. The next chapters move on to the
+remaining corners of the toolkit---binary streams, grammars, and the
+preprocessor.

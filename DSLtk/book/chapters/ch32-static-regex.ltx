@@ -1,0 +1,728 @@
+\chapter{Static Byte Regular Expressions and Binary Streams}
+\label{ch:static-regex}
+
+DSLtk contains two regular-expression engines, and they are not
+interchangeable. The first is \api{dsl::pattern<S>}, introduced in
+\chapref{ch:pattern-regex}: a compile-time predicate over a
+\code{std::string_view} whose sole entry point is
+\code{static constexpr bool matches (std::string_view)}. It answers exactly
+one question --- \emph{does this entire string match this pattern?} --- and it
+answers it at compile time, in a context where a \code{bool} is the only thing
+that can be returned. The second engine is the subject of this chapter:
+\api{dsl::StaticRegex<Source>}, a byte-level engine that compiles a pattern
+into a Thompson non-deterministic finite automaton during constant
+evaluation, and then simulates that automaton over an arbitrary buffer of
+bytes at run time.
+
+The distinction matters because the two engines answer different questions.
+\code{dsl::pattern<>} cannot report \emph{where} a match occurred, because a
+\code{bool} has nowhere to put an offset. It cannot search, because a search
+requires a start position. It cannot match a buffer that contains a NUL byte,
+because a \code{std::string_view} of type \code{char} is a text abstraction
+and the pattern syntax has no way to spell a NUL. And it cannot express
+alternation, grouping, optionality, or negated classes, so it cannot describe
+a token grammar. Each of those omissions is a deliberate simplification for
+its intended use --- compile-time dispatch on a whole string --- but each of
+them is fatal when the job is to read a binary protocol.
+
+\api{dsl::StaticRegex<>} is the answer to that second job. It operates on
+\code{std::span<const std::byte>}, so all 256 byte values are ordinary
+characters, NUL included. It supports the whole conventional regular
+expression vocabulary short of captures: grouping, alternation, the
+wildcard, character classes with ranges and negation, the three quantifiers,
+the two anchors, and a small set of escapes. It reports \emph{where} a match
+is, as a pair of half-open byte offsets. And because the pattern is a
+template argument, the pattern is compiled by \code{constexpr} code during
+translation, so a malformed pattern is a compilation error rather than a
+runtime surprise. What it does not do is backtrack: the engine implements
+POSIX leftmost-longest semantics by running an NFA in parallel, which means
+it cannot blow up exponentially on pathological patterns, and equally that it
+cannot report capture groups.
+
+The companion facility is \api{dsl::BinaryStream}: an in-memory byte buffer
+with a cursor, regex-driven token reads, explicit byte order for integers, and
+integration with the abstract \api{dsl::IO} layer described in
+\chapref{ch:codecs-io}. There is deliberately no length-prefixed record
+helper; framing is left to the caller, because framing conventions differ
+between protocols and hard-coding one would be a mistake.
+
+\section{A worked example}
+
+The program below tokenises a byte buffer with \code{StaticRegex<>}, then
+writes and reads a length-prefixed record, then round-trips the whole thing
+through an in-memory \api{dsl::IO} backend. It is complete and compiles
+against \code{DSLtk.hpp} alone.
+
+\begin{lstlisting}[style=dslcpp,caption={Tokenising a byte buffer and reading a length-prefixed record.},label={lst:ch32-tokenise}]
+#include "DSLtk.hpp"
+
+#include <algorithm>
+#include <cstdint>
+#include <cstring>
+#include <iostream>
+#include <span>
+#include <string>
+#include <vector>
+
+namespace
+{
+
+// An in-memory backend for dsl::IO, so that streams can be loaded and saved
+// without touching the filesystem.
+struct MemoryBackend
+{
+  std::vector<std::byte> data;
+  std::size_t offset = 0;
+
+  std::size_t
+  read (std::span<std::byte> out)
+  {
+    auto count = std::min (out.size (), data.size () - offset);
+    std::copy_n (data.begin () + offset, count, out.begin ());
+    offset += count;
+    return count;
+  }
+
+  std::size_t
+  write (std::span<const std::byte> bytes)
+  {
+    data.insert (data.end (), bytes.begin (), bytes.end ());
+    return bytes.size ();
+  }
+};
+
+std::string
+as_text (std::span<const std::byte> bytes)
+{
+  std::string result;
+  result.reserve (bytes.size ());
+  for (auto byte : bytes)
+    result += static_cast<char> (byte);
+  return result;
+}
+
+std::vector<std::byte>
+to_bytes (const std::string &text)
+{
+  std::vector<std::byte> result (text.size ());
+  std::memcpy (result.data (), text.data (), text.size ());
+  return result;
+}
+
+} // namespace
+
+int
+main ()
+{
+  using Word = dsl::StaticRegex<"[a-z]+">;
+  using Digits = dsl::StaticRegex<"[0-9]+">;
+
+  // ---- tokenise a byte buffer -----------------------------------------
+  auto buffer = to_bytes ("alpha 123 beta42");
+
+  std::cout << "longest word prefix ends at "
+            << Word::prefix (buffer).value_or (0) << '\n';
+
+  if (auto found = Digits::search (buffer))
+    std::cout << "first digit run is [" << found->begin << ", " << found->end
+              << ")\n";
+
+  // Leftmost-longest, not leftmost-first: for the input "ab" the
+  // alternation a|ab yields "ab" rather than "a".
+  auto ab = dsl::StaticRegex<"a|ab">::search (to_bytes ("ab"));
+  std::cout << "leftmost-longest alternation is [" << ab->begin << ", "
+            << ab->end << ")\n";
+
+  std::cout << "whole buffer is a word? "
+            << (Word::matches (buffer) ? "yes" : "no") << '\n';
+  std::cout << "\"alpha\" is a word? "
+            << (Word::matches (std::string_view ("alpha")) ? "yes" : "no")
+            << '\n';
+
+  dsl::BinaryStream stream (buffer);
+  std::cout << "tokens:";
+  while (!stream.eof ())
+    {
+      if (stream.bytes[stream.pos] == std::byte { ' ' })
+        {
+          ++stream.pos;
+          continue;
+        }
+      auto word = stream.next<"[a-z]+"> ();
+      if (!word)
+        word = stream.next<"[0-9]+"> ();
+      if (word)
+        std::cout << ' ' << as_text (*word);
+      else
+        {
+          std::cout << " <bad>";
+          ++stream.pos;
+        }
+    }
+  std::cout << '\n';
+
+  // ---- a length-prefixed record ---------------------------------------
+  dsl::BinaryStream out;
+  std::string payload = "payload";
+  out.write_integer<std::uint32_t> (static_cast<std::uint32_t> (payload.size ()),
+                                    dsl::ByteOrder::Big);
+  out.write (std::as_bytes (std::span (payload.data (), payload.size ())));
+
+  dsl::BinaryStream in (out.bytes);
+  auto length = in.read_integer<std::uint32_t> (dsl::ByteOrder::Big);
+  auto record = in.read (length);
+  std::cout << "record (" << record.size () << " bytes): " << as_text (record)
+            << '\n';
+
+  // ---- load and save through dsl::IO ----------------------------------
+  MemoryBackend backend;
+  backend.data = out.bytes;
+  dsl::IO<MemoryBackend> io (backend);
+  auto loaded = dsl::BinaryStream::load (io);
+
+  MemoryBackend sink;
+  dsl::IO<MemoryBackend> sink_io (sink);
+  loaded.save (sink_io);
+  std::cout << "round trip preserved " << sink.data.size () << " bytes\n";
+
+  return 0;
+}
+\end{lstlisting}
+
+The output is:
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch32-tokenise}.},label={lst:ch32-output}]
+longest word prefix ends at 5
+first digit run is [6, 9)
+leftmost-longest alternation is [0, 2)
+whole buffer is a word? no
+"alpha" is a word? yes
+tokens: alpha 123 beta 42
+record (7 bytes): payload
+round trip preserved 11 bytes
+\end{lstlisting}
+
+Three details in that listing are worth pausing on, because each of them is a
+place where a plausible-looking program would not compile or would behave
+differently than expected.
+
+First, \code{StaticRegex<Source>} takes the pattern as its template argument,
+so \code{Word} is a \emph{type}, not a value, and the three query operations
+are static member functions of that type. Second, \code{BinaryStream::next}
+does \emph{not} take a \code{StaticRegex} type; its template parameter is the
+pattern string itself, so the call is \code{stream.next<"[a-z]+"> ()}. Writing
+\code{stream.next<Word> ()} is a compile error, because \code{FixedString} and
+\code{StaticRegex} are unrelated types. Third, \code{next} is \emph{anchored}
+at the cursor: it does not skip over bytes that cannot begin a token. The
+tokenising loop therefore has to advance past the separators itself, and it
+has to try the word pattern before the digit pattern, because a pattern that
+cannot match at the cursor yields an empty \code{std::optional} rather than
+skipping ahead.
+
+\section{The data model}
+
+The engine is built from four small types in the namespace
+\code{byte_regex_detail}, plus two public ones.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}L{0.27\textwidth}L{0.65\textwidth}@{}}
+\toprule
+\textbf{Type} & \textbf{Meaning} \\
+\midrule
+\code{Op} &
+An eight-way tag: \code{Byte}, \code{Any}, \code{Class}, \code{Split},
+\code{Empty}, \code{Begin}, \code{End}, \code{Accept}. These are the
+instruction set of the automaton. \\
+\code{State} &
+One instruction. Holds the \code{Op}, two successor slots \code{x} and
+\code{y}, a literal \code{byte} for \code{Op::Byte}, and a 256-entry
+\code{chars} set for \code{Op::Class}. Successor slots hold an index into the
+program or \code{-1} for none. \\
+\code{Program<Capacity>} &
+The compiled automaton: a fixed \code{std::array<State, Capacity>}, the number
+of states actually used, the index of the start state, and a \code{valid}
+flag that records whether compilation succeeded. \\
+\code{Fragment} &
+A partially built sub-automaton: a start state plus the list of its dangling
+exits. Each exit is a \code{std::pair<int, bool>} whose \code{bool} selects
+the \code{y} slot rather than the \code{x} slot of the state that owns it. \\
+\code{RegexMatch} &
+A public pair of half-open byte offsets, \code{begin} and \code{end}, with a
+\code{size()} helper. \\
+\code{StaticRegex<Source>} &
+The public façade. Owns a \code{static constexpr} \code{Program} and offers
+\code{prefix}, \code{search} and \code{matches}. \\
+\midrule
+\end{tabular}
+\caption{The types that make up the static byte regular expression engine.}
+\label{tab:ch32-types}
+\end{table}
+
+The division of labour between \code{State::x} and \code{State::y} is worth
+stating explicitly, because it explains the whole design. A \code{Split}
+state uses both slots, one for each alternative. Every other state uses only
+\code{x}, which is its single successor. \code{Fragment::ends} records
+exactly which successor slots are still dangling and therefore need to be
+patched once the next fragment's start state becomes known; the \code{bool}
+in the pair says which of the two slots of that state is the dangling one.
+This is the standard technique for building an automaton without any
+intermediate tree: each sub-expression is compiled to a graph fragment whose
+entry point is known but whose exit points are not yet known, and the exits
+are patched when the fragments are joined.
+
+\code{Program<Capacity>} is a fixed-size array rather than a vector, which is
+what makes the whole thing usable as a \code{static constexpr} member: a
+\code{std::vector} is not a literal type in \cstd{}, so a program stored in a
+vector could not be a constant expression. The capacity is
+\code{Source.view ().size () * 4 + 8}, which is a generous upper bound on the
+number of states a pattern of that length can produce: each source character
+contributes at most one state, each alternation bar contributes one split,
+each alternative contributes one epsilon state, and the whole program
+contributes one accept state.
+
+The public API of \code{StaticRegex} is small and worth stating exactly,
+because the three queries differ in a way that is easy to get wrong.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}L{0.30\textwidth}L{0.28\textwidth}L{0.34\textwidth}@{}}
+\toprule
+\textbf{Call} & \textbf{Returns} & \textbf{Semantics} \\
+\midrule
+\code{prefix (bytes, start = 0)} &
+\code{std::optional<std::size_t>} &
+The offset just past the \emph{longest} match that begins exactly at
+\code{start}. Fails if no match begins there. \\
+\code{search (bytes, start = 0)} &
+\code{std::optional<RegexMatch>} &
+The \emph{leftmost-longest} match at or after \code{start}, as half-open
+offsets. \\
+\code{matches (bytes)} &
+\code{bool} &
+True if a prefix match begins at zero and ends exactly at the end of the
+buffer, i.e.\ the whole buffer matches. \\
+\code{matches (std::string_view)} &
+\code{bool} &
+The same test, with the text viewed as bytes. \\
+\midrule
+\end{tabular}
+\caption{The query surface of \code{StaticRegex}. The overload taking a
+\code{std::string_view} views the text as bytes, so it inherits the byte
+semantics of the whole engine.}
+\label{tab:ch32-api}
+\end{table}
+
+Note that \code{prefix} returns an offset, not a range: it tells you where
+the match \emph{ended}, and because it is anchored at \code{start} the range
+is implicitly \code{[start, end)}. \code{search} is the only query that
+reports both endpoints, which is why it is the one to reach for when
+extracting a token from the middle of a buffer.
+
+\subsection{The binary stream}
+
+\code{BinaryStream} is deliberately thin. Its entire state is
+\code{std::vector<std::byte> bytes} and \code{std::size_t pos = 0}; the
+cursor is public, so a caller may inspect or adjust it directly, and this is
+exactly what a hand-written framing layer needs to do.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}L{0.30\textwidth}L{0.62\textwidth}@{}}
+\toprule
+\textbf{Member} & \textbf{Behaviour} \\
+\midrule
+\code{eof ()} &
+True when the cursor is at or past the end of the buffer. \\
+\code{read (count)} &
+Returns a view of the next \code{count} bytes and advances the cursor.
+Throws \code{std::out_of_range} with the message \code{"binary stream EOF"}
+if fewer than \code{count} bytes remain. \\
+\code{write (span)} &
+Appends the bytes. The input is copied into a temporary vector first, so
+appending a view that points into the same stream is well defined. \\
+\code{next<Regex> ()} &
+Applies \code{StaticRegex<Regex>::prefix} at the cursor and returns the
+matched bytes as an optional view. Throws
+\code{std::runtime_error} with the message
+\code{"binary token regex matched empty input"} if the match is empty. \\
+\code{read_integer<T> (order)} &
+Reads \code{sizeof (T)} bytes and assembles an unsigned integer in the given
+\code{ByteOrder}. \\
+\code{write_integer<T> (value, order)} &
+Appends \code{sizeof (T)} bytes in the given order. \\
+\code{static load (io, limit)} &
+Reads a whole stream into a new \code{BinaryStream} in 4096-byte chunks.
+Throws \code{std::length_error} with the message
+\code{"binary stream input limit exceeded"} if the input is larger than
+\code{limit}, which defaults to 64 mebibytes. \\
+\code{save (io)} &
+Writes the whole buffer through \code{dsl::IO::write_all}. \\
+\midrule
+\end{tabular}
+\caption{The members of \code{BinaryStream}.}
+\label{tab:ch32-stream}
+\end{table}
+
+Two aspects of this table deserve emphasis.
+
+The first is that \code{write} copies. The comment in the header says it
+plainly: staging the input so that appending a view into this stream is
+well-defined. Without the copy, \code{bytes.insert (bytes.end (), input.begin
+(), input.end ())} would be undefined behaviour whenever \code{input} is a
+view into \code{bytes} itself, because the vector could reallocate while the
+copy is in progress. This is not a hypothetical: reading a record and then
+appending it to the same stream is a perfectly natural thing to want to do.
+
+The second is that there is \emph{no} framing helper. Nothing in
+\code{BinaryStream} knows about length prefixes, checksums, magic numbers or
+record terminators. The header comment says only \emph{"Buffered binary
+stream, with regex-token reads and explicit byte ordering."} That is the
+whole contract. A protocol layer built on top has to write its own framing,
+and \chapref{ch:case-binary} does exactly that.
+
+\section{How the engine works}
+
+The compiler is \code{Compiler<Capacity>}, and every one of its methods is a
+\code{constexpr} function operating on a \code{Program}. The compilation
+strategy is Thompson's construction: the pattern is parsed by recursive
+descent into a small grammar, and each production of that grammar is turned
+directly into automaton fragments. There is no parse tree and no intermediate
+representation --- the automaton \emph{is} the parse.
+
+The grammar has four levels. \code{expression} handles alternation,
+\code{sequence} handles concatenation, \code{repeated} handles the three
+quantifiers, and \code{atom} handles the terminal forms.
+
+\begin{pseudocode}[Compiling a pattern into a Thompson NFA]
+\textbf{function} compile (pattern)\\
+\quad program = new Program with capacity 4 times length(pattern) plus 8\\
+\quad fragment = expression()\\
+\quad accept = emit(program, Accept)\\
+\quad patch(program, fragment, accept)\\
+\quad program.start = fragment.start\\
+\quad \textbf{return} program
+\end{pseudocode}
+
+\code{compile} finishes the job by emitting the accept state and patching
+every dangling exit of the top-level fragment to point at it. It then checks
+that the parser consumed the entire source; if it did not, the program is
+marked invalid. That final check is what turns a stray character into a
+compile error rather than a silently truncated pattern.
+
+The alternation layer is the one piece worth spelling out, because its shape
+determines the shape of the resulting automaton. Each \code{expression} call
+compiles its left-hand sequence, and then, for every bar it encounters, it
+compiles a right-hand sequence and emits a split whose left branch is the
+accumulated fragment so far and whose right branch is the new sequence. The
+resulting tree is therefore left-nested: \code{a|b|c} becomes
+\code{Split(Split(a, b), c)}, with the first alternative explored first.
+
+\begin{pseudocode}[The alternation layer]
+\textbf{function} expression()\\
+\quad left = sequence()\\
+\quad \textbf{while} the next character is a bar\\
+\qquad \qquad consume the bar\\
+\qquad \qquad right = sequence()\\
+\qquad \qquad split = emit(program, Split(left.start, right.start))\\
+\qquad \qquad left.ends = left.ends followed by right.ends\\
+\qquad \qquad left.start = split\\
+\quad \textbf{return} left
+\end{pseudocode}
+
+Concatenation is simpler still: \code{sequence} starts from a fresh epsilon
+state, compiles each \code{repeated} in turn, and patches the previous
+fragment's dangling exits to the next fragment's start state. The dangling
+exits of the running result are then replaced by the dangling exits of the
+newest fragment --- the exits of a concatenation are exactly the exits of its
+last element.
+
+Quantifiers are implemented with a single split state. For an atom with
+fragment \code{F}, the code emits \code{Split(F.start, -1)}; for
+\code{?} the split's second branch is patched to the atom's exits, so the
+atom may be skipped; for \code{*} the atom's exits are patched back to the
+split, forming the loop, and the split becomes the fragment's start; for
+\code{+} the loop is formed identically but the fragment's start remains the
+atom's start, so the atom must be taken at least once. The quantifier is
+therefore a genuine loop in the automaton rather than a counted repetition,
+and it is applied to one atom only: \code{a**} and \code{a*?} are both
+invalid patterns.
+
+\subsection{Atoms and escapes}
+
+\code{atom} recognises five families of terminal. A left parenthesis
+compiles a nested \code{expression} and demands a matching right parenthesis.
+A left bracket compiles a character class, optionally negated by a caret,
+with \code{a-z}-style ranges. A full stop becomes \code{Op::Any}. A caret
+becomes \code{Op::Begin} and a dollar sign becomes \code{Op::End}, the two
+anchors. Anything else is a literal byte, possibly escaped.
+
+Escapes are handled by \code{escaped}, which recognises
+\code{\n}, \code{\r}, \code{\t} and
+\code{\0} for the corresponding control bytes,
+\code{\x} followed by two hexadecimal digits for an arbitrary
+byte value, and \emph{every other escaped character as itself}. That last
+rule is the one with teeth: \code{\d} is not a digit class, it
+is the letter \code{d}. The escape mechanism exists to let a pattern spell
+punctuation that would otherwise be syntax --- \code{\.},
+\code{\[}, \code{\*}, \code{|},
+\code{(} and so on --- and to let a pattern name the control
+bytes that cannot appear literally in a source file.
+
+Character classes accumulate into the 256-entry \code{chars} set of the
+class state. A negated class is implemented by inverting all 256 entries
+after the class has been read, which is why \code{[^a]} matches every byte
+except \code{a}, NUL included. A range whose end precedes its start is a
+compile error, as is an empty class or an unterminated one.
+
+\subsection{Simulating the automaton}
+
+Matching does not run the automaton as a backtracking search. It runs all
+reachable states in parallel, which is what produces POSIX leftmost-longest
+semantics without the risk of exponential blowup. The state set is called the
+\emph{active set}; between two input positions it is closed under epsilon
+transitions.
+
+\begin{pseudocode}[Simulating the NFA over a byte buffer]
+\textbf{function} prefix (bytes, start)\\
+\quad active = closure(program.start)\\
+\quad best = none\\
+\quad \textbf{for} pos from start to length(bytes)\\
+\qquad \textbf{if} the accept state is in active then best = pos\\
+\qquad \textbf{if} pos equals length(bytes) or active is empty then break\\
+\qquad \qquad next = empty set\\
+\qquad \qquad \textbf{for} each state in active\\
+\qquad \qquad \qquad \textbf{if} the state consumes bytes[pos]\\
+\qquad \qquad \qquad\qquad next = next joined with closure(state.next)\\
+\qquad \qquad active = next\\
+\quad \textbf{return} best
+\end{pseudocode}
+
+The \code{closure} helper is the epsilon part of the simulation. Starting
+from a state, it follows \code{Split} transitions to both successors and
+follows \code{Empty}, \code{Begin} (at offset zero) and \code{End} (at the
+end of the buffer) transitions to their single successor, collecting the
+states that actually consume a byte. A \code{seen} array of booleans makes
+the traversal terminate even when the automaton contains a cycle, which it
+does whenever a quantifier is present.
+
+Because \code{best} is assigned on every iteration and the position
+increases monotonically, the value returned is the \emph{largest} offset at
+which the accept state was reachable. That is the definition of a longest
+match. And because \code{search} simply tries \code{prefix} at each
+successive start offset and returns the first success, the result is the
+leftmost-longest match --- the POSIX rule. This is a real difference from the
+Perl rule, and the difference is observable: for the input \code{ab}, the
+pattern \code{a|ab} yields \code{ab} under this engine, because the automaton
+explores both branches of the alternation simultaneously and the longer one
+reaches the accept state at a later offset. A backtracking engine with a
+greedy first alternative would return \code{a}.
+
+\subsection{What the automaton looks like}
+
+Figure~\ref{fig:ch32-nfa} shows the automaton that the compiler produces for
+the pattern \code{a(b|c)*}, with the state indices the compiler would
+actually assign. The epsilon states are artefacts of the construction --- a
+sequence always begins with one, and a group compiles to its own sequence ---
+but they are real states in the array and the simulation has to traverse
+them.
+
+\begin{figure}[htbp]
+\begin{dslgraph}
+\node[dslsmall, fill=termbg] (s0) at (0,0) {0 \code{Empty}};
+\node[dslsmall, fill=termbg] (s1) at (2.3,0) {1 \code{Byte 'a'}};
+\node[dslsmall, fill=decisionbg] (s7) at (5.0,0) {7 \code{Split}};
+\node[dslsmall, fill=termbg] (s8) at (8.0,0) {8 \code{Accept}};
+\node[dslsmall, fill=decisionbg] (s6) at (5.0,2.3) {6 \code{Split}};
+\node[dslsmall, fill=termbg] (s2) at (1.5,4.3) {2 \code{Empty}};
+\node[dslsmall, fill=termbg] (s3) at (4.1,4.3) {3 \code{Byte 'b'}};
+\node[dslsmall, fill=termbg] (s4) at (6.3,4.3) {4 \code{Empty}};
+\node[dslsmall, fill=termbg] (s5) at (8.9,4.3) {5 \code{Byte 'c'}};
+
+\draw[dsledge] (s0) -- node[above, font=\scriptsize, inner sep=1pt] {$\varepsilon$} (s1);
+\draw[dsledge] (s1) -- node[above, font=\scriptsize, inner sep=1pt] {$\varepsilon$} (s7);
+\draw[dsledge] (s7) -- node[above, font=\scriptsize, inner sep=1pt] {$\varepsilon$} (s8);
+\draw[dsledge] (s7) -- node[right, font=\scriptsize, inner sep=1pt] {$x$} (s6);
+\draw[dsledge] (s6) -- node[midway, above left, font=\scriptsize, inner sep=1pt] {$x$} (s2);
+\draw[dsledge] (s6) -- node[midway, above right, font=\scriptsize, inner sep=1pt] {$y$} (s4);
+\draw[dsledge] (s2) -- node[above, font=\scriptsize, inner sep=1pt] {$\varepsilon$} (s3);
+\draw[dsledge] (s4) -- node[above, font=\scriptsize, inner sep=1pt] {$\varepsilon$} (s5);
+\draw[dsledgedash] (s3.south) -- (4.1,1.5) -| (s7.north);
+\draw[dsledgedash] (s5.south) -- (8.9,0.9) -| (s7.north east);
+\end{dslgraph}
+\caption{The Thompson automaton for \code{a(b|c)*}. Solid arrows are epsilon
+transitions; dashed arrows are the loop back edges installed by the \code{*}
+quantifier. The \code{x} and \code{y} labels mark the two successor slots of
+the split states: the quantifier split sends its \code{x} branch back into
+the group and its \code{y} branch to the accept state, while the alternation
+split sends one branch to each alternative.}
+\label{fig:ch32-nfa}
+\end{figure}
+
+Reading the figure from left to right: the program starts at the epsilon
+state 0, which hops to the literal \code{a}. The literal hops to the
+quantifier split 7, whose \code{y} branch ends the match and whose \code{x}
+branch enters the alternation split 6. That split has one branch for each
+alternative, and each alternative ends by hopping back to state 7, closing
+the loop.
+
+\section{Comparing the two engines}
+
+Because DSLtk ships two regular-expression engines, it is worth being
+precise about which to reach for.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}L{0.24\textwidth}L{0.30\textwidth}L{0.34\textwidth}@{}}
+\toprule
+\textbf{Property} & \code{dsl::pattern<S>} & \code{dsl::StaticRegex<S>} \\
+\midrule
+When it runs & entirely at compile time & compiled at compile time, matched
+at run time \\
+Input type & \code{std::string_view} over \code{char} &
+\code{std::span<const std::byte>} \\
+Byte range & 256 \code{char} values; NUL is not addressable by the syntax &
+all 256 byte values, NUL included \\
+Anchoring & always anchored at both ends & \code{^} and \code{$} are
+optional and anchor to the whole buffer \\
+Result & a \code{bool} & an offset, an offset pair, or a \code{bool} \\
+Grouping \code{( )} & not supported & supported \\
+Alternation \code{\|} & not supported & supported \\
+\code{?} quantifier & not supported (a literal \code{?}) & supported \\
+\code{[^...]} & not supported (\code{^} is a class member) & supported,
+negates all 256 byte values \\
+Escapes & none & \code{\n}, \code{\r},
+\code{\t}, \code{\0}, \code{\xHH},
+and any other escaped character literally \\
+Greediness & \code{+} does not backtrack & POSIX leftmost-longest; no
+backtracking at all \\
+Captures & none & none \\
+On a bad pattern & compiles, never matches & \code{static_assert} failure at
+compile time \\
+Typical use & \code{when<dsl::pattern<"...">>} dispatch &
+binary tokenising and protocol framing \\
+\midrule
+\end{tabular}
+\caption{The two DSLtk regular-expression engines side by side.}
+\label{tab:ch32-compare}
+\end{table}
+
+The practical summary is that \code{dsl::pattern<>} is a compile-time
+predicate and \code{dsl::StaticRegex<>} is a run-time matcher. If you want to
+ask \emph{is this whole string of the right shape?} at compile time, use the
+former. If you want to know \emph{where does the next token start and end in
+this buffer?} at run time, use the latter.
+
+\section{Edge cases and limits}
+
+\begin{warnbox}[What the engine does not do]
+The static byte regular expression engine implements a regular expression
+vocabulary, not a regular expression <em>language</em>. It has no captures,
+no backreferences, no counted repetition with braces, no lazy or possessive
+quantifiers, no named groups, no lookaround, no word boundaries, and no
+shorthand classes such as \code{\d} or \code{\w}.
+Attempts to use them do not silently degrade: \code{\d} matches
+the letter \code{d}, and a brace is a literal brace.
+\end{warnbox}
+
+The following points are the ones that most often surprise users.
+
+\textbf{The anchors are absolute.} \code{Op::Begin} is satisfied only when
+the current offset is zero, and \code{Op::End} only when the current offset
+equals the length of the whole buffer. They are not relative to the
+\code{start} argument of \code{prefix} or \code{search}. Consequently
+\code{StaticRegex<"^abc">::prefix (buffer, 2)} fails on a buffer that
+contains \code{abc} at offset 2, because the caret is checked against offset
+zero. A search that begins past the beginning of the buffer can therefore
+never match a pattern containing \code{^}.
+
+\textbf{Leftmost-longest is not leftmost-first.} As shown above, \code{a|ab}
+matches \code{ab}. If you need the Perl behaviour, restructure the pattern so
+that the alternatives are mutually exclusive at their first differing
+character.
+
+\textbf{Empty matches are legal but often useless.} The empty pattern
+compiles to a program whose accept state is reachable at offset zero, so
+\code{prefix} returns zero and \code{search} returns a zero-length match at
+the first offset it tries. \code{matches} therefore accepts only the empty
+string. \code{BinaryStream::next} goes one step further and throws
+\code{"binary token regex matched empty input"} rather than returning a
+zero-length token, because an infinite tokenising loop is almost never what
+the caller wanted.
+
+\textbf{Quantifiers bind to one atom.} \code{ab*} means \code{a} followed by
+zero or more \code{b}s. To repeat a group, parenthesise it. Only one
+quantifier may follow an atom: \code{a**} and \code{a*?} are compile errors,
+as is a stray \code{*} or \code{?} that appears where an atom is expected.
+
+\textbf{Character classes have sharp edges.} A right bracket must be escaped
+to appear in a class, because the class ends at the first unescaped
+\code{]}; an empty class is a compile error. A hyphen is a range operator
+only when it sits between two members and is not immediately before the
+closing bracket, so \code{[a-]} is the two-element set \code{\{a, -\}} and
+\code{[-a]} likewise, while \code{[a-z]} is a range and \code{[z-a]} is a
+compile error. A negated class inverts all 256 entries, so
+\code{[^a]} matches NUL.
+
+\textbf{The search cost is quadratic.} \code{search} calls \code{prefix} once
+for each candidate start offset, and each call is linear in the buffer
+length, so a search over an \emph{n}-byte buffer costs
+\(O(n^{2} \cdot m)\) in the worst case, where \code{m} is the number of
+automaton states. Each \code{prefix} call also allocates a fresh
+\code{std::vector<bool>} of size \code{program.size} and a pair of state
+vectors, so a search performs \emph{n} allocations. For tokenising, prefer
+\code{BinaryStream::next}, which is anchored and therefore costs only
+\(O(m)\) per token.
+
+\textbf{Views into a stream are fragile.} The span returned by \code{read} or
+\code{next} points into the stream's own \code{std::vector}, and the vector
+may reallocate on a later \code{write}. The header documents the guarantee
+precisely: views remain valid until the stream's storage changes. Copy the
+bytes out if you need them to survive a write.
+
+\textbf{Reads past the end throw.} \code{read (count)} throws
+\code{std::out_of_range} with the message \code{"binary stream EOF"} rather
+than returning a short span. \code{write_integer} bypasses the staging copy
+and appends directly to the byte vector, which is safe because it never
+aliases the buffer.
+
+\textbf{Loading is bounded.} \code{BinaryStream::load} reads in 4096-byte
+chunks and refuses to accumulate more than \code{limit} bytes, throwing
+\code{std::length_error} with the message
+\code{"binary stream input limit exceeded"}. The default limit is 64
+mebibytes. Because the check is performed after each chunk, a stream larger
+than the limit is rejected rather than truncated.
+
+\textbf{An invalid pattern is a compile error, not a runtime one.} The
+\code{static_assert} in \code{StaticRegex} fires with the message
+\code{"invalid static byte regular expression"} for any pattern the compiler
+rejects: an unterminated group or class, a reversed range, a stray
+quantifier, trailing garbage, or a pattern so long that it exceeds the
+program capacity. This is a feature --- a malformed token pattern cannot
+survive into a release build --- but it does mean that a pattern built from
+runtime data is not supported, because the pattern must be a
+\code{FixedString} template argument.
+
+\section{Closing}
+
+The static byte regular expression engine is the part of DSLtk that reaches
+below the level of text. It exists because binary protocols are not text
+protocols: they contain NUL bytes, they need to report offsets rather than
+booleans, and they need a matcher that cannot backtrack catastrophically.
+By compiling the pattern during constant evaluation and running an NFA at run
+time, \code{StaticRegex} delivers POSIX leftmost-longest matching over the
+full 256-value byte alphabet, with a compile-time guarantee that the pattern
+is well formed.
+
+\code{BinaryStream} sits on top of it as a cursor over an in-memory buffer,
+offering regex token reads, explicit byte order, and a bridge to the
+\code{dsl::IO} abstraction. What it deliberately does not offer is framing:
+the length-prefixed record in \lstref{lst:ch32-tokenise} is written by hand,
+and that is the correct division of responsibility.
+
+The next chapter changes the shape of the problem entirely. Instead of
+matching a flat sequence of bytes against a pattern, \chapref{ch:cfg-earley}
+describes how DSLtk parses a \emph{context-free grammar} with the Earley
+algorithm, building an \code{ASTNode} in the process --- a language facility
+that handles left recursion, epsilon productions and ambiguity that a
+recursive-descent parser cannot.

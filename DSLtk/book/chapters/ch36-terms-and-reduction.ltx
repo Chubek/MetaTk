@@ -1,0 +1,640 @@
+\chapter{First-Order Terms, Unification, and Bounded Reduction}
+\label{ch:terms-and-reduction}
+
+A symbolic computation is a computation whose values are not numbers but
+\emph{structures}: a syntax tree, an expression, a formula, a proof. The
+operations on such values are not arithmetic but \emph{rewriting} --- the
+replacement of one pattern by another --- and the questions one asks about
+them are not numeric but structural: does this pattern match that value,
+can these two patterns be made equal, what is the simplest form this
+expression can be reduced to.
+
+DSLtk provides the classical machinery for this. There is a term algebra, a
+matcher, a unifier, a rewrite system with a bounded normaliser, and a
+graph form of all of it in which repeated subterms are stored once and
+shared. The graph form is the reason the whole facility exists in a
+toolkit aimed at language construction, because sharing is what makes
+large symbolic expressions --- and the equality-saturation machinery of
+\chapref{ch:egraphs} --- tractable at all.
+
+The facility is free-standing, in the same way the graph of
+\chapref{ch:directed-graphs} is. The feature tags \code{dsl::Terms},
+\code{dsl::TermRewriting} and \code{dsl::GraphReduction} are empty markers
+with no mixin; \code{dsl::Term}, \code{dsl::TermRewriteSystem} and
+\code{dsl::TermGraph} are ordinary classes and free functions that a
+program uses directly.
+
+\section{A worked example}
+
+The program below exercises the whole facility. It starts with unification
+and matching, moves on to a rewrite system over arithmetic expressions, then
+contrasts the two rewriting strategies on a system where they disagree, and
+finally performs the same rewrite over a shared graph and over an ordinary
+tree in order to show what sharing buys.
+
+\begin{lstlisting}[style=dslcpp,caption={Unification, rewriting, and the same rewrite over a shared graph.},label={lst:ch36-terms}]
+#include "DSLtk.hpp"
+
+#include <iostream>
+#include <string>
+
+namespace
+{
+
+// Print the sequence of terms produced by repeated single-step rewriting.
+void
+show (const dsl::TermRewriteSystem &system, dsl::Term term,
+      dsl::RewriteStrategy strategy, const char *label)
+{
+  std::cout << label << ':';
+  while (auto next = system.rewrite_once (term, strategy))
+    {
+      term = next->term;
+      std::cout << ' ' << term.dump ();
+    }
+  std::cout << '\n';
+}
+
+} // namespace
+
+int
+main ()
+{
+  // ---- unification and matching ---------------------------------------
+  auto bound = dsl::unify_terms (dsl::parse_term ("(+ ?x ?y)"),
+                                 dsl::parse_term ("(+ a b)"));
+  if (bound)
+    {
+      std::cout << "unified:";
+      for (auto &entry : *bound)
+        std::cout << ' ' << entry.first << " = " << entry.second.dump ();
+      std::cout << '\n';
+    }
+
+  std::cout << "match with a repeated variable: "
+            << (dsl::match_term (dsl::parse_term ("(+ ?x ?x)"),
+                                 dsl::parse_term ("(+ a a)"))
+                    ? "yes"
+                    : "no")
+            << '\n';
+
+  std::cout << "match with a clashing variable: "
+            << (dsl::match_term (dsl::parse_term ("(+ ?x ?x)"),
+                                 dsl::parse_term ("(+ a b)"))
+                    ? "yes"
+                    : "no")
+            << '\n';
+
+  std::cout << "occurs check rejects ?x = (f ?x): "
+            << (dsl::unify_terms (dsl::parse_term ("?x"),
+                                  dsl::parse_term ("(f ?x)"))
+                    ? "accepted"
+                    : "rejected")
+            << '\n';
+
+  // ---- a rewrite system over arithmetic terms -------------------------
+  dsl::TermRewriteSystem arithmetic;
+  arithmetic.add_rule ("(rewrite add-zero (+ 0 ?x) ?x)");
+  arithmetic.add_rule ("(rewrite mul-zero (* 0 ?x) 0)");
+  arithmetic.add_rule ("(rewrite mul-one (* 1 ?x) ?x)");
+  arithmetic.add_rule ("(rewrite add-assoc (+ ?x (+ ?y ?z)) (+ (+ ?x ?y) ?z))");
+
+  auto term = dsl::parse_term ("(+ (* 1 (+ 0 3)) (* 0 5))");
+  auto outer
+      = arithmetic.normalize (term, 100, dsl::RewriteStrategy::Outermost);
+  std::cout << "outermost: " << outer.term.dump () << " in " << outer.steps
+            << " steps, normal form: "
+            << (outer.normal_form () ? "yes" : "no") << '\n';
+
+  // ---- outermost and innermost choose different redexes ----------------
+  dsl::TermRewriteSystem strategies;
+  strategies.add_rule ("(rewrite f-to-p (f a) p)");
+  strategies.add_rule ("(rewrite a-to-b a b)");
+
+  auto subject = dsl::parse_term ("(f a)");
+  show (strategies, subject, dsl::RewriteStrategy::Outermost,
+        "outermost sequence");
+  show (strategies, subject, dsl::RewriteStrategy::Innermost,
+        "innermost sequence");
+
+  // ---- the same rewrite over a shared graph ----------------------------
+  dsl::TermGraph graph;
+  auto root = graph.add ("(+ (f a) (f a))");
+  std::cout << "graph nodes for the shared term: "
+            << graph.graph ().node_count () << '\n';
+  graph.add ("(g b)");
+
+  dsl::TermRewriteSystem collapse;
+  collapse.add_rule ("(rewrite f-a (f a) a)");
+
+  auto step = graph.rewrite_once (root, collapse);
+  std::cout << "after one step: "
+            << graph.to_term (step ? step->root : root).dump () << '\n';
+
+  graph.collect_garbage ({root});
+  std::cout << "nodes after collection: " << graph.graph ().node_count ()
+            << '\n';
+
+  // ---- the same rewrite over an ordinary tree --------------------------
+  dsl::TermRewriteSystem plain;
+  plain.add_rule ("(rewrite f-a (f a) a)");
+  auto plain_term = dsl::parse_term ("(+ (f a) (f a))");
+  auto plain_result = plain.normalize (plain_term, 100);
+  std::cout << "tree version: " << plain_result.term.dump () << " in "
+            << plain_result.steps << " steps, " << plain_term.size ()
+            << " nodes\n";
+
+  std::cout << graph.to_dot ("shared") << '\n';
+  return 0;
+}
+\end{lstlisting}
+
+The output is:
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch36-terms}.},label={lst:ch36-output}]
+unified: x = a y = b
+match with a repeated variable: yes
+match with a clashing variable: no
+occurs check rejects ?x = (f ?x): rejected
+outermost: (+ 3 0) in 3 steps, normal form: yes
+outermost sequence: p
+innermost sequence: (f b)
+graph nodes for the shared term: 3
+after one step: (+ a a)
+nodes after collection: 2
+tree version: (+ a a) in 2 steps, 5 nodes
+digraph "shared" {
+  n2 [label="+"];
+  n5 [label="a"];
+  n2 -> n5 [label="0"];
+  n2 -> n5 [label="1"];
+}
+\end{lstlisting}
+
+The last few lines are the heart of the chapter. The tree version of
+\code{(+ (f a) (f a))} has five nodes, because the two occurrences of
+\code{(f a)} are stored separately. The graph version has three, because
+the two occurrences are the same node. When the rule \code{(f a) -> a} is
+applied, the tree version needs two steps --- one for each occurrence ---
+and the graph version needs one, because rewriting the shared node updates
+both parents at once. This is the entire point of the graph form, and it
+is what makes symbolic manipulation of large expressions feasible.
+
+\section{The data model}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}L{0.30\textwidth}L{0.62\textwidth}@{}}
+\toprule
+\textbf{Type} & \textbf{Meaning} \\
+\midrule
+\code{Term} &
+A first-order term: a \code{std::string symbol}, a
+\code{std::vector<Term> arguments}, and a \code{bool is_variable}. A
+variable has no arguments; a function term has a symbol and its arguments.
+Equality is structural and defaulted. \\
+\code{Term::variable (name)} &
+Builds a variable. The name must be non-empty, must not contain any of
+space, tab, carriage return, newline, parenthesis, quote, semicolon,
+backslash or question mark, and must not contain a control character. \\
+\code{Term::function (symbol, arguments = {})} &
+Builds a function term. \\
+\code{Term::validate ()} &
+Checks that every variable has a legal name and no arguments. \\
+\code{Term::variables ()} &
+The set of variable names occurring in the term. \\
+\code{Term::ground ()} &
+True when the term contains no variables. \\
+\code{Term::size ()} &
+The number of nodes in the term. \\
+\code{Term::at (position)} &
+The sub-term addressed by a path of argument indices. Throws
+\code{std::out_of_range} if the path is invalid. \\
+\code{Term::replaced (position, replacement)} &
+A copy of the term with the addressed sub-term replaced. \\
+\code{Term::sexpr ()} / \code{Term::dump ()} &
+The S-expression rendering of the term and its string form. \\
+\code{TermSubstitution} &
+A \code{std::unordered_map<std::string, Term>} mapping variable names to
+terms. \\
+\code{match_term (pattern, subject)} &
+One-way matching. Returns the bindings it found, or an empty optional. \\
+\code{substitute (term, bindings)} &
+Applies a substitution to every variable of a term. \\
+\code{unify_terms (left, right)} &
+Two-way unification. Returns a most general unifier, or an empty optional. \\
+\code{TermRule} &
+A rewrite rule: a \code{std::string name}, a \code{Term lhs} and a
+\code{Term rhs}. \\
+\code{term_rule (source)} &
+Parses a rule from the S-expression syntax used by the e-graph rewrite
+rules. \\
+\code{RewriteStrategy} &
+\code{Outermost} or \code{Innermost}. \\
+\code{ReductionStop} &
+\code{NormalForm} or \code{StepLimit}. \\
+\code{TermRewriteStep} &
+The result of one rewrite: the new term, the index of the rule that fired,
+and the position of the redex. \\
+\code{TermReductionResult} &
+The result of a normalisation: the final term, the number of steps, the
+reason the reduction stopped, and a \code{normal_form ()} predicate. \\
+\code{TermRewriteSystem} &
+An ordered collection of rules with \code{add_rule},
+\code{rules ()}, \code{rewrite_once (term, strategy)} and
+\code{normalize (term, max_steps = 1000, strategy)}. \\
+\code{TermGraph} &
+The graph form: a \code{DirectedGraph<TermGraphLabel, std::size_t>} with
+\code{add}, \code{to_term}, \code{rewrite_once}, \code{reduce},
+\code{collect_garbage} and \code{to_dot}. \\
+\midrule
+\end{tabular}
+\caption{The term and rewriting API.}
+\label{tab:ch36-api}
+\end{table}
+
+\section{Terms}
+
+A term is either a variable or a function application. The
+\code{is_variable} flag distinguishes them, and the invariant is that a
+variable never has arguments. \code{validate ()} enforces it, throwing
+\code{"variable cannot have arguments"} if it does not hold, and it is
+called at the entry to every operation that takes a term, so an ill-formed
+term is rejected rather than silently mishandled.
+
+The distinction between a variable and a zero-argument function is worth
+dwelling on, because the textual syntax makes it easy to conflate them. An
+unquoted atom that begins with a question mark is a variable, and the
+question mark is stripped: \code{?x} is the variable \code{x}. Every other
+atom is a \emph{function} with no arguments, so \code{a} is the constant
+function \code{a}, not a variable. A list must begin with a literal,
+non-variable atom, or the conversion fails with
+\code{"term requires a literal function symbol"}: a term cannot have a
+variable in function position.
+
+\code{parse_term} puts the two together: it parses an S-expression with
+\code{parse_sexpr} and converts it with \code{term_from_sexpr}. The
+rendering goes the other way through \code{Term::sexpr}, which produces
+\code{?name} for a variable and a list headed by the symbol for a
+function. A function whose symbol happens to begin with a question mark is
+emitted as a \emph{quoted} atom, so that \code{dump} and \code{parse_term}
+round-trip correctly.
+
+Navigation is by path. \code{at} takes a span of argument indices and walks
+down the tree, using \code{std::vector::at} so that an invalid path throws
+\code{std::out_of_range}. \code{replaced} takes the same kind of path and
+returns a copy of the term with the addressed sub-term replaced; it is
+implemented as a copy-then-write, so the original term is untouched. An
+empty path replaces the whole term, which makes \code{replaced} usable as a
+general substitution primitive as well as a sub-term editor.
+
+\section{Matching and unification}
+
+The two operations look similar and are not.
+
+\emph{Matching} is one-way. \code{match_term (pattern, subject)} asks
+whether the pattern can be seen in the subject, binding the pattern's
+variables as it goes. The subject is never bound. This is the operation a
+rewrite rule needs, because a rule says \emph{this shape on the left may be
+replaced by that shape on the right}, and the right-hand side may only
+mention variables that the left-hand side determined.
+
+\emph{Unification} is two-way. \code{unify_terms (left, right)} asks
+whether the two terms can be made equal by binding variables on either
+side, and returns a most general unifier. This is the operation a
+constraint solver or a logical-programming matcher needs.
+
+The difference shows up immediately in the example. Matching \code{(+ ?x
+?x)} against \code{(+ a b)} fails, because the two occurrences of
+\code{?x} would have to bind to different values. Unifying \code{(+ ?x
+?y)} with \code{(+ a b)} succeeds, with \code{?x} bound to \code{a} and
+\code{?y} to \code{b}.
+
+The check that makes the first case fail is worth naming, because it is
+easy to overlook. When a pattern variable has already been bound, the
+matcher does not simply fail; it compares the previous binding with the
+new value and succeeds only if they are equal. That comparison \emph{is}
+the occurrence check for repeated variables --- the matcher does not need a
+separate mechanism, because a repeated variable is exactly a variable that
+is asked to bind twice.
+
+Unification is more elaborate, and its implementation is a stack of term
+pairs rather than a recursive walk.
+
+\begin{pseudocode}[Unifying two terms]
+\textbf{function} unify (left, right)\\
+\quad bindings = an empty substitution\\
+\quad pending = a stack holding the pair (left, right)\\
+\quad \textbf{while} pending is not empty\\
+\qquad \qquad first, second = pop from pending\\
+\qquad \qquad first = substitute (first, bindings)\\
+\qquad \qquad second = substitute (second, bindings)\\
+\qquad \qquad \textbf{if} first equals second then continue the loop\\
+\qquad \qquad \textbf{if} second is a variable and first is not\\
+\qquad \qquad \qquad\qquad swap first and second\\
+\qquad \qquad \textbf{if} first is a variable\\
+\qquad \qquad \qquad\qquad \textbf{if} second contains the variable first\\
+\qquad \qquad \qquad\qquad\qquad\qquad \textbf{return} failure\\
+\qquad \qquad \qquad\qquad\qquad binding = first mapped to second\\
+\qquad \qquad \qquad\qquad\qquad \textbf{for} each entry in bindings\\
+\qquad \qquad \qquad\qquad\qquad\qquad\qquad apply binding to the entry\\
+\qquad \qquad \qquad\qquad\qquad add binding to bindings\\
+\qquad \qquad \textbf{else}\\
+\qquad \qquad \qquad\qquad \textbf{if} the symbols differ then \textbf{return} failure\\
+\qquad \qquad \qquad\qquad \textbf{if} the arities differ then \textbf{return} failure\\
+\qquad \qquad \qquad\qquad \textbf{for} each index\\
+\qquad \qquad \qquad\qquad\qquad\qquad push the pair of children onto pending\\
+\quad \textbf{return} bindings
+\end{pseudocode}
+
+Four features of this algorithm are worth drawing out.
+
+The pairs on the stack are \emph{re-substituted} with the current bindings
+before they are compared. This is what keeps the algorithm correct when a
+binding made earlier changes the shape of a term that is still waiting to
+be processed.
+
+When exactly one side of a pair is a variable the two are swapped, so that
+the variable is always on the left. The implementation swaps only when the
+second side is a variable and the first is not; when both are variables
+the first is bound to the second, which is harmless because two identical
+variables are caught by the equality test at the top of the loop.
+
+The \emph{occurs check} rejects a binding of a variable to a term that
+contains it. Binding \code{?x} to \code{(f ?x)} would define an infinite
+term, so the unification fails. Note that this check is present in
+unification but \emph{not} in matching, and it does not need to be:
+matching never builds a term, so it cannot create an infinite one.
+
+Finally, the new binding is applied to every existing binding \emph{before}
+it is inserted. That keeps the substitution idempotent: after binding
+\code{?x} to \code{a} and then \code{?y} to \code{?x}, the substitution
+maps \code{?y} to \code{a} rather than to \code{?x}, so applying the
+substitution twice gives the same answer as applying it once.
+
+\section{Rules and strategies}
+
+A \code{TermRule} is a left-hand side, a right-hand side and a name. Its
+\code{validate ()} enforces two conditions: the left-hand side may not be
+a variable, and every variable occurring on the right-hand side must also
+occur on the left. The errors are \code{"rewrite left side cannot be a
+variable"} and \code{"unbound rewrite variable"}. The second condition is
+what makes a rule's right-hand side computable: a rule that mentions a
+variable its left-hand side never binds could never be instantiated.
+
+\code{term_rule} parses a rule from a string using the same S-expression
+syntax as the e-graph rewrite rules of \chapref{ch:egraphs}: the form is
+\code{(rewrite name lhs rhs)}, and variables are written \code{?name}. The
+listing uses this form throughout.
+
+\code{TermRewriteSystem} holds the rules in insertion order and offers two
+operations. \code{rewrite_once} performs a single step and returns the
+new term together with the index of the rule that fired and the position
+of the redex. \code{normalize} repeats it until no rule applies or until
+the step limit is reached.
+
+The strategy decides \emph{which} redex is chosen. \code{Outermost} tries
+the root of the term first and descends into the children only if no rule
+matches the root. \code{Innermost} descends first and tries a node only
+after all of its children have failed. The effect is that the innermost
+strategy selects the leftmost-deepest redex and the outermost strategy
+selects the leftmost-outermost one.
+
+The two strategies can genuinely disagree, and the listing demonstrates it
+with a tiny system. The rules are \code{(f a) -> p} and \code{a -> b}, and
+the subject is \code{(f a)}. The outermost strategy rewrites the whole
+term at once and produces \code{p}. The innermost strategy descends into
+the argument first, rewrites \code{a} to \code{b}, and is left with
+\code{(f b)}, which matches neither rule. The two strategies have produced
+different normal forms from the same input, and the difference is not an
+accident of the implementation: it is the definition of the two
+strategies.
+
+\begin{pseudocode}[Normalizing a term]
+\textbf{function} normalize (term, max\_steps, strategy)\\
+\quad steps = 0\\
+\quad \textbf{loop}\\
+\qquad \qquad next = rewrite\_once (term, strategy)\\
+\qquad \qquad \textbf{if} next does not exist then leave the loop\\
+\qquad \qquad \textbf{if} steps equals max\_steps\\
+\qquad \qquad \qquad\qquad \textbf{return} the term, the steps, and a step limit\\
+\qquad \qquad term = next.term\\
+\qquad \qquad steps = steps plus 1\\
+\quad \textbf{return} the term, the steps, and a normal form
+\end{pseudocode}
+
+The order of the two tests in that loop matters. The limit is checked
+\emph{after} a successful rewrite but \emph{before} the rewritten term is
+adopted, so at most \code{max_steps} rewrites are ever applied, and the
+term returned when the limit is hit is the one that was reached before the
+last rewrite. The default limit is 1000.
+
+The step limit is the only protection against a rule set that does not
+terminate. A rule such as \code{f(?x) -> f(?x)} would loop for ever, and
+\code{normalize} would return a result with \code{stop} set to
+\code{StepLimit} rather than hanging.
+
+\code{TermRewriteStep} carries the position of the redex as a vector of
+argument indices, which is exactly the path format that \code{Term::at} and
+\code{Term::replaced} accept. A caller that wants to know \emph{where} in
+the original term the rewrite happened --- to build a source map, or to
+highlight the changed region in an editor --- can therefore take the
+position straight from the step and use it with the term navigation
+functions. The rule index is carried for the same reason: it identifies
+which of the system's rules fired, which is usually what a diagnostic
+message needs to name.
+
+\section{The graph form}
+
+\begin{figure}[htbp]
+\begin{dslgraph}
+\node[font=\small\sffamily, anchor=south] at (1.6,4.6) {as a tree};
+\node[font=\small\sffamily, anchor=south] at (7.6,4.6) {as a shared graph};
+
+\node[dslsmall, fill=termbg] (t0) at (1.6,3.6) {+};
+\node[dslsmall, fill=termbg] (t1) at (0.4,2.2) {f};
+\node[dslsmall, fill=termbg] (t2) at (2.8,2.2) {f};
+\node[dslsmall, fill=termbg] (t3) at (0.4,0.8) {a};
+\node[dslsmall, fill=termbg] (t4) at (2.8,0.8) {a};
+\draw[dsledge] (t0) -- (t1);
+\draw[dsledge] (t0) -- (t2);
+\draw[dsledge] (t1) -- (t3);
+\draw[dsledge] (t2) -- (t4);
+\node[font=\scriptsize\sffamily, anchor=north] at (1.6,-0.1) {five nodes};
+
+\node[dslsmall, fill=termbg] (d0) at (7.0,3.6) {+};
+\node[dslsmall, fill=termbg] (d1) at (8.4,2.2) {f};
+\node[dslsmall, fill=termbg] (d2) at (8.4,0.8) {a};
+\draw[dsledge] (d0) -- (d1);
+\draw[dsledge] (d0.south east) to[out=-70,in=160] (d1.south west);
+\draw[dsledge] (d1) -- (d2);
+\node[font=\scriptsize\sffamily, anchor=north] at (7.6,-0.1) {three nodes};
+\end{dslgraph}
+\caption{The same term as a tree and as a shared graph. The tree stores the
+two occurrences of \code{(f a)} separately, so it has five nodes. The graph
+stores them once and has three. Rewriting the shared node updates both
+parents in a single step, which is the entire point of the graph form.}
+\label{fig:ch36-dag}
+\end{figure}
+
+Figure~\ref{fig:ch36-dag} shows what sharing means. The term
+\code{(+ (f a) (f a))} has five nodes as a tree, because the two
+occurrences of \code{(f a)} are distinct. Interned into a graph it has
+three, because the two occurrences are the same node.
+
+\code{TermGraph} is a thin wrapper around a
+\code{DirectedGraph<TermGraphLabel, std::size_t>}. The node label is a
+symbol and an \code{is_variable} flag; the edge value is the index of the
+child within its parent, which is what lets the DOT export label the edges
+with their positions.
+
+Building a graph from a term is \code{add (term, share = true)}. The
+interning is bottom-up, so identical sub-terms within the added term
+become the same node, and the intern table is seeded from the nodes that
+already exist, so an added term can reuse them. The seeding uses
+\code{emplace}, which does not overwrite, so the first node to claim a key
+keeps it. Passing \code{share = false} disables interning entirely and
+builds a fresh node for every occurrence.
+
+Matching over a graph is the analogue of \code{match_term}. A pattern
+variable binds to a \emph{node identifier} rather than to a term, and the
+occurrence check for a repeated variable is a structural comparison of two
+nodes. That comparison has to be \emph{co-inductive}, because the graph may
+be cyclic: \code{equal_nodes} compares a pair of nodes by pushing their
+children pairs onto a work list and remembering, in a map from the left
+identifier to the set of right identifiers already compared, which pairs
+have been seen. A pair that has been seen is assumed equal, which is
+exactly right for cyclic structures and is what makes the comparison
+terminate.
+
+Finding a redex walks the graph with the depth-first traversal of
+\chapref{ch:directed-graphs}, in pre-order for the outermost strategy and
+in post-order for the innermost one, and tries the rules in order at each
+node. Applying a redex is where the graph form earns its keep.
+
+\begin{pseudocode}[Applying a rewrite to a shared graph]
+\textbf{function} apply (root, system, candidate)\\
+\quad replacement = instantiate (system.rhs, candidate.bindings)\\
+\quad redirect (candidate.id, replacement)\\
+\quad remove (candidate.id)\\
+\quad \textbf{if} candidate.id is the root\\
+\qquad \qquad \textbf{return} the replacement as the new root\\
+\quad \textbf{return} the unchanged root
+\end{pseudocode}
+
+\code{redirect} is the operation described in
+\chapref{ch:directed-graphs}: it retargets the edges pointing into the
+redex so that they point into the replacement, and leaves everything else
+alone. The redex is then removed. Because the redex may be shared, every
+parent that pointed at it is updated at once, which is why the graph
+version of the example needs one step where the tree version needs two.
+
+The redex's own children are \emph{discarded}. The edge from the redex to
+its children dies with the redex; they are not re-attached to the
+replacement. That is the correct semantics for rewriting --- a rule that
+replaces a term replaces the whole term, arguments included --- but it does
+mean that a graph rewrite cannot be used to splice the children of the
+replaced node onto its replacement.
+
+\code{collect_garbage (roots)} removes every node that is not reachable
+from the given roots, using the depth-first traversal to compute the
+reachable set. It is the graph form's counterpart to letting a tree fall out
+of scope, and it has to be called explicitly.
+
+\code{to_term (root)} converts a graph back into a tree, expanding the
+sharing. It is the operation that undoes \code{add}, and it is the point at
+which the benefit of sharing is paid back: the resulting tree may be much
+larger than the graph it came from.
+
+The graph form is not a different algebra; it is the same one with an
+implementation detail changed. \code{to_term} produces a \code{Term} that
+is equal, by \code{Term}'s structural comparison, to the term that was
+added --- provided the graph is acyclic. A program can therefore mix the two
+freely: build a graph, rewrite it, and convert the result back to a tree
+when a tree-shaped interface is wanted. The caveat is that the conversion
+recurses once per level of the graph, so a cyclic graph must never be
+converted.
+
+\section{Edge cases and limits}
+
+\begin{warnbox}[Terms are trees and trees duplicate]
+\code{dsl::Term} is a value type with deep copies. A term that mentions the
+same sub-term twice stores it twice, and every operation that copies the
+term copies both copies. For an expression of size \emph{n} whose
+structure repeats, the tree representation can be exponentially larger
+than the graph representation, and the copying cost of \code{replaced} and
+\code{normalize} is paid on the tree, not on the structure the user
+cares about. This is the single most important reason to prefer
+\code{TermGraph} for anything large.
+\end{warnbox}
+
+The remaining limits are these.
+
+\textbf{Variables are names, not bindings.} A variable is a string and a
+flag. There is no scoping, no typing, no arity checking and no distinction
+between a bound and a free variable. The term algebra is first-order and
+nothing more.
+
+\textbf{There is no occurs check in matching.} Matching \code{?x} against
+a term containing \code{?x} succeeds, and that is correct: matching binds
+variables to existing terms and never constructs anything. The occurs check
+exists only in unification, where a binding could otherwise define an
+infinite term.
+
+\textbf{Unification can be expensive.} The algorithm applies each new
+binding to every existing binding, which is quadratic in the number of
+bindings in the worst case, and the stack of pending pairs can grow
+proportionally to the size of the terms. There is no union-find, no
+tri-state unification, and no occurs check that is cheaper than a variable
+scan.
+
+\textbf{Rules have no priorities and no weights.} They are tried in
+insertion order, and the first one that matches wins. A grammar with
+overlapping left-hand sides will therefore behave in a way that depends on
+the order the rules were added.
+
+\textbf{Normalisation may not terminate.} The step limit is the only
+protection, and it defaults to 1000. A rule set that needs more steps
+than the limit will be reported as \code{StepLimit} rather than as a normal
+form, and the caller has to distinguish the two with
+\code{normal_form ()}.
+
+\textbf{The graph form discards the redex's children.} As described above,
+applying a rewrite in \code{TermGraph} removes the redex node together
+with its outgoing edges. A user who wants the children to survive has to
+rebuild the edges.
+
+\textbf{\code{collect_garbage} trusts its argument.} It removes every node
+unreachable from the supplied roots. Passing the wrong roots --- or an
+empty vector --- deletes live structure, and there is no way to recover it.
+
+\textbf{\code{to_term} can be much larger than the graph.} Expanding a
+shared graph into a tree duplicates every shared sub-term. A graph with
+exponential sharing becomes a tree with exponential size.
+
+\textbf{Variables in a graph are shared like everything else.} Interning
+does not distinguish a variable node from a function node, so two
+occurrences of the same variable name become the same node. This is
+harmless for the intended uses, but it means that a graph cannot represent
+two \emph{distinct} variables that happen to share a name.
+
+\section{Closing}
+
+The term facility completes DSLtk's collection of symbolic data
+structures. \code{dsl::Term} is the tree form: a plain value type with
+structural equality, path-based navigation, and a printer. On top of it sit
+the two matching operations --- one-way \code{match_term} for rewrite
+rules, two-way \code{unify_terms} with an occurs check for constraint
+solving --- and a rewrite system whose normaliser is bounded by a step
+count and whose strategy is explicit.
+
+\code{dsl::TermGraph} is the same algebra with sharing, and it is the form
+that matters for anything large. Interning collapses repeated sub-terms
+into single nodes; rewriting a shared node updates every parent at once;
+and the comparison of two graph nodes is co-inductive, so cyclic structures
+can be compared without hanging. The pair of facilities is what allows the
+equality-saturation machinery of \chapref{ch:egraphs} to be practical, and
+it is where DSLtk's support for symbolic computation ends.
+
+What remains is the D port of the toolkit, which is the subject of the next
+chapter.

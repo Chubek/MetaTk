@@ -1,0 +1,969 @@
+\chapter{PEG Combinators and the \code{PEGMatcher}}
+\label{ch:peg-combinators}
+
+\section{Two Layers, One Idea}
+
+The definition layer described in \chapref{ch:peg-definition} is a
+tokenizer: an ordered set of patterns, tried left to right, with a callback
+per match. It is fast and it is predictable, but it cannot express
+structure, because a rule is a regular expression subset and a regular
+expression subset has no notion of nesting. The combinator layer, which
+occupies lines 8886 to 9085 of \code{DSLtk.hpp}, exists to supply that
+missing structure. It does so by wrapping the ordinary parser core of
+\chapref{ch:parser-core} -- \code{ParsecInput}, \code{Parser},
+\code{ExpectedResult} and the operators of Chapter~\ref{ch:parser-core} --
+in the three rules that make a grammar a PEG: ordered choice that never
+commits, repetition that never commits on partial input, and lookahead that
+consumes nothing.
+
+The layer is thin by design. There is no new parser type, no new input
+type, and no new error type; every combinator here is a
+\code{std::function} wrapped in the existing \code{Parser<T>} and is
+indistinguishable, at run time, from a parser you wrote by hand. What
+changes is the \emph{discipline} the combinators impose: they commit in the
+places a PEG commits, and they backtrack in the places a PEG backtracks.
+
+The layer also contains a second facility that is not a combinator at all:
+the streaming \code{PEGMatcher}. Where \code{PEGDefinition::parse} runs to
+completion and reports a result, the matcher is a cursor that you advance
+one token at a time, with an ordered list of arms that you extend as you go.
+It is the right tool for a lexer that has to consult a context -- a mode
+flag, a keyword table, a context stack -- that a fixed rule set cannot
+express.
+
+\section{The Bridge: \code{as_span_parser}}
+
+Every combinator in this chapter produces either a \code{PEGMatch} or a
+container of them, and the reason is that a PEG match is more than a
+success: it records the span of text that was consumed, which is what a
+lexer needs and what the ordinary \code{Parser<T>} does not provide. The
+adapter that supplies this is \code{peg_detail::as_span_parser}:
+
+\begin{lstlisting}[style=dslcpp,caption={Transcribed from \code{DSLtk.hpp} lines 8900--8918. \code{as_span_parser} turns any \code{Parser<T>} into a \code{Parser<PEGMatch>} that reports the span it consumed. The value of the inner parser is discarded.},label={lst:ch26-span}]
+template <typename T>
+Parser<PEGMatch>
+as_span_parser (const Parser<T> &p)
+{
+  return parser (
+      [p] (ParsecInput &in) -> ExpectedResult<PEGMatch>
+        {
+          std::size_t begin = in.pos;
+          auto r = p (in);
+          if (!r)
+            return ExpectedResult<PEGMatch>::failure (
+                r.error.pos, r.error.kind, r.error.expected);
+          PEGMatch m;
+          m.begin = begin;
+          m.end = in.pos;
+          m.value = in.get_span (begin);
+          return m;
+        });
+}
+\end{lstlisting}
+
+The function lives in the \code{peg_detail} namespace, which is a
+naming convention for implementation types rather than a promise of
+stability, but it is a public function of a public header, and the shipped
+example \code{22-peg-combinators.cpp} does exactly what this section
+recommends: it writes its own copy of the adapter under the name
+\code{to_span_parser}. A user of the shipped header may do the same, or
+may call \code{dsl::peg_detail::as_span_parser} directly.
+
+Two details of the adapter matter. It captures the inner parser by value,
+so the result owns a complete copy of the computation and is safe to store
+and to call later. And the span it records is the text between the cursor
+before the inner parser ran and the cursor after it ran, which for a
+successful parse is exactly the matched text; for a failed parse the
+adapter forwards the inner error unchanged, including its failure kind.
+
+\section{The Combinators}
+
+Table~\ref{tab:ch26-combinators} lists every combinator in the layer, with
+its signature and the type it produces. There are nine of them, and the list
+is complete: there is no \code{peg_optional}, no \code{peg_token} and no
+\code{peg_literal}.
+
+\begin{table}[ht]
+\centering
+\caption{The PEG combinators (\code{DSLtk.hpp}, lines 8923--9085). Every one
+of them is a thin wrapper over a primitive of the parser core.}
+\label{tab:ch26-combinators}
+\small
+\begin{tabular}{@{}L{0.21\textwidth}L{0.32\textwidth}L{0.32\textwidth}@{}}
+\toprule
+\textbf{Combinator} & \textbf{Result type} & \textbf{Meaning} \\
+\midrule
+\code{peg_seq(a, b, ...)} & \code{Parser<PEGMatch>} & Sequence. The span
+of the result covers the whole sequence. \\
+\code{peg_choice(a, b, ...)} & \code{Parser<A>} & Ordered choice. Both
+alternatives must have the same value type. \\
+\code{peg_opt(p)} & \code{Parser<std::optional<T>>} & Optional. Never
+fails, never commits. \\
+\code{peg_many(p)} & \code{Parser<std::vector<T>>} & Zero or more.
+Backtracks fully on a partial failure. \\
+\code{peg_many1(p)} & \code{Parser<std::pair<T, std::vector<T>>>} & One or
+more. \\
+\code{peg_and(p)} & \code{Parser<bool>} & Positive lookahead. Consumes
+nothing. \\
+\code{peg_not(p)} & \code{Parser<bool>} & Negative lookahead. Consumes
+nothing. \\
+\code{peg_rule(r)} & \code{Parser<PEGMatch>} & Adapts a \code{PEGRule} from
+the definition layer. \\
+\code{peg_channel(c, p)} & \code{Parser<PEGMatch>} & Relabels the channel
+of the match. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Sequence}
+
+\code{peg_seq} is variadic and requires at least two arguments. It parses
+each argument in turn and produces a single \code{PEGMatch} whose span
+covers the whole sequence; the individual values are discarded, which is why
+the arguments may have wildly different types.
+
+The interesting part is what happens when a later element fails. The code
+rewinds the cursor and upgrades the failure kind:
+
+\begin{lstlisting}[style=dslcpp,caption={Transcribed from \code{DSLtk.hpp} lines 8935--8945. The failure branch of \code{peg_seq}. A failure after the first element has consumed input rewinds the cursor and marks the failure \code{Committed}.},label={lst:ch26-seq}]
+auto rb = b (in);
+if (!rb)
+  {
+    bool consumed = in.pos != begin;
+    in.pos = begin;
+    auto kind = rb.error.kind;
+    if (consumed)
+      kind = ParseFailureKind::Committed;
+    return ExpectedResult<PEGMatch>::failure (rb.error.pos, kind,
+                                              rb.error.expected);
+  }
+\end{lstlisting}
+
+The cursor is rewound unconditionally, so the input is left exactly as it
+was found. But the \code{Committed} kind is a promise to the enclosing
+construct: \code{operator|} in the parser core refuses to try its second
+alternative when the first one failed with \code{Committed}. That is the
+mechanism by which a PEG refuses to backtrack, and it is inherited by
+\code{peg_seq} rather than reimplemented.
+
+Note that the first element's failure is passed through unchanged. A
+sequence that fails on its first element has consumed nothing, so there is
+nothing to commit about, and the failure keeps whatever kind the first
+element reported.
+
+The practical consequence is that a sequence is not a safe unit of
+backtracking. If you want a sequence to be tried and undone as a unit, you
+must wrap it in \code{try_parse}, which resets the kind to \code{Soft} and
+restores the cursor. \code{peg_choice} does this for its arguments
+automatically.
+
+\subsection{Ordered Choice}
+
+\code{peg_choice} is four lines long:
+
+\begin{lstlisting}[style=dslcpp,caption={Transcribed from \code{DSLtk.hpp} lines 8960--8969. \code{peg_choice}. Both alternatives are wrapped in \code{try_parse}, so neither can commit.},label={lst:ch26-choice}]
+template <typename A, typename B, typename... Rest>
+auto
+peg_choice (const Parser<A> &a, const Parser<B> &b, const Rest &...rest)
+{
+  auto ab = try_parse (a) | try_parse (b);
+  if constexpr (sizeof...(rest) == 0)
+    return ab;
+  else
+    return peg_choice (ab, rest...);
+}
+\end{lstlisting}
+
+Because \code{try_parse} restores the cursor and downgrades a failure to
+\code{Soft}, the \code{|} operator always tries the second alternative when
+the first one fails, whatever the first one did. This is the difference
+between a PEG and a backtracking regular expression matcher, and it is
+enforced here by construction rather than by convention.
+
+There is a constraint that is easy to trip over. \code{operator|} in the
+parser core is declared as \code{template <typename T> Parser<T> operator|
+(const Parser<T> &, const Parser<T> &)}, so both operands must have the
+\emph{same} value type. Since \code{peg_choice} is built on \code{|}, its
+two arguments must also have the same type, and a call such as
+\code{peg_choice(digit, as_span_parser(alpha))} does not compile: the
+error is a deduction failure inside \code{operator|}, and it names the
+mismatch in its message. The fix is to convert both alternatives to the same
+type first, which is why the shipped example converts both sides to
+\code{Parser<PEGMatch>} before offering them to \code{peg_choice}.
+
+\subsection{Repetition and Optionality}
+
+\code{peg_opt}, \code{peg_many} and \code{peg_many1} are one-liners
+built on the primitives of the parser core:
+
+\begin{lstlisting}[style=dslcpp,caption={Transcribed from \code{DSLtk.hpp} lines 8971--8993. The three repetition combinators.},label={lst:ch26-rep}]
+template <typename T>
+auto
+peg_opt (const Parser<T> &p)
+{
+  return optional (try_parse (p));
+}
+
+template <typename T>
+auto
+peg_many (const Parser<T> &p)
+{
+  return *try_parse (p);
+}
+
+template <typename T>
+auto
+peg_many1 (const Parser<T> &p)
+{
+  return p & *try_parse (p);
+}
+\end{lstlisting}
+
+The \code{try_parse} wrapper is what makes the repetition backtracking.
+The primitive repetition operator of the parser core stops at the first
+failure and restores the cursor, but it gives up entirely -- and reports a
+failure -- if the inner parser failed with \code{Committed}. Wrapping the
+inner parser in \code{try_parse} downgrades every failure to
+\code{Soft}, so the loop always terminates cleanly with the characters it
+has consumed so far.
+
+\code{peg_opt} uses \code{optional}, which returns an empty
+\code{std::optional} rather than a failure when the inner parser fails.
+Combined with \code{try_parse}, the result never fails and never commits,
+which is exactly the behaviour of the optional operator in a PEG.
+
+\code{peg_many1} deserves a note about its shape. It is
+\code{p & *try_parse(p)}, and the \code{&} of the parser core is a
+\emph{sequence}, not a lookahead: it parses \code{p}, then parses the
+repetition, and produces a pair. So the result of \code{peg_many1} is a
+pair whose first element is the first iteration and whose second is a vector
+of the remaining ones -- an awkward shape, but a faithful one, since the
+PEG combinator layer is a thin wrapper and does not reshape its results.
+
+\subsection{Lookahead}
+
+\code{peg_and} and \code{peg_not} are the two lookahead operators. Both
+save the cursor, run the inner parser, restore the cursor, and produce a
+\code{bool}.
+
+\begin{lstlisting}[style=dslcpp,caption={Transcribed from \code{DSLtk.hpp} lines 8996--9028. \code{peg_and} and \code{peg_not}. The cursor is saved and restored in both cases, so neither consumes input.},label={lst:ch26-look}]
+template <typename T>
+auto
+peg_and (const Parser<T> &p)
+{
+  return parser (
+      [p] (ParsecInput &in) -> ExpectedResult<bool>
+        {
+          auto save = in.pos;
+          auto r = p (in);
+          in.pos = save;
+          if (!r)
+            return ExpectedResult<bool>::failure (
+                r.error.pos, ParseFailureKind::Soft, r.error.expected);
+          return true;
+        });
+}
+
+template <typename T>
+auto
+peg_not (const Parser<T> &p)
+{
+  return parser (
+      [p] (ParsecInput &in) -> ExpectedResult<bool>
+        {
+          auto save = in.pos;
+          auto r = p (in);
+          in.pos = save;
+          if (r)
+            return fail_expected<bool> (in, "negative lookahead");
+          return true;
+        });
+}
+\end{lstlisting}
+
+Two observations. The failure of \code{peg_and} is always \code{Soft}, so a
+lookahead never commits; and the failure of \code{peg_not} carries the
+label \code{"negative lookahead"}, which is the string that appears in the
+diagnostics when a negative lookahead rejects the input. Note also that
+\code{peg_not} uses \code{fail_expected}, which reports the failure at
+the \emph{current} cursor -- the restored one -- rather than at the position
+where the inner parser stopped.
+
+\subsection{Adapting Rules and Relabelling Channels}
+
+\code{peg_rule} connects the two layers. It takes a \code{PEGRule} from a
+definition and produces an ordinary parser:
+
+\begin{lstlisting}[style=dslcpp,caption={Transcribed from \code{DSLtk.hpp} lines 9031--9052. \code{peg_rule}. It honours \code{must_fail} because it goes through \code{try_match}, and it fills in the channel, the ignored flag and the source position.},label={lst:ch26-pegrule}]
+inline Parser<PEGMatch>
+peg_rule (const PEGRule &rule)
+{
+  return parser (
+      [&rule] (ParsecInput &in) -> ExpectedResult<PEGMatch>
+        {
+          std::size_t begin = in.pos;
+          auto end = rule.try_match (in.source, begin);
+          if (!end)
+            return fail_expected<PEGMatch> (in, rule.pattern_text);
+          in.pos = *end;
+          PEGMatch m;
+          m.begin = begin;
+          m.end = *end;
+          m.value = in.source.substr (begin, *end - begin);
+          m.rule = const_cast<PEGRule *> (&rule);
+          m.channel = rule.channel;
+          m.ignored = rule.channel.is_ignore ();
+          peg_detail::line_col_at (in.source, begin, m.line, m.column);
+          return m;
+        });
+}
+\end{lstlisting}
+
+The rule's own semantic action is \emph{not} run: \code{peg_rule} reports
+a match and leaves the action to the caller. This is a real difference from
+the definition layer, where the action fires automatically, and it is worth
+being explicit about because the two layers are otherwise so similar.
+
+\code{peg_channel} is the other adapter. It takes a parser and relabels
+the channel of the match it produces:
+
+\begin{lstlisting}[style=dslcpp,caption={Transcribed from \code{DSLtk.hpp} lines 9055--9085. \code{peg_channel} and its name-taking overload.},label={lst:ch26-channel}]
+template <typename T>
+auto
+peg_channel (PEGChannel channel, const Parser<T> &p)
+{
+  return parser (
+      [channel = std::move (channel),
+       p] (ParsecInput &in) -> ExpectedResult<PEGMatch>
+        {
+          std::size_t begin = in.pos;
+          auto r = p (in);
+          if (!r)
+            return ExpectedResult<PEGMatch>::failure (
+                r.error.pos, r.error.kind, r.error.expected);
+          PEGMatch m;
+          m.begin = begin;
+          m.end = in.pos;
+          m.value = in.get_span (begin);
+          m.channel = channel;
+          m.ignored = channel.is_ignore ();
+          peg_detail::line_col_at (in.source, begin, m.line, m.column);
+          return m;
+        });
+}
+
+template <typename T>
+auto
+peg_channel (std::string_view name, const Parser<T> &p)
+{
+  return peg_channel (new_peg_channel (name), p);
+}
+\end{lstlisting}
+
+The second overload goes through \code{new_peg_channel}, so it inherits
+that function's validation: a name that does not begin with \code{@} makes
+the call throw \code{std::invalid_argument}, at the point where the
+combinator is built rather than where it is run. Since the channel is
+captured by value in the returned parser, the exception is raised once, when
+the parser is constructed.
+
+Note also what \code{peg_channel} does \emph{not} carry over. The match it
+produces has a fresh \code{PEGMatch} with only the span, the value, the
+channel, the ignored flag and the position filled in; the \code{rule}
+pointer is null, because the channel adapter has no rule to point at.
+
+\section{A Small Expression Parser}
+
+Listing~\ref{lst:ch26-expr} builds an expression parser out of the
+combinators. The grammar is the usual one:
+
+\begin{center}
+\code{expr := term (('+' | '-') term)*}\qquad
+\code{term := number | identifier}\qquad
+\code{number := [0-9]+}\qquad
+\code{identifier := [A-Za-z][A-Za-z0-9]*}
+\end{center}
+
+\begin{lstlisting}[style=dslcpp,caption={An expression parser built from the PEG combinators. Note that both alternatives of \code{peg_choice} are converted to \code{Parser<PEGMatch>} before they are offered to it.},label={lst:ch26-expr}]
+#include "DSLtk.hpp"
+
+#include <cctype>
+#include <iostream>
+#include <string>
+
+namespace
+{
+/// Wrap any Parser<T> so that it reports the span it consumed.
+dsl::Parser<dsl::PEGMatch>
+spanned (const auto &inner)
+{
+  return dsl::peg_detail::as_span_parser (inner);
+}
+
+void
+show (char const *label, dsl::ParseOutcome<dsl::PEGMatch> const &r)
+{
+  std::cout << label << " -> ";
+  if (r.value)
+    std::cout << "\"" << r.value->value << "\"";
+  else
+    {
+      std::cout << "fail at offset " << r.error.pos << ", expected";
+      for (auto const &e : r.error.expected)
+        std::cout << " \"" << e << "\"";
+    }
+  std::cout << "\n";
+}
+} // namespace
+
+int
+main ()
+{
+  auto digit
+      = dsl::satisfy ([] (char c) { return std::isdigit ((unsigned char) c) != 0; },
+                      "digit");
+  auto alpha
+      = dsl::satisfy ([] (char c) { return std::isalpha ((unsigned char) c) != 0; },
+                      "alpha");
+  auto alnum
+      = dsl::satisfy ([] (char c) { return std::isalnum ((unsigned char) c) != 0; },
+                      "alnum");
+
+  // number := [0-9]+
+  auto number = spanned (dsl::peg_many1 (digit));
+
+  // identifier := [A-Za-z][A-Za-z0-9]*
+  auto identifier = dsl::peg_seq (dsl::peg_and (alpha), dsl::peg_many1 (alnum));
+
+  // term := number | identifier      (ordered choice, same value type)
+  auto term = dsl::peg_choice (number, identifier);
+
+  // expr := term (('+' | '-') term)*
+  auto plus_or_minus = dsl::peg_choice (dsl::ch ('+'), dsl::ch ('-'));
+  auto expr = dsl::peg_seq (term, dsl::peg_many (dsl::peg_seq (plus_or_minus,
+                                                            term)));
+
+  show ("expr \"1+2\"", dsl::run_parser (expr, "1+2"));
+  show ("expr \"x-3\"", dsl::run_parser (expr, "x-3"));
+  show ("expr \"1+\"", dsl::run_parser (expr, "1+"));
+  show ("expr \"1 2\"", dsl::run_parser (expr, "1 2"));
+
+  // optional sign: a? never fails and never commits
+  auto signed_number = dsl::peg_seq (dsl::peg_opt (dsl::ch ('+')),
+                                     dsl::peg_many1 (digit));
+  show ("signed \"+7\"", dsl::run_parser (signed_number, "+7"));
+  show ("signed \"7\"", dsl::run_parser (signed_number, "7"));
+
+  // negative lookahead: !'-' fails softly when a minus follows
+  auto unsigned_number = dsl::peg_seq (dsl::peg_not (dsl::ch ('-')),
+                                       dsl::peg_many1 (digit));
+  show ("unsigned \"7\"", dsl::run_parser (unsigned_number, "7"));
+  show ("unsigned \"-7\"", dsl::run_parser (unsigned_number, "-7"));
+
+  // peg_channel relabels the match
+  auto tagged = dsl::peg_channel ("@NUM", number);
+  auto tagged_result = dsl::run_parser (tagged, "42");
+  if (tagged_result.value)
+    std::cout << "tagged \"42\" -> channel " << tagged_result.value->channel.name
+              << ", ignored " << std::boolalpha << tagged_result.value->ignored
+              << "\n";
+
+  // the name-taking overload goes through new_peg_channel and validates
+  try
+    {
+      (void) dsl::peg_channel ("NUM", number);
+    }
+  catch (const std::invalid_argument &e)
+    {
+      std::cout << "peg_channel(\"NUM\", ...) throws: " << e.what () << "\n";
+    }
+
+  return 0;
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch26-expr}.},label={lst:ch26-expr-out}]
+expr "1+2" -> "1+2"
+expr "x-3" -> "x-3"
+expr "1+" -> fail at offset 1, expected "<end-of-input>"
+expr "1 2" -> fail at offset 1, expected "<end-of-input>"
+signed "+7" -> "+7"
+signed "7" -> "7"
+unsigned "7" -> "7"
+unsigned "-7" -> fail at offset 0, expected "negative lookahead"
+tagged "42" -> channel @NUM, ignored false
+peg_channel("NUM", ...) throws: dsl::new_peg_channel: channel names must begin with '@'
+\end{lstlisting}
+
+The two failing expressions are instructive. \code{"1+"} fails at offset one
+rather than at offset two: the inner repetition tried \code{peg_seq(op,
+term)}, the operator consumed the plus, the term failed, and because
+\code{peg_many} wraps its argument in \code{try_parse} the partial attempt
+was undone -- the cursor went back to offset one -- and the repetition
+simply stopped. The expression parser had therefore matched \code{"1"} and
+left the plus sign as trailing input, which \code{run_parser} reports as
+an expectation of end-of-input. This is exactly the behaviour a PEG should
+have, and it is very different from the behaviour of a backtracking regular
+expression, which would have reported the failure at the plus sign.
+
+The negative lookahead failure is reported with the label
+\code{"negative lookahead"} rather than with the pattern that was rejected,
+which is a small loss of diagnostic detail that is worth knowing about when
+you are reading an error message.
+
+\section{The Streaming Matcher}
+
+\code{PEGMatcher} is the second facility in this layer, and it is not a
+combinator at all. It is a cursor over the input with an ordered list of
+arms, and it is created by \code{peg_new_matcher}:
+
+\begin{lstlisting}[style=dslcpp,caption={Transcribed from \code{DSLtk.hpp} lines 8877--8884. \code{peg_new_matcher} binds a definition and a source text into a matcher.},label={lst:ch26-newmatcher}]
+inline PEGMatcher
+peg_new_matcher (const PEGDefinition &peg, std::string_view text)
+{
+  PEGMatcher m;
+  m.def = &peg;
+  m.text = text;
+  return m;
+}
+\end{lstlisting}
+
+The public surface is small. \code{is_spent()} reports whether the cursor
+has reached the end of the text, \code{position()} reports the offset, and
+\code{close()} is a no-op that exists for symmetry with an input handle.
+Three methods filter by channel: \code{only(name)} restricts matching to a
+single channel, \code{include(name)} adds a channel to the accepted set,
+and \code{exclude(name)} rejects a channel; \code{channel_allowed(name)}
+asks about the current filter. \code{wildcard(fn)} builds an arm that fires
+when no rule arm matches, and \code{operator<<} pushes an arm and tries it.
+
+The semantics of \code{operator<<} are the part that surprises people, so
+they are worth stating before anything else:
+
+\begin{lstlisting}[style=dslcpp,caption={Transcribed from \code{DSLtk.hpp} lines 8750--8756. \code{operator<<} pushes the arm and immediately calls \code{step}. The arm list is cleared when an arm fires.},label={lst:ch26-opshl}]
+PEGMatcher &
+operator<< (const peg_detail::PEGArm &arm)
+{
+  arms_.push_back (arm);
+  step ();
+  return *this;
+}
+\end{lstlisting}
+
+Pushing an arm runs the step immediately, and a step that fires clears the
+whole arm list. A chain of \code{<<} operators therefore fires \emph{as many
+times as there are matching alternatives}, not once. The shipped example
+\code{24-peg-matcher.cpp} writes
+
+\begin{center}
+\code{matcher << keyword(cb) << number(cb) << ident(cb) << plus(cb) <<
+matcher.wildcard(cb);}
+\end{center}
+
+inside its loop. Two independent faults combine there, and it is worth
+separating them, because they are of quite different kinds.
+
+The first is the eager firing. Each push fires as soon as it can, so with
+sound rule pointers the keyword arm would fire at the first token, the
+identifier arm at the second, and the wildcard arm would fire before the
+number arm ever got a chance: the number \code{10} would be split into two
+wildcards. The fix for this is not to change the matcher but to change the
+loop -- push one arm at a time and stop as soon as the cursor advances.
+
+The second is the dangling rule pointer. The example holds
+\code{PEGRule} references across further \code{add_rule} calls, so by the
+time the arms are built the references no longer designate the rules they
+were taken from; see \chapref{ch:peg-definition}. With those pointers, no
+rule arm ever matches, and every character of the input falls through to the
+wildcard arm. The example therefore prints a string of unknown characters
+rather than a token stream.
+
+Listing~\ref{lst:ch26-matcher} is a matcher written the right way. It keeps
+the arms in a vector of its own, it takes the rule pointers only after the
+grammar is complete, and it pushes them one at a time, checking after each
+push whether the cursor moved.
+
+\begin{lstlisting}[style=dslcpp,caption={A streaming matcher. The arms are pushed one at a time, and the loop stops as soon as one of them advances the cursor.},label={lst:ch26-matcher}]
+#include "DSLtk.hpp"
+
+#include <iostream>
+#include <string>
+#include <vector>
+
+int
+main ()
+{
+  auto grammar = dsl::create_peg_definition ();
+
+  // Every rule is added, and configured, before any pointer to it is
+  // taken: add_rule returns a reference into a std::vector, and the next
+  // add_rule may reallocate it.
+  {
+    auto &ws = grammar.add_rule<"[ \t\n]+"> ([] (dsl::PEGMatch &) {});
+    ws.channel = dsl::PEGIgnoreChannel;
+  }
+  {
+    auto &kw = grammar.add_rule<"print"> ([] (dsl::PEGMatch &) {});
+    kw.channel = dsl::new_peg_channel ("@KEYWORD");
+  }
+  {
+    grammar.add_rule<"[0-9]+"> ([] (dsl::PEGMatch &) {});
+  }
+  {
+    grammar.add_rule<"[a-zA-Z_][a-zA-Z_0-9]*"> ([] (dsl::PEGMatch &) {});
+  }
+  {
+    grammar.add_rule<"+"> ([] (dsl::PEGMatch &) {});
+  }
+
+  // The grammar is frozen: from here on the pointers are stable.
+  auto visible = grammar.rules ();
+  auto find = [&visible] (std::string_view pattern) -> const dsl::PEGRule *
+  {
+    for (const dsl::PEGRule *r : visible)
+      if (r->pattern_text == pattern)
+        return r;
+    return nullptr;
+  };
+
+  auto source = std::string{ "print x+10 if_bad" };
+
+  auto emit = [] (dsl::PEGMatch &m)
+  { std::cout << "[" << m.value << ":" << m.channel.name << "]"; };
+
+  // Arms in priority order; the wildcard is the last resort.
+  std::vector<dsl::peg_detail::PEGArm> arms;
+  arms.push_back ((*find ("print")) (emit));
+  arms.push_back ((*find ("[0-9]+")) (emit));
+  arms.push_back ((*find ("[a-zA-Z_][a-zA-Z_0-9]*")) (emit));
+  arms.push_back ((*find ("+")) (emit));
+
+  auto matcher = dsl::peg_new_matcher (grammar, source);
+  auto wildcard_arm = matcher.wildcard (emit);
+
+  std::cout << "unfiltered:\n";
+  while (!matcher.is_spent ())
+    {
+      auto before = matcher.position ();
+      for (auto &arm : arms)
+        {
+          matcher << arm;
+          if (matcher.position () != before)
+            break;
+        }
+      if (matcher.position () == before)
+        matcher << wildcard_arm;
+    }
+  matcher.close ();
+  std::cout << "\nposition " << matcher.position () << " of " << source.size ()
+            << "\n";
+
+  // The same grammar, but with the @KEYWORD channel filtered out: the
+  // word "print" now falls through to the identifier rule.
+  auto filtered = dsl::peg_new_matcher (grammar, source);
+  filtered.exclude ("@KEYWORD");
+  std::cout << "\n@KEYWORD allowed? " << std::boolalpha
+            << filtered.channel_allowed ("@KEYWORD") << "\nfiltered:\n";
+  while (!filtered.is_spent ())
+    {
+      auto before = filtered.position ();
+      for (auto &arm : arms)
+        {
+          filtered << arm;
+          if (filtered.position () != before)
+            break;
+        }
+      if (filtered.position () == before)
+        filtered << filtered.wildcard (emit);
+    }
+  std::cout << "\n";
+
+  return 0;
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch26-matcher}. With the keyword channel excluded, the word "print" is lexed by the identifier rule instead.},label={lst:ch26-matcher-out}]
+unfiltered:
+[print:@KEYWORD][x:@DEFAULT][+:@DEFAULT][10:@DEFAULT][if_bad:@DEFAULT]
+position 17 of 17
+
+@KEYWORD allowed? false
+filtered:
+[print:@DEFAULT][x:@DEFAULT][+:@DEFAULT][10:@DEFAULT][if_bad:@DEFAULT]
+\end{lstlisting}
+
+\subsection{The Step}
+
+Listing~\ref{lst:ch26-step} is the step function, and it is the heart of the
+matcher.
+
+\begin{lstlisting}[style=dslcpp,caption={Transcribed from \code{DSLtk.hpp} lines 8760--8820. \code{PEGMatcher::step}. Ignored-channel matches are skipped first; then the arms are tried in order; then the wildcard arms; and if nothing fires the arms are kept for a later push.},label={lst:ch26-step}]
+void
+step ()
+{
+  if (arms_.empty () || is_spent ())
+    return;
+  skip_ignored ();
+  if (is_spent ())
+    {
+      arms_.clear ();
+      return;
+    }
+  // Non-wildcard arms in order: first match wins.
+  for (std::size_t i = 0; i < arms_.size (); ++i)
+    {
+      const auto &arm = arms_[i];
+      if (arm.is_wildcard)
+        continue;
+      if (arm.is_channel)
+        {
+          for (const PEGRule *r : def->rules ())
+            {
+              if (r->channel.name != arm.channel.name)
+                continue;
+              if (auto end = r->try_match (text, pos))
+                {
+                  fire (arm.action, r, pos, *end);
+                  arms_.clear ();
+                  return;
+                }
+            }
+          continue;
+        }
+      if (!arm.rule || !channel_allowed (arm.rule->channel.name))
+        continue;
+      if (auto end = arm.rule->try_match (text, pos))
+        {
+          fire (arm.action, arm.rule, pos, *end);
+          arms_.clear ();
+          return;
+        }
+    }
+  // No rule arm matched: fire the first wildcard arm, if any.
+  for (std::size_t i = 0; i < arms_.size (); ++i)
+    {
+      if (!arms_[i].is_wildcard)
+        continue;
+      PEGMatch m;
+      m.value = text.substr (pos, 1);
+      m.begin = pos;
+      m.end = pos + 1;
+      m.rule = nullptr;
+      peg_detail::line_col_at (text, pos, m.line, m.column);
+      if (arms_[i].action)
+        arms_[i].action (m);
+      ++pos; // wildcard consumes one character
+      arms_.clear ();
+      return;
+    }
+  // Nothing fired yet: keep the accumulated arms; the next << may
+  // provide one that matches at this position.
+}
+\end{lstlisting}
+
+Figure~\ref{fig:ch26-step} draws the same flow.
+
+\begin{pseudocode}[One streaming matching step]
+\textbf{while} an ignored rule consumes input, advance without actions\\
+\textbf{for each} eligible non-wildcard arm in registration order\\
+\quad \textbf{if} its rule matches, advance, fire its action, clear arms, return\\
+\textbf{if} a wildcard exists, consume one byte, fire, clear arms, return\\
+Otherwise retain the arms and cursor for the next insertion
+\end{pseudocode}
+
+\begin{figure}[ht]
+\centering
+\begin{dslgraph}
+  \node[dslbox, text width=40mm] (arms) {the arm list: ordered, accumulated};
+  \node[dslbox, below=11mm of arms, text width=40mm] (skip) {\texttt{skip\_ignored()}: consume\\\texttt{@IGNORE} matches silently};
+  \node[dslbox, below=11mm of skip] (loop) {for each arm, in order};
+  \node[dslbox, below=11mm of loop, text width=38mm] (how) {a channel arm scans the rules of the definition with that channel; a rule arm consults \texttt{arm.rule->try\_match}};
+  \node[dsldecision, below=13mm of how] (ok) {did it match?};
+  \node[dslbox, below=11mm of ok] (fire) {\texttt{fire()}: build the match,\\\texttt{pos = end}, run the action};
+  \node[dslbox, below=11mm of fire] (wild) {no rule arm matched: fire the first\\\texttt{wildcard} arm, consume one character};
+  \node[dslterm, below=11mm of wild] (keep) {nothing fired: keep the arms\\\texttt{pos} is unchanged};
+
+  \draw[dsledge] (arms) -- (skip);
+  \draw[dsledge] (skip) -- (loop);
+  \draw[dsledge] (loop) -- (how);
+  \draw[dsledge] (how) -- (ok);
+  \draw[dsledge] (ok) -- node[right, font=\scriptsize] {yes} (fire);
+  \draw[dsledge] (fire) -- node[right, font=\scriptsize] {the arms are cleared} (wild);
+  \draw[dsledgedash] (wild.south) -- node[right, font=\scriptsize] {and there is no wildcard arm} (keep.north);
+
+  \draw[dslfeedback] (ok.west) -- ++(-18mm,0) |- node[left, font=\scriptsize] {no: the next arm} (loop.west);
+  \draw[dsledgedash] (loop.east) -- ++(24mm,0) |- node[right, font=\scriptsize] {every arm has failed} (wild.east);
+\end{dslgraph}
+\caption{The step of the streaming matcher. The arm list is consulted in the
+order it was built; the first arm whose rule matches fires and clears the
+list; the wildcard arms are consulted only after every rule arm has failed.}
+\label{fig:ch26-step}
+\end{figure}
+
+Four details of the step are worth drawing out.
+
+The first is that the ignored channel is handled before any arm is
+consulted. \code{skip_ignored()} walks the rules of the definition and
+consumes any \code{@IGNORE} match, repeatedly, until it makes no progress.
+The semantic actions of those rules are \emph{not} run, which is a
+difference from the definition layer, where an ignored match is delivered
+to the action like any other. The matcher treats \code{@IGNORE} as an
+instruction; the definition layer treats it as a label.
+
+The second is that a rule arm is subject to the channel filter but a
+channel arm is not. A rule arm is skipped when
+\code{channel_allowed(arm.rule->channel.name)} is false; a channel arm is
+consulted regardless, and it searches the rules of the definition for one
+whose channel name matches. A channel arm is therefore a way of saying "any
+rule on this channel", and it is not affected by the filters.
+
+The third is the fallback. When no rule arm matched, the first wildcard arm
+fires and consumes exactly one character. The match it produces has a null
+\code{rule} pointer and the default channel, so a consumer can tell a
+wildcard match from a rule match by looking at \code{m.rule}. A wildcard arm
+is what guarantees that the matcher makes progress; without one, a matcher
+that reaches a position no rule accepts will spin in the caller's loop
+forever, because the arms are retained rather than discarded.
+
+The fourth is that the arm list is retained when nothing fires. This is
+what makes it possible to build the arm list incrementally: you may push a
+rule arm, discover that it does not match here, push another, and have both
+consulted at the same position.
+
+\subsection{The Channel Filter}
+
+The filter is implemented with a mode and a set of names:
+
+\begin{lstlisting}[style=dslcpp,caption={Transcribed from \code{DSLtk.hpp} lines 8696--8733. The channel filter of the matcher. Note that \code{include} on a fresh matcher leaves the mode at \code{All}, so it has no effect until an \code{exclude} has switched the mode to \code{Exclude}.},label={lst:ch26-filter}]
+PEGMatcher &
+only (std::string_view channel)
+{
+  mode_ = FilterMode::Only;
+  channels_.clear ();
+  channels_.push_back (std::string (channel));
+  return *this;
+}
+
+PEGMatcher &
+include (std::string_view channel)
+{
+  if (mode_ == FilterMode::Exclude)
+    mode_ = FilterMode::Only;
+  channels_.push_back (std::string (channel));
+  return *this;
+}
+
+PEGMatcher &
+exclude (std::string_view channel)
+{
+  if (mode_ != FilterMode::Exclude)
+    {
+      mode_ = FilterMode::Exclude;
+      channels_.clear ();
+    }
+  channels_.push_back (std::string (channel));
+  return *this;
+}
+\end{lstlisting}
+
+The behaviour that falls out of this code is not what the names suggest, and
+a user who filters by trial and error will lose time to it. On a fresh
+matcher the mode is \code{All}, so \code{channel_allowed} returns true for
+every name. \code{only(c)} clears the set and switches to \code{Only},
+giving exactly one accepted channel. \code{exclude(c)} clears the set and
+switches to \code{Exclude}, giving everything but \code{c}. But
+\code{include(c)} on a fresh matcher merely appends a name to a set that
+the \code{All} mode ignores, so it changes nothing at all: the matcher
+still accepts every channel. And \code{exclude(c)} followed by
+\code{include(d)} switches the mode to \code{Only} while leaving \code{c} in
+the set, so the result accepts \emph{both} \code{c} and \code{d} -- the
+opposite of what a reader would expect.
+
+The safe spells are therefore \code{only(c)} for a single channel and
+\code{exclude(c)} for a blacklist, and the code of
+Listing~\ref{lst:ch26-matcher} uses the second of these.
+
+\section{Edge Cases and Limits}
+
+\paragraph{\code{operator<<} fires eagerly.} This is the sharpest edge in
+the layer and the one most likely to be encountered, because the natural
+spelling of an ordered choice is a chain of \code{<<}. The chain fires once
+per matching alternative rather than once per token. The correct idiom is
+to push one arm at a time and check the cursor, as in
+Listing~\ref{lst:ch26-matcher}.
+
+\paragraph{The shipped matcher example does not work.} As described above,
+\code{24-peg-matcher.cpp} produces a stream of unknown characters
+rather than tokens. Two independent faults combine: the example holds
+\code{PEGRule} references across further \code{add_rule} calls, which
+invalidates them (see \chapref{ch:peg-definition}), and it chains the
+arms, which fires them eagerly. The example compiles, runs, and reports
+nothing wrong.
+
+\paragraph{\code{peg_choice} requires both alternatives to have the same
+value type.} This is a consequence of \code{operator|} in the parser core
+and it is a compile-time error, so it is cheap to discover, but the
+diagnostic is a template deduction failure rather than a helpful message.
+
+\paragraph{A sequence commits.} \code{peg_seq} marks a failure as
+\code{Committed} when the failure comes after some input has been
+consumed, and a committed failure prevents \code{operator|} from trying the
+next alternative. If you write a sequence directly as an alternative of a
+raw \code{|}, the second alternative will never be tried. Use
+\code{peg_choice}, which wraps both sides in \code{try_parse}, or wrap
+the sequence yourself.
+
+\paragraph{Repetition is greedy and does not backtrack within an iteration.}
+\code{peg_many} takes as many iterations as it can. A repetition whose
+body can match several lengths -- a nested repetition, say -- will take the
+first length that lets the following element succeed, and will not try a
+shorter one. This is the standard PEG behaviour and it is the reason PEG
+grammars are not equivalent to regular expressions.
+
+\paragraph{The combinator layer produces spans, not trees.} Every
+combinator in this layer returns a \code{PEGMatch} or a container of them.
+None of them builds a tree; the tree has to be assembled from the matches
+afterwards, or by a semantic action. That is the subject of
+\chapref{ch:peg-semantic-values}.
+
+\paragraph{\code{peg_rule} does not fire the rule's action.} A rule
+adapted into a parser reports a match and stops. If you want the action to
+run, you must run it yourself, which is another reason to prefer writing
+the combinator directly over adapting a rule.
+
+\paragraph{\code{peg_channel} discards the rule pointer.} The match it
+produces has a null \code{rule}, so a consumer cannot tell which rule
+matched, only which channel the match was assigned to.
+
+\paragraph{There is no "match the whole string" entry point.} The two ways
+to run a PEG over a text are \code{PEGDefinition::parse(text)}, which runs
+to completion, and \code{peg_new_matcher}, which is the streaming cursor
+described above. Neither the combinator layer nor the matcher offers a
+function that parses an entire string and reports whether it matched, which
+is a surprising omission given how natural such a function would be; the
+closest is \code{run_parser} from the parser core, which requires an
+ordinary \code{Parser<T>} and therefore rejects trailing input.
+
+\paragraph{The matcher never reports an error.} When no arm fires and there
+is no wildcard arm, the matcher simply stops advancing. There is no error
+position, no message and no failure flag; the caller has to notice that the
+cursor did not move and decide what to do.
+
+\section{Closing}
+
+The combinator layer is where the PEG idea becomes usable. A sequence,
+\code{peg_seq}, gives you a span. An ordered choice, \code{peg_choice},
+never commits. A lookahead, \code{peg_and} or \code{peg_not}, consumes
+nothing. A repetition, \code{peg_many}, undoes a partial iteration. All of
+them are built on the parser core, so a PEG grammar and an ordinary
+combinator grammar can be mixed freely in one program.
+
+The streaming matcher is the other half of the layer, and it is the right
+tool when the set of rules depends on context: a keyword table that changes,
+a mode flag, an indentation stack. It is also the part of the layer with
+the most surprising semantics, because pushing an arm fires it immediately
+and the arm list is cleared when it does.
+
+What none of this layer provides is a tree. Both layers hand you matches
+and spans; assembling a syntax tree from them is a separate design problem,
+and it is the problem that \chapref{ch:peg-semantic-values} takes up.

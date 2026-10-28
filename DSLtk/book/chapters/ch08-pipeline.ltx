@@ -1,0 +1,578 @@
+\chapter{The Pipeline Feature}
+\label{ch:pipeline}
+
+\section{Why a pipeline}
+
+Most data processing in a domain-specific language is a sequence of
+transformations applied to a value. A lexer turns characters into tokens; a
+type checker turns tokens into a decorated syntax tree; a back end turns a
+syntax tree into code. Written as nested function calls, such a sequence
+reads inside out. The innermost call is the first transformation, and the
+reader has to count parentheses to discover the order in which the
+transformations happen. A pipeline reverses the presentation: the value comes
+first and the transformations follow it in the order they are applied, so the
+code reads in the same order as the computation.
+
+\DSLtk{} provides that reading with three small pieces. A \emph{stage} is a
+callable wrapped in a type that says ``this is a step in a pipeline''. A
+factory function, \api{dsl::pipe}, produces such a stage from an ordinary
+lambda. And a single overloaded \code{operator|} applies a stage to
+whatever is on its left. The whole facility is twenty lines of code, but it
+is the difference between a transformation chain that reads top to bottom
+and one that reads bottom to top.
+
+\section{The data model}
+
+The facility consists of three entities. They are declared at lines
+6064--6090 of \texttt{DSLtk.hpp}, immediately before the feature tag.
+
+The first is the stage type \api{dsl::PipeStage<F>}, a struct with one
+public member:
+
+\begin{lstlisting}[style=dslcpp]
+template <typename F> struct PipeStage
+{
+  F fn;
+  explicit constexpr PipeStage (F f) : fn (std::move (f)) {}
+};
+\end{lstlisting}
+
+The stage holds the callable \code{fn} \emph{by value}. The constructor is
+\code{constexpr} and \code{explicit}; the explicitness matters because the
+factory returns a \code{PipeStage} directly, and it keeps a stage from
+being produced by an accidental conversion.
+
+The second is the factory:
+
+\begin{lstlisting}[style=dslcpp]
+template <typename F>
+constexpr auto
+pipe (F &&f)
+{
+  return PipeStage<std::decay_t<F>>{ std::forward<F> (f) };
+}
+\end{lstlisting}
+
+The factory decays its argument, so a stage built from a function lvalue,
+a function reference or a temporary lambda all end up with the same
+\code{PipeStage<F>} type. This matters more than it looks: a stage is a
+\emph{type-level} object, and two stages compose only when their types are
+compatible. Decay makes the type of a stage depend on what it does rather
+than on how it was spelled at the call site.
+
+The third entity is the operator itself:
+
+\begin{lstlisting}[style=dslcpp]
+template <typename T, typename F>
+constexpr auto
+operator| (T &&val, PipeStage<F> stage)
+{
+  return stage.fn (std::forward<T> (val));
+}
+\end{lstlisting}
+
+\begin{featurebox}[The operator is a free function]
+\code{operator|} is declared at namespace scope inside \code{dsl}. It is
+\emph{not} a member of the pipeline mixin, and it does not need to be found
+by unqualified lookup: it is found by argument-dependent lookup, because
+\code{PipeStage<F>} is a class type declared in namespace \code{dsl}. A
+program therefore gets the operator for free, without inheriting from
+anything and without a \code{using} declaration.
+\end{featurebox}
+
+This is a deliberate design choice and it has two consequences worth
+making explicit. First, the operator works for any value type, including
+types declared in the global namespace: because \code{dsl} is an associated
+namespace of the \code{PipeStage} argument, the lookup succeeds no matter
+where the left-hand operand was declared. Second, the feature tag
+\code{dsl::Pipeline} is not what supplies the operator. It supplies
+something else entirely, described next.
+
+\section{The feature tag and its mixin}
+
+The feature tag \api{dsl::Pipeline} (lines 6109--6125) has a mixin that
+contains exactly one function:
+
+\begin{lstlisting}[style=dslcpp]
+template <typename T>
+static constexpr T
+wrap (T &&v)
+{
+  return std::forward<T> (v);
+}
+\end{lstlisting}
+
+\code{wrap} is the identity function. It exists so that a DSL class can be
+the nominal starting point of a pipeline: \code{m.wrap(10) | stage} reads
+as though the pipeline begins at the DSL object, even though the value
+travels unchanged. Because \code{wrap} is static, it may be called either
+through the class (\code{MyDSL::wrap(10)}) or through an instance
+(\code{m.wrap(10)}); the latter is legal but stylistically odd, and the
+class-qualified form is what a reader expects.
+
+The mixin defines no operators, no member types and no state. A DSL that
+inherits \code{dsl::Pipeline} gains precisely the ability to write
+\code{MyDSL::wrap} and nothing else. The operator itself is available to
+the whole program whether or not the feature tag is used at all.
+
+\section{Evaluation order and desugaring}
+
+\code{operator|} is left-associative in the \cpp{} grammar, so
+\code{x | a | b} parses as \code{(x | a) | b}. The left operand of the
+outer application is therefore the \emph{result} of the inner application,
+not \code{x} itself. Since the inner application is
+\code{a.fn(x)}, the outer application is \code{b.fn(a.fn(x))}.
+
+\begin{pseudocode}[Desugaring \code{x | a | b}]
+\textbf{expression} \code{x | a | b}\\[1ex]
+\quad \textbf{group} as \code{(x | a) | b} \quad (left associativity)\\
+\quad y \code{<-} \code{a.fn (x)}\\
+\quad \textbf{return} \code{b.fn (y)}\\[1ex]
+\quad \textbf{equivalently} \code{b.fn (a.fn (x))}
+\end{pseudocode}
+
+The important point is that the \emph{dataflow} is left to right even though
+the \emph{nesting} is right to left. The value \code{x} enters the first
+stage, the output of the first stage enters the second, and so on. The
+reader sees the stages in the order they are applied. This is the same
+\emph{dataflow} that the Haskell pipeline operator \code{|>} provides,
+although the two differ in associativity: \code{|>} is right-associative,
+so \code{x |> a |> b} is \code{b (a x)} with the stages written
+right-to-left, whereas the \DSLtk{} form writes them left-to-right. The
+\DSLtk{} form is the better match for \cpp{}, where \code{>} is not an
+overloadable operator and where the left-to-right reading matches the order
+in which the reader scans the line.
+
+The stages are applied in sequence, and each stage is a plain function call.
+There is no evaluation-order subtlety beyond the obvious one: the left
+operand of each application is fully evaluated before the stage runs,
+because it is an ordinary function argument.
+
+\section{\code{|} versus \code{<<}}
+
+It is natural to reach for the stream insertion operator, but the two are
+not interchangeable.
+
+\code{<<} is a member operator of the stream classes, and its left operand
+is an ostream. It is left-associative, it is not a template, and it cannot
+be overloaded for arbitrary types without inheriting from
+\code{std::basic_ostream}. It also means \emph{output}, which is a
+statement about a destination rather than about a transformation.
+
+\code{|} in this facility means \emph{apply a transformation}. Its left
+operand is any type whatsoever, and it is a template, so a stage can be
+applied to a user-defined type with no inheritance and no adapter. The
+result of one application is a value, and that value is what the next
+application consumes; the pipeline is an expression, not a statement.
+
+The two can of course be combined, and they compose naturally: the last
+stage of a pipeline may produce something that is then streamed.
+
+\section{Why the stage is taken by value}
+
+The signature \code{operator|(T &&val, PipeStage<F> stage)} takes the
+stage \emph{by value}. Three things follow, and all three are desirable.
+
+First, a stage is reusable. Because the parameter is a copy rather than a
+reference, the caller's stage is untouched:
+
+\begin{lstlisting}[style=dslcpp]
+auto twice = dsl::pipe ([] (int x) { return x * 2; });
+int a = 3 | twice;   // 6
+int b = 4 | twice;   // 8
+\end{lstlisting}
+
+If the parameter were an rvalue reference, the first call would have
+consumed the stage and the second would have operated on a moved-from
+object.
+
+Second, the pipeline is copyable. A \code{PipeStage<F>} is an ordinary
+value type: it is copyable whenever \code{F} is copyable, and it can be
+stored in a container, returned from a function, or captured by a lambda.
+A user can therefore build a library of named stages and compose them.
+
+Third, the interface is symmetric with the way the value is passed. The
+value is forwarded as \code{T&&}, so a stage that takes its argument by
+rvalue reference can move a temporary out of the pipeline, while a stage
+that takes it by const reference sees it in place. The stage, by contrast,
+is always copied, because the stage is the thing being \emph{used}, not
+consumed.
+
+\section{No allocation, no virtual dispatch}
+
+Nothing in the facility allocates. \code{PipeStage<F>} stores its callable
+inline, and \code{operator|} performs a direct call on it. There is no
+heap, no type erasure, and no \code{std::function}. There is also no
+virtual dispatch: \code{stage.fn(...)} is a static call whose target is
+known at the point of instantiation, and the compiler will inline it.
+
+The practical consequence is that a pipeline costs exactly what the stages
+themselves cost. Adding stages does not add indirection; it adds the work
+the stages do. This is a meaningful contrast with the general practice of
+building transformation pipelines out of \code{std::function} objects, where
+each stage typically costs one heap allocation and one indirect call.
+
+\begin{featurebox}[The one caveat]
+The no-allocation property holds only while \code{F} is a closure type that
+stores its captures inline. A user who builds a stage from a
+\code{std::function}, or from a lambda capturing a large object, gets
+whatever allocation policy that callable has. The facility itself never
+allocates.
+\end{featurebox}
+
+\section{Interaction with the other \code{|} operators}
+
+The word \code{operator|} is overloaded across the whole of \DSLtk{}, and
+Table~\ref{tab:pipe-operators} lists every definition in the header. The
+same token means different things in different domains, and the domains are
+disjoint enough that overload resolution is never ambiguous in practice.
+
+\begin{table}[htbp]
+  \centering
+  \begin{tabular}{@{}R{0.09\textwidth}L{0.42\textwidth}L{0.39\textwidth}@{}}
+    \toprule
+    \textbf{Line} & \textbf{Signature} & \textbf{Domain} \\
+    \midrule
+    2675 &
+    \code{magic_enum::bitwise_operators::operator|(E, E)} &
+    Bitwise union of two flag enumerators. Embedded upstream block; not
+    found by ADL unless the user writes \code{using namespace
+    dsl::bitwise_operators;}. \\
+    3991 &
+    \code{magic_enum::containers::bitset::operator|(const bitset&,
+    const bitset&)} &
+    Union of two enumeration-backed bitsets. Embedded upstream block;
+    a hidden friend. \\
+    6024 &
+    \code{dsl::Predicate<F>::operator|(Predicate<G>)} &
+    Disjunction of two predicates. A member operator, so the left operand
+    must be a predicate. See \chapref{ch:operators}. \\
+    6087 &
+    \code{dsl::operator|(T&&, PipeStage<F>)} &
+    Application of a pipeline stage. A free function found by ADL. This is
+    the subject of the present chapter. \\
+    7862 &
+    \code{dsl::operator|(const Parser<T>&, const Parser<T>&)} &
+    Ordered choice between two parsers. A free function in \code{dsl};
+    both operands must be parsers of the same result type. \\
+    8021 &
+    \code{dsl::operator|(Task, Task)} &
+    Construction of a two-element task chain. \\
+    8027 &
+    \code{dsl::operator|(TaskChain, Task)} &
+    Extension of an existing task chain by one more task. \\
+    \bottomrule
+  \end{tabular}
+  \caption{Every definition of \code{operator|} in \texttt{DSLtk.hpp}. The
+  first two live in the embedded \texttt{magic\_enum} block; the remaining
+  five are \DSLtk{}'s own. The domains are pairwise disjoint, so no two
+  rows can ever be viable for the same expression.}
+  \label{tab:pipe-operators}
+\end{table}
+
+The interaction worth dwelling on is with the parser. \code{dsl::Parser<T>}
+has its own \code{operator|}, and it means ordered choice: the left parser
+is tried first, and the right parser is tried only if the left one failed
+without having committed to consuming input. That is a completely
+different operation from the pipeline's, and yet both live in namespace
+\code{dsl}. There is no conflict, because the parser overload requires
+both operands to be \code{Parser<T>} for the same \code{T}, while the
+pipeline overload requires its right operand to be a \code{PipeStage<F>}.
+Neither deduction can succeed for the other's argument types, so overload
+resolution never has to break a tie.
+
+The same holds for the task pipeline. \code{dsl::operator|(Task, Task)}
+builds a \code{TaskChain}, and \code{dsl::operator|(TaskChain, Task)}
+extends one. These are exact, non-template matches, which outrank the
+pipeline operator's template; and the pipeline operator cannot deduce
+\code{F} from a \code{Task} in any case.
+
+\begin{notebox}[The token is overloaded; the operation is not]
+Whenever this book says ``the pipe operator'', it means the overload at
+line 6087, the one that applies a stage. The parser's \code{|} is a
+choice, the task pipeline's \code{|} is a concatenation, and the flag
+operators' \code{|} is a bitwise union. The shared spelling is convenient
+--- the operator a user reaches for first is the one that reads naturally
+in the domain at hand --- but the meanings are unrelated.
+\end{notebox}
+
+\section{Two kinds of pipeline}
+
+It is tempting to read the task pipeline of \chapref{ch:task-pipeline} as
+another instance of the same idea, and the shared spelling of the operator
+invites it. The two are related in metaphor but differ in kind, and
+understanding how they differ is the fastest way to use both correctly.
+
+A value pipeline is \emph{immediate}. The expression \code{x | s1 | s2}
+evaluates the stages as it is evaluated: \code{s1} is applied to \code{x},
+its result is applied to \code{s2}, and the whole thing is one expression
+whose value is the last stage's output. Nothing is stored, nothing is
+deferred, and the stages are concrete types known to the compiler.
+
+A task pipeline is \emph{deferred}. The expression \code{t1 | t2} does not
+run \code{t1}; it builds a \code{TaskChain} that holds both tasks. The work
+happens later, when \code{dsl::run(state, chain)} walks the chain and
+invokes each task with a shared \code{TaskState}. The chain accumulates
+rather than nests: \code{t1 | t2 | t3} is a three-element vector, not a
+tree of nested applications.
+
+Three consequences follow from the difference. First, the ``value'' that
+flows through a task pipeline is not the result of the previous task but
+the mutable \code{TaskState}, which every task may read and write; the
+results the tasks produce are collected in the state's results map. Second,
+the task pipeline's stages are type-erased: a \code{Task} holds a
+\code{std::function} of a fixed signature, so the chain presents a uniform
+interface to the code that runs it while each task's body does whatever it
+likes, at the cost of an indirect call and possibly a heap allocation. A
+value pipeline's stages are concrete types and are called directly.
+Third, a value pipeline produces a value, whereas a task pipeline produces
+a side effect --- a mutated state --- and reports failure through the
+\code{dsl::Result} that each task returns.
+
+The same distinction reappears in the PEG combinators of
+\chapref{ch:peg-combinators}, where \code{peg_seq} and \code{peg_choice}
+compose parsers. There the composed object is again a value --- a new
+parser --- and what flows through it is not a return value but the shared
+input position, which the composed parsers advance in turn. In every case
+the \code{|} operator means ``compose these two things'', and the question
+of whether the composition is immediate or deferred is answered by the
+types involved.
+
+\section{Building a stage library}
+
+Because a stage is an ordinary value with an ordinary type, a DSL can
+publish a library of named stages and let its users compose them. The
+pattern that the worked example follows is the useful one: declare the
+stages as \code{static constexpr} members of the DSL class.
+
+Three properties make this more than a convenience. The stages are
+constructed at compile time, so there is no run-time setup cost. Their
+types are distinct, so a pipeline whose stages are in the wrong order
+fails to compile rather than misbehaving. And they are ordinary members, so
+a user can find them by reading the class, pass them to a function, or
+store them.
+
+The type discipline is the part that pays off. Consider a DSL for text
+processing in which one stage produces a \code{Token} and the next
+consumes a \code{Token}. The following fragment is schematic --- the
+stage names stand for members of some DSL class --- but the typing is
+exactly what a real program would have:
+
+\begin{lstlisting}[style=dslcpp]
+auto tokens   = source | dsl::pipe (lex);
+auto lowered  = tokens | dsl::pipe (fold_case);
+auto rendered = lowered | dsl::pipe (emit);
+\end{lstlisting}
+
+The chain is checked at every joint: \code{fold_case} must accept what
+\code{lex} produces, and \code{emit} must accept what \code{fold_case}
+produces. A mistake in the middle of the chain is a compile error naming
+the stage involved, and the error is reported at the point where the
+pipeline is written rather than at the point where the data happens to
+flow.
+
+\section{A worked example}
+
+Listing~\ref{lst:pipeline-complete} builds two small DSLs on the feature.
+The first converts temperatures; the second cleans up text. Both are
+ordinary classes that inherit the feature tag and define their stages as
+\code{static constexpr} members.
+
+\begin{lstlisting}[style=dslcpp, caption={Two DSLs built on the pipeline
+feature. The units DSL converts Fahrenheit to Kelvin through two stages;
+the transform DSL trims, lower-cases and shouts a string.},
+label={lst:pipeline-complete}]
+#include "DSLtk.hpp"
+
+#include <cctype>
+#include <iostream>
+#include <string>
+
+// ---------------------------------------------------------------------------
+//  Value types
+// ---------------------------------------------------------------------------
+struct Celsius
+{
+  double degrees;
+};
+
+struct Fahrenheit
+{
+  double degrees;
+};
+
+struct Kelvin
+{
+  double degrees;
+};
+
+// ---------------------------------------------------------------------------
+//  A units DSL built on the Pipeline feature
+// ---------------------------------------------------------------------------
+struct UnitsDSL : dsl::DSL<UnitsDSL, dsl::Pipeline>
+{
+  static constexpr auto from_fahrenheit
+      = dsl::pipe ([] (double f) { return Fahrenheit{ f }; });
+  static constexpr auto to_celsius
+      = dsl::pipe ([] (Fahrenheit f)
+                   { return Celsius{ (f.degrees - 32.0) * 5.0 / 9.0 }; });
+  static constexpr auto to_kelvin
+      = dsl::pipe ([] (Celsius c) { return Kelvin{ c.degrees + 273.15 }; });
+};
+
+// ---------------------------------------------------------------------------
+//  A text-transform DSL built on the same feature
+// ---------------------------------------------------------------------------
+struct TransformDSL : dsl::DSL<TransformDSL, dsl::Pipeline>
+{
+  static constexpr auto trim
+      = dsl::pipe ([] (std::string s)
+                   {
+                     auto b = s.find_first_not_of (" \t\n");
+                     if (b == std::string::npos)
+                       return std::string{};
+                     auto e = s.find_last_not_of (" \t\n");
+                     return s.substr (b, e - b + 1);
+                   });
+  static constexpr auto lower
+      = dsl::pipe ([] (std::string s)
+                   {
+                     for (auto &ch : s)
+                       ch = static_cast<char> (std::tolower (
+                           static_cast<unsigned char> (ch)));
+                     return s;
+                   });
+  static constexpr auto shout
+      = dsl::pipe ([] (std::string s) { return s + "!"; });
+};
+
+int
+main ()
+{
+  //  Three stages: the value flows from left to right.
+  const auto kelvin
+      = 212.0 | UnitsDSL::from_fahrenheit | UnitsDSL::to_celsius
+      | UnitsDSL::to_kelvin;
+  std::cout << "212F = " << kelvin.degrees << " K\n";
+
+  //  A stage is taken by value, so it can be reused.
+  const auto twice = dsl::pipe ([] (int x) { return x * 2; });
+  std::cout << "3 | twice = " << (3 | twice) << '\n';
+  std::cout << "4 | twice = " << (4 | twice) << '\n';
+
+  //  The mixin contributes only the static identity function.
+  auto shouty = TransformDSL::wrap ("  Hello, DSLtk  ") | TransformDSL::trim
+                | TransformDSL::lower | TransformDSL::shout;
+  std::cout << shouty << '\n';
+}
+\end{lstlisting}
+
+The program prints
+
+\begin{lstlisting}[style=dslcpp]
+212F = 373.15 K
+3 | twice = 6
+4 | twice = 8
+hello, dsltk!
+\end{lstlisting}
+
+Three observations follow from the listing. The first is that the stages
+are \code{static constexpr} members of the DSL class, which means the
+pipeline is a compile-time object graph: the stages are constructed once,
+at compile time, and the pipeline itself is an expression that the compiler
+can evaluate entirely at compile time if the stages are. The second is that
+the pipeline is \emph{typed}: \code{to_celsius} accepts a
+\code{Fahrenheit} and produces a \code{Celsius}, so a pipeline with the
+stages in the wrong order does not compile. The third is that the value
+types are distinct structs rather than a single \code{double} with a unit
+tag, so a Fahrenheit cannot be passed where a Kelvin is expected. The
+pipeline gives the reading; the distinct types give the safety.
+
+\begin{figure}[htbp]
+\begin{dslgraph}
+    \node[dslterm] (v) {value \code{x}};
+    \node[dslsmall, right=of v] (s1) {stage 1\\\code{a.fn}};
+    \node[dslsmall, right=of s1] (s2) {stage 2\\\code{b.fn}};
+    \node[dslsmall, right=of s2] (s3) {stage 3\\\code{c.fn}};
+    \node[dslterm, right=of s3] (r) {result};
+    \draw[dsledge] (v) -- (s1);
+    \draw[dsledge] (s1) -- (s2);
+    \draw[dsledge] (s2) -- (s3);
+    \draw[dsledge] (s3) -- (r);
+    \draw[dslfeedback] (s1.south) to[bend right=40] node[below, font=\scriptsize]
+      {the value of the left stage is the input of the right stage} (s2.south);
+\end{dslgraph}
+  \caption{A three-stage pipeline. The data flows left to right, so the
+  stages are read in the order in which they are applied, while the
+  underlying call nesting is right to left.}
+  \label{fig:pipeline-three}
+\end{figure}
+
+\section{Edge cases and limits}
+
+\begin{itemize}
+\item \textbf{The right operand must be a stage.} The operator's second
+parameter is \code{PipeStage<F>} by value, and \code{F} is deduced.
+Consequently a bare lambda cannot be piped: \code{x | [] (int y) { return
+y; }} does not compile, and the user must write \code{x | dsl::pipe(...
+)}. This is deliberate. A raw lambda has no name, and the point of a stage
+is to be a named, reusable, typed step.
+
+\item \textbf{The left operand is forwarded, the right is copied.} The
+value is passed as \code{T&&} and forwarded, so a stage may move from it.
+The stage is copied, so it must be copy-constructible. A stage built from a
+lambda that captures a move-only object therefore cannot be piped.
+
+\item \textbf{Types must line up.} The facility performs no conversion
+between stage input and stage output. If stage one produces a
+\code{Celsius} and stage two expects a \code{Fahrenheit}, the pipeline does
+not compile. Users who want implicit conversion must insert a stage that
+converts, which is usually what they want in a DSL anyway.
+
+\item \textbf{There is no variadic pipeline object.} The facility provides
+an operator and a stage type, not a \code{Pipeline} class that can hold a
+heterogeneous sequence of stages and be applied later. A user who wants
+that must build it, typically by folding over a tuple of stages.
+
+\item \textbf{\code{PipeStage} is not itself pipeable.} The operator
+requires its right operand to be a \code{PipeStage}, and a
+\code{PipeStage} is not one, so \code{x | stage | stage2} works but
+\code{x | (stage | stage2)} does not --- the latter would require
+\code{PipeStage} to be constructible from a \code{PipeStage}, and it is
+not. Pipelines are written flat, which is the intended form.
+
+\item \textbf{There is no error channel.} Every stage returns a value. A
+stage that may fail must encode failure in its result type, for instance by
+returning a \code{dsl::Result} or a \code{dsl::Maybe}; the pipeline
+machinery has no opinion about it.
+
+\item \textbf{Exception safety is the stage's own.} If a stage throws, the
+exception propagates out of the pipeline unchanged. There is no
+\emph{finally} stage, no resource guard, and no unwind-and-continue
+behaviour.
+
+\item \textbf{\code{wrap} adds nothing at run time.} It is the identity
+function, and a good optimiser will erase it entirely. Its value is
+syntactic: it lets a DSL class name the start of a pipeline.
+
+\item \textbf{The D port spells the same idea differently.} In
+\texttt{DSLtk.d}, \code{PipeStage} is defined at line 180 and the
+application is expressed with \code{opBinaryRight}, so the D syntax is
+\code{value | stage} as well, but the operator is a member of the
+stage rather than a free function, and there is no \code{wrap} equivalent
+with the same name.
+\end{itemize}
+
+\section{Closing}
+
+The pipeline feature is the smallest of \DSLtk{}'s facilities and the one
+with the widest reach. It contributes a stage type, a factory and one
+overloaded operator; it needs no feature tag to work, it allocates nothing,
+and it costs nothing beyond the work the stages do. Its whole contribution
+is to change the reading order of a transformation chain from inside out to
+top down.
+
+The next chapter looks at a facility that composes conditions rather than
+transformations. \chapref{ch:operators} introduces \api{dsl::Predicate},
+the wrapper that turns a boolean-returning callable into a first-class
+value that can be combined with \code{&}, \code{|} and \code{!}.

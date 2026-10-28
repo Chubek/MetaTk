@@ -1,0 +1,802 @@
+\chapter{Task Pipelines: \texttt{Task}, \texttt{TaskChain}, \texttt{TaskState}}
+\label{ch:task-pipeline}
+{
+
+% \code detokenises its argument, so a long type name cannot be broken
+% across lines and will overflow a narrow table column.  \codel takes
+% two pieces of such a name, places a discretionary break between them,
+% and prints them in a monospaced face.  Because \codel does not
+% detokenise its arguments, an ampersand inside a table cell must be
+% written \&, and an underscore must be written \_.
+\providecommand{\codel}[2]{\texttt{#1\allowbreak#2}}
+
+\section{A pipeline of named steps}
+
+Some pipelines are not pipelines of parsers.  A build script reads a
+source file, generates code from it, compiles the code and runs the
+tests; a data pipeline fetches rows, cleans them, aggregates them and
+writes them out.  What these have in common is not the shape of the work
+but the shape of the \emph{control}: a fixed sequence of named steps, each
+of which may fail, and a decision about what a failure means --- stop
+everything, or carry on and report at the end.
+
+DSLtk provides a small machinery for exactly that, in about eighty lines
+of the header between lines 7985 and 8058.  It consists of a task, a
+chain of tasks, a shared state object that the tasks use to talk to one
+another, and a policy that says what a failure means.  The design is
+deliberately minimal, and in one respect --- the mechanism by which tasks
+communicate --- it is minimal to the point of being stringly typed.
+
+The chapter opens with the shipped API, because that is what a reader
+needs in order to use the facility.  It then reports a serious defect:
+in the shipped header, the runner and the conditional hook cannot be
+instantiated at all, for a reason that is worth understanding because it
+is a lesson about \code{std::variant}.  A complete working program then
+follows, and it is a faithful mirror of the shipped machinery with the
+single change that makes it usable.
+
+\section{The shipped API}
+
+\begin{table}[htbp]
+\centering
+\caption{The task-pipeline API, exactly as it appears in the header.}
+\label{tab:ch24-api}
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{L{2.6cm} L{5.8cm} L{4.8cm}}
+\toprule
+\textbf{Entity} & \textbf{Definition} & \textbf{Meaning} \\
+\midrule
+\code{TaskPolicy}
+  & \code{enum class TaskPolicy} with the enumerators
+    \code{StopOnError} and \code{ContinueOnError}
+  & What a failure means for the rest of the chain. \\
+\code{TaskState}
+  & \codel{std::unordered\_map<}{std::string,}\codel{Result<std::string,}{std::string>> results}, \code{bool suspended}
+  & The shared state.  There are no other members: no \code{output}, no
+    \code{error}, no \code{halt}.  The per-task error travels inside the
+    \code{Result} stored under the task's name. \\
+\code{Task}
+  & \code{std::string name},
+    \codel{std::function<}{Result<std::string,}
+    \codel{std::string>(TaskState\&)>}{run\_fn}
+  & One named step.  The member function \code{run(state)} simply
+    invokes \code{run_fn}. \\
+\code{TaskChain}
+  & \code{std::vector<Task> tasks}, \code{TaskPolicy policy = StopOnError}
+  & An ordered sequence of tasks and the policy that governs it. \\
+\code{operator|}
+  & \code{TaskChain operator| (Task lhs, Task rhs)}
+  & Builds a two-task chain.  The policy is \code{StopOnError}. \\
+\code{operator|}
+  & \code{TaskChain operator| (TaskChain lhs, Task rhs)}
+  & Appends a task.  The policy is \emph{not} changed. \\
+\code{run}
+  & \code{template <typename... Args> TaskState& run (TaskState& state, const TaskChain& chain, Args&&...)}
+  & Runs every task in order, stores each result in the state map under
+    the task's name, and stops on the first error under
+    \code{StopOnError} or as soon as \code{state.suspended} is set.  The
+    variadic arguments are accepted and \emph{ignored}. \\
+\code{suspend}
+  & \code{void suspend (TaskState& state)}
+  & Sets the suspension flag.  A task that calls it stops the chain
+    after it has run. \\
+\code{upon}
+  & \code{template <typename EventFn> void upon (TaskState& state, EventFn&& event, Task task)}
+  & Runs a task only if the event predicate is truthy, and stores its
+    result under the task's name. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Two features of that table deserve comment before the defect is
+discussed, because they describe the design.
+
+The first is that the state map is the \emph{only} channel between
+tasks.  A task receives a \code{TaskState&} and nothing else; it cannot
+see its predecessors except by looking up their results in
+\code{state.results} under their names.  This is stringly typed --- the
+name is a \code{std::string} and a typo is a run-time failure --- but it
+is also extremely flexible.  A task does not have to know what comes
+before it in the chain; it only has to know the name of the task whose
+output it wants.  The chain order and the data flow are two independent
+things, and a tool that generates both can change one without the other.
+
+The second is that the failure of a task is \emph{recorded, not
+propagated}.  The \code{Result} returned by a task is stored in the state
+map under the task's name, and the chain then decides what to do.  Under
+\code{StopOnError} the chain breaks; under \code{ContinueOnError} it
+carries on.  In either case the map holds the outcome of every task that
+ran, so a partially completed chain is fully inspectable afterwards.
+That is the design's real strength: a pipeline that fails half way
+through still tells you exactly how far it got and what each step said.
+
+\section{The runner does not instantiate}
+
+The shipped machinery cannot be used as it stands, and the reason is
+worth a careful statement because it is a subtle one.
+
+\code{TaskState::results} has the type
+\codel{std::unordered\_map<}{std::string,}\codel{Result<std::string,}{std::string>>}.
+\code{dsl::Result<T, E>} stores a \code{std::variant<T, E>}.  With
+\code{T} and \code{E} both \code{std::string}, that is a
+\codel{std::variant<}{std::string, std::string>} --- a variant whose two
+alternatives are the \emph{same} type.
+
+The standard library cannot inspect such a variant by type.  The
+requirement on \codel{std::holds\_}{alternative<T>} and on the
+type-indexed \code{std::get<T>} is that the alternative appear exactly
+once, and a static assertion enforces it.  The consequence is that
+\code{Result<std::string, std::string>} can be \emph{created} --- via
+\code{from_ok} and \code{from_err} --- but cannot be \emph{read}:
+\code{is_ok()}, \code{is_err()}, \code{unwrap()} and \code{unwrap_or()}
+are all ill-formed for that instantiation.
+
+Three things in the shipped code depend on reading it, and all three
+therefore fail to compile:
+
+\begin{itemize}
+\item \code{dsl::run} calls \code{result.is_err()} to decide whether to
+  break out of the loop, so the runner cannot be instantiated.
+\item \code{dsl::upon} uses \codel{state.results[}{task.name] = ...}, and
+  \codel{std::unordered\_map::}{operator[]} requires its mapped type to be
+  default-constructible.  \code{dsl::Result} declares a converting
+  constructor, so it has no default constructor, and the subscript fails
+  to compile as well.
+\item Any user code that inspects \code{state.results} --- to print the
+  map, to test a result, to read a payload --- fails to compile.
+\end{itemize}
+
+The shipped example \code{DSLtk/examples/21-task-pipeline.cpp} uses
+exactly these constructs, and it does not compile against the shipped
+header.  The intended usage looks like this:
+
+\begin{lstlisting}[style=dslcpp,caption={The intended use of the shipped task API.  The three lines marked \emph{ill-formed} do not compile, for the reason given in the text; the rest of the fragment does.},label={lst:ch24-intended}]
+#include "DSLtk.hpp"
+
+using Result = dsl::Result<std::string, std::string>;
+
+auto read = dsl::Task{ "read", [] (dsl::TaskState &) {
+    return Result::from_ok ("18");            // fine: the result can be made
+} };
+auto parse = dsl::Task{ "parse", [] (dsl::TaskState &state) {
+    auto it = state.results.find ("read");
+    if (it == state.results.end () || it->second.is_err ())   // ill-formed
+      return Result::from_err ("missing source");
+    return Result::from_ok (it->second.unwrap ());            // ill-formed
+} };
+
+auto chain = read | parse;                    // fine
+dsl::TaskState state{};
+dsl::run (state, chain);                      // ill-formed: calls is_err()
+\end{lstlisting}
+
+\begin{warnbox}[A defect in the shipped header]
+\code{dsl::run}, \code{dsl::upon} and every inspection of
+\code{TaskState::results} fail to compile, because
+\code{Result<std::string, std::string>} is a
+\code{std::variant} with two identical alternatives and therefore cannot
+be read.  The example file \code{DSLtk/examples/21-task-pipeline.cpp}
+does not compile against the shipped header either. Distinct payload types
+solve type-based inspection, but map subscripting also requires a
+default-constructible mapped type. The application-owned implementation below
+uses a default-constructible outcome and \code{insert_or_assign}.
+\end{warnbox}
+
+A second, smaller gap deserves the same treatment.  \code{dsl::Result}
+has no accessor for its error payload: there is no \code{err()}, no
+\code{error()} and no \code{value_or()}, and \code{unwrap_or(fallback)}
+returns a fallback of the \emph{value} type, not the error.  A
+\code{Result} has no direct error accessor. For distinct payload types,
+\code{map_err} exposes the error to its callable for inspection or
+transformation. The example uses an application outcome with an explicit
+message field to make reporting straightforward.
+
+\section{A worked example}
+
+Listing~\ref{lst:ch24-pipeline} is a complete program that implements a
+three-stage ``read, parse, validate'' pipeline.  It keeps the shipped
+shape --- a named job, a shared state map, a policy, a suspension flag,
+the same insertion order and the same break conditions --- and changes
+exactly two things: the outcome is a two-field struct rather than a
+\code{dsl::Result}, and the job type is called \code{Job} rather than
+\code{Task}.  Everything else, including the \code{operator|} overloads
+and the \code{upon} hook, is a line-for-line mirror of the header.
+
+\begin{lstlisting}[style=dslcpp,caption={A complete three-stage pipeline: read, parse, validate, with both policies, a conditional job, and a suspension.},label={lst:ch24-pipeline}]
+#include "DSLtk.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+// ---------------------------------------------------------------------------
+//  Why this program does not call dsl::run ()
+//
+//  dsl::TaskState::results has the type
+//      std::unordered_map<std::string,
+//                          dsl::Result<std::string, std::string>>
+//  and dsl::Result<T, E> stores a std::variant<T, E>.  With T and E both
+//  std::string that is a variant whose two alternatives are the *same*
+//  type, and std::holds_alternative / std::get<T> are ill-formed for
+//  such a variant.  Consequently dsl::Result<std::string, std::string>
+//  can be created but never read: is_ok (), is_err (), unwrap () and
+//  unwrap_or () cannot be instantiated.
+//
+//  dsl::run () calls result.is_err (), and dsl::upon () needs
+//  unordered_map::operator[], which in turn needs a default-constructible
+//  mapped type -- and dsl::Result has a user-declared constructor, so it
+//  has no default constructor at all.  Neither function can therefore be
+//  instantiated with the shipped TaskState.
+//
+//  The types below mirror the shipped machinery exactly -- a named job, a
+//  shared state map keyed by name, a policy, a suspension flag, the same
+//  insertion order and the same break conditions -- with one change: the
+//  outcome is a two-field struct instead of dsl::Result, because
+//  dsl::Result also never exposes its error payload.
+// ---------------------------------------------------------------------------
+
+struct Outcome
+{
+  bool ok{ false };
+  std::string text;
+};
+
+struct State
+{
+  std::unordered_map<std::string, Outcome> results;
+  bool suspended{ false };
+};
+
+struct Job
+{
+  std::string name;
+  std::function<Outcome (State &)> run_fn;
+  Outcome
+  run (State &state) const
+  {
+    return run_fn (state);
+  }
+};
+
+struct Chain
+{
+  std::vector<Job> jobs;
+  dsl::TaskPolicy policy{ dsl::TaskPolicy::StopOnError };
+};
+
+static Chain
+operator| (Job lhs, Job rhs)
+{
+  return Chain{ { std::move (lhs), std::move (rhs) },
+                dsl::TaskPolicy::StopOnError };
+}
+
+static Chain
+operator| (Chain lhs, Job rhs)
+{
+  lhs.jobs.push_back (std::move (rhs));
+  return lhs;
+}
+
+template <typename... Args>
+static State &
+run (State &state, const Chain &chain, Args &&...)
+{
+  for (const auto &job : chain.jobs)
+    {
+      auto result = job.run (state);
+      state.results.insert_or_assign (job.name, result);
+      if (!result.ok && chain.policy == dsl::TaskPolicy::StopOnError)
+        break;
+      if (state.suspended)
+        break;
+    }
+  return state;
+}
+
+static void
+suspend (State &state)
+{
+  state.suspended = true;
+}
+
+template <typename EventFn>
+static void
+upon (State &state, EventFn &&event, Job job)
+{
+  if (event ())
+    state.results.insert_or_assign (job.name, job.run (state));
+}
+
+// ---------------------------------------------------------------------------
+//  The three stages.
+// ---------------------------------------------------------------------------
+
+static dsl::Parser<char>
+digit ()
+{
+  return dsl::satisfy (
+      [] (char c)
+      { return std::isdigit (static_cast<unsigned char> (c)) != 0; },
+      "digit");
+}
+
+static dsl::Parser<std::string>
+digits ()
+{
+  auto core = dsl::operator& (digit (), dsl::operator* (digit ()));
+  return dsl::parser (
+      [core] (dsl::ParsecInput &in) -> dsl::ExpectedResult<std::string>
+      {
+        auto r = core (in);
+        if (!r)
+          return dsl::ExpectedResult<std::string>::failure (
+              r.error.pos, r.error.kind, r.error.expected);
+        std::string s (1, (*r).first);
+        for (char c : (*r).second)
+          s += c;
+        return s;
+      });
+}
+
+static Job
+read_job (std::string path)
+{
+  return Job{ "read",
+              [path] (State &) -> Outcome
+              {
+                std::ifstream in (path, std::ios::in | std::ios::binary);
+                if (!in)
+                  return Outcome{ false,
+                                  "cannot open '" + path + "'" };
+                std::ostringstream ss;
+                ss << in.rdbuf ();
+                return Outcome{ true, ss.str () };
+              } };
+}
+
+static Job
+parse_job ()
+{
+  return Job{ "parse",
+              [] (State &state) -> Outcome
+              {
+                auto it = state.results.find ("read");
+                if (it == state.results.end ())
+                  return Outcome{ false, "no input to parse" };
+                if (!it->second.ok)
+                  return Outcome{ false, "the input could not be read" };
+                auto outcome
+                    = dsl::run_parser (digits (), it->second.text);
+                if (!outcome.value)
+                  return Outcome{ false,
+                                  "expected a digit at offset "
+                                      + std::to_string (outcome.error.pos) };
+                return Outcome{ true, *outcome.value };
+              } };
+}
+
+static Job
+validate_job ()
+{
+  return Job{ "validate",
+              [] (State &state) -> Outcome
+              {
+                auto it = state.results.find ("parse");
+                if (it == state.results.end ())
+                  return Outcome{ false, "nothing to validate" };
+                if (!it->second.ok)
+                  return Outcome{ false, "the input did not parse" };
+                long value = std::stol (it->second.text);
+                if (value <= 0)
+                  return Outcome{ false, "the value must be positive" };
+                return Outcome{ true,
+                                "value " + std::to_string (value)
+                                    + " accepted" };
+              } };
+}
+
+// ---------------------------------------------------------------------------
+//  Reporting.
+// ---------------------------------------------------------------------------
+
+static void
+dump (const char *label, const State &state)
+{
+  std::cout << "  " << label << ":\n";
+  // The state map is an unordered_map, so the entries are sorted before
+  // printing to make the output deterministic.
+  std::vector<std::pair<std::string, Outcome>> entries (state.results.begin (),
+                                                        state.results.end ());
+  std::sort (entries.begin (), entries.end (),
+             [] (const auto &a, const auto &b)
+             { return a.first < b.first; });
+  for (const auto &entry : entries)
+    {
+      std::cout << "    " << entry.first << " -> "
+                << (entry.second.ok ? "ok" : "err") << "(\""
+                << entry.second.text << "\")\n";
+    }
+  std::cout << "    suspended=" << (state.suspended ? "true" : "false")
+            << "\n";
+}
+
+static void
+write_file (const std::string &path, const std::string &text)
+{
+  std::ofstream out (path);
+  out << text;
+}
+
+int
+main ()
+{
+  write_file ("pipeline-good.txt", "42");
+  write_file ("pipeline-bad.txt", "not a number");
+
+  std::cout << "--- StopOnError, every stage succeeds ---\n";
+  {
+    Chain chain = read_job ("pipeline-good.txt") | parse_job ()
+                  | validate_job ();
+    State state;
+    run (state, chain, 42, "an extra argument that is ignored");
+    dump ("state", state);
+  }
+
+  std::cout << "\n--- StopOnError, the first stage fails ---\n";
+  {
+    Chain chain = read_job ("pipeline-missing.txt") | parse_job ()
+                  | validate_job ();
+    State state;
+    run (state, chain);
+    dump ("state", state);
+  }
+
+  std::cout << "\n--- ContinueOnError, the middle stage fails ---\n";
+  {
+    Chain chain = read_job ("pipeline-bad.txt") | parse_job ()
+                  | validate_job ();
+    chain.policy = dsl::TaskPolicy::ContinueOnError;
+    State state;
+    run (state, chain);
+    dump ("state", state);
+  }
+
+  std::cout << "\n--- upon: a conditional job ---\n";
+  {
+    Chain chain = read_job ("pipeline-good.txt") | parse_job ()
+                  | validate_job ();
+    State state;
+    run (state, chain);
+    Job report{ "report",
+                [] (State &) -> Outcome
+                { return Outcome{ true, "all stages completed" }; } };
+    upon (
+        state,
+        [&]
+        {
+          auto it = state.results.find ("validate");
+          return it != state.results.end () && it->second.ok;
+        },
+        report);
+    Job never{ "never",
+               [] (State &) -> Outcome
+               { return Outcome{ true, "should not run" }; } };
+    upon (
+        state,
+        [&] { return state.results.count ("missing") != 0; }, never);
+    dump ("state", state);
+  }
+
+  std::cout << "\n--- suspend: a job halts the chain ---\n";
+  {
+    Chain chain
+        = read_job ("pipeline-good.txt")
+          | Job{ "halt",
+                 [] (State &state) -> Outcome
+                 {
+                   suspend (state);
+                   return Outcome{ true, "halted" };
+                 } }
+          | validate_job ();
+    State state;
+    run (state, chain);
+    dump ("state", state);
+  }
+  return 0;
+}
+\end{lstlisting}
+
+The output is:
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch24-pipeline}.},label={lst:ch24-pipeline-out}]
+--- StopOnError, every stage succeeds ---
+  state:
+    parse -> ok("42")
+    read -> ok("42")
+    validate -> ok("value 42 accepted")
+    suspended=false
+
+--- StopOnError, the first stage fails ---
+  state:
+    read -> err("cannot open 'pipeline-missing.txt'")
+    suspended=false
+
+--- ContinueOnError, the middle stage fails ---
+  state:
+    parse -> err("expected a digit at offset 0")
+    read -> ok("not a number")
+    validate -> err("the input did not parse")
+    suspended=false
+
+--- upon: a conditional job ---
+  state:
+    parse -> ok("42")
+    read -> ok("42")
+    report -> ok("all stages completed")
+    validate -> ok("value 42 accepted")
+    suspended=false
+
+--- suspend: a job halts the chain ---
+  state:
+    halt -> ok("halted")
+    read -> ok("42")
+    suspended=true
+\end{lstlisting}
+
+Four of the five scenarios are about the policy, and they show the
+design's central property clearly.  In the second scenario the read stage
+fails and the chain stops; the map contains one entry, and the two later
+stages never ran, which is exactly the information a user needs to know
+that the pipeline did not get past the first step.  In the third scenario
+the policy is \code{ContinueOnError}, so the parse stage fails, the chain
+carries on, and the validate stage runs --- and fails too, because it
+correctly observes that its input did not parse.  The map now has three
+entries, and the reader can see both that the chain continued and what
+each step said.
+
+The fourth scenario shows the \code{upon} hook.  The report job is
+registered with a predicate that inspects the state map; because the
+validate stage succeeded, the predicate is true and the report job runs,
+and its result appears in the map alongside the chain's own results.  The
+second registration in that scenario has a predicate that is never true,
+and the job it names does not appear in the map at all --- which is the
+point of a conditional hook.
+
+The fifth scenario shows the suspension flag.  The \code{halt} job calls
+\code{suspend} on the state, and the runner notices the flag after the
+job has returned; the validate stage never runs, and the map shows
+\code{suspended=true}.  Note the ordering: the suspended job's own
+result \emph{is} recorded, so the map says both that the job ran and
+that the chain stopped because of it.
+
+\section{The design}
+
+\subsection{Names as a protocol}
+
+The state map is the whole interface between tasks, and it is keyed by
+strings.  This is a deliberate trade, and it is worth naming both sides
+of it.
+
+On the bad side: a task that wants the output of the read stage writes
+\code{state.results.find ("read")}, and a typo produces an empty
+\code{optional} rather than a compile-time error.  There is no way to
+declare that a task depends on another, so a tool that generates the
+chain cannot check the dependencies either.
+
+On the good side: the chain order and the data flow are independent.  A
+task does not need to know where in the chain it sits, only which names
+it may read.  The same task can be used in two different chains, in two
+different positions, and the state map is the only thing that has to be
+agreed upon.  The pipeline in Listing~\ref{lst:ch24-pipeline} is a
+direct illustration: the validate job reads the name \code{"parse"} and
+knows nothing about the read job, yet it works in the chain, and it
+would keep working if the read job were replaced.
+
+The same design explains the \code{upon} hook.  A conditional job is
+registered against a predicate, not against a position in the chain; the
+predicate typically inspects the state map, so the condition is expressed
+in terms of the data rather than the order.
+
+\subsection{Failure as data}
+
+The second design decision is that failure is \emph{recorded} rather than
+thrown or propagated.  A task returns an outcome; the runner stores it
+under the task's name; the policy decides whether the chain continues.
+Nothing is thrown, nothing unwinds, and nothing is lost.  A partially
+completed chain is a first-class observable object: after the run, the
+map says exactly which steps ran, in what state each finished, and the
+suspension flag says whether the chain ended early by request.
+
+This is a good fit for pipelines, which are usually reporting tools
+rather than library calls.  A command-line tool that runs a build
+pipeline and then prints a report wants precisely this: the set of steps
+that completed, and the reason each failure occurred.  It is a poor fit
+for a library function whose caller wants an exception, but the library
+function can be written on top: the caller inspects the map and throws.
+
+\subsection{Combining with the parser}
+
+The parse stage of Listing~\ref{lst:ch24-pipeline} shows how the two
+halves of this part of the book fit together, and the combination is
+natural.  A task reads the raw text from the state map, runs a parser
+over it with \code{dsl::run_parser}, and turns the outcome --- a value
+or a \code{ParseError} --- into the pipeline's own outcome type.  The
+parser contributes the position of the failure; the task contributes the
+policy of what to do about it.
+
+The one rule the combination must respect is that the two error channels
+are different.  \code{dsl::ParseError} carries a position and a set of
+labels; the pipeline's outcome carries a message.  A task that wants to
+report a parse failure usefully must flatten the error into a string
+before it can be stored --- and the flattening is lossy, because the
+diagnostic formatter of Chapter~\ref{ch:parser-diagnostics} needs the
+source text to compute a line and a column, and the source may no longer
+be available by the time the task's outcome is inspected.
+
+\section{The chain and its cut-off}
+
+Figure~\ref{fig:ch24-cutoff} draws a chain of four jobs under the
+\code{StopOnError} policy, with the third job failing, and shows the
+state map that results.
+
+\begin{dslgraph}
+  \node[dslbox, text width=24mm] (read) at (-4.6,0) {read};
+  \node[dslbox, text width=24mm] (parse) at (-1.6,0) {parse};
+  \node[dslbox, text width=24mm, fill=warnbg, draw=warnfg] (validate) at (1.6,0) {validate};
+  \node[dslbox, text width=24mm] (report) at (4.6,0) {report};
+
+  \draw[dslledge] (read) -- (parse);
+  \draw[dslledge] (parse) -- (validate);
+  \draw[dslledge] (validate) -- (report);
+
+  % The cut-off
+  \draw[edgefg, thick] (3.05,-0.42) -- (3.55,0.42);
+  \draw[edgefg, thick] (3.05,0.42) -- (3.55,-0.42);
+  \node[font=\scriptsize\sffamily, below] at (2.5,-0.62) {the chain stops here};
+
+  % The state map
+  \node[dslsmall, text width=20mm] (r1) at (-4.6,-1.35) {\texttt{read} : ok};
+  \node[dslsmall, text width=20mm] (r2) at (-1.6,-1.35) {\texttt{parse} : ok};
+  \node[dslsmall, text width=20mm, fill=warnbg, draw=warnfg] (r3) at (1.6,-1.35) {\texttt{validate} : err};
+  \node[dslsmall, text width=20mm] (r4) at (4.6,-1.35) {\texttt{report} : absent};
+  \draw[dslfeedback] (read) -- (r1);
+  \draw[dslfeedback] (parse) -- (r2);
+  \draw[dslfeedback] (validate) -- (r3);
+  \draw[dslfeedback] (report) -- (r4);
+
+  \node[font=\small\sffamily, above] at (0,0.95)
+    {policy : \texttt{StopOnError}};
+\end{dslgraph}
+\begin{figure}[htbp]
+\centering
+\caption{A chain under the \code{StopOnError} policy.  The validate job
+fails, the runner breaks out of the loop, and the report job never runs.
+The state map records the outcome of every job that did run, and the
+suspension flag stays false.}
+\label{fig:ch24-cutoff}
+\end{figure}
+
+\begin{pseudocode}[Run a chain]
+\textbf{function} run (state, chain, extra arguments \ldots)\\
+\quad for each task in chain.tasks do\\
+\qquad result := task.run (state)\\
+\qquad state.results [task.name] := result\\
+\qquad if result is an error and chain.policy = StopOnError then\\
+\qquad\quad break\\
+\qquad if state.suspended then\\
+\qquad\quad break\\
+\quad return state
+\end{pseudocode}
+
+The pseudocode is the shipped runner almost line for line, and two details
+in it are easy to overlook.  The first is that the result is stored
+\emph{before} the policy is consulted, so the failing task's own outcome
+is always recorded.  The second is that the suspension flag is checked
+after every task, including after the one that set it --- so a task that
+suspends is allowed to finish and to record its result, and only the
+tasks \emph{after} it are skipped.
+
+\section{Edge cases and limits}
+
+\begin{itemize}
+\item \textbf{The shipped runner and hook do not compile.}  This is the
+  central limitation of the facility as shipped, and it is discussed at
+  length above.  The remedy is a distinct error type, or a user-defined
+  outcome type.
+
+\item \textbf{The state map is unordered.}  It is a
+  \code{std::unordered_map}, so the iteration order of the results is
+  unspecified and may differ between runs and between implementations.
+  A report that iterates the map must sort it if it wants stable
+  output; the listing does.
+
+\item \textbf{Names are the only contract.}  A task that looks up a name
+  that no task wrote finds nothing, and the difference between ``the
+  input could not be read'' and ``there was no input'' is a run-time
+  distinction that the type system cannot make.  A pipeline that must be
+  robust against a missing predecessor has to check explicitly, as the
+  parse and validate jobs of Listing~\ref{lst:ch24-pipeline} do.
+
+\item \textbf{There is no cancellation other than the flag.}  The
+  \code{suspended} member is a single boolean, and it is only consulted
+  between tasks.  A long-running task cannot be interrupted; it can only
+  ask not to be followed.
+
+\item \textbf{The variadic arguments of \code{run} are ignored.}  The
+  signature accepts any number of extra arguments and does nothing with
+  them.  They are not forwarded to the tasks, and the tasks have no way to
+  receive them.  The parameter exists, presumably, so that a caller may
+  pass configuration without changing the runner's signature; in practice
+  it is a trap for a reader who expects the arguments to mean something.
+
+\item \textbf{\code{operator|} on a chain does not change the
+  policy.}  \code{operator| (TaskChain, Task)} appends and returns the
+  chain with the policy it already had.  A pipeline that is built as
+  \code{a | b | c} therefore always has \code{StopOnError}, and the only
+  way to change the policy is to assign to the member afterwards --- which
+  is what the third scenario of Listing~\ref{lst:ch24-pipeline} does.
+
+\item \textbf{\code{operator|} on two tasks always builds a chain with
+  \code{StopOnError}.}  There is no overload that takes a policy, and no
+  way to build a chain with \code{ContinueOnError} in a single
+  expression.
+
+\item \textbf{\code{upon} overwrites.}  It assigns to the state map
+  under the task's name, so registering a job whose name collides with a
+  chain job replaces that job's recorded outcome.  The shipped
+  implementation uses the subscript operator, which also \emph{default
+  constructs} the entry if it is absent --- and that is one of the
+  reasons the shipped hook does not compile.
+
+\item \textbf{The predicate of \code{upon} is called with no
+  arguments.}  It cannot be told which task it is gating, and it cannot
+  be handed the state; it must capture whatever it needs.  In the
+  listing, the predicate captures the state by reference.
+
+\item \textbf{There is no \code{TaskPipeline} machinery.}  The feature
+  tag \code{dsl::TaskPipeline}, declared at line 7331 of the header, is
+  an empty marker with an empty mixin, exactly like
+  \code{dsl::CombinatorParser} of
+  Chapter~\ref{ch:primitive-parsers}.  A derived \code{dsl::DSL} class
+  that lists it as a feature gains nothing: the task types are
+  free-standing and are not mixed in.  The tag is a placeholder for a
+  future integration, not a working feature.
+
+\item \textbf{No task is cancellable from outside.}  A caller cannot
+  suspend a running chain, because \code{suspend} needs the
+  \code{TaskState} and the runner holds it.  The flag is for tasks to set
+  for themselves.
+
+\item \textbf{Results are overwritten by name.}  Two tasks with the same
+  name in the same chain fight over one map entry, and the last one to
+  run wins.  Nothing checks that the names of a chain are distinct.
+\end{itemize}
+
+\section{Closing}
+
+The task pipeline is a small, honest piece of design: a named step, a
+shared map, a policy, and a flag.  Its two ideas --- that tasks
+communicate by name rather than by argument, and that a failure is
+recorded as data rather than thrown --- are the ideas that make a
+pipeline inspectable after it has failed, which is the property that
+matters most for a tool that reports.
+
+Its implementation, in the shipped header, is nonetheless broken, and the
+reason is instructive: a \code{std::variant} with two identical
+alternatives cannot be read, and a type that stores a \code{Result} with
+the same value and error types inherits that blindness.  A user who
+wants the facility today must supply an outcome type of their own; the
+listing in this chapter shows the smallest such repair and the semantics
+it preserves.
+
+The next part of the book turns to the other half of DSLtk's parsing
+story: the PEG subsystem, where rules are compile-time pattern strings
+rather than the combinator functions used here.
+}

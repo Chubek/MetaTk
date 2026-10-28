@@ -1,0 +1,358 @@
+# Case Study II: A Query DSL
+
+## The problem: optimize a query without changing its rows
+
+The second case study builds an embedded query language over an in-memory
+collection of people. The query selects rows whose age is at least eighteen
+and projects their names. Its initial AST contains a redundant conjunction
+with true. A rewrite set removes that redundancy, and an independent
+interpreter evaluates both the original and rewritten trees on the same data.
+The central obligation is semantic preservation, not merely producing a
+shorter diagnostic string.
+
+The language is SQL-style in its division into source, filter, and projection,
+but it is not an SQL parser or SQL database implementation. There is no textual
+SQL grammar, query planner, join algorithm, null-value model, or database
+connection. Calling it an embedded query DSL is precise: C++ factory calls
+construct a domain-specific AST whose interpretation is supplied by the
+application.
+
+DSLtk contributes the runtime-tagged tree representation and bottom-up rewrite
+engine. The application defines a closed vocabulary, an interpreter, a row
+type, and the laws that justify simplification. This separation is useful
+because it makes the proof obligation visible. A generic rewrite engine
+cannot know that removing a true predicate preserves this particular
+interpreter's result; the domain design must establish that fact.
+
+## The query vocabulary
+
+The root tag `project-name` has one child: a relation. A `source` leaf names
+the only available relation, `people`. A `filter` node has a predicate and a
+relation child. Predicates include the true leaf, a two-child conjunction,
+and `age-ge` with one integer leaf. Integer leaves store text because that is
+the AST representation's payload model.
+
+| Tag | Shape | Meaning |
+|---|---|---|
+| `source` | Leaf with value `people` | All input rows |
+| `filter` | Predicate, relation | Keep rows satisfying the predicate |
+| `project-name` | One relation | Return each retained name |
+| `true` | Leaf | Boolean true |
+| `and` | Two predicates | Short-circuit conjunction |
+| `age-ge` | One integer leaf | Compare row age to the bound |
+| `integer` | Textual leaf | Checked integer constant |
+
+The tree is deliberately untyped at the C++ representation level. Every
+factory returns `ASTNode`, so the interpreter must validate tags and arities.
+The language vocabulary is closed: an unknown tag or malformed shape throws
+instead of being silently ignored. This turns accidental AST construction
+errors into observable failures at interpretation time.
+
+The integer reader uses `from_chars` and checks both its error code and that
+the entire payload was consumed. A string beginning with digits followed by
+junk is not a valid integer constant. This mirrors the units case study's
+whole-spelling discipline, but uses a conversion API whose end pointer makes
+the check explicit rather than a separate regex.
+
+## The interpreter defines the language
+
+The predicate interpreter receives a node and one `Person`. A true leaf
+returns true. A conjunction evaluates its left child and then its right only
+when needed. An age comparison reads the bound and compares it to the row's
+integer age. No predicate mutates the row, writes output, or changes external
+state. Purity is part of the language contract and supports the rewrite law.
+
+The relation interpreter copies the source rows or filters the result of a
+child relation. Filtering preserves the input order. The projection interpreter
+then collects names in that same order. This is a simple semantic model, not
+a streaming execution engine. Copying relation vectors makes ownership easy
+to reason about at the cost of intermediate storage.
+
+An optimization claim must refer to this exact model. A different interpreter
+with side-effecting predicates, unordered relations, or three-valued null
+logic could need different laws. The AST's tag spelling does not prove that
+all familiar SQL identities hold. The implementation defines what `and` and
+`filter` mean here, and the rewrite set is chosen accordingly.
+
+## The two simplification rules
+
+The first rule recognizes `and(true,p)` and replaces it with `p`. Its
+predicate checks the node tag, two-child arity, and the left child's leaf
+status and tag before accessing the replacement child. The rule name is
+`and-true`; it is a debugging identifier rather than a tag-dispatch mechanism.
+The actual match is entirely the user predicate's work.
+
+The second rule recognizes `filter(true,r)` and replaces it with `r`.
+Although the principal demonstration simplifies a conjunction inside a
+filter rather than removing the filter itself, the second rule shows how
+local Boolean normalization can enable a higher-level relational
+simplification. The bottom-up traversal gives a parent the already simplified
+children when its own rules are tried.
+
+Both laws preserve the interpreter's behavior because true is pure and the
+interpreter uses ordinary Boolean conjunction. They also decrease the number
+of nodes for the matched shapes. That decreasing measure supplies a simple
+termination argument for this small rule set on finite valid trees. The
+engine's pass budget remains an operational bound, but these particular
+rules do not need it to avoid a rewrite cycle.
+
+## Why rule predicates must be total on ordinary inputs
+
+A predicate that calls `child(1)` before checking arity can throw on a
+malformed or unrelated node. The rewrite engine visits every node, not only
+the nodes the rule author had in mind. A good rule predicate first checks
+the broad shape and only then inspects children. Its failure should normally
+mean not applicable, not an exception caused by an unchecked index.
+
+That does not eliminate the need for full language validation. A structurally
+matching `and` node could contain an invalid predicate on its right. Replacing
+`and(true,invalid)` by `invalid` preserves the eventual rejection behavior in
+this interpreter, but it does not make the input a valid query. Validation
+and optimization are separate passes with different responsibilities.
+
+The case study keeps the interpreter's rejection policy explicit so that
+optimization cannot accidentally turn an unknown construct into silent
+success. A larger compiler would often validate the AST once before
+optimization and then require each optimization to preserve a stronger
+well-formedness invariant. The small example shows where that invariant
+would be introduced.
+
+## The complete implementation
+
+The program is stored in `projects/query/main.cpp`. Its source is included
+directly below. Build with `make build/query`; the same target is included in
+`make examples`, which runs all five case studies.
+
+```{=latex}
+\lstinputlisting[style=dslcpp,caption={Case study II: query interpretation and semantics-preserving AST simplification.},label={lst:case-query}]{projects/query/main.cpp}
+```
+
+The data set contains Ada aged thirty-six, Lin aged seventeen, and Grace
+aged eighty-five. The query's threshold is eighteen. The expected output
+therefore contains Ada and Grace in their original order. Lin is excluded.
+The program compares original and optimized results, checks the exact
+expected names, and verifies that applying the rewrite set again leaves the
+optimized tree structurally unchanged.
+
+That final check is idempotence on this example, not a universal confluence
+proof for arbitrary rewrite sets. It is nevertheless useful evidence that
+the demonstrated tree reached the intended stable form. The decreasing
+node-count argument explains why these two rules terminate; the concrete
+idempotence check catches implementation mistakes in constructing or applying
+them.
+
+## Observed execution
+
+```text
+(project-name (filter (and (true) (age-ge (integer 18))) (source people)))
+(project-name (filter (age-ge (integer 18)) (source people)))
+Ada
+Grace
+```
+
+The first line is the original AST, the second is the simplified AST, and
+the remaining lines are interpreted results. The diagnostic dump shows that
+the true conjunction disappeared while the age filter remained. The result
+comparison shows that the change preserved the selected rows for this data.
+Both observations are needed: a matching output alone would not reveal that
+the optimization failed to run, and a smaller tree alone would not establish
+correct selection.
+
+The source also preserves the original tree because `RewriteSet::apply`
+takes its root by value. This makes before-and-after comparison natural.
+The cost is copying and rebuilding. For a large query plan, a persistent or
+arena-based representation might reduce copying, but that would introduce a
+different ownership model. The current value model is a good fit for a
+small, inspectable optimization case study.
+
+## Relation to visitors and equality saturation
+
+A visitor could collect query metrics, validate the tag vocabulary, or
+produce a textual rendering. Its schema coverage would not replace the
+interpreter's arity and payload checks. A `filter` tag being covered by a
+handler does not prove that its two children have the correct roles. The
+visitor and domain validator answer complementary questions.
+
+An e-graph could retain alternative equivalent query plans instead of
+committing to one AST. That becomes interesting when pushdown, join order,
+or projection placement interact. However, meaningful plan selection would
+need a domain cost model, while the supplied extractor minimizes node count.
+The simple rewrite set is a better fit for the local true-elimination laws
+demonstrated here. Selecting a more elaborate engine should follow the
+optimization problem rather than the attractiveness of its name.
+
+The first-order term engine is another possible representation, but it would
+need an explicit encoding for relation and predicate sorts. The current AST
+lets user predicates inspect arbitrary domain structure directly. This is
+one of the advantages of the toolkit's several transformation facilities:
+they support different problem shapes rather than forcing every application
+through one universal rewriting interface.
+
+## Extending the language while preserving meaning
+
+Adding a second projected column changes the result type and projection
+interpreter. Adding a new predicate changes the Boolean vocabulary and may
+introduce new rewrite side conditions. Adding a join changes relation
+semantics, row identity, and likely performance considerations. Each
+extension should begin with an interpreter or executable specification before
+optimization rules are added.
+
+Null values are a particularly revealing extension. SQL-style null logic is
+not ordinary two-valued Boolean logic, and comparisons can yield an unknown
+result. Existing rules must be rechecked against the new truth tables.
+Likewise, a predicate that invokes an external callback could make evaluation
+order observable. The present laws rely on a pure, two-valued model; their
+validity should not be transferred silently to a richer language.
+
+For testing, generate several small valid queries and compare original and
+rewritten execution over varied row sets. Include empty relations, boundary
+ages, repeated names, and predicates that are always true or always false.
+This can reveal mistakes in rule orientation and tree construction. It
+remains evidence rather than a formal proof, but an independent interpreter
+provides a strong reference against which a generic rewrite engine can be
+used responsibly.
+
+The case study's reusable pattern is simple: define a closed vocabulary,
+write its meaning directly, select laws justified by that meaning, and compare
+before-and-after behavior. DSLtk supplies the mechanics for constructing and
+rewriting the representation. The language designer supplies the reason the
+rewrite is correct.
+
+## A proof outline for the demonstrated transformation
+
+The rewrite `and(true,p)` to `p` can be justified for each row before
+reasoning about whole relations. If `p` evaluates to true, the conjunction
+also evaluates to true. If it evaluates to false, the conjunction evaluates
+to false. The removed true node has no observable effect and cannot fail
+under the interpreter's definition. Thus the replacement yields the same
+Boolean decision for every row on which the predicate is defined.
+
+Filtering applies that decision independently to rows in source order. Since
+each decision is preserved, the same rows survive in the same order. Projection
+reads the name field of each surviving row without mutation. It follows that
+the final ordered sequence of names is preserved. This reasoning connects
+the local Boolean law to the observable query result; it does not rely only
+on the before-and-after tree looking plausible.
+
+The rule `filter(true,r)` to `r` has a similarly direct argument: every row
+produced by the child relation is retained, in its existing order. The
+intermediate vector allocation disappears from the abstract evaluation path,
+but the returned value remains the same sequence. Whether removing that
+allocation measurably improves a particular program depends on how large the
+relation is and how the compiler implements moves and elision. The semantic
+argument and the performance hypothesis should be recorded separately.
+
+Invalid trees need a separate discussion. The proof assumes the vocabulary's
+well-formedness rules. It does not justify transforming arbitrary malformed
+trees merely because some tags match. For example, an application that
+reports all invalid descendants before interpretation could observe a different
+diagnostic after a rewrite removes a subtree. A compiler that promises stable
+validation errors should validate before optimization, or explicitly define
+which diagnostics may change after normalization.
+
+## Testing beyond the three-row example
+
+The three-row data set provides a readable witness with both retained and
+removed rows. A wider regression suite can systematically vary the facts
+relevant to the threshold. Ages seventeen, eighteen, and nineteen distinguish
+strict from non-strict comparison. An empty relation detects assumptions
+about a first row. Two people with the same name ensure projection preserves
+duplicates instead of accidentally converting the result into a set.
+
+Input order should be varied independently of the age distribution. If a
+future interpreter sorts rows while filtering, comparing only sets of names
+would miss the regression. The current language returns a vector, so order
+is an observable part of its meaning. The reference comparison should use
+that vector directly. If a future language deliberately introduces unordered
+relations, its specification and tests should change together.
+
+Small query generation can cover nested conjunctions. Start from true and
+age comparisons, combine them to a bounded depth, and place the predicates
+inside filters. Evaluate each query before and after rewriting over several
+small row sets. The generator should build only valid trees for semantic
+equivalence tests; malformed-tree tests should be a separate collection with
+explicit rejection expectations. Mixing the two makes a thrown exception
+ambiguous rather than informative.
+
+Repeated rewriting supplies another useful property: after reaching the
+intended fixed point, a second application should preserve the structure.
+This catches incomplete traversal or rules that rebuild an equivalent but
+different shape on every pass. It does not by itself establish that all
+possible rule orders reach the same result. Confluence requires reasoning
+about overlaps between rules, and becomes more important as the optimizer's
+vocabulary grows beyond strictly simplifying identities.
+
+## Planning an execution representation
+
+The AST is convenient for explaining and validating the query, but it need
+not remain the representation used for every row. A later compilation phase
+could translate the validated predicate into a callable and evaluate that
+callable during filtering. This would move tag and arity checks out of the
+inner loop. The resulting execution plan would need to own its constants
+and clearly borrow or own its data source.
+
+Such a phase creates another correctness boundary. It should preserve the
+interpreter's short-circuit order and integer-conversion policy, and it should
+not retain references into a temporary AST. Comparing compiled execution
+with the reference interpreter provides a direct test of the lowering step.
+The interpreter remains useful even if the optimized runtime eventually uses
+a very different representation.
+
+For larger plans, distinguish the cost of constructing a query, optimizing
+it, and executing it repeatedly. Expensive preparation may be worthwhile for
+a reused query and wasteful for a one-shot filter over three rows. DSLtk's
+generic tree and rewrite mechanics do not select that lifecycle. The case
+study exposes a small semantic core from which an application can make the
+choice with measurements and explicit ownership rather than premature
+assumptions about what a database-shaped language must do.
+
+
+## Implementation map and review
+
+The following diagram summarizes the chapter's central dependency or state
+transition. Arrows denote logical dependence, not elapsed time or measured
+performance. The contracts below separate what the library provides from the
+conditions that the application must establish.
+
+```{=latex}
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\node[dslsmall] (n0) {Query AST};
+\node[dslsmall, right=5mm of n0] (n1) {Rewrite};
+\draw[dsledge] (n0) -- (n1);
+\node[dslsmall, right=5mm of n1] (n2) {Interpret};
+\draw[dsledge] (n1) -- (n2);
+\node[dslsmall, right=5mm of n2] (n3) {Rows};
+\draw[dsledge] (n2) -- (n3);
+\end{tikzpicture}
+\caption{Case study II checks optimization by comparing query results.}
+\label{fig:atlas-39}
+\end{figure}
+\begin{table}[htbp]
+\centering\small
+\begin{tabular}{L{0.28\linewidth}L{0.61\linewidth}}
+\toprule Contract & Interpretation \\
+\midrule
+Vocabulary & The interpreter recognizes only the declared query tags. \\
+Rewrite & Rules remove pure true predicates. \\
+Ordering & The in-memory evaluator preserves input row order. \\
+\bottomrule
+\end{tabular}
+\caption{Implementation contracts for this chapter.}
+\label{tab:atlas-39}
+\end{table}
+\begin{pseudocode}[Operational summary]
+\textbf{1.} Build a source, predicate, and projection tree.\\
+\textbf{2.} Evaluate the original query.\\
+\textbf{3.} Apply bottom-up simplification rules.\\
+\textbf{4.} Evaluate the rewritten tree on the same rows.\\
+\textbf{5.} Compare results and inspect the normalized structure.
+\end{pseudocode}
+```
+
+### Review questions
+
+1. Why would null values complicate Boolean rewrite laws?
+
+2. How would you extend projection without accidentally changing row order?

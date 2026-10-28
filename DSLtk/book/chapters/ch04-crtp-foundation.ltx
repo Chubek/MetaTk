@@ -1,0 +1,574 @@
+\chapter{The CRTP Foundation: \code{dsl::DSL<Derived, Features...>}}
+\label{ch:crtp-foundation}
+
+\section{Twenty Lines That Carry the Whole Library}
+
+Every DSL built with \DSLtk{} inherits from the same twenty-line class.
+Listing~\ref{lst:ch04-dsl} is that class, transcribed from the shipped header
+at lines 5965--5979 without alteration.
+
+\begin{lstlisting}[style=dslcpp,caption={\code{dsl::DSL}, the CRTP base of every \DSLtk{} DSL, from \code{DSLtk.hpp} lines 5965--5979. The listing is shown as it appears inside \code{namespace dsl}.},label={lst:ch04-dsl}]
+template <typename Derived, typename... Features>
+struct DSL : Features::template Mixin<Derived>...
+{
+protected:
+  constexpr Derived &
+  self () noexcept
+  {
+    return static_cast<Derived &> (*this);
+  }
+  constexpr const Derived &
+  self () const noexcept
+  {
+    return static_cast<const Derived &> (*this);
+  }
+};
+\end{lstlisting}
+
+Fifteen of those lines are the protected \code{self()} accessor and its
+constant overload. The other five do all the work: a pack of feature tags is
+expanded into a list of base classes, one base class per feature, each
+parameterised by the deriving type. Everything else in \DSLtk{} -- the
+pipeline, the AST helpers, the rewrite engine, the expression operators --
+is delivered through that one mechanism.
+
+This chapter explains the mechanism in full. It looks at how the mixin
+expansion is performed, why the mixins are inherited separately rather than
+gathered into a single aggregate, what the \code{template} disambiguator in
+the base list is for, how a feature reaches back into the deriving type both
+statically and dynamically, what the arrangement costs at run time (nothing),
+and how you write a feature tag of your own.
+
+\section{How the Mixin Expansion Works}
+
+The base-clause
+\code{Features::template Mixin<Derived>\ldots} is a pack expansion over
+base classes. For a deriving type \code{D} and a feature list
+\code{F1, F2, F3}, the compiler instantiates \code{F1::Mixin<D>},
+\code{F2::Mixin<D>} and \code{F3::Mixin<D>} and makes each of them a direct
+base class of \code{dsl::DSL<D, F1, F2, F3>}. The expansion algorithm below states the process.
+
+\begin{pseudocode}[Expanding a feature list into base classes]
+\textbf{function} expand (D, F1, F2, \ldots, Fn)\\
+\quad \textbf{for} each feature \code{Fi} in the list\\
+\qquad \textbf{require} \code{Fi} declares a nested template \code{Mixin}\\
+\qquad instantiate \code{Mi = Fi::Mixin<D>}\\
+\qquad add \code{Mi} to the base list of \code{dsl::DSL<D, F1, \ldots, Fn>}\\
+\quad \textbf{return} the class with that base list
+\end{pseudocode}
+
+Two properties of this expansion matter. First, the parameterisation is by
+the \emph{deriving} type, not by the feature type. A feature's mixin is
+written once, as a template, and is instantiated afresh for every DSL that
+names it. The \code{Pipeline} mixin is the same code for every user; what
+differs is the \code{Derived} it was instantiated with, and therefore the
+members it can see.
+
+Second, the expansion is textual in the language's sense: the base list of
+\code{dsl::DSL<D, F1, F2>} literally contains \code{F1::Mixin<D>} and
+\code{F2::Mixin<D>}. That is what makes the feature-detection concept of
+Section~\ref{sec:ch04-concepts} possible, and it is the reason the mixins
+are not gathered into a single aggregate mixin.
+
+\section{Why Separate Base Classes}\label{sec:ch04-separate}
+
+It would have been possible to write the base class as a single aggregate
+mixin holding a tuple of feature mixins:
+
+\begin{lstlisting}[style=dslcpp,caption={The design that was not used: one aggregate mixin holding every feature.},label={lst:ch04-aggregate}]
+template <typename Derived, typename... Features>
+struct DSL : AggregateMixin<Derived, Features...> {};
+\end{lstlisting}
+
+The shipped design rejects that, for four reasons that are worth
+understanding because they generalise.
+
+\paragraph{Feature detection requires the feature to be a base.}
+The library needs to answer the question \emph{``does this type carry the
+\code{Visitors} feature?''}. It answers it with
+\code{std::derived_from<T, F::template Mixin<T>>}, and that expression is
+only well formed if \code{F::Mixin<T>} is a direct base of \code{T}. With an
+aggregate mixin there is no such base: \code{Visitors::Mixin<T>} would be a
+member of a tuple, and the question would have to be answered by trait
+machinery instead of by the type system.
+
+\paragraph{Each feature constrains itself independently.}
+\code{Rewrite}'s mixin declares \code{rewrite} with the constraint
+\code{requires requires { Derived::rules; }}, and \code{CustomLiterals}'
+mixin declares \code{parse_literal} with \code{requires requires {
+Derived::literals; }}. If all features lived in one aggregate, a constraint
+failure in one feature would remove the member from the whole class rather
+than from one feature's contribution.
+
+\paragraph{Hidden friends stay attached to their feature.}
+\code{ExprTemplates}' operators are hidden friends declared inside
+\code{ExprTemplates::Mixin<Derived>}. Because the mixin is a distinct base
+class, the friends it declares are found by argument-dependent lookup
+exactly when one of the arguments is the deriving type -- and only that
+feature's friends are found that way. Chapter~\ref{ch:feature-tags} works
+through the mechanism in detail.
+
+\paragraph{Ambiguity is a feature, not a bug.}
+With separate bases, two features that inject a member of the same name
+produce an ambiguity error at the point of use, naming both candidates. With
+one aggregate, the second definition would silently shadow the first, and
+the resulting behaviour would depend on the order of the pack. A sharp
+error is worth more than a silent surprise.
+
+\section{The \code{template} Disambiguator}
+
+The word \code{template} in \code{Features::template Mixin<Derived>} is
+not decoration. \code{Features} is a pack of unknown types at the point
+where the base clause is parsed, so \code{Mixin} is a \emph{dependent
+name}: the compiler cannot yet know whether it names a template, and if so
+whether it takes one argument or two, or whether it takes a non-type
+parameter. The standard therefore requires the \code{template} keyword to
+disambiguate the name and tell the parser that a template argument list
+follows.
+
+Without it, the base clause would not parse on a strictly conforming
+compiler. In practice GCC 16 and Clang 22 both accept the shorter spelling
+\code{Features::Mixin<Derived>\ldots} in a base-specifier-list without
+diagnostic, even under \code{-pedantic-errors}; the standard's requirement
+nonetheless stands, and the shipped header uses the conforming form. The
+same rule is why user code that names a member of a dependent base must
+write \code{Base::template member}.
+
+\section{Reaching \code{Derived}: Statically and Dynamically}
+
+A feature's mixin is instantiated with the deriving type in hand, but it is
+not \emph{the} deriving type: it is a base class of it. Two mechanisms
+bridge that gap, and the library uses both.
+
+\subsection{Statically, Through the Class Template Parameter}
+
+The mixin's template parameter \code{Derived} is a complete type name at the
+point of use inside the mixin, so the mixin can name static members of the
+deriving class directly. This is how \code{Rewrite} finds the rewrite set
+and how \code{CustomLiterals} finds the literal table.
+
+\begin{lstlisting}[style=dslcpp,caption={The two features that reach \code{Derived} statically, transcribed from the header. The listings are shown as they appear inside \code{namespace dsl}.},label={lst:ch04-static}]
+struct Rewrite
+{
+  template <typename Derived> struct Mixin
+  {
+    ASTNode
+    rewrite (const ASTNode &tree) const
+      requires requires { Derived::rules; }
+    {
+      return Derived::rules.apply (tree);
+    }
+  };
+};
+
+struct CustomLiterals
+{
+  template <typename Derived> struct Mixin
+  {
+    static long double
+    parse_literal (std::string_view input)
+      requires requires { Derived::literals; }
+    {
+      return Derived::literals.parse (input);
+    }
+  };
+};
+\end{lstlisting}
+
+Note the \code{requires requires} idiom. The outer \code{requires} is the
+constraint on the member; the inner one is a \emph{requirement}, which asks
+whether the expression \code{Derived::rules} is well formed. Because
+\code{Derived} is a dependent type, that expression cannot be evaluated
+until the mixin is instantiated, and the requirement is what makes the
+constraint well formed. If the deriving class does not declare \code{rules},
+the member simply does not exist -- and calling it produces the diagnostic
+\emph{``constraints not satisfied''} rather than a confusing error about a
+missing member.
+
+\subsection{Dynamically, Through a Cast}
+
+When a feature needs the deriving object itself -- to read or modify an
+instance member -- it must cast. \code{Memoization}'s \code{clear_cache}
+does exactly that:
+
+\begin{lstlisting}[style=dslcpp,caption={\code{Memoization}'s instance member, transcribed from the header at lines 7290--7301, and shown as it appears inside \code{namespace dsl}.},label={lst:ch04-dynamic}]
+struct Memoization
+{
+  template <typename Derived> struct Mixin
+  {
+    /// Clears all cached entries stored in `Derived::memo_cache`.
+    void
+    clear_cache ()
+    {
+      static_cast<Derived &> (*this).memo_cache.clear ();
+    }
+  };
+};
+\end{lstlisting}
+
+The cast is a \code{static_cast}, not a \code{dynamic_cast}, because the
+relationship between a mixin and the deriving type is known at compile time.
+There is no run-time check and no runtime cost.
+
+\subsection{What \code{self()} Is For}
+
+The protected \code{self()} accessor exists for the \emph{deriving class},
+not for the mixins. \code{self()} is declared \code{protected} in
+\code{dsl::DSL}, so it is accessible in the member functions of
+\code{dsl::DSL} and of any class derived from it -- that is, in your own DSL
+type -- but \emph{not} in the mixins. A mixin is a base of \code{dsl::DSL},
+not a derived class of it, and a base class cannot reach the protected
+members of its own derived class. The compiler says so plainly:
+
+\begin{lstlisting}[style=dslcmd,caption={A mixin that tries to call \code{self()}. The diagnostic names the real problem: \code{self} is a member of \code{dsl::DSL}, not of the mixin.},label={lst:ch04-selferr}]
+error: 'const struct mydsl::Length::Mixin<Derived>' has no member named 'self'
+\end{lstlisting}
+
+That is why the library's own mixins write
+\code{static_cast<Derived&>(*this)} instead. \code{self()} is a
+convenience for your code:
+
+\begin{lstlisting}[style=dslcpp,caption={Using the protected \code{self()} accessor from the deriving class.},label={lst:ch04-selfuse}]
+struct Document : dsl::DSL<Document, dsl::Pipeline>
+{
+  std::string_view body { "the quick brown fox" };
+
+  std::string_view
+  text () const noexcept
+  {
+    return self ().body;
+  }
+};
+\end{lstlisting}
+
+\section{The CRTP Pattern and Its Objections}
+
+The curiously recurring template pattern is old enough to have acquired a
+reputation, and the reputation is not entirely flattering. The standard
+objection is that CRTP is inheritance without polymorphism: it gives you
+the self-referential part of inheritance -- the ability to name your own
+type from within a base class -- without the substitutability that
+polymorphism promises. A base class that knows its derived type can call
+the derived type's members, but the derived type is not substitutable for
+the base, and no run-time decision is ever made about which derived type
+you have.
+
+That objection is correct, and \DSLtk{} accepts it. The design goal is not
+polymorphism; it is the opposite. A DSL is a single, concrete type, known
+statically, whose behaviour is assembled from independent parts before the
+program runs. There is no base to hold polymorphically, and no reason to.
+
+The second common objection is that CRTP is a hack, and that a language
+with proper mixins would do the job better. This is the objection the D
+port answers: D has template mixins, and the D implementation of \DSLtk{}
+uses them, injecting members directly into the deriving struct rather than
+inheriting them from a CRTP base. The D approach is arguably cleaner. The
+C++ approach has one advantage that is easy to overlook: the mixins end up
+as \emph{base classes}, which is what makes
+\code{HasFeature<T, F>} a one-line concept rather than a trait
+specialisation.
+
+The third objection concerns the \code{static_cast} in \code{self()}. It
+is, strictly speaking, a downcast, and if the object is not really of the
+derived type the cast is undefined behaviour. In \DSLtk{} the cast is
+always sound, because the mixin and the deriving type are related by
+inheritance in exactly one way: \code{dsl::DSL<Derived, Features...>} has
+\code{Features::Mixin<Derived>} as a base, and \code{Derived} derives from
+\code{dsl::DSL<Derived, Features...>}. The \code{static_cast} from the
+mixin to \code{Derived} is therefore a downcast through a known,
+non-virtual inheritance chain, and it is well defined.
+
+\section{Name Hiding, Not Overriding}
+
+Because the mixin machinery is ordinary C++ inheritance, the usual rules
+of name lookup apply, and they are worth spelling out because they are a
+frequent source of confusion.
+
+If your deriving class declares a member with the same name as one
+contributed by a mixin, the derived declaration \emph{hides} the inherited
+one. It does not override it, and there is no dispatch between them. A
+call \code{obj.rewrite(tree)} on an object of your class resolves to your
+declaration, and the mixin's \code{rewrite} is reachable only by an
+explicit qualification such as
+\code{obj.dsl::Rewrite::Mixin<MyDSL>::rewrite(tree)}.
+
+There is one case in which both survive: if the inherited member is a
+function template and the derived member is not, or vice versa, the two
+overload rather than hide. A mixin that contributes
+\code{make_leaf<Tag>(T&&)} and a derived class that contributes a
+non-template \code{make_leaf(T&&)} will therefore produce an ambiguity
+at the call site rather than a silent shadowing.
+
+The practical advice is simple. Choose member names for your DSL that do
+not collide with the names the features contribute, and if you must
+override one, use a \code{using} declaration to bring the base version
+into scope deliberately.
+
+\section{No Virtual Dispatch, No Vtable}
+
+Nothing in the mixin hierarchy is virtual. The mixins declare ordinary
+member functions; \code{dsl::DSL} declares ordinary member functions; the
+deriving class inherits from them. There is no \code{virtual} keyword
+anywhere in the feature machinery, and therefore no vtable pointer, no
+virtual base offsets, and no indirect call.
+
+The consequence is that a feature's members are resolved at compile time
+against a type the compiler knows exactly. \code{Rewrite}'s
+\code{rewrite(const ASTNode&)} is not a virtual call that might be
+overridden; if your class declares \code{rewrite}, it hides the mixin's, and
+the compiler tells you so at the point of use. Overriding is a
+compile-time concept, expressed with name hiding or with the
+\code{using} declaration, exactly as it is for any ordinary non-virtual
+base.
+
+The cost is that you cannot treat a DSL as a polymorphic base and dispatch
+on it at run time. If you need that -- say, to hold heterogeneous DSLs in a
+container -- you must add your own virtual interface or your own type-erasing
+wrapper. \DSLtk{} does not provide one, and the library's design does not
+suggest that it should: the whole point of the toolkit is that the
+composition happens before the program runs.
+
+\section{The Cost Model}
+
+The runtime cost of the whole arrangement is zero, and it is worth being
+precise about why.
+
+Every mixin is an empty class in the sense that matters: it has no data
+members. \code{Pipeline::Mixin} has only a static member function.
+\code{Operators::Mixin} has only a static member function. \code{AST::Mixin}
+has only static member functions. \code{Rewrite::Mixin},
+\code{Memoization::Mixin} and \code{CustomLiterals::Mixin} have instance
+member functions but no data members of their own -- they read the deriving
+class's members. The nineteen marker mixins are empty in the strictest
+sense.
+
+Because a base class subobject with no data members may be overlaid on any
+other base class subobject, the \emph{empty base optimisation} guarantees
+that a DSL type is the same size as it would be without the features. The
+deriving class's own data members determine the layout, and the mixin bases
+occupy no space at all.
+
+Listing~\ref{lst:ch04-custom} demonstrates this. \code{PlainText} and
+\code{Document} hold the same single \code{std::string_view}; the second is
+\code{PlainText} lifted into a DSL that carries the \code{Length} feature.
+Both are sixteen bytes.
+
+\section{The Utility Concepts}\label{sec:ch04-concepts}
+
+Lines 11379--11403 of the header are a short section titled \emph{``Utility
+concepts''}. It contains five concepts, and they are the library's only
+formal statement about what a feature \emph{is}. Table~\ref{tab:ch04-concepts}
+gives them verbatim.
+
+\begin{table}[ht]
+\centering
+\caption{The five utility concepts of \code{DSLtk.hpp}, lines 11383--11403.}
+\label{tab:ch04-concepts}
+\small
+\begin{tabular}{@{}L{0.19\textwidth}L{0.52\textwidth}C{0.16\textwidth}@{}}
+\toprule
+\textbf{Concept} & \textbf{Definition} & \textbf{Line} \\
+\midrule
+\code{HasFeature<T,F>} & \code{std::derived_from<T, typename F::template Mixin<T>>} & 11385 \\
+\code{Pipeable<T>} & \code{HasFeature<T, Pipeline>} & 11389 \\
+\code{ExprLike<T>} & \code{HasFeature<T, ExprTemplates>} and \code{requires (const T& t) { t.expr_value (); }} & 11393 \\
+\code{HasLiterals<T>} & \code{HasFeature<T, CustomLiterals>} and \code{requires { T::literals; }} & 11398 \\
+\code{Rewritable<T>} & \code{HasFeature<T, Rewrite>} and \code{requires { T::rules; }} & 11403 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The differences between them are instructive. \code{Pipeable} is a pure
+feature test: it asks only whether \code{Pipeline}'s mixin is a base.
+\code{ExprLike} adds an \emph{instance} requirement, because the expression
+template machinery needs \code{expr_value()} on an object.
+\code{HasLiterals} and \code{Rewritable} add a \emph{static} requirement,
+because those two features read \code{T::literals} and \code{T::rules}. A
+type that names the feature but does not supply the corresponding member
+satisfies \code{HasFeature} and fails the derived concept.
+
+There is a mild inconsistency worth noting: \code{HasLiterals} and
+\code{Rewritable} use the unqualified requirement \code{requires { T::literals;
+}}, which would be ill-formed for a dependent \code{T} in the absence of
+\code{typename} if the member were a type rather than a value. Because the
+members are values, the expressions are well formed and the concepts
+compile. A reader extending this section should be careful to keep the
+members values.
+
+The concepts are also a good demonstration of the library's own idiom: they
+are constrained on the \emph{feature list}, not on the presence of
+particular functions. That is the payoff of the separate-base-class design
+discussed in Section~\ref{sec:ch04-separate}.
+
+\section{Writing a Custom Feature Tag}
+
+A custom feature is two things: a tag struct, and a nested \code{Mixin}
+template. Nothing else is required. The tag needs no members, no
+specialisation, and no registration with the library; the mixin is
+parameterised by the deriving type and can contain anything.
+
+Listing~\ref{lst:ch04-custom} is a complete, compilable program that
+defines a feature tag called \code{Length} in the user's own namespace,
+uses it, and checks the library's own concepts against the result.
+
+\begin{lstlisting}[style=dslcpp,caption={A custom feature tag with a nested \code{Mixin}, and the resulting DSL type. The mixin contributes an instance member and reaches the deriving type with a \code{static_cast}.},label={lst:ch04-custom}]
+#include "DSLtk.hpp"
+#include <iostream>
+#include <string_view>
+#include <type_traits>
+
+namespace mydsl {
+
+/// Feature tag: measures the length of the derived DSL's text.
+struct Length
+{
+  template <typename Derived> struct Mixin
+  {
+    std::size_t
+    size () const noexcept
+    {
+      return static_cast<const Derived &> (*this).text ().size ();
+    }
+  };
+};
+
+} // namespace mydsl
+
+/// A plain value type with no feature machinery at all.
+struct PlainText
+{
+  std::string_view body { "the quick brown fox" };
+  std::string_view
+  text () const noexcept
+  {
+    return body;
+  }
+};
+
+/// The same value type, lifted into a DSL that carries the Length feature.
+struct Document : dsl::DSL<Document, mydsl::Length>
+{
+  std::string_view body { "the quick brown fox" };
+  std::string_view
+  text () const noexcept
+  {
+    return body;
+  }
+};
+
+static_assert (dsl::HasFeature<Document, mydsl::Length>);
+static_assert (!dsl::HasFeature<PlainText, mydsl::Length>);
+static_assert (!std::is_polymorphic_v<Document>);
+
+int main ()
+{
+  Document doc;
+  std::cout << "size() = " << doc.size () << "\n";
+  std::cout << "sizeof(PlainText) = " << sizeof (PlainText) << "\n";
+  std::cout << "sizeof(Document)  = " << sizeof (Document) << "\n";
+}
+\end{lstlisting}
+
+The output is
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch04-custom}. The feature adds a member and costs nothing in memory.},label={lst:ch04-custom-out}]
+size() = 19
+sizeof(PlainText) = 16
+sizeof(Document)  = 16
+\end{lstlisting}
+
+Three points are worth drawing out. The mixin reaches the deriving type
+with \code{static_cast<const Derived&>(*this)}, exactly as the library's
+own mixins do. The \code{static_assert}s show that
+\code{HasFeature} distinguishes a type that carries the feature from one
+that merely has the same shape. And the \code{sizeof} lines show that the
+feature is free.
+
+\subsection{Object Layout}
+
+Figure~\ref{fig:ch04-layout} draws the object layout that
+Listing~\ref{lst:ch04-custom} produces.
+
+\begin{figure}[ht]
+\centering
+\begin{dslgraph}
+  \node[dslbox, text width=56mm] (derived) {\textbf{Document}\\\code{std::string_view body}\\\footnotesize the deriving class's own data};
+  \node[dslbox, text width=56mm, below=9mm of derived] (crtp) {\textbf{dsl::DSL<Document, mydsl::Length>}\\\footnotesize the CRTP base: \code{self()} only, no data};
+  \node[dslbox, text width=56mm, below=9mm of crtp] (mixin) {\textbf{mydsl::Length::Mixin<Document>}\\\footnotesize the injected member \code{size()}, no data};
+  \node[dslbox, text width=56mm, below=9mm of mixin] (empty) {\textbf{(empty base optimisation)}\\\footnotesize the mixin base is overlaid on the \code{Document} subobject};
+
+  \draw[dsledge] (derived) -- (crtp);
+  \draw[dsledge] (crtp) -- (mixin);
+  \draw[dsledgedash] (mixin) -- (empty);
+  \draw[dslfeedback] (derived.east) -- ++(16mm,0) |- node[pos=0.25, right, font=\scriptsize] {no vtable pointer} (mixin.east);
+\end{dslgraph}
+\caption{The object layout of a DSL built from \code{dsl::DSL}. The chain
+has three levels, but only the deriving class's own members occupy space;
+the mixin base is empty and is overlaid by the compiler.}
+\label{fig:ch04-layout}
+\end{figure}
+
+\section{Edge Cases and Limits}
+
+\paragraph{A feature tag must define a nested \code{Mixin}.}
+The base clause names \code{Features::template Mixin<Derived>}, so a tag
+without that nested template is ill-formed at the point of instantiation:
+\emph{``no class template named 'Mixin' in 'struct NoMixin'''}. The
+requirement is checked when the \code{dsl::DSL} specialisation is formed, not
+when the tag is declared, so the diagnostic appears at the point of use.
+
+\paragraph{A tag's \code{Mixin} may only be parameterised by \code{Derived}.}
+The expansion is \code{F::Mixin<Derived>} with exactly one argument. A tag
+whose mixin takes a different number of template parameters will not
+compile, and there is no mechanism in the library for passing extra
+parameters to a feature.
+
+\paragraph{Features must be distinct.}
+Repeating a tag produces the error \emph{``duplicate base type''}. The
+message is not a diagnosis, but the cause is unambiguous: the expansion
+would produce the same base class twice.
+
+\paragraph{\code{self()} is protected, and only the deriving class can use
+it.}
+A mixin that tries to call \code{this->self()} fails to compile, because a
+base class cannot reach the protected members of a class derived from it.
+Use \code{static_cast<Derived&>(*this)} inside a mixin and \code{self()}
+inside the deriving class.
+
+\paragraph{The deriving type must be complete at the point of use, not at the
+point of declaration.}
+\code{dsl::DSL<Document, F>} may name an incomplete \code{Document}; the
+base class does not require it to be complete. But the moment a member of
+the mixin is instantiated -- that is, the moment you call it -- the
+deriving type must be complete. In practice this means the mixin's member
+bodies are always instantiated after the deriving class is closed, which is
+why the pattern works at all.
+
+\paragraph{There is no run-time feature selection.}
+The feature list is part of the type. Two DSL types that differ in their
+feature lists are unrelated types, and no amount of run-time configuration
+will make one behave like the other. If you need a configurable DSL, make
+the feature list a template parameter of your own type.
+
+\paragraph{Name hiding, not overriding.}
+Because nothing is virtual, a member declared in the deriving class hides
+the mixin's member rather than overriding it. A member function template in
+the mixin and a non-template member of the same name in the deriving class
+can coexist, in which case the deriving class's declaration wins outright
+and the mixin's is still reachable by an explicit qualification. This is
+ordinary C++ name lookup, but it surprises readers who expect polymorphism.
+
+\paragraph{Concepts are not exhaustive.}
+The five utility concepts cover five features. There is no
+\code{HasVisitors}, no \code{HasRewrite}, no \code{HasParsers}. The
+general-purpose \code{HasFeature<T, F>} works for every tag, including
+your own, but it tests only that the mixin is a base -- not that the
+deriving class supplies the members the feature needs.
+
+\section{What Comes Next}
+
+The foundation is now open. You know how a feature list becomes a set of
+base classes, what it costs, and how to add your own. Chapter
+\ref{ch:fixed-string} turns to the smallest and most frequently used piece
+of the library: \code{dsl::FixedString}, the type that lets a string literal
+be a template argument.

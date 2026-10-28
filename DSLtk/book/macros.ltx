@@ -1,0 +1,321 @@
+% macros.ltx -- shared macros and environments for
+% "DSLtk: The Definitive Guide"
+%
+% Loaded by main.ltx before the document body.  Every chapter file in
+% chapters/ may rely on the definitions below.  Keep this file free of
+% chapter-specific material.
+
+% ---------------------------------------------------------------------------
+% 1. Product and language names
+% ---------------------------------------------------------------------------
+
+\newcommand{\DSLtk}{\textsc{DSLtk}\xspace}
+\newcommand{\cpp}{\textsc{c++}\xspace}
+\newcommand{\dlang}{\textsc{d}\xspace}
+\newcommand{\cstd}{\textsc{c++20}\xspace}
+\newcommand{\dsltk}{\texttt{DSLtk}\xspace}
+\newcommand{\dslns}{\texttt{dsl::}\xspace}
+\newcommand{\mixin}{\texttt{mixin}\xspace}
+
+% ---------------------------------------------------------------------------
+% 2. Inline code helpers
+% ---------------------------------------------------------------------------
+
+% \code{foo} -- monospaced inline identifier (breaks across lines)
+\DeclareRobustCommand{\code}[1]{\ifmmode\text{\code{#1}}\else\begingroup\ttfamily\expandafter\nolinkurl\expandafter{\detokenize{#1}}\endgroup\fi}
+
+% \kwd{...} -- keyword emphasised inside a code listing
+\newcommand{\kwd}[1]{\textcolor{keywordcolor}{\textbf{#1}}}
+\newcommand{\codecomment}[1]{\textcolor{commentcolor}{\textit{#1}}}
+\newcommand{\type}[1]{\textcolor{typecolor}{#1}}
+
+% \api{dsl::foo} -- an entry in the public API surface
+\DeclareRobustCommand{\api}[1]{\code{#1}}
+
+% \mathxt{...} -- maths in text mode
+\newcommand{\mathxt}[1]{\ensuremath{#1}}
+
+% ---------------------------------------------------------------------------
+% 3. Cross references
+% ---------------------------------------------------------------------------
+
+\newcommand{\chapref}[1]{Chapter~\ref{#1}}
+\newcommand{\secref}[1]{Section~\ref{#1}}
+\newcommand{\figref}[1]{Figure~\ref{#1}}
+\newcommand{\tabref}[1]{Table~\ref{#1}}
+\newcommand{\lstref}[1]{Listing~\ref{#1}}
+
+% \chapref{chapter:xx-...} style for symbolic chapter labels
+\newcommand{\ChapName}[1]{\emph{\cref{#1}}}
+
+% ---------------------------------------------------------------------------
+% 4. Boxes
+% ---------------------------------------------------------------------------
+
+\newtcolorbox{notebox}[1][Note]{
+  colback=notebg,
+  colframe=notefg,
+  fonttitle=\bfseries\sffamily,
+  title={#1},
+  boxrule=0.6pt,
+  arc=1.6pt,
+  left=7pt, right=7pt, top=5pt, bottom=5pt,
+  before skip=8pt, after skip=8pt
+}
+
+\newtcolorbox{warnbox}[1][Caution]{
+  colback=warnbg,
+  colframe=warnfg,
+  fonttitle=\bfseries\sffamily,
+  title={#1},
+  boxrule=0.6pt,
+  arc=1.6pt,
+  left=7pt, right=7pt, top=5pt, bottom=5pt,
+  before skip=8pt, after skip=8pt
+}
+
+\newtcolorbox{tipbox}[1][Practice]{
+  colback=tipbg,
+  colframe=tipfg,
+  fonttitle=\bfseries\sffamily,
+  title={#1},
+  boxrule=0.6pt,
+  arc=1.6pt,
+  left=7pt, right=7pt, top=5pt, bottom=5pt,
+  before skip=8pt, after skip=8pt
+}
+
+\newtcolorbox{csbox}[1][Case Study]{
+  colback=csbg,
+  colframe=csfg,
+  fonttitle=\bfseries\sffamily,
+  title={#1},
+  boxrule=0.8pt,
+  arc=2pt,
+  left=8pt, right=8pt, top=6pt, bottom=6pt,
+  before skip=10pt, after skip=10pt
+}
+
+\newtcolorbox{featurebox}[1][Feature]{
+  colback=featbg,
+  colframe=featfg,
+  fonttitle=\bfseries\sffamily,
+  title={#1},
+  boxrule=0.6pt,
+  arc=1.6pt,
+  left=7pt, right=7pt, top=5pt, bottom=5pt,
+  before skip=8pt, after skip=8pt
+}
+
+% ---------------------------------------------------------------------------
+% 5. Pseudocode environment
+% ---------------------------------------------------------------------------
+
+\newenvironment{pseudocode}[1][]{
+  \begin{tcolorbox}[
+    colback=codebg, colframe=codefg, boxrule=0.4pt, arc=1.5pt,
+    left=8pt, right=8pt, top=5pt, bottom=5pt,
+    title={#1}, fonttitle=\bfseries\sffamily,
+    before skip=8pt, after skip=8pt]
+  \small\setstretch{1.0}
+  \begin{tabbing}
+  \hspace{1.5em}\=\hspace{1.2em}\=\hspace{1.2em}\=\hspace{1.2em}\=\kill
+}{%
+  \end{tabbing}
+  \end{tcolorbox}
+}
+
+% ---------------------------------------------------------------------------
+% 6. Listing configuration
+% ---------------------------------------------------------------------------
+
+\lstdefinestyle{dslcpp}{
+  language=C++,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{keywordcolor}\bfseries,
+  stringstyle=\color{stringcolor},
+  commentstyle=\color{commentcolor}\itshape,
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  numbersep=6pt,
+  frame=single,
+  rulecolor=\color{codefg},
+  backgroundcolor=\color{codebg},
+  breaklines=true,
+  breakatwhitespace=false,
+  showstringspaces=false,
+  tabsize=2,
+  columns=fullflexible,
+  keepspaces=true,
+  captionpos=b,
+  morekeywords={concept, requires, constexpr, consteval, constinit,
+                co_await, co_yield, co_return, typename, template, operator}
+}
+
+\lstdefinelanguage{D}{
+  morekeywords={module,import,struct,class,interface,enum,alias,mixin,template,
+    static,if,else,foreach,return,void,int,double,string,auto,ref,const,immutable,
+    assert,this,new,delete,scope,unittest,in,out,body,throw,try,catch},
+  sensitive=true, morecomment=[l]{//}, morecomment=[s]{/*}{*/},
+  morestring=[b]", morestring=[b]'
+}
+\lstdefinestyle{dsld}{
+  language=D,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{keywordcolor}\bfseries,
+  stringstyle=\color{stringcolor},
+  commentstyle=\color{commentcolor}\itshape,
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  numbersep=6pt,
+  frame=single,
+  rulecolor=\color{codefg},
+  backgroundcolor=\color{codebg},
+  breaklines=true,
+  showstringspaces=false,
+  tabsize=4,
+  columns=fullflexible,
+  keepspaces=true,
+  captionpos=b,
+  morekeywords={mixin, template, alias, enum, struct, static, immutable,
+                module, import, void, return, in, out, body, if, else,
+                foreach, foreach_reverse, scope, try, catch, throw}
+}
+
+\lstdefinestyle{dslsexpr}{
+  language={},
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{keywordcolor}\bfseries,
+  stringstyle=\color{stringcolor},
+  commentstyle=\color{commentcolor}\itshape,
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  numbersep=6pt,
+  frame=single,
+  rulecolor=\color{codefg},
+  backgroundcolor=\color{codebg},
+  breaklines=true,
+  showstringspaces=false,
+  tabsize=2,
+  columns=fullflexible,
+  keepspaces=true,
+  captionpos=b,
+  morekeywords={rewrite, rule, grammar, start, when, then, else, endif,
+                define, include, ifdef, ifndef, match, sat}
+}
+
+\lstdefinestyle{dslcmd}{
+  language={},
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{keywordcolor}\bfseries,
+  commentstyle=\color{commentcolor}\itshape,
+  frame=single,
+  rulecolor=\color{codefg},
+  backgroundcolor=\color{codebg},
+  breaklines=true,
+  columns=fullflexible,
+  captionpos=b
+}
+
+\lstdefinestyle{dsldot}{
+  language={},
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{keywordcolor}\bfseries,
+  stringstyle=\color{stringcolor},
+  commentstyle=\color{commentcolor}\itshape,
+  frame=single,
+  rulecolor=\color{codefg},
+  backgroundcolor=\color{codebg},
+  breaklines=true,
+  columns=fullflexible,
+  captionpos=b
+}
+
+% ---------------------------------------------------------------------------
+% 7. TikZ styles for the diagrams used throughout the book
+% ---------------------------------------------------------------------------
+
+\tikzset{
+  dslnode/.style={
+    draw=nodefg, fill=nodebg, rounded corners=2pt,
+    minimum height=7mm, minimum width=20mm,
+    font=\small\sffamily, align=center, inner sep=4pt
+  },
+  dslbox/.style={
+    draw=nodefg, fill=nodebg, rounded corners=2pt,
+    minimum height=6mm, text width=28mm,
+    font=\small\sffamily, align=center, inner sep=4pt
+  },
+  dsllarge/.style={
+    draw=nodefg, fill=nodebg, rounded corners=2pt,
+    minimum height=9mm, text width=34mm,
+    font=\small\sffamily, align=center, inner sep=5pt
+  },
+  dslsmall/.style={
+    draw=nodefg, fill=nodebg, rounded corners=2pt,
+    minimum height=5mm, text width=18mm,
+    font=\scriptsize\sffamily, align=center, inner sep=3pt
+  },
+  dsldecision/.style={
+    draw=nodefg, fill=decisionbg, diamond, aspect=2.2,
+    font=\small\sffamily, align=center, inner sep=2pt
+  },
+  dslterm/.style={
+    draw=nodefg, fill=termbg, ellipse,
+    font=\small\sffamily, align=center, inner sep=3pt
+  },
+  dsledge/.style={
+    -{Latex[length=2.2mm]}, draw=edgefg, thick
+  },
+  dslledge/.style={dsledge},
+  dsledgedash/.style={
+    -{Latex[length=2mm]}, draw=edgefg, thick, dashed
+  },
+  dslfeedback/.style={
+    -{Latex[length=2mm]}, draw=edgefg, thick, dotted
+  },
+  dslgroupr/.style={
+    draw=groupfg, fill=groupbg, rounded corners=3pt, inner sep=6pt
+  },
+  dslgkey/.style={
+    draw=nodefg, fill=decisionbg, circle, inner sep=1.5pt,
+    font=\scriptsize\bfseries\sffamily
+  }
+}
+
+% \dslgraph{...} -- a centred, breakable TikZ figure with a caption
+\newenvironment{dslgraph}[1][]{%
+  \begin{center}
+  \begin{adjustbox}{max width=\linewidth}
+  \begin{tikzpicture}[>=stealth, node distance=7mm, every node/.style={transform shape}]
+}{%
+  \end{tikzpicture}
+  \end{adjustbox}
+  \end{center}
+}
+
+% ---------------------------------------------------------------------------
+% 8. Table helpers
+% ---------------------------------------------------------------------------
+
+% Column type for narrow centred entries used in wide comparison tables
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{R}[1]{>{\raggedleft\arraybackslash}p{#1}}
+
+% ---------------------------------------------------------------------------
+% 9. Symbols used by the mathematics in the text
+% ---------------------------------------------------------------------------
+
+\newcommand{\Set}[1]{\{#1\}}
+\newcommand{\Seq}[1]{\langle #1 \rangle}
+\providecommand{\Mapsto}{\mapsto}
+\newcommand{\Step}{\longrightarrow}
+\newcommand{\Steps}{\longrightarrow^{\ast}}
+\newcommand{\Cost}[1]{\mathrm{cost}(#1)}
+\newcommand{\Size}[1]{\lvert #1 \rvert}
+\newcommand{\FV}[1]{\mathrm{fv}(#1)}
+\newcommand{\HashOf}[1]{\mathcal{H}(#1)}
+\newcommand{\E}[1]{\mathcal{E}(#1)}
+\newcommand{\K}[1]{\mathcal{K}(#1)}
+\newcommand{\union}{\ensuremath{\cup}}

@@ -1,0 +1,603 @@
+\chapter{Architecture and the Feature Catalogue}
+\label{ch:architecture}
+
+\section{What Architecture Means for a Single Header}
+
+Most libraries have an architecture in the ordinary sense: a directory tree, a
+separation between public headers and implementation files, a build system
+that produces one or more artefacts. \DSLtk{} has none of that. It is one
+file of 12,024 lines and a set of conventions. Its architecture is therefore
+not a layout but a \emph{structure of concepts} -- a small number of
+primitives, a uniform way of extending them, and a layering that keeps the
+parts from interfering with one another.
+
+This chapter makes that structure explicit. It maps the physical regions of
+\code{DSLtk.hpp}, distinguishes the two kinds of feature the library
+defines, walks the layering from core value types up to graphs and terms,
+explains the convention that almost every public entry point is a
+namespace-scope free function, and closes with a catalogue of all
+twenty-six feature tags and the free types that accompany them. The D port's
+different composition mechanism is described at the end, because it is the
+clearest way to see what the C++ design is actually doing.
+
+\section{The Physical Map of \code{DSLtk.hpp}}
+
+The header is one translation unit, but it is not homogeneous. It has five
+large regions, and knowing which region a facility lives in tells you a good
+deal about how it is meant to be used. Table~\ref{tab:ch03-regions} gives the
+map.
+
+\begin{table}[ht]
+\centering
+\caption{The physical regions of \code{DSLtk.hpp}.}
+\label{tab:ch03-regions}
+\small
+\begin{tabular}{@{}L{0.22\textwidth}L{0.13\textwidth}L{0.55\textwidth}@{}}
+\toprule
+\textbf{Region} & \textbf{Lines} & \textbf{Contents} \\
+\midrule
+Prologue & 374--401 & \code{#pragma once}, twenty-one standard-library includes, and the conditional \code{<lua.hpp>} include guarded by \code{DSLTK_ENABLE_LUA}. \\
+Embedded \code{magic_enum} & 403--5816 & The complete public headers of \code{magic_enum} v0.9.8, delimited by the \code{BEGIN} and \code{END DSLTK EMBEDDED MAGIC_ENUM} markers. \\
+\code{namespace dsl} & 5818--12024 & Everything that is \DSLtk{} proper. The namespace opens at 5818 and never closes before the end of the file. \\
+Feature-tag shells & 9091--9138 & Nine one-line marker tags: \code{SExpressions} through \code{ContextFreeGrammar}. \\
+Standalone library & 7356--11403 & The facilities that are usable without inheriting from \code{dsl::DSL}: memoization, lazy values, \code{Maybe}, \code{Result}, the parser core, the PEG subsystem, S-expressions, e-graphs, codecs, abstract I/O, visitors, static regular expressions, binary streams, context-free grammars and the preprocessor. \\
+Utility concepts & 11379--11403 & \code{HasFeature}, \code{Pipeable}, \code{ExprLike}, \code{HasLiterals} and \code{Rewritable}. \\
+Graph and term subsystem & 11405--12024 & Four further marker tags and the free-standing \code{DirectedGraph}, \code{Term}, \code{TermRewriteSystem} and \code{TermGraph} types. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Two observations follow immediately. First, the embedded \code{magic_enum}
+block occupies 45 per cent of the file, which means the \DSLtk{}-specific code
+is roughly 6,200 lines -- a very different picture from the raw line count.
+Second, the standalone library region is by far the largest block of
+\DSLtk{}'s own code, and it sits \emph{after} the feature tags that refer to
+it. The ordering is not accidental: the feature tags near the top of the
+namespace are the ones a DSL author interacts with, while the machinery they
+name is defined further down.
+
+\section{Two Kinds of Feature}
+
+The single most important structural fact about \DSLtk{} is that its
+twenty-six feature tags are not all the same kind of thing. Seven of them
+inject members into the deriving class. Nineteen are \emph{markers}: their
+\code{Mixin} is an empty struct, and naming them in a feature list changes
+nothing about the class you derive.
+
+Listing~\ref{lst:ch03-kinds} shows the two shapes side by side. On the left
+is \code{dsl::Pipeline}, whose mixin contributes a static \code{wrap}
+template. On the right is \code{dsl::PatternMatch}, whose mixin is empty.
+
+\begin{lstlisting}[style=dslcpp,caption={An injecting feature (left) and a marker feature (right), both from the shipped header.},label={lst:ch03-kinds}]
+struct Pipeline
+{
+  template <typename Derived> struct Mixin
+  {
+    template <typename T>
+    static constexpr T
+    wrap (T &&v)
+    {
+      return std::forward<T> (v);
+    }
+  };
+};
+
+struct PatternMatch
+{
+  template <typename Derived> struct Mixin
+  {
+    // Feature presence marker; no additional methods needed since
+    // dsl::match/when/otherwise are free functions in the dsl:: namespace.
+  };
+};
+\end{lstlisting}
+
+The distinction is easy to miss because both kinds have exactly the same
+outer shape, and because the header's documentation comments sometimes
+suggest that a marker does more than it does. The \code{PatternMatch}
+comment above the tag says the feature \emph{``Exposes dsl::match /
+dsl::when / dsl::otherwise as static methods on the derived class for
+convenience''}, but the mixin body contains only a comment saying the
+opposite. In the shipped code, a DSL that names \code{dsl::PatternMatch} does
+\emph{not} acquire a \code{match} member; \code{dsl::match} remains a
+namespace-scope free function and must be called as such. The same is true
+of every other marker.
+
+This is not a defect so much as a design position, and it is worth stating
+plainly: in \DSLtk{}, a feature tag is a \emph{namesake}. Naming
+\code{dsl::Visitors} in your feature list tells a reader -- and a tool --
+that your DSL is a visitor-bearing DSL, and it lets the \code{HasFeature}
+concept answer questions about it. It does not, by itself, give you
+anything to call.
+
+\subsection{The Seven Injecting Features}
+
+These are the tags whose \code{Mixin} contributes something.
+
+\begin{itemize}
+\item \code{dsl::Pipeline} (line 6109) contributes a static
+      \code{wrap(T&&)} template that lifts a value into a chain of
+      transformations.
+\item \code{dsl::Operators} (line 6143) contributes a static
+      \code{make_pred(F&&)} factory that turns a callable into a
+      \code{dsl::Predicate}.
+\item \code{dsl::AST} (line 6723) contributes the static
+      \code{make_leaf<Tag>} and \code{make_node<Tag>} templates, thin
+      wrappers over the free functions \code{dsl::leaf} and
+      \code{dsl::node}.
+\item \code{dsl::Rewrite} (line 6922) contributes an \emph{instance}
+      member \code{rewrite(const ASTNode&)} that applies the derived
+      class's static \code{rules} member. The member is constrained with
+      \code{requires requires { Derived::rules; }}, so it only exists
+      for a derived class that actually declares \code{rules}.
+\item \code{dsl::ExprTemplates} (line 7056) contributes no ordinary members
+      at all. It contributes hidden friends: \code{operator+},
+      \code{operator-}, \code{operator*} and \code{operator/}, binary and
+      unary, defined inside the mixin so that argument-dependent lookup
+      finds them only for the deriving type.
+\item \code{dsl::CustomLiterals} (line 7265) contributes the static
+      \code{parse_literal(std::string_view)}, constrained on
+      \code{Derived::literals}.
+\item \code{dsl::Memoization} (line 7290) contributes the instance member
+      \code{clear_cache()}, which clears the derived class's
+      \code{memo_cache} member.
+\end{itemize}
+
+Note the two kinds of member these produce. \code{Pipeline},
+\code{Operators}, \code{AST} and \code{CustomLiterals} add \emph{static}
+members, which are found through the class name and are therefore usable
+without an instance. \code{Rewrite} and \code{Memoization} add
+\emph{instance} members, because they act on per-object state: a rewrite
+set, a cache. \code{ExprTemplates} adds neither; it adds operators.
+
+\subsection{The Nineteen Marker Features}
+
+The remaining nineteen tags have an empty \code{Mixin}: \code{EnumReflection}
+(5897), \code{PatternMatch} (6503), \code{LazyFeature} (7303),
+\code{Monadic} (7310), \code{ResultFeature} (7317),
+\code{CombinatorParser} (7324), \code{TaskPipeline} (7331),
+\code{SExpressions} (9091), \code{EqualitySaturation} (9097),
+\code{Serialization} (9103), \code{AbstractIO} (9109),
+\code{Visitors} (9115), \code{StaticRegularExpressions} (9121),
+\code{Preprocessing} (9127), \code{ContextFreeGrammar} (9133),
+\code{Graphs} (11405), \code{Terms} (11406), \code{TermRewriting} (11407)
+and \code{GraphReduction} (11408).
+
+These nineteen are not placeholders or stubs. Each corresponds to a
+substantial, working subsystem that is usable on its own: \code{Maybe<T>},
+\code{Result<T,E>}, the parser combinators, the PEG engine, the e-graph
+saturator, the visitor compiler, the preprocessor, the Earley parser, the
+graph and term machinery. What the marker does is let those subsystems be
+\emph{named} in a feature list, so that \code{HasFeature<T, Visitors>} is a
+meaningful question and so that the feature list reads as a declaration of
+what kind of DSL this is.
+
+\subsection{Why the Distinction Is Worth Making}
+
+A reader who does not know about the two kinds will write
+\code{MyDSL::match(...)} and get a compile error, or will assume that
+naming \code{dsl::Visitors} gives them a visitor. The catalogue in
+Section~\ref{sec:ch03-catalogue} therefore records, for every tag, whether
+its mixin adds members and what those members are.
+
+There is also a cost consideration. A marker mixin is an empty class, and
+the empty base optimisation guarantees that it contributes zero bytes to the
+layout of the deriving type. Seven injecting features do the same when their
+members are all static. In neither case is there a vtable, a virtual
+function, or any runtime overhead.
+
+\section{The Layering}
+
+Reading the header from top to bottom does not give you the architecture,
+because the header is ordered by convenience rather than by dependency.
+Figure~\ref{fig:ch03-layers} gives the real structure: six layers, each of
+which depends only on the layers beneath it.
+
+\begin{figure}[ht]
+\centering
+\begin{dslgraph}
+  \node[dslbox, text width=62mm, minimum height=11mm] (l6) at (0,0) {\textbf{Layer 6: graphs and terms}\\\code{DirectedGraph}, \code{Term}, \code{TermRewriteSystem}};
+  \node[dslbox, text width=62mm, minimum height=11mm] (l5) at (0,-1.55) {\textbf{Layer 5: boundaries}\\\code{Serializer}, \code{IO<Backend>}, \code{ASTVisitor}, \code{StaticRegex}, \code{Preprocessor}};
+  \node[dslbox, text width=62mm, minimum height=11mm] (l4) at (0,-3.10) {\textbf{Layer 4: saturation}\\\code{SExpr}, \code{EGraph}, \code{sexpr_rules}, \code{sexpr_grammar}};
+  \node[dslbox, text width=62mm, minimum height=11mm] (l3) at (0,-4.65) {\textbf{Layer 3: parsing}\\\code{Parser<T>}, \code{ParsecInput}, \code{PEGDefinition}, \code{CFG}};
+  \node[dslbox, text width=62mm, minimum height=11mm] (l2) at (0,-6.20) {\textbf{Layer 2: composition}\\\code{dsl::DSL<Derived, Features...>}, feature tags, \code{Predicate}, \code{PipeStage}};
+  \node[dslbox, text width=62mm, minimum height=11mm] (l1) at (0,-7.75) {\textbf{Layer 1: core value types}\\\code{FixedString}, \code{ASTNode}, \code{Maybe<T>}, \code{Result<T,E>}, \code{Lazy<T>}};
+
+  \draw[dsledge] (l1) -- (l2);
+  \draw[dsledge] (l2) -- (l3);
+  \draw[dsledge] (l3) -- (l4);
+  \draw[dsledge] (l4) -- (l5);
+  \draw[dsledge] (l5) -- (l6);
+\end{dslgraph}
+\caption{The six layers of \DSLtk{}. Each layer uses only the layers beneath
+it; nothing points downwards. The embedded enum-reflection library is not
+shown, since it is a leaf library that layer 1 does not itself depend on.}
+\label{fig:ch03-layers}
+\end{figure}
+
+Layer 1, the core value types, contains the small, self-contained types the
+rest of the library is written in terms of: \code{FixedString}, the
+compile-time string carrier; \code{ASTNode}, the value-type tree;
+\code{Predicate} and \code{PipeStage}, the two composition wrappers;
+\code{BinExpr} and \code{UnaryExpr}, the expression-template nodes;
+\code{Maybe<T>} and \code{Result<T,E>}, the two error-handling wrappers;
+\code{Lazy<T>}; and \code{SExpr}, the S-expression value. Every one of these
+can be used with no DSL class anywhere in sight.
+
+Layer 2 is the composition layer: the CRTP base class, the feature tags and
+the two mixins that inject members. This is the layer a DSL author touches.
+
+Layer 3 is parsing, in three flavours: the backtracking parser combinators
+over \code{Parser<T>} and \code{ParsecInput} (lines 7664--7983), the PEG
+engine built on \code{PEGDefinition} and \code{PEGMatcher} (8123--9085), and
+the Earley-style context-free grammar machinery (10539--10793). All three
+produce or consume the same \code{ASTNode} value type from layer 1.
+
+Layer 4 is saturation: the S-expression reader and printer, and the
+e-graph engine with its rewriting, matching and extraction machinery. This
+is the layer that turns a set of rewrite rules into an optimal term.
+
+Layer 5 is the boundary layer -- everything that touches the outside world
+or crosses a representation boundary. Serialization protocols, abstract byte
+I/O, schema-derived visitors, compile-time byte regular expressions and
+binary streams, and the preprocessor with its optional Lua hook.
+
+Layer 6 is graphs and terms: \code{DirectedGraph} with its algorithms and
+DOT output, and the first-order term machinery with unification and bounded
+reduction.
+
+The layering is not merely decorative. It explains, for instance, why the
+e-graph engine can extract an \code{ASTNode}: because layer 4 sits directly
+on top of layer 1's value type. And it explains why the parser subsystems do
+not know about the e-graph engine: layer 3 does not depend on layer 4.
+
+\section{Everything Is a Namespace-Scope Free Function}
+
+One convention runs through the whole library and deserves to be stated on
+its own: essentially every public entry point is a free function at
+namespace scope in \code{dsl}. The \code{leaf}, \code{node}, \code{rule},
+\code{rewrite_set}, \code{match}, \code{when}, \code{otherwise},
+\code{pattern}, \code{lit}, \code{literal_set}, \code{predicate},
+\code{pipe}, \code{memoize}, \code{parser}, \code{ch}, \code{satisfy},
+\code{optional}, \code{try_parse}, \code{labeled}, \code{run_parser},
+\code{create_peg_definition}, \code{derive_peg_definition},
+\code{peg_new_matcher}, \code{peg_seq}, \code{peg_choice},
+\code{ast_schema}, \code{on}, \code{compile_visitor},
+\code{make_cfg}, \code{sexpr_grammar}, \code{sexpr_rules} and
+\code{parse_sexpr} are all free functions.
+
+The consequences are practical. A facility can be used without defining a
+DSL at all: \code{dsl::node<"add">(dsl::leaf<"num">(1),
+dsl::leaf<"num">(2))} needs no base class, no inheritance, and no
+configuration. And the mixins, where they exist at all, are thin
+convenience wrappers that forward to the free function. \code{AST}'s
+\code{make_leaf} is literally \code{return dsl::leaf<Tag>(...)}.
+
+Listing~\ref{lst:ch03-free} shows this in practice: the same tree built
+twice, once through the free function and once through the DSL's own static
+members.
+
+\begin{lstlisting}[style=dslcpp,caption={The free-function convention. Both routes produce the same tree; neither requires an instance of anything.},label={lst:ch03-free}]
+#include "DSLtk.hpp"
+#include <iostream>
+
+// A DSL built from *injecting* features: the mixins add real members.
+struct Calc : dsl::DSL<Calc, dsl::Pipeline, dsl::AST> {};
+
+// A DSL built from *marker* features: the mixins are empty.
+struct Tagged : dsl::DSL<Tagged, dsl::PatternMatch, dsl::Visitors> {};
+
+int main () {
+  // The free function works with no DSL in sight at all.
+  auto loose = dsl::node<"add"> (dsl::leaf<"num"> (1), dsl::leaf<"num"> (2));
+
+  // The same tree, built through the DSL's own static members.
+  auto owned = Calc::make_node<"add"> (Calc::make_leaf<"num"> (1),
+                                       Calc::make_leaf<"num"> (2));
+
+  std::cout << loose.dump () << "\n";
+  std::cout << owned.dump () << "\n";
+  std::cout << "sizeof(Calc)   = " << sizeof (Calc) << "\n";
+  std::cout << "sizeof(Tagged) = " << sizeof (Tagged) << "\n";
+}
+\end{lstlisting}
+
+The output is
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch03-free}. Both DSL types are one byte, because every mixin is empty and the empty base optimisation applies.},label={lst:ch03-free-out}]
+(add (num 1) (num 2))
+(add (num 1) (num 2))
+sizeof(Calc)   = 1
+sizeof(Tagged) = 1
+\end{lstlisting}
+
+The two \code{sizeof} lines are the point. A DSL that names three features
+occupies exactly as much memory as one that names none, because every mixin
+is an empty base class and the compiler is free to overlap it with anything
+else. The features are a compile-time device and nothing more.
+
+\subsection{How a Name Is Resolved}
+
+The procedure below describes how a call site finds its
+implementation. It is worth writing down because the answer is not always
+the one a reader expects.
+
+\begin{pseudocode}[Resolving a \code{dsl::} call site]
+\textbf{function} resolve (name)\\
+\quad \textbf{if} name is a member of the derived class then\\
+\qquad \textbf{return} that member\\
+\quad \textbf{if} name is a free function in \code{dsl} then\\
+\qquad \textbf{return} that function\\
+\quad \textbf{if} name is an operator then\\
+\qquad \textbf{return} the hidden friend found by argument-dependent lookup\\
+\qquad \qquad (only if an associated class is the deriving type)\\
+\quad \textbf{otherwise}\\
+\qquad \textbf{report} \emph{no such facility}
+\end{pseudocode}
+
+The third branch is the subtle one. Operators injected by
+\code{dsl::ExprTemplates} are hidden friends, so they are found only when one
+of the arguments is the deriving type or a class associated with it. That is
+what keeps \code{operator+} from being ambiguous with every other
+\code{operator+} in the program, and it is why the mixin's operators apply
+to \code{Scalar} but not to \code{int}.
+
+\section{The Feature Catalogue}\label{sec:ch03-catalogue}
+
+Table~\ref{tab:ch03-catalogue} is the reference for the whole library. For
+each of the twenty-six feature tags it gives the line at which the tag is
+defined, what its \code{Mixin} contributes, and the free types that carry
+the actual functionality.
+
+\begingroup
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{longtable}{@{}L{0.24\textwidth}C{0.05\textwidth}C{0.085\textwidth}L{0.25\textwidth}L{0.30\textwidth}@{}}
+\caption{The complete feature catalogue. \emph{Kind} is \emph{injecting} when
+the mixin adds members and \emph{marker} when the mixin is empty.}
+\label{tab:ch03-catalogue}\\
+\toprule
+\textbf{Tag} & \textbf{Line} & \textbf{Kind} & \textbf{Mixin adds} & \textbf{Companion free types} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Tag} & \textbf{Line} & \textbf{Kind} & \textbf{Mixin adds} & \textbf{Companion free types} \\
+\midrule
+\endhead
+\code{EnumReflection} & 5897 & marker & nothing & \code{magic_enum} re-exported as \code{dsl::enum_name}, \code{enum_cast}, \code{enum_entries}, \code{enum_switch}, \code{containers::array}, \code{customize::enum_range} \\
+\code{Pipeline} & 6109 & injecting & static \code{wrap} & \code{PipeStage}, \code{pipe}, free \code{operator|} \\
+\code{Operators} & 6143 & injecting & static \code{make_pred} & \code{Predicate}, \code{predicate} \\
+\code{PatternMatch} & 6503 & marker & nothing & \code{pattern<S>}, \code{WhenClause}, \code{when}, \code{OtherwiseClause}, \code{otherwise}, \code{MatchTable}, \code{match} \\
+\code{AST} & 6723 & injecting & static \code{make_leaf<Tag>}, \code{make_node<Tag>} & \code{ASTNode}, \code{leaf<Tag>}, \code{node<Tag>} \\
+\code{Rewrite} & 6922 & injecting & instance \code{rewrite} (needs \code{Derived::rules}) & \code{RewriteRule}, \code{rule<Tag>}, \code{RewriteSet}, \code{rewrite_set} \\
+\code{ExprTemplates} & 7056 & injecting & hidden friends \code{+ - * /} & \code{BinExpr}, \code{UnaryExpr}, \code{ExprTerminal}, free operators on \code{BinExpr} \\
+\code{CustomLiterals} & 7265 & injecting & static \code{parse_literal} (needs \code{Derived::literals}) & \code{LiteralEntry}, \code{lit<Suffix>}, \code{LiteralSet}, \code{literal_set} \\
+\code{Memoization} & 7290 & injecting & instance \code{clear_cache} (uses \code{Derived::memo_cache}) & \code{MemoizedCallable}, \code{memoize} \\
+\code{LazyFeature} & 7303 & marker & nothing & \code{Lazy<T>} \\
+\code{Monadic} & 7310 & marker & nothing & \code{Maybe<T>}, free \code{map}, \code{flat_map}, \code{filter}, \code{or_else} over \code{std::optional} \\
+\code{ResultFeature} & 7317 & marker & nothing & \code{Result<T,E>} \\
+\code{CombinatorParser} & 7324 & marker & nothing & \code{ParsecInput}, \code{ParseError}, \code{ExpectedResult<T>}, \code{Parser<T>}, \code{parser}, \code{ch}, \code{satisfy}, \code{optional}, \code{try_parse}, \code{labeled}, \code{run_parser} \\
+\code{TaskPipeline} & 7331 & marker & nothing & \code{Task}, \code{TaskChain}, \code{TaskState}, \code{run}, \code{suspend}, \code{upon} \\
+\code{SExpressions} & 9091 & marker & nothing & \code{SExpr}, \code{parse_sexpr}, \code{parse_sexpressions}, \code{ast_to_sexpr}, \code{sexpr_to_ast} \\
+\code{EqualitySaturation} & 9097 & marker & nothing & \code{EGraph}, \code{EMatch}, \code{ERewriteRule}, \code{SaturationLimits}, \code{SaturationResult}, \code{sexpr_rules} \\
+\code{Serialization} & 9103 & marker & nothing & \code{Serializer<Backend>}, \code{Deserializer<Backend>} \\
+\code{AbstractIO} & 9109 & marker & nothing & \code{IO<Backend>} \\
+\code{Visitors} & 9115 & marker & nothing & \code{ASTTag}, \code{VisitorCase}, \code{on<Tag>}, \code{ASTVisitor}, \code{derive_visitor}, \code{ASTSchema}, \code{ast_schema}, \code{compile_visitor} \\
+\code{StaticRegularExpressions} & 9121 & marker & nothing & \code{StaticRegex<S>}, \code{RegexMatch}, \code{BinaryStream} \\
+\code{Preprocessing} & 9127 & marker & nothing & \code{Preprocessor}, \code{PreprocessorMacro}, \code{lua_script_hook} (under \code{DSLTK_ENABLE_LUA}) \\
+\code{ContextFreeGrammar} & 9133 & marker & nothing & \code{CFG}, \code{CFGSymbol}, \code{CFGRule}, \code{CFGParseResult}, \code{CFGTerminal}, \code{CFGNonterminal}, \code{CFGProduction}, \code{make_cfg}, \code{sexpr_grammar} \\
+\code{Graphs} & 11405 & marker & nothing & \code{DirectedGraph}, \code{GraphNodeId}, \code{GraphEdgeId}, \code{dot_quote} \\
+\code{Terms} & 11406 & marker & nothing & \code{Term}, \code{TermSubstitution}, \code{parse_term}, \code{term_from_sexpr}, \code{substitute} \\
+\code{TermRewriting} & 11407 & marker & nothing & \code{TermRule}, \code{term_rule}, \code{TermRewriteStep}, \code{TermReductionResult}, \code{TermRewriteSystem} \\
+\code{GraphReduction} & 11408 & marker & nothing & \code{TermGraph}, \code{TermGraphLabel}, \code{GraphRewriteStep}, \code{GraphReductionResult} \\
+\bottomrule
+\end{longtable}
+\endgroup
+
+\section{Consequences of the Single-Header Form}
+
+Before leaving the physical structure, it is worth drawing out three
+consequences of the library's packaging that recur throughout the book.
+
+\paragraph{There is one translation unit, so the one-definition rule is
+never at risk.}
+Every function in \code{DSLtk.hpp} that is not a template is marked
+\code{inline}, and every class template is instantiated once per program
+rather than once per translation unit. A program that includes the header
+in fifty translation units has fifty copies of the template definitions,
+but exactly one copy of each inline function, and the linker discards the
+duplicates. There is no ODR violation to worry about, and no need for
+export macros, visibility attributes, or \code{#pragma once} discipline
+beyond what the header already provides.
+
+\paragraph{Compile time is paid per translation unit.}
+This is the cost of the arrangement. Every translation unit that includes
+\code{DSLtk.hpp} parses all 12,024 lines of it, and instantiates every
+template it uses. The library's own examples are small enough that the
+difference is imperceptible, but a large project that includes the header
+widely will feel it. The mitigation is the three-tier wrapper arrangement
+of Chapter~\ref{ch:getting-started}: include the toolkit in exactly one
+wrapper header, and include only that wrapper elsewhere.
+
+\paragraph{Everything is visible.}
+There is no private implementation detail, because there is no separate
+implementation. The embedded \code{magic_enum} block, the parser
+combinators, the e-graph engine and the graph machinery are all in the same
+file, in the same namespace, and are all equally accessible to the user.
+This is a feature for a toolkit -- a DSL author can reach into the parser
+combinators and use them directly -- and a hazard for anyone who wants to
+hide implementation details. It also means that a name collision between
+the library and user code is possible, which is why the wrapper idiom
+exists.
+
+\section{Auditing the Catalogue}
+
+The catalogue in Section~\ref{sec:ch03-catalogue} is not a summary of the
+documentation; it is a transcription of the source. Every tag was located
+by searching the header for its declaration, and every mixin was read to
+determine whether it was empty.
+
+Two observations fall out of that exercise, and both are worth stating
+because they are not visible from the documentation alone.
+
+The first is that the shipped mixins are almost all thin. The seven that
+contribute members either forward to a free function -- \code{AST}'s
+\code{make_leaf} is \code{return dsl::leaf<Tag>(...)} -- or perform one
+narrow operation on the deriving class's members. \code{Rewrite}'s
+\code{rewrite} is a single call to \code{Derived::rules.apply(tree)}.
+\code{CustomLiterals}' \code{parse_literal} is a single call to
+\code{Derived::literals.parse(input)}. The mixins are adapters, not
+implementations, and this is why they are cheap to instantiate.
+
+The second is that the classification into injecting and marker features is
+not a matter of degree. Of the twenty-six tags, nineteen have a mixin whose
+body is empty or contains only comments, and seven have one that declares
+members. There is no third category, and no tag that contributes
+something in between.
+
+\section{The D Port's Different Composition Mechanism}
+
+The D implementation offers the same twenty-six feature tags and the same
+library surface, but it composes them by a different mechanism, and the
+contrast is instructive. In C++ a feature list becomes a list of base
+classes. In D it becomes a mixin template applied to the enclosing struct.
+
+Listing~\ref{lst:ch03-dmixin} shows the D port's \code{DSL!} mixin template
+in full. It is the direct counterpart of \code{dsl::DSL<Derived,
+Features...>}.
+
+\begin{lstlisting}[style=dslcmd,caption={The D port's composition mechanism, from \code{DSLtk.d} lines 92--121. Members are mixed into the enclosing aggregate; there is no base class.},label={lst:ch03-dmixin}]
+/// Compose features in the enclosing aggregate: mixin DSL!(Pipeline, AST).
+mixin template DSL(Features...)
+{
+    import std.meta : AliasSeq, NoDuplicates, staticIndexOf;
+    import DSLtk;
+    alias DSLFeatures = AliasSeq!Features;
+    static assert(Features.length == NoDuplicates!Features.length,
+                  "DSL features must be unique");
+    static if (staticIndexOf!(Pipeline, Features) >= 0)
+        static auto wrap(T)(T value) { return value; }
+    static if (staticIndexOf!(Operators, Features) >= 0)
+        static auto make_pred(F)(F fn) { return DSLtk.predicate(fn); }
+    static if (staticIndexOf!(AST, Features) >= 0)
+    {
+        static auto make_leaf(string tag, T)(T value) { return DSLtk.leaf!tag(value); }
+        static auto make_node(string tag, C...)(C children) { return DSLtk.node!tag(children); }
+    }
+    static if (staticIndexOf!(Rewrite, Features) >= 0)
+        ASTNode rewrite(ASTNode tree) { return rules.apply(tree); }
+    static if (staticIndexOf!(CustomLiterals, Features) >= 0)
+        static real parse_literal(string input) { return literals.parse(input); }
+    static if (staticIndexOf!(Memoization, Features) >= 0)
+        void clear_cache() { memo_cache = null; }
+    static if (staticIndexOf!(ExprTemplates, Features) >= 0)
+        mixin ExpressionOperators;
+    static foreach (Feature; Features)
+    {
+        static if (__traits(hasMember, Feature, "Mixin")) mixin Feature.Mixin;
+    }
+}
+\end{lstlisting}
+
+Table~\ref{tab:ch03-cpp-vs-d} compares the two mechanisms point by point.
+
+\begin{table}[ht]
+\centering
+\caption{The C++ CRTP mechanism against the D \code{mixin DSL!(...)} mechanism.}
+\label{tab:ch03-cpp-vs-d}
+\small
+\begin{tabular}{@{}L{0.22\textwidth}L{0.36\textwidth}L{0.34\textwidth}@{}}
+\toprule
+\textbf{Aspect} & \textbf{C++, \code{DSLtk.hpp}} & \textbf{D, \code{DSLtk.d}} \\
+\midrule
+How features are named & a type parameter pack: \code{dsl::DSL<Derived, F1, F2>} & a mixin template application: \code{mixin DSL!(F1, F2)} \\
+Where members land & in base classes of the deriving struct & directly in the deriving struct's own scope \\
+Base class created & yes: \code{dsl::DSL<Derived, Features...>} & no: the mixin injects members into the enclosing aggregate \\
+Feature tag shape & a struct with a nested \code{template <typename D> struct Mixin} & a plain empty struct; the \code{DSL!} template dispatches with \code{static if (staticIndexOf!(...))} \\
+Extension point for a custom feature & a nested \code{Mixin} template in the tag & a nested \code{Mixin} template in the tag, mixed in by \code{static if (__traits(hasMember, Feature, "Mixin")) mixin Feature.Mixin;} \\
+Feature detection & \code{std::derived_from<T, F::template Mixin<T>>} & \code{__traits(hasMember, T, "DSLFeatures")} plus \code{staticIndexOf} \\
+Duplicate features & compile error, \emph{``duplicate base type''} & a \code{static assert} with the message \emph{``DSL features must be unique''} \\
+String template arguments & \code{FixedString<N>}, a C++20 class-type NTTP & native D string template parameters; \code{FixedString} is optional \\
+Operator injection & hidden friends declared inside the mixin & \code{mixin ExpressionOperators} inside the mixin template \\
+Extra language requirements & class-type non-type template parameters & template mixins, \code{static foreach}, CTFE \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Two differences deserve emphasis. The first is that the D port has no base
+class at all. \code{struct BasicDSL { mixin DSL!(Pipeline, Operators); }}
+produces a struct whose members are the mixin's members and nothing else;
+there is no \code{BasicDSL} base, no protected \code{self()}, and no
+\code{static_cast} dance to get back to the deriving type. The cost is that
+D cannot express the C++ version's \code{static_cast<Derived&>(*this)}
+pattern, so the D mixins simply call \code{rules}, \code{literals} and
+\code{memo_cache} unqualified, relying on D's lexical scoping to find the
+enclosing struct's members.
+
+The second is the detection mechanism. C++ detects a feature by asking
+whether a particular base class is present, which is exact and free.
+D cannot ask that question of a mixin, so it records the feature list in an
+alias \code{DSLFeatures} and searches it with \code{staticIndexOf}. The
+result is a boolean template rather than a concept, and it answers the same
+question.
+
+\section{Edge Cases and Limits}
+
+\paragraph{The marker features really do nothing.}
+Nineteen of the twenty-six tags have an empty \code{Mixin}. Naming
+\code{dsl::Visitors}, \code{dsl::Preprocessing}, \code{dsl::Graphs} or
+\code{dsl::EqualitySaturation} in a feature list adds no members and no
+behaviour. If you are expecting \code{MyDSL::compile_visitor(...)} to
+appear because you named \code{dsl::Visitors}, it will not: you must call
+\code{dsl::compile_visitor} yourself.
+
+\paragraph{The documentation of \code{PatternMatch} is stale.}
+The comment above the tag at line 6492 says that the feature exposes
+\code{dsl::match}, \code{dsl::when} and \code{dsl::otherwise} as static
+methods on the derived class. The mixin body contradicts this, and the
+shipped code follows the body. Treat the free functions as the real API.
+
+\paragraph{A feature tag must have a nested \code{Mixin}.}
+\code{dsl::DSL<Derived, Features...>} expands to
+\code{Features::template Mixin<Derived>...}, so a tag without a
+\code{Mixin} template is a hard error at the point of instantiation:
+\emph{``no class template named 'Mixin' in 'struct NoMixin'''}. This is the
+one requirement the feature-tag protocol imposes, and the D port mirrors it
+by checking \code{__traits(hasMember, Feature, "Mixin")}.
+
+\paragraph{Features must be unique.}
+Repeating a tag produces the error \emph{``duplicate base type''}. The D
+port is friendlier here: it fails a \code{static assert} with a message that
+names the problem.
+
+\paragraph{There is no ordering guarantee between injecting features.}
+Two injecting features that contributed a member of the same name would
+produce an ambiguous lookup rather than a defined override. The shipped
+features do not collide, but a custom feature that injects, say, a
+\code{wrap} of its own will conflict with \code{dsl::Pipeline}'s, and the
+error you get will be an ambiguity in name lookup, not a diagnostic about
+features.
+
+\paragraph{The feature list is not extensible at runtime.}
+Features are a compile-time pack. There is no way to add a feature to a DSL
+after the type has been defined, and no way to select features by a runtime
+flag. This is a feature rather than a limitation, but it does mean that a
+DSL whose feature set must vary at runtime has to be a template over the
+feature pack rather than a single type.
+
+\paragraph{Names inside the \code{dsl} namespace are not reserved by the
+library.}
+Because the convention is that every public entry point is a free function
+in \code{dsl}, a user who writes \code{using namespace dsl;} and then
+defines their own \code{dsl::leaf} or \code{dsl::match} will collide. The
+three-tier wrapper idiom of Chapter~\ref{ch:getting-started} exists partly
+to keep user code out of the \code{dsl} namespace.
+
+\section{What Comes Next}
+
+You now have a map: six layers, twenty-six feature tags of two distinct
+kinds, one convention for public names, and one mechanism for composition.
+Chapter~\ref{ch:crtp-foundation} opens layer 2 and takes apart the
+twenty-line definition of \code{dsl::DSL<Derived, Features...>}, explains
+why the mixins are inherited separately rather than gathered into one
+aggregate, and shows what the CRTP pattern buys and what it costs.

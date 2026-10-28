@@ -1,0 +1,549 @@
+\chapter{\code{ASTNode}: The Value-Type Tree}
+\label{ch:astnode}
+
+\section{The problem: a tree that every part of the toolkit can share}
+
+A domain-specific language needs a common representation for the trees its
+front ends produce. A parser must build one; a pretty-printer must read one;
+a rewriter must transform one; an evaluator must walk one. If each of those
+components invents its own node type, the components cannot be mixed, and
+the author of the DSL ends up writing the same tree five times.
+
+\DSLtk{} answers this with a single type: \api{dsl::ASTNode}, defined at
+line 6525 of \texttt{DSLtk.hpp}. It is deliberately small. It has no
+virtual functions, no type tags in the C++ sense, no reference-counted
+handles, and no inheritance. It is a \emph{value type}: copying an
+\api{ASTNode} copies an entire subtree, and two nodes that print the same
+way compare equal. Everything else in the AST subsystem --- the factories
+of \chapref{ch:leaf-and-node}, the traversal idioms of \chapref{ch:traversal},
+the rules of \chapref{ch:rewrite}, and the fixpoint engine of
+\chapref{ch:rewrite-sets} --- is built on top of this one class.
+
+That decision has consequences, and the chapter is largely about them. The
+storage is not a \code{std::variant}; the accessors are not iterators; the
+comparison operator has no inequality companion; and the copy semantics are
+the dominant cost in every algorithm that touches the tree. A reader who
+understands those four facts will not be surprised by anything later in
+Part Five.
+
+It is worth saying what the alternative designs would have cost. A
+pointer-based tree, in which each node is separately allocated and the
+children are held through pointers, avoids the copy cost entirely, but it
+introduces ownership questions that \DSLtk{} declines to answer: who frees
+a node, who shares it, and what happens when two parts of a front end want
+to share a subtree. A reference-counted tree answers the first two
+questions and adds a third --- the cycle problem --- that has no pleasant
+solution in a header-only library. A \code{std::variant}-based tree
+expresses the leaf/inner distinction in the type system, but it forces the
+user to name both shapes at every use site and makes the recursive
+definition awkward to write, because a \code{variant} cannot contain
+itself.
+
+\api{ASTNode} takes the third path. It stores a discriminator and the
+union of the two shapes side by side, it owns its whole subtree, and it
+copies eagerly. The price is the copy cost described in
+\secref{sec:astnode-copy}; the benefit is that an \api{ASTNode} can be
+stored in a container, returned from a function, compared, and thrown
+around without any of the ceremony that a raw-pointer tree demands. For a
+toolkit whose job is to be a building block rather than a complete
+product, that is the right trade.
+
+\section{A worked example}
+
+The program below builds a small expression tree, prints it, compares it
+structurally, and demonstrates that the copy is deep. It is complete and
+compiles against the shipped header.
+
+\begin{lstlisting}[style=dslcpp,caption={Building and inspecting an \api{ASTNode} tree.},label={lst:astnode-demo}]
+#include "DSLtk.hpp"
+#include <iostream>
+#include <stdexcept>
+
+int main ()
+{
+  using dsl::ASTNode;
+
+  // 1. The default node: empty tag, leaf, empty value.
+  ASTNode empty;
+  std::cout << "default  : " << empty.dump () << '\n';
+
+  // 2. A leaf carries a tag and a textual value.
+  ASTNode one = dsl::leaf<"num"> (1);
+  std::cout << "leaf     : " << one.dump () << '\n';
+
+  // 3. An inner node carries a tag and an ordered list of children.
+  ASTNode sum = dsl::node<"add"> (one, dsl::leaf<"num"> (2));
+  std::cout << "inner    : " << sum.dump () << '\n';
+
+  // 4. Structural equality.
+  ASTNode sum2 = dsl::node<"add"> (dsl::leaf<"num"> (1), dsl::leaf<"num"> (2));
+  std::cout << "equal    : " << std::boolalpha << (sum == sum2) << '\n';
+
+  // 5. The tree is a deep copy: mutating the copy does not affect the original.
+  ASTNode mutable_copy = sum;
+  mutable_copy.children ()[0] = dsl::leaf<"num"> (999);
+  std::cout << "copy     : " << mutable_copy.dump () << '\n';
+  std::cout << "original : " << sum.dump () << '\n';
+
+  // 6. child() is bounds checked.
+  try
+    {
+      (void) one.child (0);
+    }
+  catch (const std::out_of_range &)
+    {
+      std::cout << "child(0) : threw std::out_of_range\n";
+    }
+  return 0;
+}
+\end{lstlisting}
+
+The output is
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:astnode-demo}.},label={lst:astnode-demo-out}]
+default  : ()
+leaf     : (num 1)
+inner    : (add (num 1) (num 2))
+equal    : true
+copy     : (add (num 999) (num 2))
+original : (add (num 1) (num 2))
+child(0) : threw std::out_of_range
+\end{lstlisting}
+
+Three observations are worth pausing on. The default-constructed node
+prints as \code{()}: it has an empty tag and is a leaf with an empty value, so
+\api{dump()} emits an open parenthesis, the (empty) tag, and a close
+parenthesis. The copy in step~5 shares nothing with the original: replacing
+\api{children()[0]} of the copy leaves the original's first operand at
+\code{(num 1)}. And \api{child(0)} on a leaf throws rather than returning a
+dangling reference.
+
+\section{The data model}
+
+\api{ASTNode} is a class with four private data members and no base classes.
+The layout is shown in \figref{fig:astnode-layout}.
+
+\begin{figure}[htbp]
+\begin{dslgraph}
+  \node[dsllarge] (self) {ASTNode};
+
+  \node[dslsmall, below=6mm of self, xshift=-27mm] (tag)
+    {\code{std::string}\\ \code{tag_}};
+  \node[dslsmall, below=6mm of self] (value)
+    {\code{std::string}\\ \code{value_}};
+  \node[dslsmall, below=6mm of self, xshift=33mm] (children)
+    {\code{std::vector}\\ \code{<ASTNode>}\\ \code{children_}};
+  \node[dslsmall, below=9mm of value, xshift=-7mm] (leaf)
+    {\code{bool}\\ \code{is_leaf_ = true}};
+
+  \draw[dsledge] (self) -- (tag);
+  \draw[dsledge] (self) -- (value);
+  \draw[dsledge] (self) -- (children);
+  \draw[dsledge] (self) -- (leaf);
+
+  \node[dslterm, below=4mm of children] (kid)
+    {ASTNode (child 0)};
+  \node[dslterm, below=4mm of kid] (kid2)
+    {ASTNode (child 1)};
+  \draw[dsledgedash] (children) -- (kid);
+  \node[dslsmall, below=4mm of kid2] {recursive by value};
+
+  \node[dslterm, left=4mm of leaf] (disc)
+    {discriminator};
+  \draw[dslfeedback] (disc) -- (leaf);
+\end{dslgraph}
+\caption{The object layout of \api{ASTNode}: four parallel members, one of
+which is a recursive container of values rather than pointers. The
+\texttt{is\_leaf\_} flag is a discriminator, not a variant index.}
+\label{fig:astnode-layout}
+\end{figure}
+
+The members are declared at lines 6645--6648, immediately after the private
+helper \api{dump_impl}:
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}L{4.3cm}C{1.0cm}L{7.9cm}@{}}
+\toprule
+\textbf{Member} & \textbf{Line} & \textbf{Semantics} \\
+\midrule
+\code{std::string tag_}
+  & 6645
+  & The node's label. Always present, possibly empty. Copied from the
+    compile-time \api{FixedString} at construction time. \\
+\code{std::string value_}
+  & 6646
+  & The textual payload of a leaf. Empty for every node built through the
+    inner-node constructor. \\
+\code{std::vector<}\newline \code{<ASTNode> children_}
+  & 6647
+  & Ordered sub-nodes, stored \emph{by value}. Empty for a well-formed
+    leaf. \\
+\code{bool is_leaf_ = true}
+  & 6648
+  & Discriminator. \code{true} means the node is a leaf and \code{value_}
+    is meaningful; \code{false} means the node is an inner node and
+    \code{children_} is meaningful. \\
+\bottomrule
+\end{tabular}
+\caption{The four private members of \api{ASTNode}. There is no
+\code{std::variant}, no base class, and no pointer to shared storage.}
+\label{tab:astnode-members}
+\end{table}
+
+The class is best understood as a tagged pair of payloads that happen to be
+stored side by side rather than in a variant. The \code{is_leaf_} flag does
+not select between two \emph{storages}; it selects between two
+\emph{interpretations}. In the leaf interpretation, \code{value_} is the
+payload and \code{children_} is ignored; in the inner interpretation,
+\code{children_} is the payload and \code{value_} is ignored. Every
+accessor in the class follows that convention, and so does
+\api{operator==}. A reader coming from a sum-type design should note that
+the convention is not enforced anywhere: the flag is a plain
+\code{bool} member, and the class offers no way to ask whether the
+members agree with it.
+
+The crucial point in \tabref{tab:astnode-members} is the third row.
+\code{children_} is a \code{std::vector<ASTNode>}, not a
+\code{std::vector<ASTNode*>} and not a vector of variants. Every child is
+stored inline. That single decision determines the copy semantics, the
+memory profile, and the shape of every algorithm in the subsystem.
+
+\subsection{Construction}
+
+There are exactly three constructors, and they partition the node space
+cleanly.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}L{5.4cm}C{1.0cm}L{6.8cm}@{}}
+\toprule
+\textbf{Signature} & \textbf{Line} & \textbf{Result} \\
+\midrule
+\code{ASTNode()}
+  & 6528
+  & Empty tag, leaf, empty value, no children. Prints as \code{()}. \\
+\code{ASTNode(std::string_view tag,}\newline
+\code{std::string value)}
+  & 6531
+  & A leaf: the tag is copied, the value is moved in, \code{is_leaf_} is
+    \code{true}. \\
+\code{ASTNode(std::string_view tag,}\newline
+\code{std::vector<ASTNode> children)}
+  & 6537
+  & An inner node: the tag is copied, the children are moved in,
+    \code{is_leaf_} is \code{false}. The value stays empty. \\
+\bottomrule
+\end{tabular}
+\caption{The three constructors of \api{ASTNode}. The two-argument overloads
+are distinguished by the type of the second argument, so there is no
+ambiguity between them.}
+\label{tab:astnode-ctors}
+\end{table}
+
+The two two-argument overloads are not ambiguous because
+\code{std::string} and \code{std::vector<ASTNode>} are unrelated types: no
+implicit conversion exists in either direction. A caller who wants a leaf
+must pass something convertible to \code{std::string}; a caller who wants an
+inner node must pass a vector. Note also that neither two-argument
+constructor sets \code{value_} for an inner node, and neither sets
+\code{children_} for a leaf. The two payload members are mutually
+exclusive by construction.
+
+\subsection{Accessors}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}L{4.2cm}C{1.0cm}L{8.0cm}@{}}
+\toprule
+\textbf{Signature} & \textbf{Line} & \textbf{Semantics} \\
+\midrule
+\code{tag() const}
+  & 6543
+  & A \code{std::string_view} of the node's tag. The tag cannot be mutated
+    through the public API, so the view stays valid for the node's
+    lifetime. \\
+\code{is_leaf() const}
+  & 6550
+  & The discriminator. \\
+\code{value() const}
+  & 6557
+  & The leaf payload, as a \code{const std::string&}. Returns a reference
+    to an empty string for an inner node. \\
+\code{children() const}
+  & 6564
+  & The children, read-only, as a reference to the underlying vector. \\
+\code{children()}
+  & 6571
+  & The children, \emph{mutable}. This is the only mutating accessor on
+    the class. \\
+\code{child(i) const}
+  & 6578
+  & The \(i\)-th child. Throws \code{std::out_of_range} if \(i\) is out of
+    range. \\
+\code{child(i)}
+  & 6583
+  & The \(i\)-th child, mutably. Same throwing behaviour. \\
+\code{size() const}
+  & 6590
+  & The number of children. Zero for a leaf. \\
+\code{dump() const}
+  & 6606
+  & An S-expression rendering. See \secref{sec:astnode-dump}. \\
+\code{operator==}
+  & 6614
+  & Structural equality. See \secref{sec:astnode-equality}. \\
+\bottomrule
+\end{tabular}
+\caption{The public interface of \api{ASTNode}. There is no
+\texttt{child\_at}, no iterator interface, no explicit \code{operator!=}, and no
+\code{operator<<}.}
+\label{tab:astnode-api}
+\end{table}
+
+Three absences deserve emphasis, because code written against another tree
+library will not compile against this one.
+
+\begin{itemize}
+\item There is no \code{child_at}. The method is called \code{child}, and it
+  has both a const and a non-const overload.
+\item There are no iterators. \code{children()} returns a reference to the
+  underlying \code{std::vector}, so a caller who wants iteration writes
+  \code{for (auto const& child : node.children())} exactly as the header
+  itself does at lines 6860, 9339 and 9997. There is no \code{begin()}, no
+  \code{end()}, and no range-for friendliness of its own.
+\item There is no \code{operator<<}. A node does not stream; you must call
+  \api{dump()} and stream the resulting string.
+\end{itemize}
+
+There is also no mutable accessor for \code{value_} and no mutable accessor
+for \code{tag_}. This is easy to miss and it constrains what an in-place
+rewriter can do: it can change a node's \emph{children}, but it cannot
+change a leaf's text or any node's tag without rebuilding the node. The
+rewrite engine of \chapref{ch:rewrite-sets} sidesteps this by never
+mutating in place at all.
+
+\subsection{Dumping}
+\label{sec:astnode-dump}
+
+\api{dump()} (line 6606) is the debugging primitive of the whole subsystem.
+It allocates an output stream, delegates to the private recursive helper
+\api{dump_impl} (line 6625), and returns the resulting string. The stream
+is a \code{std::ostringstream}.
+
+\begin{pseudocode}[S-expression rendering of a node]
+\textbf{function} dump\_impl (n, os)\\
+\quad os \code{<-} '(' \code{<-} n.tag\\
+\quad \textbf{if} n.is\_leaf \textbf{then}\\
+\qquad \textbf{if} n.value is not empty \textbf{then}\\
+\qquad\quad os \code{<-} ' ' \code{<-} n.value\\
+\quad \textbf{else}\\
+\qquad \textbf{for} c \textbf{in} n.children \textbf{do}\\
+\qquad\quad os \code{<-} ' '\\
+\qquad\quad dump\_impl (c, os)\\
+\quad os \code{<-} ')'
+\end{pseudocode}
+
+The rendering is therefore: a leaf with a non-empty value becomes
+\code{(tag value)}; a leaf with an empty value becomes \code{(tag)}; an inner
+node becomes \code{(tag child1 child2 ...)}. The example in the header's own
+comment at line 6603 is exact: a node tagged \code{"add"} with two numeric
+leaves dumps as \code{"(add (num 1) (num 2))"}.
+
+To see the rendering in detail, consider the tree
+\code{node<"add">(leaf<"num">(1), leaf<"num">(2))}. The outer node is not
+a leaf, so \api{dump_impl} writes an open parenthesis, the tag
+\code{"add"}, and then, for each child in order, a space followed by the
+child's own rendering. The first child is a leaf whose value is non-empty,
+so it writes \code{"(num 1)"}; the second writes \code{"(num 2)"}. The
+outer node then writes its closing parenthesis, producing
+\code{"(add (num 1) (num 2))"}. Notice that the space separator is written
+by the parent, not by the child: a child never knows whether it is the
+first, the last, or the only child, and the format therefore does not
+depend on the number of siblings.
+
+The output is an S-expression in the informal sense, but it is \emph{not} the
+\api{SExpr} of \chapref{ch:sexpressions} and it is not round-trippable
+through \api{parse_sexpr}. No quoting is applied, so a leaf value that
+contains a space or a parenthesis is indistinguishable from a differently
+shaped tree. \code{leaf<"str">("hello world")} dumps as
+\code{(str hello world)}, which reads as a three-element list rather than a
+two-element one. Use \api{ast_to_sexpr} (line 9332) when a lossless
+representation matters.
+
+\subsection{Equality}
+\label{sec:astnode-equality}
+
+\api{operator==} at line 6614 is the whole of the comparison surface. It
+proceeds in three steps: the tags must be equal, the leaf-ness must be
+equal, and then either the values are compared (for two leaves) or the two
+children vectors are compared (for two inner nodes).
+
+\begin{pseudocode}[Structural comparison of two nodes]
+\textbf{function} equals (a, b)\\
+\quad \textbf{if} a.tag \code{!=} b.tag \textbf{then return} false\\
+\quad \textbf{if} a.is\_leaf \code{!=} b.is\_leaf \textbf{then return} false\\
+\quad \textbf{if} a.is\_leaf \textbf{then return} a.value = b.value\\
+\quad \textbf{return} a.children = b.children
+\end{pseudocode}
+
+Two consequences follow. First, the comparison is a \emph{structural} one:
+two trees built independently but identically are equal, which is what makes
+\api{ASTNode} usable as the value type of a hash-consed or memoised
+computation. Second, the comparison is asymmetric in what it looks at: for
+an inner node the \code{value_} member is never consulted. In practice
+this is unobservable, because the inner-node constructor leaves
+\code{value_} empty and nothing in the public API can fill it in --- but it
+does mean that equality is not simply "all members are equal".
+
+There is no explicitly declared \code{operator!=}, but C++20's rewritten
+comparison candidates make \code{a != b} work using the Boolean equality
+operator. There is also no
+\code{operator<}, no hash function, and no \code{std::hash} specialisation,
+so an \api{ASTNode} cannot be a key in an \code{unordered_container} and
+cannot be sorted.
+
+\section{The cost of a copy}
+\label{sec:astnode-copy}
+
+Because \code{children_} holds values, the implicitly generated copy
+constructor of \api{ASTNode} copies the entire subtree beneath it. There is
+no sharing, no reference count, and no copy-on-write. The cost model is
+therefore:
+
+\begin{pseudocode}[Cost of copying a node]
+\textbf{function} copy\_cost (n)\\
+\quad \textbf{return} $1 + \sum_{c \in \mathrm{children}(n)} \mathrm{copyCost}(c)$
+\end{pseudocode}
+
+For a tree of \(N\) nodes this is \(\Theta(N)\) node copies and, in the
+worst case, \(\Theta(N)\) string copies as well, because each copied node
+duplicates its own tag and (for leaves) its value.
+
+\begin{notebox}[The copy is the unit of currency]
+Every algorithm in this part of the book pays for trees in copies. The
+rewrite engine of \chapref{ch:rewrite-sets} rebuilds a node for every child
+it rewrites; a pass over an \(N\)-node tree allocates on the order of \(N\)
+nodes. A reader who is optimising a DSL built on \DSLtk{} should think of
+\api{ASTNode} as an immutable-by-convention value with an unusually
+expensive copy constructor, and should prefer algorithms that touch each
+node a constant number of times.
+\end{notebox}
+
+This is the reason the rewrite engine is written as a copy-based fold rather
+than as an in-place mutation, and it is the reason \chapref{ch:traversal}
+devotes attention to the difference between the two styles.
+
+\section{Edge cases and limits}
+
+\paragraph{No variant, no sum type.}
+The storage is four parallel members, not a \code{std::variant} over a leaf
+shape and an inner shape. Two consequences follow. The size of an
+\api{ASTNode} is the size of the \emph{union} of both shapes plus the
+discriminator, so every node pays for a vector and two strings even when it
+is a leaf. And the class cannot be extended with a third node kind without
+changing the class itself.
+
+\paragraph{The invariants are conventions, not types.}
+A well-formed leaf has an empty \code{children_} and a non-empty
+\code{value_}; a well-formed inner node has children and an unused
+\code{value_}. Nothing enforces this. In particular, the mutable
+\code{children()} accessor lets a caller push children into a leaf:
+
+\begin{lstlisting}[style=dslcpp,caption={The mutable \api{children()} accessor can break the leaf invariant.},label={lst:astnode-invariant}]
+ASTNode leaf ("num", "1");
+leaf.children ().push_back (ASTNode ("x", "y"));
+std::cout << leaf.dump () << '\n';    // (num 1) -- children are ignored
+std::cout << leaf.is_leaf () << '\n'; // 1
+std::cout << leaf.size () << '\n';    // 1
+\end{lstlisting}
+
+The node then reports \code{is_leaf() == true} and \code{size() == 1}
+simultaneously, and \api{dump()} prints it as a leaf, silently discarding
+the children. Such a tree violates the application's leaf convention.
+The mutation itself is defined C++; consumers may reject it or disagree
+about whether the hidden children participate in traversal and equality.
+
+\paragraph{An empty inner node and an empty leaf are different.}
+\code{ASTNode("f", std::vector<ASTNode>{})} is an inner node with no
+children, whereas \code{ASTNode("f", "")} is a leaf with an empty value.
+Both dump as \code{(f)}, but they are not equal, because
+\code{is_leaf_} differs. Code that reconstructs trees from \api{dump()}
+output cannot distinguish them.
+
+\paragraph{Out-of-range access throws.}
+\code{child(i)} uses \code{children_.at(i)}, which throws
+\code{std::out_of_range}. The choice is deliberate: the alternative,
+\code{operator[]}, would be silent. A rule predicate that assumes a node has
+at least one child must therefore check \code{size()} first, and a
+predicate that forgets will terminate the whole rewrite with an exception
+rather than with a wrong answer. The header's own example at line 6762
+gets this right for the first check and relies on the user's discipline for
+the rest.
+
+\paragraph{No support for shared structure.}
+Because a subtree is copied by value, a DAG cannot be represented: two
+parents that both refer to the same child will hold two distinct copies.
+Any algorithm that would like to share a subtree --- a common-subexpression
+cache, a DAG-shaped term, a cyclic graph --- is outside the model.
+
+\paragraph{No ownership or lifetime machinery.}
+There are no smart pointers, no arenas, and no node pools. A tree owns its
+entire subtree and frees it on destruction. For very large trees this
+means one large recursive destruction, which is exactly the stack-depth
+hazard discussed in \chapref{ch:traversal}.
+
+\paragraph{No streaming.}
+\code{std::cout << node} does not compile. Use \code{node.dump()}. The
+type also has no supplied \code{std::formatter} specialization, so
+\code{std::format} requires a conversion or a user formatter. Stream insertion
+and formatting customization are separate protocols.
+
+\paragraph{No way to enumerate the tags in use.}
+Nothing in the class reports which tags a tree contains, how many distinct
+tags it uses, or whether two subtrees agree on their vocabulary. The
+\api{ASTVisitor} of \chapref{ch:visitors} performs exactly this
+computation --- it walks a schema tree collecting distinct tags --- but it
+does so privately, for the purpose of validating that a handler exists for
+every tag. A user who wants to know the vocabulary of a tree at run time
+must write the walk.
+
+\paragraph{No serialisation format.}
+\api{dump()} is a debugging rendering, not a wire format: it does not quote,
+it does not distinguish an empty inner node from an empty leaf, and it does
+not carry the leaf/inner distinction faithfully through a parse. A user who
+needs to persist a tree should either define a grammar on top of
+\api{dump()} that it fully controls, or use the \api{SExpr} type of
+\chapref{ch:sexpressions}, which has an explicit quoting rule and an
+explicit \code{is_atom} discriminator.
+
+\paragraph{No concurrency guarantees, but no hazards either.}
+The class says nothing about thread safety, and it needs to say nothing:
+because every node owns its subtree outright and there are no shared
+mutable subobjects, two threads may read the same tree concurrently
+without synchronisation. Two threads may not, however, mutate the same tree
+concurrently, because the mutable \code{children()} accessor hands out a
+reference into the node's internals. As with any standard container, the
+usual rule applies: concurrent readers are fine, and any writer must
+exclude every reader.
+
+\paragraph{The \code{size()} / \code{children()} relationship.}
+\code{size()} is defined as \code{children_.size()} and nothing else. It
+is not a count of the node's own constituents, and it is not a count of
+descendants. A rule that wants to know how many leaves a subtree contains
+must count them; there is no cached statistic on the node to consult. This
+keeps the class cheap --- the node has no derived state --- at the price of
+making every global query a full traversal.
+
+\section{Closing}
+
+\api{ASTNode} is a small class with large consequences. Its four parallel
+members give it a fixed, predictable layout; its value semantics make
+trees safe to copy and easy to compare; and its recursive-by-value child
+storage makes copying the dominant operation in every algorithm built on
+top of it. Its interface is deliberately minimal --- no variant, no
+iterators, no inequality operator, no streaming --- which means that the
+idioms that fill those gaps are user-written. \chapref{ch:leaf-and-node}
+supplies the construction idioms; \chapref{ch:traversal} supplies the
+walking idioms; \chapref{ch:rewrite} and \chapref{ch:rewrite-sets} supply
+the transformation idioms.

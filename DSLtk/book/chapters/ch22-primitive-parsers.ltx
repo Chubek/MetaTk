@@ -1,0 +1,937 @@
+\chapter{Primitive Parsers and Combinators}
+\label{ch:primitive-parsers}
+{
+
+% \code detokenises its argument, so a long type name cannot be broken
+% across lines and will overflow a narrow table column.  \codel takes
+% two pieces of such a name, places a discretionary break between them,
+% and prints them in a monospaced face.  Because \codel does not
+% detokenise its arguments, an ampersand inside a table cell must be
+% written \&, and an underscore must be written \_.
+\providecommand{\codel}[2]{\texttt{#1\allowbreak#2}}
+
+\section{The combinator set is small}
+
+The first thing to say about DSLtk's combinator library is that it is
+\emph{tiny}.  Between lines 7798 and 7983 of the header there are exactly
+ten public functions and operators that build parsers:
+
+\begin{center}
+\code{parser}, \code{operator*}, \code{operator&}, \code{operator|},
+\code{optional}, \code{try_parse}, \code{labeled}, \code{ch},
+\code{satisfy}, and \code{fail_expected}.
+\end{center}
+
+There is no \code{digit}, no \code{letter}, no \code{string}, no
+\code{seq}, no \code{choice}, no \code{many}, no \code{some}, no
+\code{preceded}, no \code{followed}, no \code{between}, no \code{sep_by},
+and no \code{map_parser}.  There is no \code{map} combinator at all.
+
+This is not an oversight, and it is not a gap waiting to be filled by a
+future release; it is the design.  The library provides the four
+\emph{shapes} of parser composition --- repetition, sequence, choice and
+optionality --- and leaves the vocabulary of the language to the user.
+A \code{digit} parser is three lines of code once \code{satisfy} exists,
+and a parser that is written out is a parser whose error message, whose
+commitment behaviour and whose whitespace handling the author controls.
+Handing the user a fixed vocabulary would hand the user a fixed set of
+error messages too.
+
+The cost of the decision is that a user who expects the combinator
+libraries of Haskell, or of Python's \code{parsy}, will find the
+vocabulary missing.  The benefit is that the four shapes compose into
+everything the others provide, and that the semantics of the four shapes
+are short enough to state exactly.  This chapter states them exactly,
+builds a small expression language on top of them, and shows how the
+missing pieces are written.
+
+\section{A worked example}
+
+Listing~\ref{lst:ch22-expr} is a complete program: a recursive-descent
+expression parser built entirely from \code{ch}, \code{satisfy},
+\code{operator*}, \code{operator&}, \code{operator|} and
+\code{try_parse}, together with a small tree representation and an
+evaluator.  The language is
+
+\begin{center}
+\texttt{expr\ \ :=\ term\ (('+' | '-') term)*}\\
+\texttt{term\ \ :=\ factor\ (('*' | '/') factor)*}\\
+\texttt{factor\ :=\ number\ |\ '('\ expr\ ')'}
+\end{center}
+
+and the program evaluates an expression, or reports where it went wrong.
+
+\begin{lstlisting}[style=dslcpp,caption={A complete expression parser and evaluator written on top of the shipped primitives.},label={lst:ch22-expr}]
+#include "DSLtk.hpp"
+
+#include <cctype>
+#include <iostream>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
+// ------------------------------------------------------------------ AST
+
+struct Expr;
+using ExprPtr = std::shared_ptr<Expr>;
+
+struct Expr
+{
+  enum class Kind
+  {
+    Number,
+    Add,
+    Sub,
+    Mul,
+    Div
+  };
+  Kind kind{ Kind::Number };
+  double value{ 0.0 };
+  ExprPtr lhs{};
+  ExprPtr rhs{};
+};
+
+static ExprPtr
+make_number (double v)
+{
+  auto e = std::make_shared<Expr> ();
+  e->kind = Expr::Kind::Number;
+  e->value = v;
+  return e;
+}
+
+static ExprPtr
+make_binary (Expr::Kind k, ExprPtr l, ExprPtr r)
+{
+  auto e = std::make_shared<Expr> ();
+  e->kind = k;
+  e->lhs = std::move (l);
+  e->rhs = std::move (r);
+  return e;
+}
+
+// ------------------------------------------------- map (not in the library)
+
+template <typename In, typename F>
+static dsl::Parser<std::invoke_result_t<F, In>>
+map_parser (dsl::Parser<In> p, F f)
+{
+  using Out = std::invoke_result_t<F, In>;
+  return dsl::parser (
+      [p, f] (dsl::ParsecInput &in) -> dsl::ExpectedResult<Out>
+      {
+        auto r = p (in);
+        if (!r)
+          return dsl::ExpectedResult<Out>::failure (
+              r.error.pos, r.error.kind, r.error.expected);
+        return f (*r);
+      });
+}
+
+// ------------------------------------------------------------ leaf tokens
+
+// lexeme (p) -- match p and then swallow the whitespace that follows.
+// A failure is propagated unchanged and the cursor is left alone.
+template <typename T>
+static dsl::Parser<T>
+lexeme (dsl::Parser<T> p)
+{
+  return dsl::parser (
+      [p] (dsl::ParsecInput &in) -> dsl::ExpectedResult<T>
+      {
+        auto r = p (in);
+        if (!r)
+          return r;
+        while (!in.eof ()
+               && std::isspace (static_cast<unsigned char> (in.peek ())))
+          in.consume ();
+        return *r;
+      });
+}
+
+static dsl::Parser<char>
+digit ()
+{
+  return dsl::satisfy (
+      [] (char c)
+      { return std::isdigit (static_cast<unsigned char> (c)) != 0; },
+      "digit");
+}
+
+static dsl::Parser<char>
+letter ()
+{
+  return dsl::satisfy (
+      [] (char c)
+      { return std::isalpha (static_cast<unsigned char> (c)) != 0; },
+      "letter");
+}
+
+static dsl::Parser<char>
+alnum ()
+{
+  return dsl::satisfy (
+      [] (char c)
+      { return std::isalnum (static_cast<unsigned char> (c)) != 0; },
+      "alphanumeric character");
+}
+
+// identifier := letter (alphanumeric character)*
+static dsl::Parser<std::string>
+identifier ()
+{
+  auto core = dsl::operator& (letter (), dsl::operator* (alnum ()));
+  return lexeme (map_parser (
+      core,
+      [] (const std::pair<char, std::vector<char>> &p)
+      {
+        std::string s (1, p.first);
+        for (char c : p.second)
+          s += c;
+        return s;
+      }));
+}
+
+// number := digit (digit)* ('.' digit (digit)*)?
+static dsl::Parser<double>
+number ()
+{
+  auto int_part = dsl::operator& (digit (), dsl::operator* (digit ()));
+  auto frac = dsl::operator& (
+      dsl::ch ('.'), dsl::operator& (digit (), dsl::operator* (digit ())));
+  auto whole
+      = dsl::operator& (int_part, dsl::optional (dsl::try_parse (frac)));
+  return lexeme (map_parser (
+      whole,
+      [] (const auto &p) -> double
+      {
+        std::string text;
+        text += p.first.first;
+        for (char c : p.first.second)
+          text += c;
+        if (p.second)
+          {
+            text += '.';
+            text += p.second->first;
+            for (char c : p.second->second.second)
+              text += c;
+          }
+        return std::stod (text);
+      }));
+}
+
+// keyword := literal, not followed by an identifier character
+static dsl::Parser<std::string>
+keyword (std::string kw)
+{
+  return dsl::parser (
+      [kw] (dsl::ParsecInput &in) -> dsl::ExpectedResult<std::string>
+      {
+        std::size_t save = in.pos;
+        for (char c : kw)
+          {
+            if (in.peek () != c)
+              {
+                in.pos = save;
+                return dsl::fail_expected<std::string> (in, kw);
+              }
+            in.consume ();
+          }
+        if (!in.eof ()
+            && std::isalnum (static_cast<unsigned char> (in.peek ())))
+          {
+            in.pos = save;
+            return dsl::fail_expected<std::string> (in, kw);
+          }
+        return kw;
+      });
+}
+
+// ------------------------------------------------------------- the grammar
+//
+//   expr   := term (('+' | '-') term)*
+//   term   := factor (('*' | '/') factor)*
+//   factor := number | '(' expr ')'
+//
+// The three nonterminals are file-scope objects because a recursive
+// grammar cannot be written as a cycle of ordinary C++ calls: dsl::Parser
+// captures its operand by value, so a reference to a nonterminal has to
+// be deferred until the parser is invoked.  The `parse` member of
+// dsl::Parser is public, so each nonterminal can be assembled in one
+// piece and installed afterwards.
+
+static dsl::Parser<ExprPtr> expr_p;
+static dsl::Parser<ExprPtr> term_p;
+static dsl::Parser<ExprPtr> factor_p;
+
+static dsl::Parser<ExprPtr>
+expr_ref ()
+{
+  return dsl::parser (
+      [] (dsl::ParsecInput &in) -> dsl::ExpectedResult<ExprPtr>
+      { return expr_p (in); });
+}
+
+static dsl::Parser<ExprPtr>
+term_ref ()
+{
+  return dsl::parser (
+      [] (dsl::ParsecInput &in) -> dsl::ExpectedResult<ExprPtr>
+      { return term_p (in); });
+}
+
+static dsl::Parser<ExprPtr>
+factor_ref ()
+{
+  return dsl::parser (
+      [] (dsl::ParsecInput &in) -> dsl::ExpectedResult<ExprPtr>
+      { return factor_p (in); });
+}
+
+using OpList = std::vector<std::pair<char, ExprPtr>>;
+
+// fold (first, ops, op_a, kind_a, kind_b) -- left-associative fold over a
+// list of binary operators: op_a selects kind_a, any other operator
+// selects kind_b.
+static ExprPtr
+fold (const ExprPtr &first, const OpList &ops, char op_a, Expr::Kind kind_a,
+      Expr::Kind kind_b)
+{
+  ExprPtr acc = first;
+  for (const auto &op : ops)
+    {
+      auto k = (op.first == op_a) ? kind_a : kind_b;
+      acc = make_binary (k, acc, op.second);
+    }
+  return acc;
+}
+
+static void
+build_grammar ()
+{
+  auto num
+      = map_parser (number (), [] (double v) { return make_number (v); });
+
+  auto paren = dsl::operator& (
+      dsl::operator& (lexeme (dsl::ch ('(')), expr_ref ()),
+      lexeme (dsl::ch (')')));
+  auto grouped = map_parser (
+      paren, [] (const std::pair<std::pair<char, ExprPtr>, char> &p)
+      { return p.first.second; });
+
+  factor_p.parse = (num | grouped).parse;
+
+  auto term_op = lexeme (dsl::ch ('*')) | lexeme (dsl::ch ('/'));
+  auto term_tail = dsl::operator* (dsl::operator& (term_op, factor_ref ()));
+  auto term_pair = dsl::operator& (factor_ref (), term_tail);
+  term_p.parse = map_parser (
+                     term_pair,
+                     [] (const std::pair<ExprPtr, OpList> &p)
+                     {
+                       return fold (p.first, p.second, '*', Expr::Kind::Mul,
+                                    Expr::Kind::Div);
+                     })
+                     .parse;
+
+  auto expr_op = lexeme (dsl::ch ('+')) | lexeme (dsl::ch ('-'));
+  auto expr_tail = dsl::operator* (dsl::operator& (expr_op, term_ref ()));
+  auto expr_pair = dsl::operator& (term_ref (), expr_tail);
+  expr_p.parse = map_parser (
+                     expr_pair,
+                     [] (const std::pair<ExprPtr, OpList> &p)
+                     {
+                       return fold (p.first, p.second, '+', Expr::Kind::Add,
+                                    Expr::Kind::Sub);
+                     })
+                     .parse;
+}
+
+// ------------------------------------------------------------- evaluation
+
+static double
+eval (const ExprPtr &e)
+{
+  switch (e->kind)
+    {
+    case Expr::Kind::Number:
+      return e->value;
+    case Expr::Kind::Add:
+      return eval (e->lhs) + eval (e->rhs);
+    case Expr::Kind::Sub:
+      return eval (e->lhs) - eval (e->rhs);
+    case Expr::Kind::Mul:
+      return eval (e->lhs) * eval (e->rhs);
+    case Expr::Kind::Div:
+      return eval (e->lhs) / eval (e->rhs);
+    }
+  return 0.0;
+}
+
+// ------------------------------------------------------------------ main
+
+static std::string
+format_expected (const std::vector<std::string> &labels)
+{
+  if (labels.empty ())
+    return "<nothing>";
+  std::string s;
+  for (std::size_t i = 0; i < labels.size (); ++i)
+    {
+      if (i)
+        s += (i + 1 == labels.size () ? " or " : ", ");
+      s += labels[i];
+    }
+  return s;
+}
+
+static void
+run (const std::string &src)
+{
+  auto outcome = dsl::run_parser (expr_p, src);
+  std::cout << "  input: \"" << src << "\"\n";
+  if (outcome.value)
+    std::cout << "    value: " << eval (*outcome.value) << "\n";
+  else
+    std::cout << "    error at offset " << outcome.error.pos << ": expected "
+              << format_expected (outcome.error.expected) << "\n";
+}
+
+int
+main ()
+{
+  build_grammar ();
+  run ("1 + 2 * 3");
+  run ("(1 + 2) * 3");
+  run ("10 / 4 - 1.5");
+  run ("1 +");
+  run ("2 * )");
+  run ("let");
+
+  // PEG-style ordered choice: the keyword wins when it applies, the
+  // identifier wins when it does not.
+  auto word = dsl::try_parse (keyword ("if")) | identifier ();
+  for (const char *w : { "if", "iffy", "x" })
+    {
+      auto o = dsl::run_parser (word, w);
+      std::cout << "  word \"" << w << "\" -> "
+                << (o.value ? *o.value : std::string ("<error>")) << "\n";
+    }
+  return 0;
+}
+\end{lstlisting}
+
+The program is worth reading for its errors as much as for its successes.
+The message for \code{"1 +"} is ``expected \code{(} or \code{digit}'',
+and it is wrong in an instructive way.  The parser reached the end of the
+input after the plus sign and asked for a factor; a factor is either a
+number or a parenthesised expression, and \code{operator|} merged the two
+labels because both alternatives failed at the same offset.  The message
+is technically accurate and practically useless, because the
+parenthesised alternative was never plausible.  Chapter~\ref{ch:parser-diagnostics}
+returns to this: the label-union rule is the price of a grammar that
+does not know which alternatives were plausible.
+
+Running the program produces:
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch22-expr}.},label={lst:ch22-expr-out}]
+  input: "1 + 2 * 3"
+    value: 7
+  input: "(1 + 2) * 3"
+    value: 9
+  input: "10 / 4 - 1.5"
+    value: 1.5
+  input: "1 +"
+    error at offset 3: expected ( or digit
+  input: "2 * )"
+    error at offset 4: expected ( or digit
+  input: "let"
+    error at offset 0: expected ( or digit
+  word "if" -> if
+  word "iffy" -> iffy
+  word "x" -> x
+\end{lstlisting}
+
+\section{The combinators, exactly}
+
+Table~\ref{tab:ch22-combinators} gives every combinator with its exact
+signature, its result type, and what it does to the cursor.  The cursor
+column is the important one, because it is where the four shapes differ
+from one another.
+
+\begin{table}[htbp]
+\centering
+\caption{The complete combinator set of the shipped parser library.}
+\label{tab:ch22-combinators}
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{L{1.8cm} L{4.8cm} L{3.0cm} L{4.8cm}}
+\toprule
+\textbf{Name} & \textbf{Signature} & \textbf{Result type} &
+\textbf{Cursor behaviour} \\
+\midrule
+\code{operator*}
+  & \code{Parser<std::vector<T>> operator* (const Parser<T>& p)}
+  & \codel{Parser<std::}{vector<T>>}
+  & Greedy zero-or-more.  On a soft failure the cursor is restored and the
+    loop stops; on a committed failure the failure is returned at once,
+    without unwinding the repetitions already collected. \\
+\code{operator&}
+  & \code{Parser<std::pair<A,B>> operator& (const Parser<A>& a, const Parser<B>& b)}
+  & \codel{Parser<std::}{pair<A,B>>}
+  & If \code{a} fails, \code{a}'s error propagates unchanged.  If \code{b}
+    fails, the cursor is rewound to the position before \code{a} ran, and
+    the kind is upgraded to \code{Committed} when \code{a} consumed
+    input. \\
+\code{operator|}
+  & \code{Parser<T> operator| (const Parser<T>& a, const Parser<T>& b)}
+  & \code{Parser<T>}
+  & Ordered choice.  \code{a} runs first; a committed failure is returned
+    unchanged; otherwise the cursor is rewound and \code{b} runs.  If
+    \code{b} also fails, the two errors are merged, so their label sets
+    are unioned. \\
+\code{optional}
+  & \code{Parser<std::optional<T>> optional (const Parser<T>& p)}
+  & \codel{Parser<std::}{optional<T>>}
+  & A soft failure becomes a success carrying an empty
+    \code{std::optional}; a committed failure propagates unchanged. \\
+\code{try_parse}
+  & \code{Parser<T> try_parse (const Parser<T>& p)}
+  & \code{Parser<T>}
+  & Snapshots the cursor, restores it on failure, and demotes the failure
+    kind to \code{Soft}.  This is the explicit backtracking operator. \\
+\code{labeled}
+  & \code{Parser<T> labeled (const Parser<T>& p, std::string expected)}
+  & \code{Parser<T>}
+  & Replaces the label list of a failure with the single given label.  The
+    position and the kind are untouched. \\
+\code{ch}
+  & \code{Parser<char> ch (char c)}
+  & \code{Parser<char>}
+  & Matches one specific byte.  Fails softly, without consuming, if the
+    byte is not there. \\
+\code{satisfy}
+  & \code{Parser<char> satisfy (std::function<bool(char)> pred, std::string label)}
+  & \code{Parser<char>}
+  & Matches one byte accepted by the predicate.  Fails softly, without
+    consuming, if the predicate rejects it or the input has ended. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Two observations about that table are worth making explicitly, because
+both are easy to get wrong.
+
+First, \code{operator|} requires that its two operands have the
+\emph{same} result type.  The signature is
+\code{operator| (const Parser<T>&, const Parser<T>&)}; there is no
+overload that combines two different types, and no \code{std::variant} is
+introduced behind the scenes.  A parser that wants to choose between a
+number and a string must reconcile the two types itself, usually by
+mapping both to a common representation, exactly as the \code{factor}
+rule of Listing~\ref{lst:ch22-expr} does.
+
+Second, \code{operator&} is a \emph{binary} combinator that returns a
+\code{std::pair}.  Sequencing three parsers is therefore a nesting:
+\code{a & b & c} parses as \code{(a & b) & c}, and the result type is
+\codel{std::pair<}{std::pair<A,B>,C>}.  The nested shape is awkward but it
+is not wrong, and the commit behaviour of the nested form is exactly the
+commit behaviour of the flat form: a failure in the third element rewinds
+the cursor past the first two.
+
+\section{The primitives}
+
+\code{ch} and \code{satisfy} are the only two parsers in the library that
+match a byte, and they are worth reading closely, because their error
+labels are what a user sees most often.
+
+\code{ch(c)} builds a parser that matches exactly the byte \code{c}.  It
+is written in terms of \code{labeled}, and the label it uses is the
+character itself: a failure expects exactly that one character, so a
+diagnostic for a missing parenthesis names the character and nothing
+else.  The
+implementation tests \code{in.peek () == c} and consumes on a match; on a
+mismatch it returns \codel{fail\_expected<char>(in,}{std::string(1, c))},
+which is a soft failure at the current position with a one-element label
+list.
+
+\code{satisfy(pred, label)} is the general form.  It takes a
+\codel{std::function<}{bool(char)>} and a human-readable label, and fails
+softly if the predicate rejects the byte --- or if the input has ended.
+That last clause matters: \code{satisfy} explicitly tests
+\code{!in.eof ()}, so it never matches the null byte that
+\code{peek()} returns at the end of the input.  A predicate that would
+otherwise accept \code{'\textbackslash 0'} is not consulted at the end of
+the input.
+
+The two primitives are enough to build every token a typical language
+needs.  The three that are usually wanted are three lines each; an
+identifier is a repetition and a sequence; and the one thing the library
+cannot express --- changing the value type of a parser --- needs a helper
+that the user writes.  Listing~\ref{lst:ch22-tokens} contains all three
+of those things, and the whole listing compiles on its own.
+
+\begin{lstlisting}[style=dslcpp,caption={The token parsers that the library does not ship, an identifier parser built from them, and the \code{map} helper that the library does not ship.},label={lst:ch22-tokens}]
+#include "DSLtk.hpp"
+
+#include <cctype>
+#include <string>
+#include <utility>
+#include <vector>
+
+static dsl::Parser<char>
+digit ()
+{
+  return dsl::satisfy (
+      [] (char c)
+      { return std::isdigit (static_cast<unsigned char> (c)) != 0; },
+      "digit");
+}
+
+static dsl::Parser<char>
+letter ()
+{
+  return dsl::satisfy (
+      [] (char c)
+      { return std::isalpha (static_cast<unsigned char> (c)) != 0; },
+      "letter");
+}
+
+static dsl::Parser<char>
+alnum ()
+{
+  return dsl::satisfy (
+      [] (char c)
+      { return std::isalnum (static_cast<unsigned char> (c)) != 0; },
+      "alphanumeric character");
+}
+
+// The library has no map combinator, so the user writes one.
+template <typename In, typename F>
+static dsl::Parser<std::invoke_result_t<F, In>>
+map_parser (dsl::Parser<In> p, F f)
+{
+  using Out = std::invoke_result_t<F, In>;
+  return dsl::parser (
+      [p, f] (dsl::ParsecInput &in) -> dsl::ExpectedResult<Out>
+      {
+        auto r = p (in);
+        if (!r)
+          return dsl::ExpectedResult<Out>::failure (
+              r.error.pos, r.error.kind, r.error.expected);
+        return f (*r);
+      });
+}
+
+// identifier := letter (alphanumeric character)*
+static dsl::Parser<std::string>
+identifier ()
+{
+  auto core = dsl::operator& (letter (), dsl::operator* (alnum ()));
+  return map_parser (
+      core,
+      [] (const std::pair<char, std::vector<char>> &p)
+      {
+        std::string s (1, p.first);
+        for (char c : p.second)
+          s += c;
+        return s;
+      });
+}
+\end{lstlisting}
+
+The \code{map_parser} helper deserves a note.  It is twenty lines long,
+it is the single most useful thing a user of this library will write, and
+it is not in the library.  Its shape is forced by the result type: a
+failure must be re-wrapped in the \code{ExpectedResult} of the new value
+type, preserving the position, the kind and the labels, and a success is
+transformed.  Note that the failure is propagated with its
+\code{expected} list intact, so the labels survive a mapping --- which
+matters, because \code{operator|} merges those labels.
+
+A number parser is the same idea with an optional fraction.  The
+fraction is wrapped in \code{try_parse} for a reason that the next
+section explains: without it, the dot and the digits that follow it
+become a commitment, and \code{1.} would be a hard error rather than the
+number one followed by a stray dot.
+
+\section{Ordered choice and commitment}
+
+\api{try_parse} is the operator that makes PEG-style ordered choice
+possible, and it is worth being precise about what it does, because the
+name is misleading.  It does not \emph{try} the parser; the parser has
+already run by the time \code{try_parse} sees it.  What \code{try_parse}
+does is undo the parser's effects: it restores the cursor to where the
+parser started, and it rewrites the failure kind from \code{Committed} to
+\code{Soft}.  It is an \emph{undo}, not a \emph{try}.
+
+The distinction matters because of the commitment rule.  A committed
+failure is a promise that no alternative may be tried.  A parser that has
+consumed input and then failed is, by the commit discipline of
+Chapter~\ref{ch:parser-core}, entitled to make that promise --- but only
+if the author of the grammar wants it.  \code{try_parse} is how the
+author says \emph{not} here: this parser may consume, and may fail, but
+the caller is free to look elsewhere.
+
+The canonical use is a keyword.  Consider a language with the keyword
+\code{if} and with identifiers.  The rule for a word is ``the keyword
+\code{if}, or an identifier''.  If the keyword parser matches the letters
+\code{i} and \code{f} and then discovers that the next character is a
+letter, it has consumed two bytes and failed.  Written naively --- with
+the keyword parser reporting a committed failure --- the choice would stop
+there and the identifier alternative would never run, so \code{iffy}
+would be a parse error.  Wrapping the keyword in \code{try_parse} says:
+``if the keyword does not apply, rewind and let the identifier have a
+go''.  The last three lines of Listing~\ref{lst:ch22-expr} demonstrate
+exactly this, and the output shows \code{"iffy"} parsing as an identifier.
+
+The same mechanism is used in the number parser for the fractional part.
+\code{1.} is not a number in the grammar, but the failure of the
+fraction is soft because the fraction was wrapped in \code{try_parse},
+so the number parser accepts \code{1} and leaves the dot for whatever
+comes next.  Without the wrapper, \code{operator&} would see that the
+dot had been consumed, upgrade the failure to \code{Committed}, and the
+whole number would fail.
+
+Figure~\ref{fig:ch22-choice} draws the flow of \code{operator|}.  It is
+the flow of every ordered choice in every parsing expression grammar ever
+written, and the three branches --- succeed, commit, rewind --- are the
+three outcomes the commit discipline allows.
+
+\begin{dslgraph}
+  \node[dslterm] (start) at (0,4.0) {run alternative \texttt{a}};
+  \node[dsldecision] (ok) at (0,2.9) {\texttt{a} succeeded?};
+  \node[dslbox] (retA) at (-4.5,1.7) {return \texttt{a}'s value};
+  \node[dsldecision] (commit) at (0,1.7) {committed?};
+  \node[dslbox] (retFail) at (3.6,0.5) {return the committed failure};
+  \node[dslbox] (rewind) at (-2.2,0.5) {rewind the cursor};
+  \node[dsldecision] (ok2) at (-2.2,-0.7) {\texttt{b} succeeded?};
+  \node[dslbox] (retB) at (-5.0,-1.9) {return \texttt{b}'s value};
+  \node[dslbox] (merge) at (-1.4,-1.9) {merge the two errors};
+  \node[dslbox] (retM) at (1.9,-1.9) {return the merged failure};
+
+  \draw[dslledge] (start) -- (ok);
+  \draw[dslledge] (ok) -- node[pos=0.45, above left, font=\scriptsize\sffamily] {yes} (retA);
+  \draw[dslledge] (ok) -- node[pos=0.85, right, font=\scriptsize\sffamily] {no} (commit);
+  \draw[dslledge] (commit) -- node[pos=0.45, above right, font=\scriptsize\sffamily] {yes} (retFail);
+  \draw[dslledge] (commit) -- node[pos=0.45, below left, font=\scriptsize\sffamily] {no} (rewind);
+  \draw[dslledge] (rewind) -- (ok2);
+  \draw[dslledge] (ok2) -- node[pos=0.45, left, font=\scriptsize\sffamily] {yes} (retB);
+  \draw[dslledge] (ok2) -- node[pos=0.45, right, font=\scriptsize\sffamily] {no} (merge);
+  \draw[dslledge] (merge) -- (retM);
+\end{dslgraph}
+\begin{figure}[htbp]
+\centering
+\caption{The control flow of \code{operator|}.  A committed failure in the
+first alternative ends the choice; a soft failure rewinds the cursor and
+gives the second alternative a turn.  When both fail, the two errors are
+merged, which is what produces messages of the form ``expected X or Y''.}
+\label{fig:ch22-choice}
+\end{figure}
+
+\begin{pseudocode}[Ordered choice with commitment]
+\textbf{function} choice (a, b, input)\\
+\quad save := input.pos\\
+\quad ra := a (input)\\
+\quad if ra succeeded then\\
+\qquad return ra\\
+\quad if ra.error.kind = Committed then\\
+\qquad return ra \quad (no alternative may be tried)\\
+\quad input.pos := save\\
+\quad rb := b (input)\\
+\quad if rb succeeded then\\
+\qquad return rb\\
+\quad merge\_error (rb.error, ra.error)\\
+\quad return rb
+\end{pseudocode}
+
+Note the direction of the merge in the last two lines.  The second
+alternative's error is the destination and the first's is the source, so
+the first alternative's labels are appended to the second's.  The set of
+labels is what the user sees; the order in which they are listed is an
+artefact of this choice of destination, and it is why the message in
+Listing~\ref{lst:ch22-expr-out} reads ``\code{(} or \code{digit}'' rather
+than ``\code{digit} or \code{(}''.
+
+\section{Optionality and labels}
+
+Two of the combinators deserve a closer look because they are the ones
+most often used for their side effects rather than for their results.
+
+\code{optional(p)} is the combinator that makes a rule optional, and its
+semantics are a direct consequence of the commit discipline.  If \code{p}
+fails softly, the result is a success carrying an empty
+\code{std::optional}; if \code{p} fails with a commitment, the failure
+propagates unchanged.  The distinction is exactly right for the intended
+use --- an optional suffix that turns out not to be there is not an
+error --- but it means that an optional parser can still fail hard, and
+that failure will stop the enclosing repetition.  A grammar that wants
+``this suffix is optional, whatever happens'' must wrap the suffix in
+\code{try_parse} as well, which is what the fraction in the number
+parser of Listing~\ref{lst:ch22-expr} does.
+
+\code{labeled(p, text)} is the combinator that fixes a message.  When
+\code{p} fails, the label list of the error is replaced by the single
+label given, and nothing else about the error changes: the position stays
+where \code{p} reported it, and the kind stays whatever \code{p} chose.
+This is the tool for turning a low-level failure into a message a user
+can act on.  A parser that matches the three letters of a keyword with
+\code{operator&} reports the expected character at the point of the
+mismatch --- \code{'t'}, say --- and wrapping the whole thing in
+\code{labeled} with the text \code{"'let'"} produces a message that names
+the construct rather than the byte.
+
+The library itself uses \code{labeled} in exactly this way: \code{ch(c)}
+is \code{labeled} applied to a raw byte comparison, with the character as
+the label.  That is why a missing \code{'}'' in the expression grammar of
+Listing~\ref{lst:ch22-expr} is reported as ``expected \code{(}'' and not
+as ``expected a character''.
+
+\section{Writing a recursive grammar}
+
+A grammar that refers to itself cannot be written as a cycle of ordinary
+function calls, and the reason is specific to this library: the
+combinators capture their operands \emph{by value}.  Writing
+
+\begin{lstlisting}[style=dslcpp,caption={The two forward declarations that a recursive grammar would need.  The fragment compiles, but the declarations cannot be satisfied: building either parser would try to build the other, forever.},label={lst:ch22-naive}]
+#include "DSLtk.hpp"
+
+#include <memory>
+
+struct Expr;
+using ExprPtr = std::shared_ptr<Expr>;
+
+dsl::Parser<ExprPtr> factor ();   // the factor rule needs expr
+dsl::Parser<ExprPtr> expr ();     // the expr rule needs factor
+\end{lstlisting}
+
+is impossible, because building the factor parser would immediately try
+to build the expression parser, which would try to build the factor
+parser again.
+
+The solution used in Listing~\ref{lst:ch22-expr} is to separate the
+\emph{reference} from the \emph{parser}.  Each nonterminal is a
+file-scope object whose \code{parse} member is filled in later, and each
+grammar rule refers to the nonterminal through a tiny forwarding parser:
+
+\begin{lstlisting}[style=dslcpp,caption={Deferring a recursive reference through the public \code{parse} member.},label={lst:ch22-defer}]
+#include "DSLtk.hpp"
+
+#include <memory>
+
+struct Expr;
+using ExprPtr = std::shared_ptr<Expr>;
+
+static dsl::Parser<ExprPtr> expr_p;   // the nonterminal
+static dsl::Parser<ExprPtr> term_p;
+static dsl::Parser<ExprPtr> factor_p;
+
+static dsl::Parser<ExprPtr>
+expr_ref ()
+{
+  return dsl::parser (
+      [] (dsl::ParsecInput &in) -> dsl::ExpectedResult<ExprPtr>
+      { return expr_p (in); });   // expr_p.parse is installed later
+}
+\end{lstlisting}
+
+Because \code{expr_ref} looks up \code{expr_p} when it is \emph{called}
+rather than when it is built, the cycle in the grammar is broken: the
+three nonterminals can be assembled in any order, as long as each one's
+\code{parse} member is installed before the parse begins.  The recursion
+is now bounded by the nesting depth of the input, which is exactly what a
+recursive-descent parser should be.
+
+\section{Edge cases and limits}
+
+\begin{itemize}
+\item \textbf{Repetition is greedy and does not backtrack.}  \code{operator*}
+  keeps the repetitions it has already collected when it stops.  A
+  parser that needs to give a character back --- to match, say, a run of
+  digits that ends before a dot --- must arrange for the repetition to
+  stop at the right place, usually by making the element parser fail at
+  the right offset.  There is no \code{many} with a maximum, and no
+  \code{sep_by}.
+
+\item \textbf{Repetition loops forever on a parser that consumes
+  nothing.}  \code{operator*} calls its element in a loop and stops only
+  when the element fails.  An element that succeeds without advancing the
+  cursor therefore loops forever.  \code{satisfy} always consumes on
+  success, so it is safe; a hand-written element parser must be checked.
+
+\item \textbf{\code{operator&} rewinds the cursor even for a committed
+  failure.}  When the second element fails, the cursor is restored to
+  the position before the first element ran, whatever the kind of the
+  failure.  The commitment is therefore a property of the
+  \emph{error record}, not a guarantee about the cursor.  The library
+  honours the record in \code{operator|} and in \code{operator*}, but a
+  caller that inspects the cursor after a committed failure will find it
+  rewound.
+
+\item \textbf{\code{operator&} commits on the basis of the cursor, not
+  of the error kind.}  The upgrade to \code{Committed} happens when the
+  first element moved the cursor.  A first element that consumed nothing
+  leaves the kind of the second element's failure alone, even if that
+  second element consumed input before failing.
+
+\item \textbf{There is no \code{map}, and no \code{map_parser}.}
+  Listing~\ref{lst:ch22-tokens} writes one.  Without it, every
+  combinator that changes a value type has to be written by hand, and
+  the resulting code is where most of the boilerplate in a DSLtk grammar
+  lives.
+
+\item \textbf{There is no \code{sep_by}, so lists need a hand.}  A
+  comma-separated list is an element parser followed by a repetition of
+  ``comma and element'', and the trailing comma has to be handled by the
+  user.  The repetition is \code{operator*}, and the optional trailing
+  separator is \code{optional}.
+
+\item \textbf{\code{operator|} needs matching types.}  Choosing between
+  alternatives that produce different types requires the user to
+  reconcile them, usually by mapping to a common type.  There is no
+  \code{std::variant} in the result.
+
+\item \textbf{There is no \code{not}, no lookahead, and no
+  \code{eof}.}  A parser cannot assert that the next byte is absent, and
+  the grammar of Listing~\ref{lst:ch22-expr} works around the absence of
+  a negative lookahead by making the keyword parser check the character
+  after the keyword itself.
+
+\item \textbf{Left recursion is not supported.}  A rule that begins with
+  itself --- \code{expr := expr '+' term} --- produces a parser that
+  never terminates.  This is inherent in the design, not a defect: the
+  library is a PEG-style ordered-choice library, and PEG does not support
+  left recursion either.  The expression grammar of
+  Listing~\ref{lst:ch22-expr} is left-associative by folding a list of
+  operators, not by recursing on the left.
+
+\item \textbf{\code{ch} and \code{satisfy} match bytes, not
+  characters.}  The library is byte-oriented, so a Unicode letter is
+  several bytes and \code{satisfy} with a byte predicate will reject it.
+  A Unicode-aware grammar must decode the input itself.
+
+\item \textbf{The combinator set is complete.}  There is no hidden
+  combinator, no internal helper that does more, and no extension
+  point.  The feature tag \code{dsl::CombinatorParser}, declared at line
+  7324 of the header, is an empty marker with an empty mixin, exactly
+  like \code{dsl::TaskPipeline} discussed in
+  Chapter~\ref{ch:task-pipeline}; the machinery is free-standing and
+  adds nothing to a derived \code{dsl::DSL} class.
+\end{itemize}
+
+\section{Closing}
+
+DSLtk's combinator library is four shapes and two primitives.  Four
+shapes: repetition, sequence, choice, optionality.  Two primitives: match
+a byte, match a byte satisfying a predicate.  Everything else --- digits,
+identifiers, numbers, keywords, lists, expressions --- is written by the
+user in terms of those, and the whole vocabulary of a language is
+therefore under the author's control, including the wording of its error
+messages.
+
+The chapter's central mechanism is commitment.  A parser may consume input
+and then fail, and it must say whether the caller may look elsewhere.
+\code{try_parse} is the operator that says \emph{yes, you may}; the
+default is \emph{no}.  The next chapter takes the error records that these
+combinators produce and turns them into messages a human can read.
+}

@@ -1,0 +1,622 @@
+\chapter{Compile-Time Dispatch: \code{match}, \code{when}, \code{otherwise}}
+\label{ch:pattern-match}
+
+\section{What dispatch means here}
+
+Almost every language implementation eventually needs a table that maps a
+value to a behaviour. A state machine maps a state to a transition
+function. A command-line parser maps an option name to a handler. A
+diagnostic engine maps an error code to a message. A lexer maps a token to
+its classification.
+
+In \cpp{} this is usually written as a \code{switch}, and a \code{switch} has
+two well-known shortcomings. It is verbose: each arm repeats the case
+pattern. And it is not extensible: adding a case means editing the
+\code{switch}, which means the table cannot be assembled from independent
+pieces.
+
+The pattern-match facility addresses both. A table is built from a list of
+\emph{clauses}, each of which pairs a key with a handler. The list is a
+template argument pack, so the table's \emph{shape} is fixed when the
+program is compiled. The \emph{decision} of which clause fires, however, is
+made at run time by comparing the incoming key against the clause keys.
+This distinction is the single most important thing to understand about the
+facility, and it is easy to get wrong, so it is worth stating plainly
+before going any further.
+
+\begin{property}[Compile-time shape, run-time decision]
+The set of clauses, the type of the key, the type of the result and the
+types of the handlers are all determined at compile time. Which clause
+handles a given key is determined at run time, by comparing the key value
+against the compile-time key of each clause in turn. A table is therefore
+\emph{not} a compile-time dispatch: adding a runtime value to the key does
+not make the table dynamic, and removing a clause from the table does not
+make the dispatch cheaper.
+\end{property}
+
+\section{The clause types}
+
+The facility occupies lines 6293--6483 of \texttt{DSLtk.hpp} and consists
+of four pieces: a clause template for keyed dispatch, a clause template for
+the fallback, the table itself, and the free functions that build them.
+
+A keyed clause is \api{dsl::WhenClause<Key, F>}, declared at line 6305:
+
+\begin{lstlisting}[style=dslcpp]
+template <auto Key, typename F> struct WhenClause
+{
+  F handler;
+  using handler_type_or_void = F;
+  explicit constexpr WhenClause (F f) : handler (std::move (f)) {}
+  //  ... try_invoke ...
+};
+\end{lstlisting}
+
+The key is a \emph{non-type template parameter}. That is the source of both
+the facility's power and its restrictions. Because the key is part of the
+type, it must be a constant expression, and its type must be structural. In
+practice this means the key is one of:
+
+\begin{itemize}
+\item an integral constant, such as \code{dsl::when<1>};
+\item an enumeration constant, such as \code{dsl::when<State::Idle>};
+\item an object of a structural class type, such as
+\code{dsl::pattern<"[0-9]+">}, which has no non-static data members and
+is therefore usable as a constant.
+\end{itemize}
+
+The fallback clause is \api{dsl::OtherwiseClause<F>}, declared at line
+6366. It has the same shape, minus the key, and its \code{try_invoke}
+always returns \code{false}. The fallback is therefore never found by the
+ordinary scan; it is located by a second pass that looks for the
+\code{OtherwiseClause} specialisation by type.
+
+The table is \api{dsl::MatchTable<Clauses...>}, declared at line 6409. It
+holds a \code{std::tuple} of the clauses and provides the call operator
+that performs the dispatch.
+
+\section{The factories}
+
+Three free functions build the pieces. \code{dsl::when<Key>(f)} at line
+6349 produces a \code{WhenClause}; \code{dsl::otherwise(f)} at line 6384
+produces an \code{OtherwiseClause}; and \code{dsl::match(clauses...)} at
+line 6478 produces the table.
+
+\code{dsl::match} is a variadic template that decays its arguments and
+constructs a \code{MatchTable} directly:
+
+\begin{lstlisting}[style=dslcpp]
+template <typename... Clauses>
+constexpr auto
+match (Clauses &&...cs)
+{
+  return MatchTable<std::decay_t<Clauses>...>{ std::forward<Clauses> (cs)... };
+}
+\end{lstlisting}
+
+A deduction guide is also provided at line 6465,
+
+\begin{lstlisting}[style=dslcpp]
+template <typename... Cs> MatchTable (Cs...) -> MatchTable<Cs...>;
+\end{lstlisting}
+
+so that a user who prefers to name the table type may write
+\code{dsl::MatchTable table { clause1, clause2 };} and have the clause
+types deduced. The guide is redundant with the factory for most uses, but
+it makes \code{MatchTable} usable in a deduction context.
+
+\section{How a key is recognised}
+
+The heart of the facility is \code{WhenClause::try_invoke}, at lines
+6311--6337. Its logic is a two-way choice made at compile time, on the
+\emph{type} of the clause's key, and executed at run time on the
+\emph{value} of the incoming key.
+
+The first branch is taken when the key's type has a static member
+\code{matches} taking a \code{std::string_view}. The detection is written
+as a requirement:
+
+\begin{lstlisting}[style=dslcpp]
+using KeyT = std::remove_cvref_t<decltype (Key)>;
+if constexpr (requires { KeyT::matches (std::string_view{}); })
+  {
+    if constexpr (std::convertible_to<K, std::string_view>)
+      {
+        if (KeyT::matches (std::string_view (key)))
+          {
+            out = handler (key, std::forward<Args> (args)...);
+            return true;
+          }
+      }
+  }
+\end{lstlisting}
+
+The requirement is satisfied by \api{dsl::pattern<S>}, whose
+\code{matches} member is the compile-time regex engine of
+\chapref{ch:pattern-regex}. When it is satisfied, the incoming key must
+also be convertible to a \code{std::string_view}; if it is not, the clause
+cannot match and is skipped.
+
+The second branch is taken otherwise, and requires that the incoming key
+type and the clause's key type be equality comparable:
+
+\begin{lstlisting}[style=dslcpp]
+else if constexpr (std::equality_comparable_with<K, decltype (Key)>)
+  {
+    if (key == Key)
+      {
+        out = handler (key, std::forward<Args> (args)...);
+        return true;
+      }
+  }
+\end{lstlisting}
+
+If neither branch applies --- because the key type has no \code{matches}
+member and is not comparable with the incoming type --- the clause simply
+never matches, and the table behaves as though the clause were absent.
+
+\begin{notebox}[A note on the \code{when<pattern<...>>} spelling]
+The header's own documentation writes the pattern form as
+\code{dsl::when<dsl::pattern<"[0-9]+">>(handler)}. That spelling does not
+compile: \code{Key} is a non-type template parameter, so the argument must
+be a \emph{value}, and a bare type name is not a value. Two spellings do
+work. The first is to name the pattern in a constant:
+
+\begin{lstlisting}[style=dslcpp]
+constexpr auto number_key = dsl::pattern<"[0-9]+">{};
+auto table = dsl::match (dsl::when<number_key> (handler), ...);
+\end{lstlisting}
+
+The second is to parenthesise the value, which also disambiguates the
+closing angle brackets:
+
+\begin{lstlisting}[style=dslcpp]
+auto table = dsl::match (dsl::when<(dsl::pattern<"[0-9]+">{})> (handler), ...);
+\end{lstlisting}
+\end{notebox}
+
+\section{The handler's arguments}
+
+A handler is always called as \code{handler(key, extra...)}. The key
+comes first, followed by whatever additional arguments the table was
+called with. This is a small but consequential convention: it means a
+handler always has access to the value that selected it, which is what
+allows a single handler to be written for several keys.
+
+It also means that the header's own ``Example B'' comment, at line 290 of
+\texttt{DSLtk.hpp}, does not compile as written. That example writes
+handlers of one argument, \code{[](auto e) { ... }}, and then calls the
+table with a key and an event, \code{transitions(state, e)}. The handler
+must accept both arguments:
+
+\begin{lstlisting}[style=dslcpp]
+dsl::when<State::Idle> (
+    [] (State, std::string_view e)
+    { return e == "start" ? State::Running : State::Idle; })
+\end{lstlisting}
+
+The \code{otherwise} handler must accept the same number of arguments as
+the keyed handlers, for the same reason: the table's return type is
+computed from \code{std::invoke_result_t} over \emph{all} clauses, and
+the fallback is included in that computation.
+
+\section{The result type}
+
+The return type of a table is computed at the point where the table's call
+operator is instantiated. The relevant line is 6420:
+
+\begin{lstlisting}[style=dslcpp]
+using RetT = std::common_type_t<std::invoke_result_t<
+    typename Clauses::handler_type_or_void, Key, Args...>...>;
+\end{lstlisting}
+
+The type of every clause's handler is instantiated with the key type and
+the extra argument types, and the common type of all those results becomes
+the table's result type. A \code{std::optional<RetT>} holds the result
+while the scan is in progress, and the value is unwrapped and returned at
+the end.
+
+This has two consequences that are easy to trip over. The first is that
+all the handlers must be invocable with the same argument list. A handler
+that takes the key but not the extra arguments produces a
+\code{std::invoke_result} with no \code{type} member, and the error is
+reported deep inside the call operator's instantiation.
+
+The second is stricter than the common-type alias suggests. Each clause's
+\code{try_invoke} takes an optional reference specialized on that handler's
+concrete result type. It cannot bind an \code{optional<RetT>&} when the
+specializations differ. For example, the common type of \code{std::string}
+and \code{const char *} is \code{std::string}, but the pointer-returning
+clause still fails this reference requirement. Return the same concrete type
+from every handler, including the fallback.
+
+\begin{notebox}[Uniform return types]
+The rule of thumb is simple: give every handler in a table the same return
+type, and make that type the same for the fallback as for the keyed
+clauses. A table that returns \code{std::string} everywhere is the easiest
+to work with, because the common type of a set of \code{std::string}
+results is \code{std::string}.
+\end{notebox}
+
+\section{Dispatch}
+
+The pseudocode block that follows states the algorithm.
+
+\begin{pseudocode}[Dispatch on a key]
+\textbf{function} \code{dispatch}(table, key, args)\\
+\quad \textbf{for} each clause c of table, in declaration order \textbf{do}\\
+\qquad \textbf{if} c is a \code{when} clause \textbf{then}\\
+\qquad\qquad \textbf{if} the type of c.key has a static
+\code{matches(string_view)} \textbf{then}\\
+\qquad\qquad\qquad \textbf{if} \code{c.key.matches(key)} \textbf{then}\\
+\qquad\qquad\qquad\qquad \textbf{return} \code{c.handler(key, args)}\\
+\qquad \textbf{else} \textbf{if} c.key is comparable with key \textbf{then}\\
+\qquad\qquad \textbf{if} \code{key == c.key} \textbf{then}\\
+\qquad\qquad\qquad \textbf{return} \code{c.handler(key, args)}\\
+\quad \textbf{if} table contains an \code{otherwise} clause o \textbf{then}\\
+\qquad \textbf{return} \code{o.handler(key, args)}\\
+\quad \textbf{raise} \code{std::runtime_error}\\
+\qquad \code{"dsl::match: no clause matched and no otherwise"}
+\end{pseudocode}
+
+Three properties of this algorithm are worth naming.
+
+The \emph{first matching clause wins}. The implementation folds over the
+clauses with a short-circuiting logical-or, so the scan stops at the first
+clause whose \code{try_invoke} returns \code{true}. The order of the
+clauses is therefore significant, and it is the order in which they were
+written.
+
+The \emph{fallback is not part of the scan}. \code{OtherwiseClause}'s
+\code{try_invoke} unconditionally returns \code{false}, so the fallback
+never terminates the scan. A second pass over the clause list finds it by
+type. As a consequence the fallback clause may appear \emph{anywhere} in
+the list, not only at the end, and if two fallback clauses are present the
+first one in the list is the one that is used.
+
+A table with \emph{no fallback and no match} throws. The exception is a
+\code{std::runtime_error} whose message is exactly
+\code{"dsl::match: no clause matched and no otherwise"}. The throw happens
+after the scan and after the fallback pass, and only when no clause
+produced a result and no fallback exists.
+
+\begin{figure}[htbp]
+\begin{dslgraph}
+    \node[dslterm] (key) {key};
+    \node[dslbox, right=of key] (c1) {\code{when<K1>}};
+    \node[dslbox, right=of c1] (c2) {\code{when<K2>}};
+    \node[dslbox, right=of c2] (c3) {\code{otherwise}};
+    \node[dslsmall, below=of c1] (h1) {handler 1};
+    \node[dslsmall, below=of c2] (h2) {handler 2};
+    \node[dslsmall, below=of c3] (h3) {fallback handler};
+    \draw[dsledge] (key) -- (c1);
+    \draw[dsledge] (c1) -- node[above, font=\scriptsize] {no} (c2);
+    \draw[dsledge] (c2) -- node[above, font=\scriptsize] {no} (c3);
+    \draw[dsledge] (c1) -- node[left, font=\scriptsize] {yes} (h1);
+    \draw[dsledge] (c2) -- node[left, font=\scriptsize] {yes} (h2);
+    \draw[dsledge] (c3) -- node[left, font=\scriptsize] {fallback} (h3);
+\end{dslgraph}
+  \caption{The clause chain. The key is tested against each clause in
+  declaration order; the first clause that matches runs its handler and the
+  scan stops. The fallback clause is reached only if every keyed clause
+  has failed. A table with no fallback clause terminates in a
+  \code{std::runtime_error} instead.}
+  \label{fig:match-chain}
+\end{figure}
+
+\section{What the facility is for}
+
+It is worth being explicit about when a match table is the right tool,
+because it is not always the right tool.
+
+Against a \code{switch}, the table wins in two ways. The first is
+completeness: a \code{switch} over an enumeration that the compiler does
+not know is exhaustive produces a warning, not an error, and a \code{switch}
+over an integer has no notion of exhaustiveness at all; a table's clause
+list is a single place where the set of handled values is written down.
+The second is composability: because a clause is a self-contained object
+with a key and a handler, clauses can be built by different functions and
+combined, and a table can be assembled from them at run time.
+
+Against a hash map from keys to handlers, the table wins when the number
+of keys is small and known, and when the keys are of a type that can be
+compared with \code{operator==} or tested with a \code{matches} member. It
+loses when the key set is large, when the keys are strings that must be
+hashed, or when the key set is not known until run time --- because a
+clause's key is a template argument and therefore a constant. For a
+dispatch over a hundred string commands, a \code{std::unordered_map} is
+the right structure and a match table is not.
+
+Against a chain of \code{if}-statements, the table wins in readability
+and in the single point of change: adding a case means adding a clause,
+and removing a case means removing a clause, with no risk of leaving a
+stale \code{break} behind.
+
+\section{Tables in constant expressions}
+
+Because the whole dispatch machinery is usable in a constant expression, a
+table can be a \code{static constexpr} member of a DSL class and can be
+consulted during compilation. The worked example below does exactly that:
+\code{StateMachine::transitions} and \code{LexerDSL::classify} are
+\code{static constexpr} members, and the compiler evaluates them when it
+instantiates the class.
+
+The property that makes this work is that the pieces the call operator
+uses are all constant-expression friendly in \cpp{}20: \code{std::optional}
+and \code{std::apply} are \code{constexpr}, the clause tuple is a
+\code{constexpr}-constructible \code{std::tuple}, and the
+\code{std::string_view} comparisons the equality branch performs are
+constant expressions. The one statement in the call operator that is not
+usable in a constant expression is the \code{throw}, and a throw that is
+not reached does no harm: the branch is simply never taken.
+
+The practical benefit is that a table built at compile time costs nothing
+at run time. There is no initialisation, no allocation and no indirection:
+the table is a \code{std::tuple} of closures that the compiler has already
+laid out, and calling it is a sequence of inline comparisons.
+
+\begin{table}[htbp]
+  \centering
+  \begin{tabular}{@{}L{0.16\textwidth}L{0.26\textwidth}L{0.48\textwidth}@{}}
+    \toprule
+    \textbf{Clause} & \textbf{Key requirement} & \textbf{Behaviour} \\
+    \midrule
+    \code{when<Key>(f)} &
+    A constant expression of a structural type: an integral constant, an
+    enumeration constant, or a structural class object such as
+    \code{dsl::pattern<...>}. &
+    The key is compared with \code{operator==} against the clause's key,
+    unless the key's type has a static \code{matches(std::string_view)}
+    member, in which case that member is used and the incoming key must be
+    convertible to a \code{std::string_view}. A clause whose key type
+    satisfies neither condition never matches. \\
+    \code{otherwise(f)} &
+    None. &
+    Never matches during the scan. It is located by a second pass and is
+    used only when no keyed clause matched. It may appear anywhere in the
+    clause list. \\
+    \bottomrule
+  \end{tabular}
+  \caption{The two clause kinds and the requirements each places on the
+  key.}
+  \label{tab:clause-kinds}
+\end{table}
+
+\section{Interaction with the pattern facility}
+
+A \code{dsl::pattern<...>} key turns the table into a classifier. Because
+the pattern's \code{matches} member is a \code{constexpr} function, the
+whole dispatch can be evaluated during constant evaluation when the key is
+constant.
+
+There is a subtlety in how pattern keys interact with the equality
+branch. The detection in \code{try_invoke} is a requirement on the
+\emph{type} of the key: \code{requires { KeyT::matches(std::string_view{});
+}}. A \code{dsl::pattern} has such a member, so the pattern branch is
+taken. But the branch additionally requires the incoming key type to be
+convertible to a \code{std::string_view}. If the incoming key is an
+\code{int}, the pattern branch is taken and then immediately abandoned,
+because the inner \code{if constexpr} is false; the \code{else if constexpr}
+branch is \emph{not} reached, since the outer \code{if constexpr} has
+already committed to the pattern branch. The consequence is that a table
+with a pattern key and an integer key cannot dispatch on the integer, and
+mixing the two kinds of key in one table is a mistake.
+
+Enumeration keys use the equality branch and are entirely straightforward.
+The clause key \code{State::Idle} is an enumeration constant, and the
+comparison \code{key == Key} is an ordinary equality comparison between two
+values of the same enumeration type.
+
+\section{A worked example}
+
+Listing~\ref{lst:match-complete} contains two tables. The first is a state
+machine whose key is an enumeration and whose extra argument is an event
+name; it is the corrected form of the header's ``Example B''. The second
+classifies a string against two pattern keys.
+
+\begin{lstlisting}[style=dslcpp, caption={A complete program: an
+enumeration-keyed state machine and a pattern-keyed classifier, together
+with the error raised by a table that has no fallback.},
+label={lst:match-complete}]
+#include "DSLtk.hpp"
+
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+
+// ---------------------------------------------------------------------------
+//  A state machine, dispatched on an enumeration key
+// ---------------------------------------------------------------------------
+struct StateMachine : dsl::DSL<StateMachine, dsl::Pipeline, dsl::PatternMatch>
+{
+  enum class State
+  {
+    Idle,
+    Running,
+    Done
+  };
+
+  //  The handler receives the key first, then the extra arguments.
+  static constexpr auto transitions = dsl::match (
+      dsl::when<State::Idle> (
+          [] (State, std::string_view e)
+          { return e == "start" ? State::Running : State::Idle; }),
+      dsl::when<State::Running> (
+          [] (State, std::string_view e)
+          { return e == "stop" ? State::Done : State::Running; }),
+      dsl::otherwise (
+          [] (State, std::string_view) { return State::Done; }));
+
+  State state = State::Idle;
+
+  void
+  send (std::string_view e)
+  {
+    state = transitions (state, e);
+  }
+
+  //  The pipeline feature is orthogonal; it is used here only to format
+  //  the state for display.
+  std::string
+  describe () const
+  {
+    return state
+           | dsl::pipe ([] (State s)
+                        { return "state "
+                                 + std::to_string (static_cast<int> (s)); });
+  }
+};
+
+// ---------------------------------------------------------------------------
+//  A lexer, dispatched on a string key
+// ---------------------------------------------------------------------------
+constexpr auto number_key = dsl::pattern<"[0-9]+">{};
+constexpr auto word_key = dsl::pattern<"[a-zA-Z_][a-zA-Z_0-9]*">{};
+
+struct LexerDSL : dsl::DSL<LexerDSL, dsl::PatternMatch>
+{
+  static constexpr auto classify = dsl::match (
+      dsl::when<number_key> (
+          [] (std::string_view k) { return std::string{ "Number(" } + std::string{ k } + ")"; }),
+      dsl::when<word_key> (
+          [] (std::string_view k) { return std::string{ "Ident(" } + std::string{ k } + ")"; }),
+      dsl::otherwise (
+          [] (std::string_view k) { return std::string{ "Other(" } + std::string{ k } + ")"; }));
+};
+
+int
+main ()
+{
+  StateMachine sm;
+  sm.send ("start");
+  std::cout << "after start: " << sm.describe () << '\n';
+  sm.send ("stop");
+  std::cout << "after stop:  " << sm.describe () << '\n';
+
+  for (auto const *text : { "123", "alpha_7", "@" })
+    std::cout << LexerDSL::classify (text) << '\n';
+
+  auto strict = dsl::match (dsl::when<1> ([] (int k) { return k * 10; }));
+  try
+    {
+      strict (2);
+    }
+  catch (const std::runtime_error &e)
+    {
+      std::cout << "caught: " << e.what () << '\n';
+    }
+}
+\end{lstlisting}
+
+The program prints
+
+\begin{lstlisting}[style=dslcpp]
+after start: state 1
+after stop:  state 2
+Number(123)
+Ident(alpha_7)
+Other(@)
+caught: dsl::match: no clause matched and no otherwise
+\end{lstlisting}
+
+Note that the two tables in the listing are \code{static constexpr} members
+of their DSL classes. This works because the whole dispatch machinery is
+usable in a constant expression: the \code{std::optional} that holds the
+result, the \code{std::apply} that walks the clause tuple, and the
+\code{throw} that is the last resort are all constant-expression friendly
+in \cpp{}20. A table built at compile time and stored as a member costs
+nothing at run time.
+
+\section{The feature tag}
+
+The tag \api{dsl::PatternMatch} is declared at line 6503, and its mixin is
+empty:
+
+\begin{lstlisting}[style=dslcpp]
+struct PatternMatch
+{
+  template <typename Derived> struct Mixin
+  {
+    // Feature presence marker; no additional methods needed since
+    // dsl::match/when/otherwise are free functions in the dsl:: namespace.
+  };
+};
+\end{lstlisting}
+
+The reason is the same as for \code{dsl::EnumReflection}: the API is a set
+of free functions in namespace \code{dsl}, and there is nothing for a mixin
+to contribute. The tag exists so that a DSL class can list pattern
+matching among its features, which is documentation for the reader and a
+place for a future extension to hook into.
+
+\section{Edge cases and limits}
+
+\begin{itemize}
+\item \textbf{All handlers must share a common return type.} The table's
+result type is \code{std::common_type_t} over the
+\code{std::invoke_result_t} of every clause, including the fallback. A
+table whose keyed handlers return \code{std::string} and whose fallback
+returns \code{const char *} does not compile because its clause expects a
+different optional-reference specialization, despite a valid common type. The
+error is reported deep inside the table's call operator, which makes it
+easy to misdiagnose. Make the return types uniform.
+
+\item \textbf{Every handler must accept the key plus every extra
+argument.} A handler of the wrong arity is a hard error at the point where
+the table is instantiated, and the diagnostic names the clause rather than
+the user's lambda.
+
+\item \textbf{The key must be a compile-time constant.} A runtime value
+cannot be a clause key. A table that must dispatch on runtime data needs a
+different structure, such as a \code{std::unordered_map} of handlers.
+
+\item \textbf{Pattern keys and non-string keys cannot be mixed in one
+table.} As explained above, the pattern branch of \code{try_invoke}
+commits at compile time and is not revisited.
+
+\item \textbf{A predicate cannot be a clause key.} The key is compared by
+equality or by a static \code{matches} member, and a predicate has
+neither; such a clause compiles but never matches. See
+\chapref{ch:operators}.
+
+\item \textbf{The dispatch is linear.} The clauses are examined in order,
+so a table with $n$ clauses may perform $n$ comparisons. For a large table
+of string keys this is a linear scan rather than a hash lookup, and the
+facility offers no way to build a hashed table from the same clauses.
+
+\item \textbf{There is no fall-through and no \code{break}.} A handler
+returns a value; it cannot ask for the scan to continue. A table with
+several clauses that may all apply must be expressed as a single handler
+that decides internally.
+
+\item \textbf{The exception is a \code{std::runtime_error}, not a
+\code{dsl::Result}.} A table that may fail should model the failure in its
+return type instead, and use a fallback clause to produce the failure
+value. The throwing behaviour is the last resort, and it exists so that a
+table without a fallback is not silently wrong.
+
+\item \textbf{No support for capturing state in the table.} The clauses
+are stored by value in a tuple, and the table is copyable, but there is no
+mechanism for a table to be parameterised at run time beyond the
+arguments passed to the call. A rule set that changes between runs must be
+rebuilt.
+
+\item \textbf{The return type of a table with no clauses is
+\code{void}.} The common type of an empty pack of invoke results is
+\code{void}, and the table's call operator would then attempt to
+dereference an empty optional. A table with no clauses is not useful.
+\end{itemize}
+
+\section{Closing}
+
+The pattern-match facility gives \DSLtk{} a small, typed dispatch table
+whose shape is checked by the compiler and whose decisions are made at run
+time. Its most valuable property is that the key and the handler are
+bound together in a single compile-time unit, so a table cannot fall out of
+step with the set of values it is meant to handle.
+
+The next chapter looks at the facility that makes one kind of key
+especially useful: \api{dsl::pattern}, the compile-time regular expression
+engine that lets a clause key describe a \emph{set} of strings rather than
+a single one.

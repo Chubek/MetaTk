@@ -1,0 +1,578 @@
+\chapter{Traversal, Dumping, and Tree Utilities}
+\label{ch:traversal}
+
+\section{There is no traversal helper, and that is deliberate}
+
+Every algorithm that consumes an abstract syntax tree walks it. A
+pretty-printer walks it to produce text; an evaluator walks it to produce a
+value; a linter walks it to find problems; a rewriter walks it to transform
+it. It would be reasonable to expect \DSLtk{} to ship a walker alongside
+the node type.
+
+It does not. \api{ASTNode}, as described in \chapref{ch:astnode}, exposes
+no visitor, no \code{walk} member, no iterator, and no fold. What it does
+expose is \code{children()}, and the header itself uses it the way a user
+would: at line 6860 the rewrite engine iterates
+\code{for (auto &child : n.children ())}, at line 9339 the S-expression
+printer iterates \code{for (const auto &child : node.children ())}, and at
+line 10001 the visitor's schema collector does the same. The pattern is the
+API.
+
+The reason for the omission is a design position rather than an
+oversight. \api{ASTNode} is a value type with no type-level tag, as
+\chapref{ch:leaf-and-node} established, so a walker cannot dispatch on the
+node's kind at compile time. A generic walker could still be written --- it
+would take a callback --- and \chapref{ch:visitors} eventually provides
+something along those lines. But the toolkit declines to guess at what a
+caller wants to do at each node, and it declines to impose a traversal
+order. The consequence for the reader is that traversal is a dozen lines of
+user code, and that the dozen lines are visible, adjustable, and cheap to
+reason about.
+
+\section{A worked example}
+
+The program below implements the three traversals this chapter discusses: a
+node count, a tag search, and an in-place rewrite. It also shows a
+tag-dispatch loop built on the compile-time dispatch of
+\chapref{ch:pattern-match}.
+
+\begin{lstlisting}[style=dslcpp,caption={Three hand-written traversals of an \api{ASTNode} tree, plus a tag dispatch.},label={lst:traversal-demo}]
+#include "DSLtk.hpp"
+#include <iostream>
+#include <optional>
+#include <string>
+#include <string_view>
+
+using dsl::ASTNode;
+
+// 1. How many nodes does the tree contain?
+std::size_t
+count_nodes (ASTNode const &n)
+{
+  std::size_t total = 1;
+  for (auto const &child : n.children ())
+    total += count_nodes (child);
+  return total;
+}
+
+// 2. The first node carrying a given tag, or null.
+ASTNode const *
+find_by_tag (ASTNode const &n, std::string_view tag)
+{
+  if (n.tag () == tag)
+    return &n;
+  for (auto const &child : n.children ())
+    if (auto const *hit = find_by_tag (child, tag))
+      return hit;
+  return nullptr;
+}
+
+// 3. Constant folding for binary "add" over numeric literals.
+std::optional<ASTNode>
+fold_add (ASTNode const &n)
+{
+  if (n.is_leaf () || n.tag () != "add" || n.size () != 2)
+    return std::nullopt;
+  if (!n.child (0).is_leaf () || n.child (0).tag () != "num")
+    return std::nullopt;
+  if (!n.child (1).is_leaf () || n.child (1).tag () != "num")
+    return std::nullopt;
+  int a = std::stoi (n.child (0).value ());
+  int b = std::stoi (n.child (1).value ());
+  return dsl::leaf<"num"> (a + b);
+}
+
+// 4. Bottom-up rewrite that mutates the tree in place.
+void
+rewrite_in_place (ASTNode &n)
+{
+  for (auto &child : n.children ())
+    rewrite_in_place (child);
+  if (auto replacement = fold_add (n))
+    n = std::move (*replacement);
+}
+
+// 5. Tag dispatch: map the runtime tag onto an enum, then match on it.
+enum class Op
+{
+  Add,
+  Num,
+  Other
+};
+
+Op
+classify (std::string_view tag)
+{
+  if (tag == "add")
+    return Op::Add;
+  if (tag == "num")
+    return Op::Num;
+  return Op::Other;
+}
+
+int
+main ()
+{
+  ASTNode tree = dsl::node<"add"> (dsl::node<"add"> (dsl::leaf<"num"> (2),
+                                                     dsl::leaf<"num"> (3)),
+                                   dsl::leaf<"num"> (4));
+
+  std::cout << "tree     : " << tree.dump () << '\n';
+  std::cout << "nodes    : " << count_nodes (tree) << '\n';
+
+  if (auto const *hit = find_by_tag (tree, "num"))
+    std::cout << "first num: " << hit->value () << '\n';
+
+  ASTNode copy = tree;
+  rewrite_in_place (copy);
+  std::cout << "folded   : " << copy.dump () << '\n';
+  std::cout << "untouched: " << tree.dump () << '\n';
+
+  // Tag dispatch through dsl::match.
+  auto handler = dsl::match (
+      dsl::when<Op::Add> (
+          [] (Op, ASTNode const &n) { return "add with " + std::to_string (n.size ()) + " children"; }),
+      dsl::when<Op::Num> (
+          [] (Op, ASTNode const &n) { return "num = " + n.value (); }),
+      dsl::otherwise (
+          [] (Op, ASTNode const &n) { return "unhandled tag " + std::string (n.tag ()); }));
+
+  for (auto const &child : tree.children ())
+    std::cout << "dispatch : " << handler (classify (child.tag ()), child) << '\n';
+
+  // dump() does not quote: a value with a space is ambiguous.
+  ASTNode spaced = dsl::leaf<"str"> ("hello world");
+  std::cout << "unquoted : " << spaced.dump () << '\n';
+  return 0;
+}
+\end{lstlisting}
+
+The output is
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:traversal-demo}.},label={lst:traversal-demo-out}]
+tree     : (add (add (num 2) (num 3)) (num 4))
+nodes    : 5
+first num: 2
+folded   : (num 9)
+untouched: (add (add (num 2) (num 3)) (num 4))
+dispatch : add with 2 children
+dispatch : num = 4
+unquoted : (str hello world)
+\end{lstlisting}
+
+\section{The four shapes of traversal}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}L{3.6cm}L{4.0cm}L{7.0cm}@{}}
+\toprule
+\textbf{Shape} & \textbf{Order} & \textbf{Cost and use} \\
+\midrule
+Manual recursion
+  & whatever the caller writes
+  & \(O(N)\) nodes visited. The cheapest possible traversal, and the one
+    every other shape is built from. \\
+Callback walk
+  & pre-order or post-order
+  & \(O(N)\) visits plus \(O(D)\) stack. Useful when the action at each
+    node is the same. \\
+Tag dispatch
+  & pre-order by default
+  & \(O(N)\) visits plus one enum lookup per node. Use when the action
+    differs per tag. \\
+\api{ASTVisitor}
+  & pre-order or post-order
+  & \(O(N)\) visits plus a tag comparison per node, plus a schema check at
+    construction. Exhaustiveness is checked by \code{static_assert}. \\
+\bottomrule
+\end{tabular}
+\caption{The traversal shapes available to a \DSLtk{} user, with their
+costs in terms of the number of nodes \(N\) and the tree depth \(D\).}
+\label{tab:traversal-shapes}
+\end{table}
+
+\figref{fig:walk-orders} contrasts the two orders that matter. The tree is
+the same in both pictures; the number under each node is the position of
+that node in the visit sequence. A pre-order walk reaches a node before
+its children, which is what a printer wants: the tag is known before the
+subtree is written. A post-order walk reaches a node after its children,
+which is what a folder wants: the children have already been reduced when
+the parent is examined.
+
+\begin{figure}[htbp]
+\begin{dslgraph}
+  \node[dsllarge] at (3.2,1.1) {pre-order};
+  \node[dsllarge] at (9.9,1.1) {post-order};
+
+  \node[dslsmall] (pa) at (3.2,0) {A\\1};
+  \node[dslsmall] (pb) at (1.7,-1) {B\\2};
+  \node[dslsmall] (pc) at (3.2,-1) {C\\5};
+  \node[dslsmall] (pd) at (4.7,-1) {D\\6};
+  \node[dslsmall] (pe) at (1.0,-2) {E\\3};
+  \node[dslsmall] (pf) at (2.4,-2) {F\\4};
+  \node[dslsmall] (pg) at (4.1,-2) {G\\7};
+  \node[dslsmall] (ph) at (5.3,-2) {H\\8};
+  \draw[dsledge] (pa) -- (pb);
+  \draw[dsledge] (pa) -- (pc);
+  \draw[dsledge] (pa) -- (pd);
+  \draw[dsledge] (pb) -- (pe);
+  \draw[dsledge] (pb) -- (pf);
+  \draw[dsledge] (pd) -- (pg);
+  \draw[dsledge] (pd) -- (ph);
+
+  \node[dslsmall] (qa) at (9.9,0) {A\\8};
+  \node[dslsmall] (qb) at (8.4,-1) {B\\3};
+  \node[dslsmall] (qc) at (9.9,-1) {C\\4};
+  \node[dslsmall] (qd) at (11.4,-1) {D\\7};
+  \node[dslsmall] (qe) at (7.7,-2) {E\\1};
+  \node[dslsmall] (qf) at (9.1,-2) {F\\2};
+  \node[dslsmall] (qg) at (10.8,-2) {G\\5};
+  \node[dslsmall] (qh) at (12.0,-2) {H\\6};
+  \draw[dsledge] (qa) -- (qb);
+  \draw[dsledge] (qa) -- (qc);
+  \draw[dsledge] (qa) -- (qd);
+  \draw[dsledge] (qb) -- (qe);
+  \draw[dsledge] (qb) -- (qf);
+  \draw[dsledge] (qd) -- (qg);
+  \draw[dsledge] (qd) -- (qh);
+\end{dslgraph}
+\caption{Pre-order and post-order walks of the same tree. The number under
+each node is its position in the visit sequence. Moving the recursive call
+from before the loop to after the loop is the whole difference between the
+two.}
+\label{fig:walk-orders}
+\end{figure}
+
+\subsection{Manual recursion}
+
+The simplest traversal is the one the header writes. A function takes a
+node, does something with it, and recurses over \code{children()}:
+
+\begin{lstlisting}[style=dslcpp,caption={A manual recursive walk.},label={lst:manual-recursion}]
+void
+for_each (dsl::ASTNode const &n, std::function<void (dsl::ASTNode const &)> f)
+{
+  f (n);
+  for (auto const &child : n.children ())
+    for_each (child, f);
+}
+\end{lstlisting}
+
+The order is determined entirely by where the call to \code{f} sits. Put it
+before the loop and the walk is pre-order; put it after the loop and the
+walk is post-order. Moving a single line changes the semantics of the whole
+program, which is both the strength and the hazard of the manual style.
+
+\subsection{A callback walk}
+
+The manual recursion above becomes a callback walk when the recursion is
+hidden behind a named function. A general-purpose walker looks like this:
+
+\begin{pseudocode}[A generic tree walk]
+\textbf{function} walk (n, pre, post)\\
+\quad \textbf{if} pre is not empty \textbf{then} pre (n)\\
+\quad \textbf{for} c \textbf{in} n.children \textbf{do}\\
+\qquad walk (c, pre, post)\\
+\quad \textbf{if} post is not empty \textbf{then} post (n)
+\end{pseudocode}
+
+This is the shape the toolkit's own rewrite engine uses internally. The
+recursive helper \api{rewrite_once} of \chapref{ch:rewrite-sets} walks the
+children first, then acts on the node --- a post-order walk with a single
+action, but with the action fused into the recursion.
+
+\subsection{Tag dispatch with \code{dsl::match}}
+
+When the action at each node depends on the node's tag, the natural
+tool is the compile-time dispatch table of \chapref{ch:pattern-match}:
+\code{dsl::match}, \code{dsl::when}, and \code{dsl::otherwise}. There is,
+however, a genuine obstacle, and it is worth stating precisely because the
+header's own documentation suggests otherwise.
+
+\code{dsl::when} takes its key as a non-type template parameter of type
+\code{auto}. Such a parameter must be a \emph{structural} type: an
+integral, an enumeration, a pointer to an object with static storage
+duration, or a literal class type whose members are all structural. Two
+consequences follow, and both are visible in the shipped header.
+
+First, a string literal cannot be a key. The compiler says so directly:
+
+\begin{lstlisting}[style=dslcpp,caption={A string literal cannot be a \code{when} key.},label={lst:when-string}]
+auto t = dsl::match (
+    dsl::when<"add"> ([] (std::string_view k) { return "add"; }),
+    dsl::otherwise ([] (std::string_view k) { return "other"; }));
+// error: '"add"' is not a valid template argument for type 'const char*'
+// note: string literals can never be used in this context
+\end{lstlisting}
+
+Second, the key must be a value, not a type name. The header's documentation
+at lines 6173, 6300 and 6347 omits the object construction after the pattern
+type. Both \code{FixedString} and \code{pattern} satisfy the relevant
+structural-type requirements; a user-provided constexpr constructor does not
+disqualify a class. Construct a pattern object with \texttt{\{\}} to use it
+as the key.
+
+\begin{lstlisting}[style=dslcpp,caption={A structural pattern object is a valid dispatch key.},label={lst:when-pattern}]
+auto t = dsl::match (
+    dsl::when<dsl::pattern<"add">{}> ([] (std::string_view k) { return "add"; }),
+    dsl::otherwise ([] (std::string_view k) { return "other"; }));
+// t(std::string_view("add")) returns "add".
+\end{lstlisting}
+
+Another option is to map the runtime tag onto an enumeration and dispatch
+on the enumeration, exactly as \code{classify} does in
+Listing~\ref{lst:traversal-demo}. An enumeration \emph{is} a structural
+type, so \code{dsl::when<Op::Add>(...)} compiles, and the
+\code{std::equality_comparable_with} test inside \api{WhenClause} succeeds
+because the key type and the clause key type are the same enumeration. The
+price is one comparison chain per node, and the requirement that the
+enumeration be kept in step with the tags the tree actually uses.
+
+\begin{warnbox}[The documented \code{when<pattern<...>>} form does not compile]
+The header's documentation for \code{dsl::pattern} and \code{dsl::when}
+shows \code{dsl::when<dsl::pattern<"[0-9]+">>(handler)} as the
+pattern-based dispatch form. In the shipped code that expression is
+ill-formed because it supplies a type where an \code{auto} value is required.
+The working form is \code{dsl::when<dsl::pattern<"[0-9]+">{}>(handler)}.
+The \code{try_invoke} member recognizes the pattern's static \code{matches}
+operation. Chapter 10 and the companion pattern probe exercise this path.
+\end{warnbox}
+
+\subsection{\code{ASTVisitor}: the batteries-included alternative}
+
+\chapref{ch:visitors} describes the \api{ASTVisitor} of \texttt{DSLtk.hpp}
+at line 9992, which is the toolkit's own answer to the traversal problem.
+It is worth contrasting it with the hand-written walks here.
+
+An \api{ASTVisitor} can be built from a schema tree --- a sample tree whose
+tags are runtime strings --- and a set of cases, each
+pairing a tag with a handler. Construction walks the schema, collects the
+distinct tags, and throws \code{std::invalid_argument} if any tag has no
+handler. The visitor then offers \api{visit}, which invokes the handler
+for one node, and \api{walk}, which visits the whole tree in either
+pre-order or post-order.
+
+Three differences matter in practice. The visitor validates that every tag
+in the schema is handled, so a missing handler is caught at construction
+time rather than at the first node that happens to carry the missing tag.
+The visitor dispatches by comparing the node's runtime tag against each
+case's compile-time tag, which is a string comparison per node --- the same
+work the enumeration mapping does, but without the user having to maintain
+an enumeration. And the visitor's \api{walk} is a fixed recursion, so it
+inherits the depth limitation discussed below.
+
+The compile-time schema machinery goes further: \api{compile_visitor}
+takes a schema \emph{type} rather than a schema tree, and a
+\code{static_assert} demands that the cases cover every tag in the
+schema, recursively. That is the closest thing \DSLtk{} has to a
+compile-time guarantee about an AST's shape, and it exists precisely
+because \api{ASTNode} cannot carry its tag in its type.
+
+\section{Dumping, comparing, and the limits of both}
+
+\subsection{\code{dump()} as a debugging primitive}
+
+\api{dump()} was described in \chapref{ch:astnode}: a recursive
+S-expression-like rendering that writes \code{"(tag value)"} for a leaf
+with a value, \code{"(tag)"} for a leaf without one, and
+\code{"(tag child1 child2 ...)"} for an inner node. It is the right tool
+for a diagnostic message and the wrong tool for a wire format, for one
+reason: it does not quote.
+
+\begin{lstlisting}[style=dslcmd,caption={Unquoted values are ambiguous.},label={lst:unquoted}]
+(str hello world)
+\end{lstlisting}
+
+The rendering above cannot be parsed back into a two-element tree, because
+the parser cannot tell whether \code{hello} and \code{world} are one value
+or two. The same applies to a value containing a parenthesis, which would
+close the node early. A DSL whose leaf values may contain arbitrary text
+must either quote them itself before storing them, or use the \api{SExpr}
+machinery of \chapref{ch:sexpressions}, which has a documented escaping
+rule.
+
+The second limitation of \api{dump()} is that it is lossy in the other
+direction as well: an inner node with no children and a leaf with an empty
+value both render as \code{"(tag)"}, and the two are not equal nodes. A
+round trip through \api{dump()} therefore loses the leaf/inner distinction
+for empty nodes.
+
+\subsection{Structural comparison}
+
+\api{operator==} compares two trees structurally, as
+\chapref{ch:astnode} described: the tags must match, the leaf-ness must
+match, and then either the values or the children vectors must match. For
+a rewriting system this is exactly the right notion of equality, and it is
+the notion the rewrite engine uses to decide whether a pass changed
+anything --- indirectly, through the \code{changed} flag that
+\api{rewrite_once} maintains.
+
+There is no explicitly declared \code{operator!=}, but C++20 rewrites
+\code{a != b} using the Boolean equality operator. There is no \code{operator<} and no
+\code{std::hash} specialisation, so an \api{ASTNode} cannot be sorted and
+cannot be a key in an \code{unordered_container}. A user who wants to
+deduplicate trees must write a hash function, which means walking the tree
+and combining the hash of every tag and value --- a piece of work the
+toolkit does not do for them.
+
+\subsection{Why \code{child(i)} throws}
+
+\api{child(i)} is defined in terms of \code{children_.at(i)}, which throws
+\code{std::out_of_range} when the index is out of range. The alternative
+would have been \code{operator[]}, which is unchecked.
+
+For a tree library this is the right choice. A traversal that indexes
+children without checking is a traversal that will eventually read past
+the end of a vector, and the failure --- a corrupted program, or a crash
+somewhere far from the cause --- is far harder to diagnose than an
+exception with a message naming the offending index. The cost is that
+every predicate which assumes a particular arity must check it, and a
+predicate that forgets will throw out of the middle of a rewrite pass
+rather than producing a wrong answer.
+
+\begin{tipbox}[Write arity checks into the predicate]
+A predicate that inspects \code{n.child(0)} should begin with a test of
+\code{n.size()}. A predicate that inspects a child's tag should also test
+\code{n.child(0).is_leaf()}, because a child may be an inner node whose
+tag happens to be the same string. These two checks, written once in a
+helper, remove almost every way a rule can crash.
+\end{tipbox}
+
+\section{Mutation, depth, and the shape of a rewrite}
+
+\subsection{\code{children()} hands out a mutable reference}
+
+The const and mutable overloads of \code{children()} return the same
+underlying vector; the mutable one simply drops the \code{const}. This is
+the hinge between traversal and rewriting. A traversal written as
+\code{for (auto &child : n.children ())} can modify the tree it is
+walking, and \code{rewrite_in_place} in Listing~\ref{lst:traversal-demo}
+does exactly that: it folds constants by replacing the node in place with
+a freshly built leaf.
+
+Two properties of this style are worth spelling out. First, it is cheap:
+the in-place rewrite allocates one new node per folded constant and nothing
+else, whereas the copy-based engine of \chapref{ch:rewrite-sets} allocates
+a new node for every node it visits. Second, it is limited: as
+\chapref{ch:astnode} established, there is no mutable accessor for a
+node's tag or for a leaf's value, so an in-place rewrite can only change a
+node's children or replace the node wholesale. A rule that wants to
+retag a node must build a replacement and assign it --- which is what
+\code{n = std::move (*replacement)} does.
+
+\subsection{Recursion depth}
+
+Every traversal in this chapter is recursive, and so is
+\api{rewrite_once}, and so is \api{dump()}, and so is the destructor of
+\api{ASTNode} when it destroys a \code{std::vector<ASTNode>}. There is no
+tail-call guarantee in C++ and no explicit stack in any of these
+functions, so the depth of the tree bounds the depth of the C++ stack
+frame chain.
+
+For a hand-written source language, trees are usually shallow: an
+expression nest of a few dozen levels is already unusual, and the default
+stack of a POSIX thread is typically eight megabytes, which buys
+thousands of frames. For a tree built by a machine --- a parsed document,
+a generated term, a deserialised graph --- the depth can be arbitrary, and
+a traversal of a ten-thousand-deep tree will exhaust the stack. The
+toolkit offers no iterative traversal, no depth limit, and no diagnostic.
+
+\begin{warnbox}[Depth is the practical limit]
+If a tree can be arbitrarily deep, do not walk it with recursion. Either
+bound the depth when the tree is built, or maintain an explicit stack of
+pending nodes. The rewrite engine of \chapref{ch:rewrite-sets} has the same
+exposure, and its \code{max_iterations} bound does not help: it bounds
+the number of passes, not the depth of a single pass.
+\end{warnbox}
+
+\section{The traversal-shaped utilities}
+
+Two other parts of the toolkit are traversals in disguise, and it is useful
+to see them in this light.
+
+\api{ast_to_sexpr} (line 9332) and \api{sexpr_to_ast} (line 9343) of
+\chapref{ch:sexpressions} walk a tree and build a tree respectively. The
+first is a post-order traversal that produces an \api{SExpr} list whose
+head is the node's tag; the second is a pre-order traversal of an
+\api{SExpr} that produces an \api{ASTNode}. Neither uses the factories of
+\chapref{ch:leaf-and-node}, because the tags they handle are runtime
+strings.
+
+The round trip between them is lossy in an instructive way.
+\code{ast_to_sexpr} emits \code{(tag value)} for a leaf and
+\code{(tag child ...)} for an inner node; \code{sexpr_to_ast} reads a
+two-element list whose second element is an atom as a \emph{leaf}. So an
+inner node with exactly one child whose child is an atom is read back as a
+leaf, and a bare atom is read back with the tag \code{"atom"}. The
+conversion is convenient for interchange between the two subsystems; it is
+not an identity.
+
+The e-graph subsystem of \chapref{ch:egraphs} is a third traversal-shaped
+utility, but of a different kind: it never walks an \api{ASTNode}. It
+hash-conses its own nodes, maintains equivalence classes with a union-find,
+and rebuilds congruence after every round of rule applications. Its
+\code{extract} function then reconstructs a finite tree, and its
+\code{extract_ast} function converts that tree into an \api{ASTNode} using
+the \api{ASTNode} constructors. The comparison with the rewrite engine of
+\chapref{ch:rewrite-sets} is deferred to that chapter and to
+\chapref{ch:egraphs}; the point here is only that the two subsystems
+produce the same output type by completely different means.
+
+\section{Edge cases and limits}
+
+\paragraph{No built-in traversal of any kind.}
+There is no \code{walk}, no \code{visit}, no \code{for_each_child}, and
+no range adaptor. Every traversal is user code. The cost is a dozen lines
+per project; the benefit is that the traversal is exactly what the
+application needs.
+
+\paragraph{No iteration order is prescribed.}
+Because \code{children()} returns a \code{std::vector}, the order of the
+children is the order in which they were inserted, and it is stable. But
+no algorithm in the toolkit promises that a rule will be applied in
+child order, and the rewrite engine's bottom-up pass visits children
+before parents without promising anything about siblings.
+
+\paragraph{No depth limit and no diagnostic.}
+Nothing counts recursion depth. A deep tree is a stack overflow, and the
+failure carries no indication of which traversal caused it.
+
+\paragraph{No protection against concurrent mutation.}
+\code{children()} hands out a mutable reference into the node's internals.
+Two threads that mutate the same tree concurrently are in undefined
+behaviour territory; concurrent readers are safe.
+
+\paragraph{\code{dump()} is not invertible.}
+As described above, \code{dump()} neither quotes nor distinguishes an
+empty inner node from an empty leaf. A tree printed and read back is not
+necessarily the tree that was printed.
+
+\paragraph{No hashing, no ordering, no inequality.}
+The comparison surface of \api{ASTNode} is exactly one operator. Any
+algorithm that needs a set, a map, or a sort key over trees must supply
+its own.
+
+\paragraph{Tag dispatch needs a hand-written mapping.}
+Because \code{dsl::when} cannot take a string key, a user who wants
+compile-time dispatch on tags must maintain an enumeration and a mapping
+function by hand, and must keep them in step with the tags the tree
+actually uses. The \api{ASTVisitor} of \chapref{ch:visitors} removes that
+bookkeeping at the price of requiring a schema.
+
+\paragraph{The in-place style has a smaller repertoire.}
+An in-place rewrite can restructure a tree but cannot retag a node or
+change a leaf's text without replacing the node. Rules that need to do
+either must allocate, and once one allocates, the copy-based engine of
+\chapref{ch:rewrite-sets} is usually the simpler choice.
+
+\section{Closing}
+
+Traversal in \DSLtk{} is what it is everywhere else in the toolkit: a small
+primitive set, and a composition of those primitives by the user. The
+range over \code{children()} is the whole vocabulary; the four shapes in
+\tabref{tab:traversal-shapes} are four ways of using it. The two things a
+reader should carry forward are that \code{children()} is a mutable
+reference, which makes in-place rewriting possible, and that the toolkit
+does not prescribe an order, which makes the order the reader's to choose
+--- and to pay for. \chapref{ch:rewrite} takes these observations and turns
+them into rules.

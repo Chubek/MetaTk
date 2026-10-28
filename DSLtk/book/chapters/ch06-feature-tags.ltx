@@ -1,0 +1,768 @@
+\chapter{Feature Tags and Mixins: Anatomy of Composition}
+\label{ch:feature-tags}
+
+\section{The Feature Protocol}
+
+\DSLtk{} has exactly one extension point, and it is a small one. A feature
+is a tag: an empty struct that may contain a nested template named
+\code{Mixin}. The tag is what you name in the feature list; the mixin is
+what the library instantiates with your type and inherits into your class.
+Listing~\ref{lst:ch06-protocol} shows the protocol in its minimal form.
+
+\begin{lstlisting}[style=dslcpp,caption={The feature protocol: a tag with a nested \code{Mixin}, and a DSL that names it.},label={lst:ch06-protocol}]
+#include "DSLtk.hpp"
+#include <iostream>
+#include <string_view>
+
+namespace mydsl {
+
+/// A feature: the tag names it, the mixin delivers it.
+struct Greeting
+{
+  template <typename Derived> struct Mixin
+  {
+    /// A static member: reached through the class name.
+    static constexpr std::string_view
+    salutation ()
+    {
+      return "hello";
+    }
+  };
+};
+
+} // namespace mydsl
+
+struct Greeter : dsl::DSL<Greeter, mydsl::Greeting>
+{
+};
+
+int main ()
+{
+  std::cout << Greeter::salutation () << "\n";
+}
+\end{lstlisting}
+
+Three properties of this protocol are worth stating before the details.
+
+The tag is \emph{nothing but a name}. It has no data, no behaviour, no
+registration step, and no relationship to any other tag. Two tags are
+unrelated types, and the library never asks whether a tag is ``known''.
+
+The mixin is parameterised by the deriving type, and only by the deriving
+type. This is what lets a feature reach into your class, and it is what
+makes the mixin safe to reuse across every DSL that names it.
+
+The mixin may contribute members of four different kinds -- static
+functions, instance functions, operators, and (implicitly) nothing at all.
+Chapter~\ref{ch:architecture} distinguished the seven features that
+contribute members from the nineteen that do not; this chapter takes the
+seven apart.
+
+\section{The Anatomy of a Mixin}
+
+\subsection{The Tag}
+
+A tag is declared at namespace scope. It may be empty, and in the shipped
+header every tag is empty except for the nested mixin. The tag's name is
+what appears in the feature list, and the tag's \emph{type} is what the
+library uses to find the mixin: the base clause
+\code{Features::template Mixin<Derived>\ldots} names the member template
+\code{Mixin} of the tag.
+
+The consequence is that a tag without a nested \code{Mixin} template is
+ill-formed, and the diagnostic appears where the DSL is declared rather than
+where the tag is:
+
+\begin{lstlisting}[style=dslcmd,caption={A tag with no nested \code{Mixin}, and the diagnostic it produces at the point of use.},label={lst:ch06-nomixin}]
+error: no class template named 'Mixin' in 'struct NoMixin'
+\end{lstlisting}
+
+\subsection{The Nested Mixin}
+
+The mixin is a class template with exactly one parameter, the deriving type.
+It is instantiated once per DSL that names the feature, and the
+instantiation becomes a base class of \code{dsl::DSL}. Because the mixin is
+a base of \code{dsl::DSL}, and \code{dsl::DSL} is a base of your class, the
+mixin is a base of your class -- which is exactly what the
+\code{HasFeature} concept of Chapter~\ref{ch:crtp-foundation} tests.
+
+The mixin may be as simple as this:
+
+\begin{lstlisting}[style=dslcpp,caption={The no-op mixin. Nineteen of the shipped feature tags are exactly this, and they are the marker features.},label={lst:ch06-noop}]
+struct PatternMatch
+{
+  template <typename Derived> struct Mixin
+  {
+    // Feature presence marker; no additional methods needed since
+    // dsl::match/when/otherwise are free functions in the dsl:: namespace.
+  };
+};
+\end{lstlisting}
+
+The no-op mixin is not a stub or an oversight. It is the declaration that
+the feature exists and that it is available as free functions. A DSL that
+names \code{dsl::PatternMatch} is declaring that it is a pattern-matching
+DSL; the concept \code{HasFeature<T, PatternMatch>} then answers that
+question for any generic code.
+
+\subsection{The Constraint Idiom}
+
+Two of the shipped mixins constrain themselves on a member of the deriving
+class. The idiom is a nested requirement:
+
+\begin{lstlisting}[style=dslcpp,caption={The \code{requires requires} idiom, taken from \code{Rewrite}'s mixin and shown as it appears inside \code{namespace dsl}. The inner requirement asks whether \code{Derived::rules} is well formed; the outer clause constrains the member on the answer.},label={lst:ch06-constraint}]
+struct Rewrite
+{
+  template <typename Derived> struct Mixin
+  {
+    ASTNode
+    rewrite (const ASTNode &tree) const
+      requires requires { Derived::rules; }
+    {
+      return Derived::rules.apply (tree);
+    }
+  };
+};
+\end{lstlisting}
+
+There are two requirements here, and they do different jobs. The inner one
+is a \emph{requirement}: an expression that must be well formed for the
+constraint to be satisfied. \code{Derived::rules} is well formed exactly
+when the deriving class declares a member named \code{rules}; because
+\code{Derived} is a dependent type, that question cannot be answered until
+the mixin is instantiated, which is why it has to be written as a
+requirement rather than as a plain expression.
+
+The outer one is a \emph{constraint}: a boolean condition on the member. If
+the deriving class has no \code{rules}, the constraint is not satisfied and
+the member \code{rewrite} does not exist for that class. Calling it produces
+the diagnostic \emph{``constraints not satisfied''}, which names the
+problem directly instead of reporting a missing member.
+
+The pattern is repeated verbatim in \code{CustomLiterals}' mixin, with
+\code{Derived::literals} in place of \code{Derived::rules}.
+
+\paragraph{A constraint is not the same as a declaration.}
+\code{Memoization}'s mixin is unconstrained, even though its
+\code{clear_cache} needs a \code{memo_cache} member:
+
+\begin{lstlisting}[style=dslcpp,caption={\code{Memoization}'s mixin, unconstrained. The requirement on \code{Derived::memo_cache} is enforced only when the member is instantiated, that is, when it is called.},label={lst:ch06-unconstrained}]
+struct Memoization
+{
+  template <typename Derived> struct Mixin
+  {
+    /// Clears all cached entries stored in `Derived::memo_cache`.
+    void
+    clear_cache ()
+    {
+      static_cast<Derived &> (*this).memo_cache.clear ();
+    }
+  };
+};
+\end{lstlisting}
+
+Because a member function of a class template is instantiated only when it
+is used, a DSL that names \code{dsl::Memoization} but does not declare
+\code{memo_cache} compiles perfectly well -- as long as nobody calls
+\code{clear_cache()}. The error appears at the call site instead, and it
+reads like an ordinary missing-member diagnostic. The constrained form is
+better; the shipped code is inconsistent about which it uses, and a custom
+feature should prefer the constrained form.
+
+\section{Four Kinds of Contribution}
+
+\subsection{Static Members}
+
+A static member is found through the class name and needs no instance.
+\code{Pipeline}, \code{Operators}, \code{AST} and \code{CustomLiterals} all
+contribute static members. Listing~\ref{lst:ch06-static} shows
+\code{AST}'s two.
+
+\begin{lstlisting}[style=dslcpp,caption={Static members: \code{AST}'s \code{make_leaf} and \code{make_node}, transcribed from the header at lines 6723--6748 and shown as they appear inside \code{namespace dsl}.},label={lst:ch06-static}]
+struct AST
+{
+  template <typename Derived> struct Mixin
+  {
+    template <FixedString Tag, typename T>
+    static ASTNode
+    make_leaf (T &&val)
+    {
+      return dsl::leaf<Tag> (std::forward<T> (val));
+    }
+
+    template <FixedString Tag, typename... Children>
+      requires (std::convertible_to<Children, ASTNode> && ...)
+    static ASTNode
+    make_node (Children &&...children)
+    {
+      return dsl::node<Tag> (std::forward<Children> (children)...);
+    }
+  };
+};
+\end{lstlisting}
+
+Note that neither member mentions \code{Derived}. A static member that
+needed the deriving type would have to name it explicitly, and the shipped
+mixins that do need it -- \code{Rewrite}, \code{CustomLiterals},
+\code{Memoization} -- are the ones that reach for it.
+
+\subsection{Instance Members}
+
+An instance member acts on per-object state, and therefore needs the object.
+\code{Rewrite}'s \code{rewrite} is an instance member, and so is
+\code{Memoization}'s \code{clear_cache}. The former reads a static member
+(\code{Derived::rules}) but is still an instance member, because the
+library's designers chose to make it callable on an instance;
+\code{clear_cache} is an instance member because the cache belongs to the
+object.
+
+\subsection{Operators, Injected as Hidden Friends}
+
+The third kind of contribution is the interesting one, and it is the
+mechanism that lets a DSL have its own operators without polluting the
+global namespace. \code{ExprTemplates} is the shipped example.
+Listing~\ref{lst:ch06-hidden} is its mixin in full, transcribed from lines
+7056--7099.
+
+\begin{lstlisting}[style=dslcpp,caption={\code{ExprTemplates}' mixin, shown as it appears inside \code{namespace dsl}. The five operators are \emph{hidden friends}: friend functions defined inside the class, findable only through argument-dependent lookup.},label={lst:ch06-hidden}]
+struct ExprTemplates
+{
+  template <typename Derived> struct Mixin
+  {
+    /// operator+ (binary)
+    template <typename R>
+    friend constexpr auto
+    operator+ (const Derived &lhs, const R &rhs)
+    {
+      return BinExpr<std::plus<>, Derived, R>{ lhs, rhs };
+    }
+
+    /// operator- (binary)
+    template <typename R>
+    friend constexpr auto
+    operator- (const Derived &lhs, const R &rhs)
+    {
+      return BinExpr<std::minus<>, Derived, R>{ lhs, rhs };
+    }
+
+    /// operator* (binary)
+    template <typename R>
+    friend constexpr auto
+    operator* (const Derived &lhs, const R &rhs)
+    {
+      return BinExpr<std::multiplies<>, Derived, R>{ lhs, rhs };
+    }
+
+    /// operator/ (binary)
+    template <typename R>
+    friend constexpr auto
+    operator/ (const Derived &lhs, const R &rhs)
+    {
+      return BinExpr<std::divides<>, Derived, R>{ lhs, rhs };
+    }
+
+    /// Unary negation
+    friend constexpr auto
+    operator- (const Derived &e)
+    {
+      return UnaryExpr<std::negate<>, Derived>{ e };
+    }
+  };
+};
+\end{lstlisting}
+
+\subsection{Free Functions}
+
+The fourth kind of contribution is not a contribution at all. Nineteen of
+the shipped features contribute only free functions in namespace
+\code{dsl}: \code{dsl::match}, \code{dsl::when}, \code{dsl::otherwise},
+\code{dsl::leaf}, \code{dsl::node}, \code{dsl::rule},
+\code{dsl::rewrite_set}, \code{dsl::lit}, \code{dsl::literal_set},
+\code{dsl::parser}, \code{dsl::ch}, \code{dsl::satisfy},
+\code{dsl::run_parser}, \code{dsl::create_peg_definition},
+\code{dsl::compile_visitor}, \code{dsl::make_cfg} and the rest. A marker
+feature is exactly a feature whose facilities live at namespace scope.
+
+\section{How Hidden Friends Are Found}
+
+This is the subtlest mechanism in the library, so it is worth setting it out
+step by step.
+
+A \emph{hidden friend} is a friend function defined inside a class. It has
+no namespace scope of its own: it cannot be found by ordinary unqualified
+lookup, and it does not appear in any overload set except the ones that
+argument-dependent lookup constructs. The only way to find it is for one of
+its parameters to have an associated class that encloses the friend.
+
+In \code{ExprTemplates::Mixin<Derived>}, the friend
+\code{operator+(const Derived&, const R&)} is declared inside the class
+\code{ExprTemplates::Mixin<Derived>}. The class in which it is declared is
+therefore an associated class of the friend.
+
+Now consider the call \code{a + b}, where \code{a} has type
+\code{Scalar} and \code{Scalar} derives from
+\code{dsl::DSL<Scalar, ExprTemplates>}, which in turn derives from
+\code{ExprTemplates::Mixin<Scalar>}. The associated classes of the call
+include every base class of \code{Scalar}, and therefore include
+\code{ExprTemplates::Mixin<Scalar>}. Argument-dependent lookup searches the
+scope of each associated class for friends declared in it, finds the hidden
+friend, and selects it.
+
+That is the whole trick. The operator becomes visible exactly when one of
+its operands is the deriving type, and at no other time.
+
+\subsection{Why Not a Namespace-Scope Operator?}
+
+The obvious alternative is a free function at namespace scope:
+
+\begin{lstlisting}[style=dslcpp,caption={The design that was not used: a namespace-scope operator template over the deriving type.},label={lst:ch06-freeop}]
+template <typename Derived, typename R>
+constexpr auto
+operator+ (const Derived &lhs, const R &rhs)
+{
+  return BinExpr<std::plus<>, Derived, R>{ lhs, rhs };
+}
+\end{lstlisting}
+
+This does not work, and the reason is instructive. A namespace-scope
+operator template participates in ordinary unqualified lookup and in
+argument-dependent lookup for \emph{every} call of the form \code{x + y} in
+the entire program. The compiler must therefore attempt to deduce
+\code{Derived} from the left operand of every addition anywhere, including
+\code{int + int}, \code{std::string + std::string} and
+\code{double + double}. Each of those attempts fails to deduce
+\code{Derived}, and the resulting error messages are bewildering: a user
+adding two integers would be told that no matching \code{operator+} exists,
+with a note about \code{Derived} being unable to be deduced.
+
+The hidden friend avoids the problem entirely, because the friend is not
+visible during ordinary lookup at all. It is found only if argument-dependent
+lookup reaches it, and argument-dependent lookup reaches it only when an
+operand has the right associated class.
+
+\subsection{A Trace of the Lookup}
+
+It is worth following the lookup for a single expression, because the
+mechanism is easy to describe and easy to get wrong. The procedure below
+is what the compiler does for \code{a + b}, where \code{a} is a
+\code{Scalar} and \code{b} is a \code{double}.
+
+\begin{pseudocode}[Finding a hidden friend by argument-dependent lookup]
+\textbf{function} adl (call)\\
+\quad candidates \leftarrow \{\}\\
+\quad \textbf{for} each argument \code{arg} of the call\\
+\qquad \textbf{for} each class \code{C} associated with \code{arg}\\
+\qquad\qquad \textbf{for} each base class \code{B} of \code{C}\\
+\qquad\qquad \qquad \textbf{for} each friend declared in \code{B}\\
+\qquad\qquad\qquad\qquad \textbf{if} the friend is a candidate for the call\\
+\qquad\qquad\qquad\qquad \qquad candidates \leftarrow candidates \texttt{ union } \{\code{friend}\}\\
+\quad \textbf{return} candidates, to be resolved with the ordinary
+  \qquad\quad overload rules together with ordinary lookup
+\end{pseudocode}
+
+The associated classes of the left argument \code{a} are \code{Scalar} and
+all of its base classes. The base classes are \code{dsl::DSL<Scalar,
+ExprTemplates>}, then \code{ExprTemplates::Mixin<Scalar>}. The friend
+\code{operator+} is declared in that last class, so it is a candidate. The
+right argument \code{b}, a \code{double}, contributes nothing.
+
+The candidate set therefore contains exactly one hidden friend. Ordinary
+unqualified lookup, which searches the enclosing namespaces, contributes
+nothing at all, because a friend declared inside a class is not in any
+namespace.
+
+The final step is ordinary overload resolution over the union of the two
+sets. If the user has also written a namespace-scope
+\code{operator+(const Scalar&, double)} in their own namespace, that
+function is found by ordinary lookup, and the two candidates are then
+resolved by the usual rules -- which is to say that the outcome depends on
+the relative order of the two declarations, exactly as it would for any
+pair of operators.
+
+\subsection{The Left-Operand Asymmetry}\label{sec:ch06-left}
+
+There is a consequence of the friend signature that is easy to miss. The
+binary friends take \code{const Derived&} as their \emph{first}
+parameter, so the deriving type must be on the left:
+
+\begin{lstlisting}[style=dslcmd,caption={The asymmetry, in two lines of output. \code{a + b} compiles; \code{b + a} does not.},label={lst:ch06-asym}]
+two + 3.0        // fine: the hidden friend's first parameter is Derived
+3.0 + two        // error: no match for 'operator+' (operand types are
+                 //        'double' and 'Scalar')
+\end{lstlisting}
+
+The library patches this for the expression-template tree itself. Lines
+7103--7129 declare four namespace-scope operators whose first parameter is
+a \code{BinExpr}, so that \code{(a + b) * c} works with the tree on the
+left. Those operators are safe at namespace scope precisely because their
+first parameter is a concrete type -- \code{BinExpr} -- so they never
+compete with anything else.
+
+\subsection{What the Operator Does Not Check}
+
+\code{ExprTemplates}' operators are unconstrained. They call
+\code{lhs.expr_value()} without requiring that the deriving class has such
+a member. A DSL that names \code{dsl::ExprTemplates} but does not provide
+\code{expr_value()} compiles until the operator is used, at which point the
+error is an ordinary missing-member diagnostic.
+
+The library's own concept \code{ExprLike} does check it properly, by
+requiring \code{t.expr_value()} on a \code{const T&}. A custom feature
+that injects an operator should do the same.
+
+\section{Injecting a Type, Not Just a Member}
+
+Everything said so far has been about member functions, but a mixin may
+contribute anything a class can contain: a nested type, a type alias, a
+static data member, a constant. This is the natural way to give a DSL its
+own vocabulary types.
+
+Listing~\ref{lst:ch06-type} defines a feature that contributes a nested
+struct and a type alias.
+
+\begin{lstlisting}[style=dslcpp,caption={A feature that injects a type. Because the mixin is a base class of the deriving type, the nested type is reachable as \code{S::Tag} and the alias as \code{S::self_type}.},label={lst:ch06-type}]
+namespace mydsl {
+
+struct Tagged
+{
+  template <typename Derived> struct Mixin
+  {
+    /// A nested type: part of the DSL's vocabulary.
+    struct Tag
+    {
+      static constexpr std::string_view text = "tagged";
+    };
+
+    /// An alias for the deriving type, available to user code.
+    using self_type = Derived;
+  };
+};
+
+} // namespace mydsl
+
+struct S : dsl::DSL<S, mydsl::Tagged> {};
+
+// S::Tag::text is "tagged"
+// std::is_same_v<S::self_type, S> is true
+\end{lstlisting}
+
+Two features of this are worth noting. The nested type is a member of the
+mixin, and the mixin is a base of \code{S}, so the type is inherited and
+reachable through the derived class's name. And the alias
+\code{using self_type = Derived;} is the mixin's own use of its template
+parameter: the mixin knows the deriving type, and can publish it.
+
+Note also that these contributions do not interact with the concept of
+Chapter~\ref{ch:crtp-foundation} in any special way. \code{HasFeature<S,
+mydsl::Tagged>} is true because \code{mydsl::Tagged::Mixin<S>} is a base of
+\code{S}; the nested type and the alias are simply inherited.
+
+\subsection{What a Mixin Cannot Contribute}
+
+A mixin cannot contribute a constructor that takes the deriving class's
+arguments, because the mixin is instantiated as a base and never
+constructed in its own right. It cannot contribute a destructor, for the
+same reason. It cannot be final, because it is inherited. And it cannot
+contribute a virtual function usefully, because there is no virtual
+dispatch anywhere in the arrangement -- Chapter~\ref{ch:crtp-foundation}
+explains why.
+
+\section{How Features Interact}
+
+Features are independent by default. Naming \code{dsl::Rewrite} does not
+require \code{dsl::AST}, because \code{Rewrite}'s mixin works with the free
+type \code{dsl::ASTNode} rather than with anything the \code{AST} mixin
+provides. A DSL that names only \code{dsl::Rewrite} and declares a
+\code{rules} member compiles and its \code{rewrite} method works.
+
+The dependencies that do exist run through the deriving class, not through
+the feature list:
+
+\begin{itemize}
+\item \code{Rewrite} needs \code{Derived::rules}, a static member.
+\item \code{CustomLiterals} needs \code{Derived::literals}, a static member.
+\item \code{Memoization} needs \code{Derived::memo_cache}, an instance
+      member.
+\item \code{ExprTemplates} needs \code{Derived::expr_value()}, an instance
+      member, but does not check for it.
+\end{itemize}
+
+When a feature genuinely needs another feature -- because the member it
+provides is meaningless without the other -- the way to say so is the
+\code{HasFeature} concept. A constrained member is the mechanism:
+
+\begin{lstlisting}[style=dslcpp,caption={A feature that requires another feature. The constraint is checked at the point of use, and the diagnostic names the constraint.},label={lst:ch06-requires}]
+namespace mydsl {
+
+/// Feature tag: requires the AST feature and adds an instance member.
+struct Simplify
+{
+  template <typename Derived> struct Mixin
+  {
+    dsl::ASTNode
+    simplify (const dsl::ASTNode &tree) const
+      requires dsl::HasFeature<Derived, dsl::AST>
+    {
+      return dsl::node<"simplified"> (tree);
+    }
+  };
+};
+
+} // namespace mydsl
+\end{lstlisting}
+
+A DSL that names \code{mydsl::Simplify} without \code{dsl::AST} compiles,
+but calling \code{simplify} does not:
+
+\begin{lstlisting}[style=dslcmd,caption={The diagnostic produced by a violated feature-on-feature constraint.},label={lst:ch06-violated}]
+error: no matching function for call to 'Bad::simplify(dsl::ASTNode)'
+note: candidate: 'dsl::ASTNode mydsl::Simplify::Mixin<Derived>::simplify(...)
+       constraints not satisfied
+\end{lstlisting}
+
+\section{A Feature That Injects an Operator}
+
+Listing~\ref{lst:ch06-custom} is a complete program that defines two
+custom features: one that injects an operator as a hidden friend, and one
+that requires an existing feature. It uses the library's own
+\code{AST} feature, the library's free functions, and the
+\code{HasFeature} concept.
+
+\begin{lstlisting}[style=dslcpp,caption={Two custom feature tags: one injecting a hidden-friend operator, one requiring an existing feature.},label={lst:ch06-custom}]
+#include "DSLtk.hpp"
+#include <iostream>
+
+namespace mydsl {
+
+/// Feature tag: injects `operator^` (integer power) as a hidden friend.
+struct Power
+{
+  template <typename Derived> struct Mixin
+  {
+    template <typename R>
+    friend constexpr auto
+    operator^ (const Derived &lhs, const R &rhs)
+    {
+      double base = lhs.expr_value ();
+      double exponent = static_cast<double> (rhs);
+      double result = 1.0;
+      for (int step = 0; step < static_cast<int> (exponent); ++step)
+        result *= base;
+      return result;
+    }
+  };
+};
+
+/// Feature tag: requires the AST feature and adds an instance member.
+struct Simplify
+{
+  template <typename Derived> struct Mixin
+  {
+    dsl::ASTNode
+    simplify (const dsl::ASTNode &tree) const
+      requires dsl::HasFeature<Derived, dsl::AST>
+    {
+      return dsl::node<"simplified"> (tree);
+    }
+  };
+};
+
+} // namespace mydsl
+
+struct Number : dsl::DSL<Number, mydsl::Power, dsl::AST, mydsl::Simplify>
+{
+  double value{};
+  Number () = default;
+  explicit Number (double v) : value (v) {}
+  double expr_value () const { return value; }
+};
+
+int main ()
+{
+  Number two{2.0};
+  auto eighth = two ^ 8;
+  std::cout << "two ^ 8 = " << eighth << "\n";
+
+  auto tree = Number::make_leaf<"num"> (7);
+  Number instance;
+  std::cout << "simplified = " << instance.simplify (tree).dump () << "\n";
+}
+\end{lstlisting}
+
+The output is
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch06-custom}.},label={lst:ch06-custom-out}]
+two ^ 8 = 256
+simplified = (simplified (num 7))
+\end{lstlisting}
+
+The operator \code{\^} is worth a second look. It is a hidden friend
+declared inside \code{mydsl::Power::Mixin<Number>}, so it is found by
+argument-dependent lookup when the left operand is a \code{Number}, and it
+is invisible everywhere else. No other program that includes this header
+sees it, and no \code{operator^} in the global namespace has been
+polluted. Note also that \code{\^} has lower precedence than \code{+}, so
+\code{two ^ 8 + 1} parses as \code{two ^ (8 + 1)} -- a reminder that
+injected operators come with the precedence of the operator symbol they
+reuse.
+
+\section{Mixin Assembly}
+
+The diagram below shows how a feature list becomes an object.
+The procedure below states the same process in words.
+
+\begin{figure}[ht]
+\centering
+\begin{dslgraph}
+  \node[dslbox, text width=42mm] (m1) at (-4.6,1.5) {\code{Pipeline::Mixin<Greeter>}};
+  \node[dslbox, text width=42mm] (m2) at (-4.6,0) {\code{AST::Mixin<Greeter>}};
+  \node[dslbox, text width=42mm] (m3) at (-4.6,-1.5) {\code{Rewrite::Mixin<Greeter>}};
+
+  \node[dslbox, text width=48mm, minimum height=13mm] (base) at (0,0) {\code{dsl::DSL<Greeter, Pipeline, AST, Rewrite>}\\three direct bases, no data};
+
+  \node[dslbox, text width=38mm] (derived) at (4.8,0) {\code{struct Greeter :}\\ \code{dsl::DSL<...>}};
+
+  \draw[dsledge] (m1) -- (base);
+  \draw[dsledge] (m2) -- (base);
+  \draw[dsledge] (m3) -- (base);
+  \draw[dsledge] (base) -- (derived);
+  \draw[dslfeedback] (derived.south) -- ++(0,-8mm) -| node[pos=0.25, below, font=\scriptsize] {the mixins are bases of the base} (m3.south);
+\end{dslgraph}
+\caption{Mixin assembly. Each feature tag contributes one base class to
+\code{dsl::DSL}; the deriving class inherits from that, and therefore from
+all of them. The arrow back to the mixins records that the derivation is
+direct: \code{Rewrite::Mixin<Greeter>} is a base of \code{Greeter}.}
+\label{fig:ch06-assembly}
+\end{figure}
+
+\begin{pseudocode}[Assembling a DSL from a feature list]
+\textbf{function} assemble (Derived, F1, F2, \ldots, Fn)\\
+\quad \textbf{for} each feature \code{Fi}\\
+\qquad \textbf{require} \code{Fi::Mixin} exists\\
+\qquad instantiate \code{Mi = Fi::Mixin<Derived>}\\
+\qquad \textbf{if} \code{Mi} declares members then\\
+\qquad\qquad \textbf{comment} those members are inherited by \code{Derived}\\
+\qquad \textbf{else}\\
+\qquad\qquad \textbf{comment} \code{Mi} is a marker: no members, no cost\\
+\quad \textbf{return} \code{Derived}, which inherits from every \code{Mi}
+\end{pseudocode}
+
+\section{The Same Extension Point in Both Ports}
+
+The C++ and D ports agree on the shape of a custom feature, even though they
+disagree on almost everything else about composition. In D, the
+\code{DSL!} mixin template ends with a loop that mixes in any feature's own
+nested mixin:
+
+\begin{lstlisting}[style=dslcmd,caption={The D port's custom-feature extension point, from \code{DSLtk.d} lines 117--120.},label={lst:ch06-dmixin2}]
+static foreach (Feature; Features)
+{
+    static if (__traits(hasMember, Feature, "Mixin")) mixin Feature.Mixin;
+}
+\end{lstlisting}
+
+So a D feature tag may also carry a nested \code{Mixin}, and that mixin is
+mixed into the deriving struct. The D module header says so explicitly:
+\emph{``Custom feature tags may supply a nested mixin template named
+Mixin.''} The D port's own test suite exercises this, with a tag that
+declares \code{mixin template Mixin() { int custom_value() const { return
+17; } }}.
+
+The C++ port requires the nested \code{Mixin} unconditionally: the base
+clause names it, so a tag without one does not compile. The D port makes it
+optional, because the D \code{DSL!} template supplies its own members for
+the built-in features and only reaches for \code{Feature.Mixin} when the
+feature provides one.
+
+The practical difference for a user writing a custom feature is small. In
+both ports you write a tag with a nested mixin; in C++ the mixin is a
+class template parameterised by the deriving type, and in D it is a mixin
+template with no parameters, mixed into the enclosing struct.
+
+\section{What Each Feature Contributes}
+
+Table~\ref{tab:ch06-contributions} summarises the seven injecting features.
+The remaining nineteen contribute no members at all.
+
+\begin{table}[ht]
+\centering
+\caption{What each injecting feature contributes, and in what form.}
+\label{tab:ch06-contributions}
+\small
+\begin{tabular}{@{}L{0.19\textwidth}L{0.32\textwidth}L{0.16\textwidth}L{0.25\textwidth}@{}}
+\toprule
+\textbf{Feature} & \textbf{Member added} & \textbf{Kind} & \textbf{Needs from \code{Derived}} \\
+\midrule
+\code{Pipeline} & \code{wrap(T&&)} & static function & nothing \\
+\code{Operators} & \code{make_pred(F&&)} & static function & nothing \\
+\code{AST} & \code{make_leaf<Tag>}, \code{make_node<Tag>} & static function templates & nothing \\
+\code{Rewrite} & \code{rewrite(const ASTNode&)} & instance function & \code{rules} (static) \\
+\code{ExprTemplates} & \code{operator+}, \code{-}, \code{*}, \code{/} & hidden friends & \code{expr_value()} (instance) \\
+\code{CustomLiterals} & \code{parse_literal(std::string_view)} & static function & \code{literals} (static) \\
+\code{Memoization} & \code{clear_cache()} & instance function & \code{memo_cache} (instance) \\
+\midrule
+\code{PatternMatch} and the other eighteen markers & nothing & marker & nothing \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Edge Cases and Limits}
+
+\paragraph{A feature tag must contain a nested \code{Mixin}.}
+There is no default. The library does not provide a fallback mixin, so a tag
+without one is a compile error at the point where the DSL is declared.
+
+\paragraph{The mixin takes exactly one parameter.}
+The expansion is \code{F::Mixin<Derived>}. A mixin with a second template
+parameter, or with a defaulted one that the library does not supply, will
+not instantiate.
+
+\paragraph{The mixin is instantiated once per deriving type.}
+A feature used by ten DSLs is instantiated ten times, and each
+instantiation is a distinct type. This is why the mixins are thin: the cost
+of instantiating them is multiplied by the number of DSLs that use them.
+
+\paragraph{Feature-to-feature constraints are unusual.}
+Only two of the shipped mixins constrain themselves on another feature, and
+neither does: both constrain themselves on a member of the deriving class.
+If your feature truly needs another feature, use
+\code{requires dsl::HasFeature<Derived, OtherFeature>}, and be aware that
+this makes the feature order in the list irrelevant while making the
+dependency explicit in the source.
+
+\paragraph{Hidden friends are found only on the left for binary operators.}
+As Section~\ref{sec:ch06-left} showed, \code{b + a} does not compile when
+\code{a} is the deriving type and \code{b} is not. If your language needs
+the deriving type on either side, you must declare two friends.
+
+\paragraph{Hidden friends do not participate in overload resolution against
+ordinary candidates in the way you might expect.}
+They are found by argument-dependent lookup, which means they are considered
+for arguments of the deriving type and are invisible otherwise. A user's
+\code{operator+(const MyType&, const MyType&)} at namespace scope will
+still be found by ordinary lookup for \code{MyType + MyType}, and the two
+candidates will be resolved by the usual overload rules. If both are
+viable, the outcome depends on the relative ordering of the two
+declarations, exactly as with any pair of operators.
+
+\paragraph{An injected operator inherits the precedence and associativity of
+the symbol it reuses.}
+\code{\^} binds more tightly than \code{+}; \code{<<} binds more tightly
+than \code{+}. A language that wants different precedences must not reuse
+those symbols.
+
+\paragraph{Marker features cost nothing but also do nothing.}
+Nineteen of the twenty-six tags contribute no members. A marker in a feature
+list is documentation and a queryable fact, not a capability.
+
+\paragraph{The feature list is fixed at compile time.}
+There is no way to add a feature to an existing DSL type, and no runtime
+mechanism for choosing between feature sets. The pack is part of the type.
+
+\section{What Comes Next}
+
+The composition mechanism is now fully described: the tag, the mixin, the
+four kinds of contribution, the hidden-friend technique, and the
+interactions between features. The next chapter opens the first of the
+standalone subsystems, the enum-reflection facility that the library
+inherits from the embedded \code{magic_enum} v0.9.8.

@@ -1,0 +1,637 @@
+\chapter{The Parser Core: \texttt{ParsecInput}, \texttt{ExpectedResult}, \texttt{Parser}}
+\label{ch:parser-core}
+{
+
+% \code detokenises its argument, so a long type name cannot be broken
+% across lines and will overflow a narrow table column.  \codel takes
+% two pieces of such a name, places a discretionary break between them,
+% and prints them in a monospaced face.  Because \codel does not
+% detokenise its arguments, an ampersand inside a table cell must be
+% written \&, and an underscore must be written \_.
+\providecommand{\codel}[2]{\texttt{#1\allowbreak#2}}
+
+\section{Why a parser needs a core}
+
+A parser is a function from text to meaning, but the function that does the
+real work --- the one that matches a token, that repeats a rule, that tries
+an alternative --- does not look like a function from text to meaning.  It
+looks like a function from a cursor to a maybe-value.  Three questions have
+to be answered on every call, and a parser library has to answer them in a
+way that composes.
+
+The first question is \emph{where am I}.  Every parser has to read a
+character, sometimes look ahead one character, and sometimes report which
+characters it just swallowed.  The natural representation is a mutable
+cursor over an immutable buffer.
+
+The second question is \emph{did it work}.  A parser either produces a
+value or it does not, and the ``does not'' case has to carry enough
+information for the caller to decide what to do next: retry a different
+alternative, or give up and tell the user what was expected.
+
+The third question is the hard one: \emph{what happens when a parser
+consumes some input and then fails}.  A backtracking parser must be able
+to undo the consumption; a parser that has committed to a path must be able
+to say so, so that the alternatives are not tried.  Without a way to
+distinguish a recoverable failure from an unrecoverable one, ordered choice
+degenerates into exponential search, and error messages become a lottery.
+
+DSLtk's answer is small and explicit.  The header implements the whole
+parser core in about a hundred and thirty lines: a cursor
+(\code{ParsecInput}), a two-valued failure kind (\code{ParseFailureKind}),
+an error record (\code{ParseError}), a result type that carries either a
+value or an error (\code{ExpectedResult<T>}), a parser value
+(\code{Parser<T>}), and four free functions that glue them together
+(\code{parser}, \code{merge_error}, \code{fail_expected} and
+\code{load_parse_input_file}).  Everything else in this part of the book
+is built out of those.
+
+Two design decisions deserve to be stated up front, because they explain
+almost every observable behaviour later in the chapter.  First, the parser
+is a \emph{value}: \code{Parser<T>} is a thin wrapper around a
+\code{std::function}, so parsers are copied, stored in containers, and
+passed around like any other object.  Second, the parser is
+\emph{stateless}: all mutable state lives in the \code{ParsecInput} that the
+caller passes by non-const reference.  A parser can therefore be run
+concurrently on two inputs, and the same parser object can be reused for a
+million inputs without any hidden bookkeeping.
+
+\section{A worked example}
+
+The core is small enough to use directly, without any combinator at all.
+The following program implements a parser for one fixed literal token by
+hand, and reports where the mismatch occurred.
+
+\begin{lstlisting}[style=dslcpp,caption={A hand-written parser for a fixed token, and a diagnostic printer for the error it produces.},label={lst:ch21-token}]
+#include "DSLtk.hpp"
+
+#include <iostream>
+#include <string>
+
+// A hand-written parser for a fixed literal token.  It is *not* built
+// from dsl::ch: it drives the cursor itself, which is exactly what a
+// primitive parser in the combinator library does.
+//
+// Note the discipline: the parser rewinds the cursor to where it started
+// when it fails, but it reports the failure at the offset where the
+// mismatch actually occurred.  The two positions are independent.
+static dsl::Parser<std::string>
+token (std::string lit)
+{
+  return dsl::parser (
+      [lit] (dsl::ParsecInput &in) -> dsl::ExpectedResult<std::string>
+      {
+        std::size_t start = in.pos;
+        for (char c : lit)
+          {
+            if (in.eof () || in.peek () != c)
+              {
+                std::size_t bad = in.pos;
+                in.pos = start;
+                return dsl::ExpectedResult<std::string>::failure (
+                    bad, dsl::ParseFailureKind::Soft,
+                    { "token '" + lit + "'" });
+              }
+            in.consume ();
+          }
+        return lit;
+      });
+}
+
+// A tiny diagnostic printer.  The header has no message formatter; this
+// is the user's job.
+static std::string
+format_expected (const std::vector<std::string> &labels)
+{
+  if (labels.empty ())
+    return "<nothing>";
+  std::string s;
+  for (std::size_t i = 0; i < labels.size (); ++i)
+    {
+      if (i)
+        s += (i + 1 == labels.size () ? " or " : ", ");
+      s += labels[i];
+    }
+  return s;
+}
+
+static void
+report (const std::string &src)
+{
+  auto outcome = dsl::run_parser (token ("let"), src);
+  std::cout << "  source: \"" << src << "\"\n";
+  if (outcome.value)
+    {
+      std::cout << "    matched \"" << *outcome.value << "\"\n";
+      return;
+    }
+  const auto &err = outcome.error;
+  std::cout << "    error at offset " << err.pos << " ("
+            << (err.kind == dsl::ParseFailureKind::Committed ? "committed"
+                                                            : "soft")
+            << "): expected " << format_expected (err.expected) << "\n";
+  std::cout << "    ";
+  for (std::size_t i = 0; i < src.size (); ++i)
+    std::cout << ' ';
+  std::cout << std::string (err.pos, ' ') << "^\n";
+}
+
+int
+main ()
+{
+  report ("let");
+  report ("let x = 1;");
+  report ("lst");
+  report ("le");
+  report ("");
+  return 0;
+}
+\end{lstlisting}
+
+Compiling against \code{DSLtk/DSLtk.hpp} and running it produces:
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch21-token}.},label={lst:ch21-token-out}]
+  source: "let"
+    matched "let"
+  source: "let x = 1;"
+    error at offset 3 (committed): expected <end-of-input>
+                 ^
+  source: "lst"
+    error at offset 1 (soft): expected token 'let'
+        ^
+  source: "le"
+    error at offset 2 (soft): expected token 'let'
+        ^
+  source: ""
+    error at offset 0 (soft): expected token 'let'
+    ^
+\end{lstlisting}
+
+Three things in that output are worth pausing over.  The second case is not
+a failure of the token parser at all: the token matched, and the error
+comes from \code{run_parser}, which refuses to leave trailing input
+behind; that is the \code{Committed} error labelled
+\code{"<end-of-input>"} discussed in Chapter~\ref{ch:parser-diagnostics}.
+The third and fourth cases show the distinction the hand-written parser
+makes between the two positions: the cursor is rewound to offset zero, but
+the error is reported at offset one and offset two respectively, because
+that is where the input stopped matching the token.  The fifth case shows
+the same thing at the end of the input.
+
+\section{The data model}
+
+The core is five types and four functions.  Table~\ref{tab:ch21-types} lists
+the types with all of their members; Table~\ref{tab:ch21-functions} lists
+the free functions.
+
+\begin{table}[htbp]
+\centering
+\caption{The types of the parser core, with every member.}
+\label{tab:ch21-types}
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{L{3.0cm} L{5.6cm} L{5.8cm}}
+\toprule
+\textbf{Type} & \textbf{Members} & \textbf{Meaning} \\
+\midrule
+\code{ParsecInput}
+  & \code{std::string_view source}, \code{std::size_t pos},
+    \code{peek()}, \code{eof()}, \code{consume()},
+    \code{get_span(start)}
+  & The cursor.  \code{peek()} returns the byte at \code{pos} or
+    \code{'\textbackslash 0'} at end of input; \code{consume()} returns
+    that byte and advances, or returns \code{'\textbackslash 0'} and does
+    not advance; \code{get_span(start)} returns the text between
+    \code{start} and the current position. \\
+\codel{ParseFailure}{Kind}
+  & \code{Soft}, \code{Committed}
+  & Whether a failure may be retried. \\
+\code{ParseError}
+  & \code{std::size_t pos}, \code{ParseFailureKind kind},
+    \codel{std::vector<std::string>}{expected}
+  & Where the failure happened, whether it is recoverable, and the set of
+    labels that would have been accepted there.  \code{pos} is a
+    \emph{byte offset}, not a line and column. \\
+\codel{ExpectedResult}{<T>}
+  & \code{value_type}, \code{std::optional<T> value},
+    \code{ParseError error}, \code{failure(pos, kind, expected)},
+    explicit \code{operator bool}, \code{operator*} (const and
+    non-const)
+  & The result of one parser call.  It is \emph{not} a variant: it always
+    has both a value slot and an error slot.  Constructors exist for
+    \code{std::nullopt_t}, \code{const T&} and \code{T&&}. \\
+\code{Parser<T>}
+  & \codel{std::function<}{ExpectedResult<T>}\codel{(ParsecInput\&)>}{parse},
+    \codel{operator()}{(ParsecInput\&)}
+  & The parser value.  \code{operator()} simply forwards to
+    \code{parse}. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{The free functions of the parser core.}
+\label{tab:ch21-functions}
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{L{3.6cm} L{5.8cm} L{5.4cm}}
+\toprule
+\textbf{Function} & \textbf{Signature} & \textbf{Purpose} \\
+\midrule
+\code{parser}
+  & \code{template <typename Fn> auto parser (Fn&& fn)}
+  & Wraps a callable into a \code{Parser<T>}, deducing \code{T} from the
+    \code{value_type} of the callable's return type. \\
+\code{merge_error}
+  & \code{void merge_error (ParseError& dst, const ParseError& src)}
+  & Folds a second error into the first.  The farther position wins; on a
+    tie the kind is promoted to \code{Committed} and the label lists are
+    unioned. \\
+\code{fail_expected}
+  & \code{template <typename T> ExpectedResult<T> fail_expected (const ParsecInput& in, std::string label, ParseFailureKind kind = Soft)}
+  & Builds a failed result whose error sits at the cursor's current
+    position and whose label list contains exactly one label. \\
+\code{load_parse_input_file}
+  & \codel{Result<std::string,}{std::string>}\codel{load\_parse\_}{input\_file}
+    \codel{(const std::string\&}{path)}
+  & Reads a whole file into a string, or returns an error.  See
+    Chapter~\ref{ch:task-pipeline} for a caveat about this return type. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+It is just as important to record what the core does \emph{not} have.
+\code{ParsecInput} has no \code{position()}, no \code{remaining()}, no
+\code{skip()} and no \code{expect()}; the cursor is a bare offset into a
+view, and everything else is derived from it.  It records no error state
+of its own: a failure lives in the \code{ExpectedResult} that the parser
+returns, never in the input.  \code{ExpectedResult<T>} has no
+\code{operator->}, so a success must be reached with \code{(*r).field} or
+\code{r.value->field}; it has no \code{value_or()}, no
+\code{map()} and no \code{error_or()}.  Its \code{operator bool} is
+\emph{explicit}, so a result cannot be converted to \code{bool} by
+accident, and \code{operator*} on a failed result dereferences an empty
+\code{std::optional}, which is undefined behaviour --- the caller must
+test first.
+
+The \code{ParseError} record deserves one more word, because it is the
+single most consequential design decision in the core.  A \code{ParseError}
+does not know its line or its column; it knows a byte offset into the
+source.  Line and column are properties of the \emph{file}, and a parser
+that is handed a fragment of a file --- a string view into the middle of a
+buffer --- has no way to recover them.  Computing them is therefore the
+user's job, and Chapter~\ref{ch:parser-diagnostics} shows a formatter that
+does it.
+
+\begin{invariant}[The cursor is the only mutable state]
+\label{inv:ch21-cursor}
+Between two calls to a parser, the only state that survives is the
+\code{pos} member of the \code{ParsecInput}.  A parser that wants to
+remember anything between calls must put it in the value it returns, or
+capture it in the closure that implements it.
+\end{invariant}
+
+\subsection{Why the result is not a variant}
+
+The most surprising thing about \code{ExpectedResult<T>} is that it is not
+a \code{std::variant}.  The obvious design --- a variant of \code{T} and
+\code{ParseError} --- would halve the size of the result and would make
+``did it work'' a single index test.  The shipped design keeps two
+independent members instead, and the reason is that the two pieces of
+information are genuinely independent.
+
+A \code{ParseError} is not an alternative to a value; it is
+\emph{metadata about the attempt}.  A successful parse still has an
+attempt, and the attempt has a position at which it succeeded, a kind
+(which is vacuously \code{Soft}), and an empty list of labels.  A failed
+parse still has a value slot, which is empty.  Keeping the two apart
+means the error can be carried along and merged --- which is exactly what
+\api{merge_error} does --- without any of the ceremony that a variant
+would impose on every access.  The price is that the type is bigger than
+it needs to be, and that a successful result carries a meaningless error
+that a careless caller might read.
+
+There is a second, more practical reason.  \code{ExpectedResult<T>} is
+constructed in a great many places, and the type must be usable in a
+\code{return} statement from a lambda whose return type is deduced.  With
+a variant, every such construction would have to name the alternative
+explicitly.  With two members and a set of constructors, the code reads
+as ordinary value semantics: \code{ExpectedResult<T>::failure(pos, kind,
+expected)} builds a failure, and the implicit conversion from \code{T}
+builds a success.
+
+The result is also \emph{not} a \code{std::expected}, and this is worth
+noting because the two are easy to confuse.  \code{std::expected} keeps
+the error in the same alternative as the value, so a success and a failure
+are mutually exclusive by construction.  \code{ExpectedResult} keeps them
+apart, and the \code{operator bool} reports only on the value slot.  A
+failed result is \code{false}, and that is the only question
+\code{operator bool} answers.
+
+\subsection{The parser as a value}
+
+\code{Parser<T>} holds one member, a
+\code{std::function<ExpectedResult<T>(ParsecInput&)>}, and forwards
+calls to it.  Three consequences follow, and all three are used in the next
+chapter.
+
+First, a parser is \emph{copyable} and therefore storable.  A grammar can
+be built once, at start-up, and then run against a million inputs; the
+combinators of Chapter~\ref{ch:primitive-parsers} capture their operands
+by value precisely so that this works.
+
+Second, a parser is \emph{inspectable and replaceable}.  The
+\code{parse} member is public, so a parser can be taken apart and put
+back together.  This is not a stylistic accident: it is the only way to
+write a recursive grammar with combinators that capture by value, and
+Listing~\ref{lst:ch22-expr} shows the technique.
+
+Third, a parser is \emph{stateless with respect to the input}.  Two
+threads may run the same parser on two different inputs simultaneously,
+because the only mutable state is the \code{ParsecInput} each thread
+supplies.  The parser object itself is not modified by a call.
+
+The deduction in \api{parser} deserves a word.  The callable's return
+type must be an \codel{ExpectedResult<}{Something>}, and the
+\code{value_type} member of that result is used to deduce \code{T}.  The
+deduction is not from the callable's argument type --- there is only one
+argument type --- but from the nested \code{value_type}, which is why
+\code{ExpectedResult<T>} bothers to define one in the first place.  The
+practical consequence is that a lambda must state its return type, either
+by annotating it or by having an unambiguous \code{return} statement; a
+lambda whose body returns two different types will fail to deduce, with
+a message that mentions \code{value_type} rather than the lambda.
+
+\section{The algorithm: the commit discipline}
+
+Everything subtle in the parser core follows from one rule:
+
+\begin{contract}[The commit discipline]
+\label{contract:ch21-commit}
+A parser that consumes input and then fails is responsible for putting
+\code{in.pos} back where it was, unless it has decided to commit.  A
+failure whose kind is \code{Committed} means \emph{no alternative may be
+tried}: the input has been consumed in a way that the caller has promised
+not to undo.
+\end{contract}
+
+The rule is not enforced by the library; it is a convention that the
+library's own combinators follow and that user-written parsers must follow
+too.  The convention has two halves, and it is worth keeping them apart.
+
+The first half is the \emph{rewind}.  A parser that fails softly must
+leave the cursor exactly where it found it, so that the caller --- typically
+\api{operator|} --- can rewind and try something else.  A parser that
+fails in a committed way may leave the cursor wherever it likes, because
+nobody is going to try anything else.
+
+The second half is the \emph{label}.  The failure record says whether the
+failure was soft or committed, and the distinction is what
+\api{operator|} uses to decide whether to try the second alternative.
+A soft failure is a request: ``this did not match, and you may look
+elsewhere''.  A committed failure is a verdict: ``this did not match, and
+looking elsewhere would be wrong''.
+
+The \code{ParseFailureKind} enumeration is the whole vocabulary:
+
+\begin{verbatim}
+enum class ParseFailureKind { Soft, Committed };
+\end{verbatim}
+
+Consider the difference between the two spellings of a keyword parser.  A
+keyword parser that matches the letters of \code{if} and then discovers
+that the next character is a letter has consumed input.  If it reports a
+soft failure and rewinds, the caller may fall back to an identifier
+parser.  If it reports a committed failure, the caller must not, and the
+error propagates.  The library gives the user the choice, and
+\api{try_parse} (Chapter~\ref{ch:primitive-parsers}) is the explicit
+operator for choosing the first behaviour.
+
+\subsection{Merging errors}
+
+When two alternatives both fail, the library has to decide which error to
+report.  The rule implemented by \api{merge_error} is the familiar
+``farthest failure wins'' heuristic, with one refinement.
+
+\begin{pseudocode}[Merge two parse errors]
+\textbf{function} merge\_error (dst, src)\\
+\quad if src.pos > dst.pos then\\
+\qquad dst := src\\
+\qquad return\\
+\quad if src.pos < dst.pos then\\
+\qquad return\\
+\quad if src.kind = Committed then\\
+\qquad dst.kind := Committed\\
+\quad for each label in src.expected do\\
+\qquad\quad if label is not in dst.expected then\\
+\qquad\qquad\quad append label to dst.expected
+\end{pseudocode}
+
+The first two branches implement the heuristic.  The error that was
+recorded furthest into the input is the most informative one, because it
+is the point at which the parser had committed the most context; an error
+at offset zero of a large token is less useful to a user than an error at
+the end of it.  When the source error is strictly farther away, it
+\emph{replaces} the destination wholesale --- position, kind and labels
+alike.  Note the word \emph{replaces}: the kind of the farther error is
+adopted, not promoted, so a committed failure at a nearer position can be
+discarded in favour of a soft failure at a farther one.  That is
+deliberate, and it is the right trade, because the position is what the
+user cares about.
+
+The remaining branch handles the tie.  Two alternatives that failed at the
+same offset are two answers to the same question --- what would have been
+acceptable here? --- so their label lists are unioned, and the result is
+promoted to \code{Committed} so that the union is not thrown away by a
+further merge.  This is the mechanism behind messages of the form
+``expected digit, identifier, or a closing brace''.  The de-duplication is
+linear in the length of the two lists, which is fine for the handful of
+labels a hand-written grammar produces and noticeable only for a grammar
+with thousands of alternatives.
+
+One subtlety is worth flagging, because it is visible in the output of
+Listing~\ref{lst:ch21-token} and in the message formatter of
+Chapter~\ref{ch:parser-diagnostics}.  The union preserves the order in
+which the labels were \emph{appended}, and \api{operator|} merges the
+error of the \emph{second} alternative as the destination.  The labels
+therefore appear in the reverse of the order in which the alternatives
+were written.  A grammar that offers \code{digit} first and \code{'('}
+second reports ``expected \code{(} or \code{digit}''.  The set is right;
+the order is not the source order, and a formatter that cares should sort
+or should be written knowing this.
+
+\subsection{Building a failure by hand}
+
+\api{fail_expected} is the shortest path from ``the cursor is at
+position \emph{p} and the byte there is not what I wanted'' to a failed
+result.  It records the label at the cursor's \emph{current} position,
+which is why a parser that has already consumed input reports the failure
+at the end of what it consumed rather than at the start of the attempt.  A
+parser that wants to report elsewhere must construct the
+\code{ExpectedResult} itself, as the hand-written parser in
+Listing~\ref{lst:ch21-token} does; the machinery is public, and
+\code{ExpectedResult<T>::failure(pos, kind, expected)} is the direct way
+to say exactly where the problem is.
+
+\subsection{Loading input}
+
+\api{load_parse_input_file} is a convenience that reads an entire file
+into a \code{std::string} and returns it in a
+\code{Result<std::string, std::string>}.  It opens the file in binary
+mode, so a file containing a null byte is read faithfully, and it reports
+two distinct failures: the file could not be opened, or it could not be
+read to the end.  Because the result type is
+\code{Result<std::string, std::string>}, both the payload and the error
+message are \code{std::string}, and Chapter~\ref{ch:task-pipeline}
+explains why that particular instantiation is not inspectable in the
+shipped header.
+
+\section{The cursor model}
+
+Figure~\ref{fig:ch21-cursor} draws the model the code implements.  The
+source is an immutable view; the cursor is an index into it; and the text
+that a parser has consumed is recoverable with \code{get_span} without
+having been stored anywhere.
+
+\begin{dslgraph}
+  \tikzset{bytecell/.style={draw=nodefg, fill=nodebg, rounded corners=2pt,
+                           minimum width=8mm, minimum height=6mm,
+                           font=\small\sffamily}}
+  % The byte cells
+  \node[bytecell] (b0) at (0,0) {\texttt{l}};
+  \node[bytecell] (b1) at (0.9,0) {\texttt{e}};
+  \node[bytecell] (b2) at (1.8,0) {\texttt{t}};
+  \node[bytecell] (b3) at (2.7,0) {\texttt{\textvisiblespace}};
+  \node[bytecell] (b4) at (3.6,0) {\texttt{x}};
+  \node[bytecell] (b5) at (4.5,0) {\texttt{\textvisiblespace}};
+  \node[bytecell] (b6) at (5.4,0) {\texttt{=}};
+  \node[bytecell] (b7) at (6.3,0) {\texttt{\textvisiblespace}};
+
+  % The view
+  \draw[->, thick] (-0.6,1.15) -- (6.9,1.15);
+  \node[font=\small\sffamily, above] at (3.15,1.15)
+    {\texttt{source} : a \texttt{std::string\_view}};
+
+  % The cursor
+  \draw[densely dashed, thick] (2.25,-1.05) -- (2.25,0.55);
+  \draw[->, thick] (2.25,0.55) -- (2.25,0.10);
+  \node[font=\small\sffamily, below] at (2.25,-1.05) {\texttt{pos} = 3};
+
+  % Consumed and remaining
+  \draw[thick, rounded corners=2pt] (-0.45,-0.45) rectangle (2.23,0.45);
+  \node[font=\scriptsize\sffamily, below] at (0.9,-0.50)
+    {\texttt{get\_span(0)} : consumed};
+  \draw[thick, rounded corners=2pt, dashed] (2.27,-0.45) rectangle (6.75,0.45);
+  \node[font=\scriptsize\sffamily, below] at (4.5,-0.50) {not yet consumed};
+
+  % The operations
+  \node[dslbox, text width=26mm, fill=decisionbg] (peek) at (0.9,-2.05)
+    {\texttt{peek()} : the byte at \texttt{pos}};
+  \node[dslbox, text width=26mm, fill=decisionbg] (cons) at (3.6,-2.05)
+    {\texttt{consume()} : the byte, then advance};
+  \node[dslbox, text width=26mm, fill=decisionbg] (eof) at (6.3,-2.05)
+    {\texttt{eof()} : \texttt{pos} past the end};
+  \draw[dslledge] (peek) -- (b0);
+  \draw[dslledge] (cons) -- (b1);
+  \draw[dslledge] (eof) -- (b5);
+\end{dslgraph}
+\begin{figure}[htbp]
+\centering
+\caption{The cursor model of \code{ParsecInput}.  The source is an immutable
+view; \code{pos} is the only mutable member.  \code{get_span(start)}
+recovers the text between any earlier offset and the cursor, so a parser
+never has to copy the text it has consumed.}
+\label{fig:ch21-cursor}
+\end{figure}
+
+The figure also shows the three accessors in their natural order.  A
+parser almost always begins by asking \code{eof()} or \code{peek()}; it
+consumes only when it is sure; and it reports what it consumed with
+\code{get_span} when it needs the text rather than a derived value.  The
+fourth member, \code{pos}, is public, and the library's combinators write
+to it directly --- that is how a rewinding combinator undoes a failed
+attempt.  A user-written parser is expected to do the same.
+
+\section{Edge cases and limits}
+
+The core is minimal, and its limits are worth stating precisely.
+
+\begin{itemize}
+\item \textbf{The source must outlive the parse.}  \code{ParsecInput}
+  holds a \code{std::string_view}, not a copy.  A view over a temporary
+  is a dangling view: constructing a \code{ParsecInput} directly from a
+  temporary \code{std::string} leaves the view referring to a destroyed
+  temporary before the next statement runs.  The same hazard applies to
+  \code{run_parser}, although there the temporary lives until the end of
+  the calling statement, so the call itself is safe.
+
+\item \textbf{A null byte in the source is indistinguishable from the end
+  of the source.}  \code{peek()} returns \code{'\textbackslash 0'} at the
+  end of input, and it returns the same value for a real null byte.
+  \code{eof()} distinguishes the two, and a parser that cares should test
+  it.
+
+\item \textbf{\code{consume()} at the end of the input is a no-op.}  It
+  returns \code{'\textbackslash 0'} and leaves \code{pos} unchanged, so
+  it is safe to call, but a parser that loops on \code{consume()} without
+  testing \code{eof()} will spin forever.
+
+\item \textbf{\code{get_span} can throw.}  It computes
+  \code{source.substr(start, pos - start)}.  If \code{start} is greater
+  than \code{pos}, the length underflows to a huge value, which
+  \code{substr} clamps, so the result is a short view rather than a
+  disaster; but if \code{start} is beyond the end of the source,
+  \code{substr} throws \code{std::out_of_range}.  The argument must be
+  an offset that the cursor has already passed.
+
+\item \textbf{A successful result still carries an error.}  Because
+  \code{ExpectedResult<T>} is not a variant, the error member of a
+  successful result is a default-constructed \code{ParseError}: offset
+  zero, kind \code{Soft}, empty label list.  Code that inspects
+  \code{r.error} without first checking the result will read a
+  meaningless error.
+
+\item \textbf{\code{operator*} on a failed result is undefined behaviour.}
+  It dereferences an empty \code{std::optional}.  The explicit
+  \code{operator bool} exists to make the test easy, but it does not
+  enforce it.
+
+\item \textbf{There is no \code{operator->}.}  A success is reached with
+  \code{(*r).field}, \code{r.value->field} or, most often,
+  \code{r.value.value_or(...)}.  Code that writes \code{r->field} will
+  not compile, and this is a common source of confusion for readers coming
+  from \code{std::optional} or \code{std::expected}.
+
+\item \textbf{\code{merge_error} copies whole errors.}  When the source
+  error is farther along, the destination is overwritten rather than
+  merged, so the labels of the nearer error are discarded.  This is
+  intended --- the farther position is the better diagnostic --- but it
+  means the union of labels only ever contains labels that failed at the
+  same offset.
+
+\item \textbf{The label list is unbounded.}  \code{expected} is a
+  \code{std::vector<std::string>} and nothing limits its size.  A parser
+  that unions thousands of alternatives produces a correspondingly large
+  message, and \code{merge_error} compares labels linearly.
+
+\item \textbf{Errors are positions, not explanations.}  The core does not
+  know what a ``token'' is, only which byte it wanted.  Turning an offset
+  and a list of labels into a sentence with a line and a column is the
+  user's job, and it is done in Chapter~\ref{ch:parser-diagnostics}.
+\end{itemize}
+
+\section{Closing}
+
+The parser core of DSLtk is four small ideas: a cursor that is the only
+mutable state, a result that carries its own error, a failure kind that
+distinguishes ``try something else'' from ``give up'', and a merge rule
+that keeps the most informative error.  Nothing here is clever, and
+nothing here is optional: every combinator in the next chapter is a
+composition of exactly these pieces.
+
+Chapter~\ref{ch:primitive-parsers} takes the core and adds the
+combinators --- and finds that the library's combinator set is far smaller
+than one might expect, which makes the commit discipline all the more
+important to understand.
+}

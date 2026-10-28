@@ -1,0 +1,581 @@
+\chapter{Building Trees: \code{leaf<>} and \code{node<>}}
+\label{ch:leaf-and-node}
+
+\section{Why factories and not constructors}
+
+\chapref{ch:astnode} described \api{ASTNode} as a value type with three
+constructors. Those constructors are usable, but they are not ergonomic.
+Every call site would have to name the payload type explicitly, and every
+tag would have to be spelled as a string literal:
+
+\begin{lstlisting}[style=dslcpp,caption={Constructing nodes directly: correct, but noisy.},label={lst:direct-ctors}]
+dsl::ASTNode n1 ("num", std::string ("42"));
+dsl::ASTNode n2 ("add", std::vector<dsl::ASTNode>{ n1, n1 });
+\end{lstlisting}
+
+The tag in that code is a runtime string, which means the compiler cannot
+check it, cannot dispatch on it, and cannot fold two nodes with the same
+tag into one type. \DSLtk{} therefore provides a small family of factory
+functions whose \emph{template parameter} is the tag and whose
+\emph{arguments} are the payload. The tag becomes a compile-time constant;
+the payload is ordinary run-time data.
+
+The four factories occupy lines 6662--6707 of \texttt{DSLtk.hpp}. They are
+free functions in namespace \dslns, not members of \api{ASTNode} and not
+members of any feature mixin:
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}L{5.6cm}C{1.0cm}L{6.6cm}@{}}
+\toprule
+\textbf{Overload} & \textbf{Line} & \textbf{Behaviour} \\
+\midrule
+\code{leaf<Tag>(T&& val)}
+  & 6662
+  & Generic. Streams \code{val} into an \code{ostringstream} and stores the
+    resulting \emph{text}. Accepts anything with an
+    \code{operator<<}. \\
+\code{leaf<Tag>(std::string_view val)}
+  & 6672
+  & Stores the string contents directly, skipping the stream. \\
+\code{leaf<Tag>(const char* val)}
+  & 6680
+  & Stores the C string directly, skipping the stream. \\
+\code{node<Tag>(Children&&... children)}
+  & 6698
+  & Builds an inner node. The children are copied or moved, in argument
+    order, into a \code{std::vector<ASTNode>}. \\
+\bottomrule
+\end{tabular}
+\caption{The four AST factories. \code{Tag} is a \api{FixedString}
+non-type template parameter in every case.}
+\label{tab:leaf-node-overloads}
+\end{table}
+
+\section{A worked example}
+
+\begin{lstlisting}[style=dslcpp,caption={Building a small expression tree with the factories.},label={lst:leaf-node-demo}]
+#include "DSLtk.hpp"
+#include <iostream>
+#include <string>
+#include <string_view>
+#include <vector>
+
+// A DSL that mixes in the AST feature, so that make_leaf/make_node are
+// available as static members.
+struct Calc : dsl::DSL<Calc, dsl::AST>
+{
+};
+
+int main ()
+{
+  using dsl::ASTNode;
+
+  // leaf<> renders its argument through an ostringstream, so the value
+  // stored in the node is the *text* "42".
+  ASTNode n = dsl::leaf<"num"> (42);
+  std::cout << n.dump () << '\n';
+  std::cout << "textual value: " << std::boolalpha << (n.value () == "42")
+            << '\n';
+
+  // The string overloads skip the stream but store the same text.
+  ASTNode a = dsl::leaf<"s"> (std::string_view ("hello"));
+  ASTNode b = dsl::leaf<"s"> ("hello");
+  ASTNode c = dsl::leaf<"s"> (std::string ("hello"));
+  std::cout << a.dump () << ' ' << b.dump () << ' ' << c.dump () << '\n';
+  std::cout << "all equal: " << (a == b && b == c) << '\n';
+
+  // node<> keeps its children in the order they were written.
+  ASTNode add = dsl::node<"add"> (dsl::leaf<"x"> (1), dsl::leaf<"y"> (2));
+  std::cout << add.dump () << '\n';
+
+  // Arity is not checked: node<"f"> accepts any number of children.
+  ASTNode none = dsl::node<"f"> ();
+  ASTNode three = dsl::node<"f"> (dsl::leaf<"a"> (1),
+                                  dsl::leaf<"b"> (2),
+                                  dsl::leaf<"c"> (3));
+  std::cout << none.dump () << ' ' << three.dump () << '\n';
+
+  // Building a tree from a flat vector: use the inner-node constructor
+  // directly, because node<> takes its children as a variadic argument list.
+  std::vector<ASTNode> kids;
+  kids.push_back (dsl::leaf<"num"> (10));
+  kids.push_back (dsl::leaf<"num"> (20));
+  ASTNode built{ "add", std::move (kids) };
+  std::cout << built.dump () << '\n';
+
+  // The AST feature's static wrappers have the same signatures.
+  ASTNode m = Calc::make_node<"mul"> (Calc::make_leaf<"num"> (6),
+                                      Calc::make_leaf<"num"> (7));
+  std::cout << m.dump () << '\n';
+  return 0;
+}
+\end{lstlisting}
+
+The output is
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:leaf-node-demo}.},label={lst:leaf-node-demo-out}]
+(num 42)
+textual value: true
+(s hello) (s hello) (s hello)
+all equal: true
+(add (x 1) (y 2))
+(f) (f (a 1) (b 2) (c 3))
+(add (num 10) (num 20))
+(mul (num 6) (num 7))
+\end{lstlisting}
+
+\section{What the tag does, and what it does not do}
+
+The \code{Tag} template parameter of every factory is a
+\api{FixedString}, the compile-time string holder described in
+\chapref{ch:fixed-string}. A \api{FixedString} is a literal type: it can be
+used as a non-type template parameter, and two \code{FixedString}s with the
+same characters are the same \emph{type} only when their lengths agree.
+
+What happens to that compile-time tag is the crux of this chapter.
+\code{leaf} and \code{node} both pass \code{Tag.view()} --- a
+\code{std::string_view} over the \api{FixedString}'s character array --- to
+the \api{ASTNode} constructor, which \emph{copies} it into the node's
+\code{std::string tag_} member. The node does not remember the
+\api{FixedString}; it keeps a runtime string.
+
+\begin{notebox}[The compile-time tag does not survive into the type system]
+\code{leaf<"a">(1)} and \code{leaf<"b">(1)} have the same type --- both are
+\code{ASTNode} --- and they compare equal only if their tag strings match,
+which they do not. There is no way to recover the tag of an
+\api{ASTNode} at compile time, no way to dispatch on it statically, and no
+way to write an overload set that is selected by it. The compile-time tag
+is a convenience for the \emph{caller}, not a guarantee about the
+\emph{node}.
+\end{notebox}
+
+This is the single most important thing to understand about the AST
+subsystem, and it explains the existence of two other pieces of
+\DSLtk{}. The compile-time schema of \chapref{ch:visitors} ---
+\api{ast_schema} --- exists precisely
+because \api{ASTNode} cannot carry a tag in its type; and the
+\api{RewriteRule} of \chapref{ch:rewrite} accepts a tag as a template
+parameter for the same reason, so that two rules with different names are
+different types even though the engine never looks at their names.
+
+A second consequence of the copy is lifetime safety. \code{Tag.view()}
+points into the \api{FixedString}'s static storage, but the node copies the
+characters into its own \code{std::string}, so a node outlives nothing and
+depends on nothing.
+
+A third consequence is that trees are not constant expressions.
+\api{ASTNode} is not a literal type: it has a user-provided constructor,
+and \code{leaf} allocates an \code{ostringstream}. The error is explicit:
+\begin{lstlisting}[style=dslcpp,caption={Trees cannot be built in a constant expression.},label={lst:not-constexpr}]
+constexpr dsl::ASTNode n = dsl::leaf<"x"> (1);
+// error: the type 'const dsl::ASTNode' of 'constexpr' variable 'n' is not literal
+// error: 'dsl::ASTNode' is not literal because:
+// error: it is not an aggregate, does not have a trivial default constructor,
+// error: and has no 'constexpr' constructor that is not a copy or move constructor
+\end{lstlisting}
+
+The compile-time tag therefore buys compile-time \emph{checking} of the tag
+and nothing more. The tree itself is a run-time object.
+
+It is worth adding one detail about the \api{FixedString} itself, because
+it is easy to assume more than is there. The length of the string is part
+of the type: \code{FixedString<4>} and \code{FixedString<5>} are different
+types even if the characters agree, so \code{leaf<"ab">} and
+\code{leaf<"abc">} instantiate different template specialisations even
+though both produce a node whose runtime tag is the text between the
+quotes. The length distinction exists because a class type with a
+character array member cannot be a non-type template parameter unless its
+size is known at compile time. What the length does \emph{not} do is give
+the node a compile-time tag; the node stores a \code{std::string}, and
+\code{std::string} has no compile-time size.
+
+\section{Overload resolution between the three \code{leaf} overloads}
+
+Because \code{leaf} is overloaded on the type of its second parameter, the
+choice of overload is a matter of some subtlety. The measured behaviour of
+the shipped header is as follows.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}L{6.0cm}L{4.4cm}L{2.8cm}@{}}
+\toprule
+\textbf{Argument type} & \textbf{Overload selected} & \textbf{Stored text} \\
+\midrule
+\code{int}, \code{double}, \code{bool}
+  & generic (\code{T&&})
+  & the streamed representation \\
+\code{std::string} (lvalue or rvalue)
+  & generic (\code{T&&})
+  & the string contents \\
+\code{std::string_view}
+  & the \code{string_view} overload
+  & the view's contents \\
+\code{const char*}
+  & the \code{const char*} overload
+  & the C string \\
+a string literal \code{"hi"}
+  & the \code{const char*} overload
+  & the literal's characters \\
+\code{const char[N]} (lvalue)
+  & the \code{const char*} overload
+  & the array's characters \\
+\code{char[N]} (lvalue)
+  & generic (\code{T&&})
+  & the streamed representation \\
+\bottomrule
+\end{tabular}
+\caption{Which \code{leaf} overload wins, and what it stores. The stored
+text is the same in every case; only the mechanism differs.}
+\label{tab:leaf-overload-resolution}
+\end{table}
+
+Two observations are worth drawing out. First, the specialised overloads
+are \emph{optimisations only}. The header's comment at line 6671 says as
+much: the \code{string_view} overload "avoids extra stream". For every
+argument type in the table, the resulting node has the same tag and the
+same text, so the two nodes compare equal. A user therefore never has to
+think about which overload was chosen --- only about what text they want.
+
+Second, the selection is not simply "the most specific type wins". The
+generic overload takes its argument by forwarding reference, so it is an
+exact match for every type, including arrays. A \code{char[N]} lvalue
+selects the generic overload, because binding \code{char(&)[N]} is an
+identity match whereas converting to \code{const char*} additionally needs a
+qualification adjustment. A \code{const char[N]} lvalue has no such
+problem and selects the \code{const char*} overload, and a string literal
+behaves the same way.
+
+\section{How \code{node<>} stores its children}
+
+The inner-node factory is short, and every line of it matters:
+
+\begin{lstlisting}[style=dslcpp,caption={The \code{node} factory, verbatim from the header.},label={lst:node-impl}]
+template <FixedString Tag, typename... Children>
+  requires (std::convertible_to<Children, ASTNode> && ...)
+ASTNode
+node (Children &&...children)
+{
+  std::vector<ASTNode> v;
+  v.reserve (sizeof...(children));
+  (v.emplace_back (std::forward<Children> (children)), ...);
+  return ASTNode{ Tag.view (), std::move (v) };
+}
+\end{lstlisting}
+
+The \code{reserve} call sizes the vector exactly once, before any element
+exists, so the \code{emplace_back} calls never reallocate. The fold
+expression is a unary right fold over the comma operator, which means the
+elements are constructed in argument order --- the first argument becomes
+child~0, the second becomes child~1, and so on. The vector is then moved
+into the node, so the children are relocated rather than copied a second
+time.
+
+Because the parameter is a forwarding reference, an rvalue child is
+\emph{moved} into the vector and an lvalue child is \emph{copied}. The
+difference matters: constructing
+\code{node<"add">(dsl::leaf<"num">(1), dsl::leaf<"num">(2))} moves two
+temporary nodes and copies nothing, whereas reusing a named node copies it.
+
+The \code{requires} clause asks only that each \code{Children} type be
+convertible to \api{ASTNode}. In practice this admits \api{ASTNode} itself
+and references to it, and nothing else. In particular, a
+\code{std::vector<ASTNode>} is \emph{not} accepted:
+
+\begin{lstlisting}[style=dslcpp,caption={A vector of children is rejected by the constraint.},label={lst:node-vector-rejected}]
+std::vector<dsl::ASTNode> v;
+auto n = dsl::node<"f"> (v);
+// error: no matching function for call to 'node<"f">(std::vector<dsl::ASTNode>&)'
+// note: constraints not satisfied
+\end{lstlisting}
+
+A note on the fold. \code{(v.emplace_back (...), ...)} is a unary right
+fold over the comma operator: the pack expands to
+\code{(e1, e2, e3)}. The comma operator sequences its operands, so the
+fold evaluates the arguments strictly left to right. That is what makes
+the order of the children well defined; without it, the order of the
+arguments in a variadic call would be unspecified and the tree would be
+ambiguous.
+
+\section{The \code{AST} feature and its static wrappers}
+
+The feature tag \api{dsl::AST} is declared at line 6723. It contributes a
+mixin with exactly two static members:
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}L{6.2cm}C{1.0cm}L{6.0cm}@{}}
+\toprule
+\textbf{Member} & \textbf{Line} & \textbf{Behaviour} \\
+\midrule
+\code{make_leaf<Tag>(T&& val)}
+  & 6730
+  & Forwards to \code{dsl::leaf<Tag>}. Same signature, same constraint
+    (none), same result. \\
+\code{make_node<Tag>(Children&&...)}
+  & 6740
+  & Forwards to \code{dsl::node<Tag>}. Same signature, same
+    \code{convertible_to} constraint, same result. \\
+\bottomrule
+\end{tabular}
+\caption{The \code{AST} feature mixin. Both members are static and are
+inherited by the DSL class.}
+\label{tab:ast-feature-mixin}
+\end{table}
+
+The wrappers exist so that a DSL can write its own \code{make_leaf} and
+\code{make_node} instead of the fully qualified \code{dsl::leaf} and
+\code{dsl::node}. Because the mixin is a base class
+of \api{dsl::DSL} and hence of the user's class, the static members are
+inherited and reachable through the derived name. They add nothing
+behavioural: no state, no caching, no validation. A user who prefers the
+free functions can ignore the feature entirely --- \code{dsl::leaf} and
+\code{dsl::node} do not require any mixin to be present.
+
+It is worth noting what the mixin does \emph{not} do. It does not
+constrain the derived class to define anything, and it does not use the
+\code{Derived} parameter at all: the mixin is generic over \code{Derived}
+purely to fit the feature-mixin protocol of \chapref{ch:feature-tags}. A
+consequence is that the two static members can be called without ever
+instantiating a DSL object; \code{MyDSL::make_leaf<"x">(1)} is a static
+call, and there is no \code{this} to speak of.
+
+\section{The factories and the rest of the toolkit}
+
+The four factories are the only sanctioned way to build a node from
+scratch, but they are not the only way to obtain one. Three other parts of
+\DSLtk{} produce \api{ASTNode} values, and it is worth knowing how they
+relate to the factories.
+
+The rewrite machinery of \chapref{ch:rewrite} produces nodes with the
+factories, in the transformer of a rule. A rule that rewrites
+\code{add(num 1, num 2)} into a folded constant will typically return
+\code{dsl::leaf<"num">(3)}; a rule that removes a wrapper will typically
+return \code{n.child(0)}, that is, a node it did not build at all. Because
+a transformer returns an \api{ASTNode} \emph{by value}, the engine moves
+the replacement into place, and the subtree beneath the replacement is
+shared with the tree the rule was handed --- which, since the node holds
+its children by value, means it is copied. This is the copy cost of
+\chapref{ch:astnode} showing up again, and it is the reason a rewrite
+engine built on value semantics is not free.
+
+The S-expression reader of \chapref{ch:sexpressions} produces nodes
+through the \api{ASTNode} constructors directly rather than through
+\code{leaf} and \code{node}, because the tag of a node read from a
+S-expression is not known at compile time. The two-argument leaf
+constructor is exactly the right tool there: the tag is a runtime string
+and the value is a runtime string. The factories and the constructors are
+complementary, not competing.
+
+Finally, the visitor subsystem of \chapref{ch:visitors} is built on a
+completely separate notion of a schema. \api{ast_schema} builds a
+\emph{compile-time} tree whose node types are \api{ASTSchema} and whose tags
+are template parameters; \api{ASTVisitor} then dispatches on the runtime
+tag of an \api{ASTNode} by comparing it against the tags recorded in that
+compile-time tree. In other words, the visitors recover exactly the
+type-level tag information that \code{leaf} and \code{node} discard. The
+two mechanisms are complementary in the same way: the factories make
+construction pleasant, and the schema makes dispatch exhaustive.
+
+\section{Construction cost}
+
+Every factory allocates. \code{leaf} constructs an
+\code{std::ostringstream}, writes into it, and copies the result out as a
+\code{std::string}; the stream's internal buffer is then released. For a
+tree with many leaves --- and a source file with many tokens has many
+leaves --- this is the dominant cost of parsing. A front end that cares
+about throughput should prefer the \code{string_view} or \code{const char*}
+overload for text leaves, which allocate exactly one string and nothing
+else, and should reserve its child vectors when the arity is known.
+
+\code{node} is cheaper per child: it allocates one vector, reserves
+exactly the right amount of space, and moves each child into place. The
+one copy that does happen is the one the caller asked for by passing an
+lvalue.
+
+\section{The factory call graph}
+
+\figref{fig:factory-graph} shows how a call to \code{node<"add">(...)} is
+resolved. The tag reaches the node as a \code{std::string_view} and is
+copied into \code{tag_}; the children are materialised into a vector and
+moved into \code{children_}.
+
+\begin{figure}[htbp]
+\begin{dslgraph}
+  \node[dsllarge] (call) {call site};
+
+  \node[dslbox, below=8mm of call, xshift=-42mm] (leafgen)
+    {\code{leaf<Tag>}\\\code{(T&&)}\\stream the value};
+  \node[dslbox, below=8mm of call] (leafsv)
+    {\code{leaf<Tag>}\\\code{(string_view)}\\copy the text};
+  \node[dslbox, below=8mm of call, xshift=42mm] (leafcp)
+    {\code{leaf<Tag>}\\\code{(const char*)}\\copy the text};
+
+  \node[dslbox, below=8mm of leafsv] (nodecall)
+    {\code{node<Tag>}\\\code{(Children&&...)}\\variadic children};
+
+  \node[dslbox, below=8mm of nodecall, xshift=-30mm] (vec)
+    {\code{std::vector}\\\code{<ASTNode> v}\\\code{reserve}, then};
+  \node[dslbox, below=8mm of nodecall, xshift=30mm] (ctor)
+    {\code{ASTNode(tag,}\\\code{std::move (v))}\\inner constructor};
+
+  \node[dslbox, below=8mm of ctor] (members)
+    {tag copied into \code{tag_}\\vector moved into \code{children_}};
+
+  \draw[dsledge] (call) -- (leafgen);
+  \draw[dsledge] (call) -- (leafsv);
+  \draw[dsledge] (call) -- (leafcp);
+  \draw[dsledge] (leafgen) -- (ctor);
+  \draw[dsledge] (leafsv) -- (ctor);
+  \draw[dsledge] (leafcp) -- (ctor);
+  \draw[dsledge] (nodecall) -- (vec);
+  \draw[dsledge] (vec) -- (ctor);
+  \draw[dsledge] (ctor) -- (members);
+\end{dslgraph}
+\caption{The resolution of the four factories. All four end in the same two
+\api{ASTNode} constructors; only the way the payload is produced differs.}
+\label{fig:factory-graph}
+\end{figure}
+
+\section{Recipes}
+
+\paragraph{Heterogeneous children.}
+Nothing requires the children of a node to share a tag or a shape. A node
+tagged \code{"call"} may hold a leaf tagged \code{"fn"}, a leaf tagged
+\code{"arg"}, and another inner node, in any combination. Each child
+carries its own tag, and \api{size()} reports the arity. A DSL that wants
+homogeneous children must enforce that itself, by convention or by a
+predicate.
+
+\paragraph{Building from a flat vector.}
+\code{node<>} takes a variadic argument list, so it cannot consume a
+vector of children directly. The inner-node constructor can:
+
+\begin{lstlisting}[style=dslcpp,caption={Assembling a node from a vector of children.},label={lst:build-from-vector}]
+std::vector<dsl::ASTNode> kids;
+kids.push_back (dsl::leaf<"num"> (10));
+kids.push_back (dsl::leaf<"num"> (20));
+dsl::ASTNode sum{ "add", std::move (kids) };   // inner node
+\end{lstlisting}
+
+Note that the second argument is \emph{moved}, so the vector is left empty
+afterwards. Passing it by copy would double the work, since the vector's
+copy constructor copies every child.
+
+\paragraph{Arity is not checked.}
+\code{node<"f">()} is legal and produces an inner node with no children,
+which dumps as \code{(f)}. \code{node<"f">(a, b, c)} is equally legal. The
+constraint on \code{node<>} says nothing about how many children there are.
+A DSL that cares about arity must check it with \api{size()} --- in a rule
+predicate, in a visitor handler, or immediately after construction.
+
+\paragraph{Appending to a finished node.}
+Because \code{children()} returns a mutable reference, a node can be
+extended after the fact with \code{node.children().push_back (child)}.
+Nothing checks that the result is still a sensible node: appending to a
+leaf silently turns a leaf into a leaf with children, which
+\chapref{ch:astnode} describes as a broken invariant. Appending is
+convenient in a parser that discovers a child late; it is dangerous in a
+library that promises well-formed trees.
+
+\section{Building a tree from a flat token list}
+
+The most common construction problem in practice is the inverse of what
+these factories make comfortable: a parser has produced a flat sequence of
+tokens and must turn it into a tree. \code{node<>} does not help with that
+directly, because it wants its children as separate arguments. The
+following scheme does.
+
+\begin{pseudocode}[Building a tree from a flat token list]
+\textbf{function} build (tokens, pos, depth)\\
+\quad \textbf{if} pos \code{>=} length (tokens) \textbf{then return} null\\
+\quad head \code{<-} tokens [pos]\\
+\quad \textbf{if} head is an opening token \textbf{then}\\
+\qquad pos \code{<-} pos + 1\\
+\qquad children \code{<-} empty list\\
+\qquad \textbf{while} tokens [pos] is not a closing token \textbf{do}\\
+\qquad\quad child \code{<-} build (tokens, pos, depth + 1)\\
+\qquad\quad append child to children\\
+\qquad pos \code{<-} pos + 1\\
+\qquad \textbf{return} \code{node<"list">} (children...)\\
+\quad \textbf{else}\\
+\qquad \textbf{return} \code{leaf<"atom">} (head)
+\end{pseudocode}
+
+The scheme is a shift/reduce parser in miniature: the token stream is the
+input, the call stack is the recursion, and the tree is the output. The
+important detail is that the recursion produces \emph{children}, not a flat
+list, and that the variadic factory wants children as arguments --- so the
+natural implementation collects them into a \code{std::vector<ASTNode>} and
+then hands that vector to the inner-node constructor, exactly as in the
+recipe above. The alternative, which is more convenient when the arity is
+known statically, is to build the children expression directly in the
+recursive call.
+
+\section{Edge cases and limits}
+
+\paragraph{The tag is not part of the node's type.}
+Already stated, but worth repeating because it is the most common source of
+surprise. Two nodes with different tags have the same C++ type, so
+\code{std::variant} dispatch, overload resolution, and template specialisation
+are all unavailable on \api{ASTNode}. Only the runtime string is
+discriminating.
+
+\paragraph{The value is always text.}
+\code{leaf<"num">(42)} stores the string \code{"42"}, not the integer. A
+rule that constant-folds arithmetic must parse the text back --- with
+\code{std::stoi}, \code{std::from_chars}, or a hand-written scanner --- and
+must decide what to do with text that is not a number. There is no
+numeric payload in \api{ASTNode}, and no way to attach one.
+
+\paragraph{Values are not quoted.}
+\code{leaf<"s">("a b")} produces \code{(s a b)}, which is ambiguous when
+read back. If a value may contain whitespace or parentheses, the caller
+must quote it itself before storing it, or use the \api{SExpr} machinery of
+\chapref{ch:sexpressions}, which has a documented escalation rule.
+
+\paragraph{No arity or shape checking.}
+Nothing in the factories validates that a node tagged \code{"add"} has two
+children, or that a node tagged \code{"num"} is a leaf. Such checks belong
+in predicates and visitors.
+
+\paragraph{No constness in the payload.}
+\code{leaf<Tag>(const char* val)} reads the C string but does not copy it
+into the caller's storage; the node does copy it into \code{value_}, so
+the result is independent of the caller's buffer afterwards. Passing a
+pointer to a buffer that is later modified is nevertheless a bug in the
+caller's code, not in the factory's.
+
+\paragraph{Exception safety.}
+\code{leaf} allocates a stream; if the stream's insertion throws --- a
+\code{std::bad_alloc}, or a user-defined \code{operator<<} that throws ---
+the exception propagates and no node is produced. \code{node} is stronger:
+the vector is a local, so a throwing copy or move of a child unwinds
+cleanly and destroys the already-constructed children.
+
+\paragraph{No factory for an existing tree.}
+There is no \code{clone}, \code{with_tag}, or \code{with_value}. To
+change a node's tag or a leaf's text, a caller must construct a new node
+and move the children across by hand.
+
+\paragraph{Mixing the free functions and the mixin.}
+\code{dsl::leaf} and \code{MyDSL::make_leaf} are interchangeable; there
+is no interaction between them and no state to initialise. A user may mix
+and match freely within a single program.
+
+\section{Closing}
+
+The four factories of \chapref{ch:leaf-and-node} are a thin layer over the
+three constructors of \chapref{ch:astnode}, and their whole contribution
+is to move the tag from the run-time world into the compile-time one. What
+that buys is a checkable tag at the call site; what it costs is that the
+node itself remains untagged at the type level, so that the tag must be
+matched as a string everywhere downstream.
+
+The two facts a reader should carry forward are that the value of a leaf
+is always \emph{text} --- \code{leaf<"num">(42)} stores \code{"42"}, not
+\code{42} --- and that a node's arity, shape, and homogeneity are
+conventions that the factories neither enforce nor record. Everything in
+the next two chapters works with those conventions rather than around
+them: \chapref{ch:traversal} walks the trees these factories build, and
+\chapref{ch:rewrite} and \chapref{ch:rewrite-sets} transform them.

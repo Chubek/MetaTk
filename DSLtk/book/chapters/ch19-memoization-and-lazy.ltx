@@ -1,0 +1,576 @@
+\chapter{Memoization and Lazy Values}
+\label{ch:memoization-and-lazy}
+
+\section{Two Deferrals, Two Purposes}
+
+A DSL that evaluates rules, parses grammars, or computes normal forms tends
+to contain functions whose results are expensive to produce and cheap to
+re-use. The classic example is a rewrite rule set that is applied at every
+node of a tree: the rules themselves do not change, but the interpreter that
+applies them is asked the same questions over and over. Two different
+mechanisms address this, and \DSLtk{} ships both.
+
+\emph{Memoisation} answers the question ``have I computed this before?'' by
+keying a cache on the argument. \code{dsl::memoize} wraps a function of one
+argument in a cache, so that each distinct argument is computed once and
+every later call with the same argument returns the stored answer.
+
+\emph{Laziness} answers the question ``does anyone want this yet?'' by
+postponing a computation until it is first demanded. \code{dsl::Lazy} wraps a
+producer in a one-shot cache: the producer runs at most once in the entire
+lifetime of the object, and only if someone asks.
+
+The two are easy to confuse because both are implemented with a cache. They
+differ in what the cache is keyed on, how many values it can hold, and what
+the caller receives. Section~\ref{sec:ch19-compare} sets them side by side.
+
+\section{A Worked Example}
+
+Listing~\ref{lst:ch19-memo} is a complete program that exercises both. It
+counts how many times the underlying functions actually run, which is the
+only honest way to demonstrate that a cache is doing its job.
+
+\begin{lstlisting}[style=dslcpp,caption={Memoisation and laziness side by side. The evaluation counters show that the memoised square runs its body once for two calls with the same key, that the memoised Fibonacci computes each index once, and that the lazy producer runs exactly once however many times it is read.},label={lst:ch19-memo}]
+#include "DSLtk.hpp"
+#include <functional>
+#include <iostream>
+#include <unordered_map>
+
+int main ()
+{
+  std::cout << std::boolalpha;
+
+  // ---------------- memoize ----------------
+  long long square_evaluations = 0;
+  auto square = dsl::memoize<int, long long> (
+      [&square_evaluations] (int x) -> long long {
+        ++square_evaluations;
+        return static_cast<long long> (x) * x;
+      });
+
+  std::cout << "square(12)     = " << square (12)
+            << "  evaluations: " << square_evaluations << "\n";
+  std::cout << "square(12)     = " << square (12)
+            << "  evaluations: " << square_evaluations << "\n";
+
+  square.clear_cache ();
+  square_evaluations = 0;
+  square (12);
+  std::cout << "after clear_cache, evaluations: " << square_evaluations << "\n";
+
+  // A recursive function whose memoized wrapper calls back into itself.
+  long long fib_evaluations = 0;
+  std::function<long long (int)> fib;
+  fib = dsl::memoize<int, long long> (
+      [&fib, &fib_evaluations] (int n) -> long long {
+        ++fib_evaluations;
+        return n < 2 ? n : fib (n - 1) + fib (n - 2);
+      });
+
+  std::cout << "fib(40)        = " << fib (40)
+            << "  evaluations: " << fib_evaluations << "\n";
+  fib_evaluations = 0;
+  std::cout << "fib(40) again  = " << fib (40)
+            << "  evaluations: " << fib_evaluations << "\n";
+
+  // ---------------- Lazy ----------------
+  int builds = 0;
+  dsl::Lazy<std::string> configuration ([&builds] {
+    ++builds;
+    return std::string ("expensive configuration");
+  });
+
+  std::cout << "is_computed before get(): " << configuration.is_computed () << "\n";
+  std::cout << "get()  -> " << configuration.get () << "\n";
+  std::cout << "is_computed after  get(): " << configuration.is_computed () << "\n";
+  std::cout << "producer invocations: " << builds << "\n";
+  std::cout << "force() equals get(): " << (configuration.force () == configuration.get ())
+            << "\n";
+
+  // ---------------- the Memoization mixin ----------------
+  struct CountingDSL : dsl::DSL<CountingDSL, dsl::Memoization>
+  {
+    std::unordered_map<std::string, int> memo_cache;
+  };
+
+  CountingDSL d;
+  d.memo_cache["x"] = 1;
+  d.memo_cache["y"] = 2;
+  std::cout << "memo_cache size before clear: " << d.memo_cache.size () << "\n";
+  d.clear_cache ();
+  std::cout << "memo_cache size after  clear: " << d.memo_cache.size () << "\n";
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch19-memo}. The Fibonacci result is computed by forty-one calls rather than the hundreds of millions an unmemoised recursion would need; the second call to the same index costs nothing at all.},label={lst:ch19-memo-out}]
+square(12)     = 144  evaluations: 1
+square(12)     = 144  evaluations: 1
+after clear_cache, evaluations: 1
+fib(40)        = 102334155  evaluations: 41
+fib(40) again  = 102334155  evaluations: 0
+is_computed before get(): false
+get()  -> expensive configuration
+is_computed after  get(): true
+producer invocations: 1
+force() equals get(): true
+memo_cache size before clear: 2
+memo_cache size after  clear: 0
+\end{lstlisting}
+
+The Fibonacci case is the one worth pausing over. The lambda passed to
+\code{memoize} calls \code{fib}, the \code{std::function} that the memoised
+wrapper was assigned to, so the recursive calls go through the cache as well.
+Without the cache the same computation would need a number of calls
+exponential in the argument; with it, exactly forty-one, one for each index
+from zero to forty. The trick of capturing the wrapper by reference through a
+\code{std::function} is the standard way to write a self-recursive memoised
+function in \cpp{}, and the header imposes no obstacle to it.
+
+\section{The Data Model}
+\label{sec:ch19-compare}
+
+\code{dsl::MemoizedCallable<Key, Value, Fn>} (lines 7356--7381) is the
+memoising wrapper. It has two private members: the wrapped callable
+\code{Fn fn_} and a cache, which is a \code{std::unordered_map<Key, Value>}.
+The constructor is \code{explicit MemoizedCallable(Fn fn)}.
+
+\code{dsl::memoize<Key, Value>(fn)} (lines 7382--7388) is the factory. It
+takes the callable by forwarding reference, decays it, and returns
+\code{MemoizedCallable<Key, Value, std::decay_t<Fn>>}.
+
+\code{dsl::Lazy<T>} (lines 7404--7436) is the lazy cell. It has two private
+members: a \code{std::function<T ()> producer_} and a
+\code{std::optional<T> value_}. The empty \code{optional} is the "not yet
+computed" flag; the presence of a value in it is the flag. The constructor
+is \code{explicit Lazy(std::function<T ()> producer)}.
+
+\code{dsl::Memoization} (lines 7290--7301) is a feature tag of a different
+kind. Its mixin adds a single member function, \code{clear_cache()}, whose
+body is
+
+\begin{lstlisting}[style=dslcpp,caption={The \code{Memoization} feature mixin, transcribed from \code{DSLtk.hpp} lines 7290--7301. It reaches into the deriving type for a member called \code{memo_cache} and empties it.},label={lst:ch19-mixin}]
+struct Memoization
+{
+  template <typename Derived> struct Mixin
+  {
+    /// Clears all cached entries stored in `Derived::memo_cache`.
+    void
+    clear_cache ()
+    {
+      static_cast<Derived &> (*this).memo_cache.clear ();
+    }
+  };
+};
+\end{lstlisting}
+
+This is worth pausing on, because it is easy to mistake for the cache
+inside \code{MemoizedCallable}. It is not. The mixin does not create a
+cache; it empties a map that the \emph{user} provides as a member of the
+deriving type, conventionally named \code{memo_cache}. The header's comment
+says as much: the deriving DSL is expected to define \code{memo_cache},
+typically an unordered map. There is no \code{requires} clause, so a DSL
+that names the feature without providing the member fails to compile with an
+error about a missing member rather than a diagnosable constraint violation.
+
+The two caches are entirely separate. \code{MemoizedCallable} has a private
+cache it owns and will never expose; the mixin has a cache the user owns and
+fills by hand. A DSL that wants a memoisation facility it can inspect and
+invalidate should use the mixin and write the lookups itself; a DSL that
+wants a function memoised automatically should use \code{memoize}.
+
+\begin{table}[ht]
+\centering
+\caption{\code{dsl::memoize} and \code{dsl::Lazy} compared. Both are caches,
+but they cache different things and answer different questions.}
+\label{tab:ch19-compare}
+\small
+\begin{tabular}{@{}L{0.24\textwidth}L{0.34\textwidth}L{0.34\textwidth}@{}}
+\toprule
+\textbf{Aspect} & \code{dsl::memoize} & \code{dsl::Lazy} \\
+\midrule
+Question answered & have I computed this key before? & does anyone want this yet? \\
+Key & required; must satisfy \code{std::hash<Key>} & none \\
+Cache & \code{std::unordered_map<Key, Value>} & \code{std::optional<T>} \\
+Entries held & one per distinct key & exactly one, ever \\
+Producer runs & once per distinct key & at most once in total \\
+Result delivered & by copy, as \code{Value} & by reference, as \code{T&} \\
+Construction & \code{memoize<Key, Value>(fn)} & \code{Lazy<T>(producer)} \\
+Template arguments & \code{Key} and \code{Value} must both be spelled out & \code{T} must be spelled out \\
+Resetting & \code{clear_cache()} empties the map & impossible; there is no reset \\
+Const-correctness & \code{operator()} is non-const & \code{get()} is non-const \\
+Thread safety & none & none \\
+\code{constexpr} & no & no \\
+\midrule
+\multicolumn{3}{@{}L{0.92\textwidth}@{}}{\emph{Neither} facility accepts a
+custom hash or equality predicate, and neither reports how many entries its
+cache holds.} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{The Memoised Call}
+
+The call sequence of \code{MemoizedCallable::operator()} is three steps,
+and Algorithm~\ref{alg:ch19-memo} states it. The \code{find} is followed by
+a computation and then an \code{emplace}; the \code{emplace} is a no-op if
+the key is already present, but it cannot be, because the \code{find} just
+established that it was not.
+
+\begin{pseudocode}[A memoised call]
+\textbf{function} call (key)\\
+\quad \textbf{if} the cache contains key then\\
+\qquad \textbf{return} a copy of the cached value\\
+\quad value := the wrapped function (key)\\
+\quad insert value into the cache under key\\
+\quad \textbf{return} a copy of value
+\label{alg:ch19-memo}
+\end{pseudocode}
+
+Four consequences follow from the code as written, and all four are
+observable.
+
+The operator is \emph{non-const}. The declaration is
+\code{Value operator() (const Key &key)}, with no trailing \code{const},
+because it mutates the cache. A \code{const} memoised callable cannot be
+called at all. This is a genuine constraint on how the wrapper can be
+stored: it cannot be a \code{const} member of a class whose methods are
+\code{const}, and it cannot be placed in a \code{std::optional} that is
+inspected through a \code{const} reference.
+
+The value is returned \emph{by copy}. The two return statements are
+\code{return it->second;} and \code{return value;}, both of which copy the
+stored object. Nothing is returned by reference or by move. A cached value
+of a type that is expensive to copy is copied on every call, which is a real
+cost that the cache does not avoid.
+
+The key type must be usable with \code{std::hash}. The cache is a plain
+\code{std::unordered_map<Key, Value>}, so the standard hash and the
+standard equality are used, and there is no mechanism for supplying
+alternatives. A key type that needs a bespoke hash has to provide a
+specialisation of \code{std::hash}, or be replaced by a type that does.
+
+The header says plainly that the wrapper is "intentionally not thread-safe"
+(line 7344). Two threads calling the same memoised callable concurrently
+may both miss the cache, both run the function, and both attempt to
+\code{emplace}; the \code{unordered_map} is not safe for concurrent
+mutation, and the result is a data race rather than merely a duplicated
+computation.
+
+\begin{figure}[ht]
+\centering
+\begin{dslgraph}
+  \node[dslsmall, anchor=east, font=\sffamily\bfseries] (mlab) at (-6.6,0.8) {memoize};
+  \node[dslbox, text width=23mm] (m0) at (-4.8,0.8)
+    {cache holds\\no entry for\\the key};
+  \node[dslbox, text width=23mm] (m1) at (-1.6,0.8)
+    {miss\\the function\\runs};
+  \node[dslbox, text width=23mm] (m2) at (1.6,0.8)
+    {entry stored\\value copied out};
+  \node[dslbox, text width=23mm] (m3) at (4.8,0.8)
+    {hit\\the stored value\\is copied out};
+
+  \draw[dsledge] (m0) -- node[above, font=\scriptsize] {call} (m1);
+  \draw[dsledge] (m1) -- node[above, font=\scriptsize] {store} (m2);
+  \draw[dsledge] (m2) -- node[above, font=\scriptsize] {call} (m3);
+  \draw[dslfeedback] (m3.south) -- (4.8,-0.25)
+    -- node[below, font=\scriptsize] {a different key} (1.6,-0.25) -- (m2.south);
+
+  \node[dslsmall, anchor=east, font=\sffamily\bfseries] (llab) at (-6.6,-2.4) {Lazy};
+  \node[dslbox, text width=23mm] (l0) at (-4.8,-2.4)
+    {not yet forced\\the producer has\\not run};
+  \node[dslbox, text width=23mm] (l1) at (-1.6,-2.4)
+    {forced\\the producer runs};
+  \node[dslbox, text width=23mm] (l2) at (1.6,-2.4)
+    {the value is cached\\a reference is\\returned};
+  \node[dslbox, text width=23mm] (l3) at (4.8,-2.4)
+    {forced again\\the cached value\\is returned};
+
+  \draw[dsledge] (l0) -- node[above, font=\scriptsize] {get} (l1);
+  \draw[dsledge] (l1) -- node[above, font=\scriptsize] {store} (l2);
+  \draw[dsledge] (l2) -- node[above, font=\scriptsize] {get} (l3);
+  \draw[dslfeedback] (l3.south) -- (4.8,-3.5)
+    -- node[below, font=\scriptsize] {the producer never runs again} (-1.6,-3.5) -- (l1.south);
+\end{dslgraph}
+\caption{The lifecycle of the two caches. The upper lane is the memoised
+call: a miss runs the function and inserts a result, and a later call with
+the same key hits the cache. The lower lane is the lazy cell: the producer
+runs at most once, and every subsequent read returns the same cached value.}
+\label{fig:ch19-lifecycle}
+\end{figure}
+
+Figure~\ref{fig:ch19-lifecycle} contrasts the two lifecycles. The upper lane
+can revisit the miss path indefinitely, once per new key; the lower lane
+leaves the miss path after the first forcing and never returns to it.
+
+\section{The Lazy Cell}
+
+\code{Lazy<T>} is the classic "thunk with a flag", written once and
+generically. The pattern it implements is old: a value that is not yet
+computed, a flag saying whether it has been, and a producer that fills it
+in on demand. Written by hand for a specific type it would look like this:
+
+\begin{lstlisting}[style=dslcpp,caption={The thunk-with-a-flag pattern that \code{dsl::Lazy} generalises. The sketch assumes a user-supplied \code{load_disk} function. The hand-written version names one value type; the header's version uses \code{std::optional<T>} for the flag and the value together, and \code{std::function<T ()>} for the producer.},label={lst:ch19-thunk}]
+struct Config
+{
+  bool computed = false;
+  std::string value;
+
+  std::string const & get ()
+  {
+    if (!computed)
+      {
+        value = load_from_disk ();   // expensive
+        computed = true;
+      }
+    return value;
+  }
+};
+\end{lstlisting}
+
+\code{Lazy} is that pattern with the value type and the producer turned into
+template parameters. The \code{std::optional<T>} member plays both roles at
+once: an empty optional is the flag, and a populated optional is the value.
+This is a neat economy, and it has one consequence worth noting: because
+the flag and the value are the same object, there is no way to have a
+computed value that is itself empty or default-constructed. A
+\code{Lazy<std::optional<int>>} can hold an empty optional inside a
+populated optional, which is fine, but a \code{Lazy<int>} that computes the
+value zero is indistinguishable from one that has not been computed only by
+inspecting \code{is_computed()}.
+
+The public surface is three members.
+
+\code{get()} evaluates the producer if it has not already run, and returns a
+\emph{reference} to the cached value. The return type is \code{T&}, not
+\code{T}, so a caller that wants to mutate the value in place can, and a
+caller that binds a reference does not pay for a copy.
+
+\code{force()} is an alias for \code{get()}. The two names exist because
+``force'' reads better at a call site that is explicitly demanding a value
+and ``get'' reads better when it is not obvious. There is no behavioural
+difference whatsoever; \code{force()} is a one-line forward.
+
+\code{is_computed()} is \code{const noexcept} and reports whether the
+producer has fired. It is the only way to ask the question without forcing
+the value.
+
+What is \emph{absent} is as important as what is present. There is no
+\code{value()}, no \code{operator()}, no \code{reset()}, and no
+\code{const} overload of \code{get()}. In particular:
+
+\begin{itemize}
+\item Because \code{get()} is non-const, a \code{const Lazy<T>} cannot be
+read at all. A lazy cell in a \code{const} context, or in a \code{const}
+member function, is unusable.
+\item Because there is no \code{reset()}, a forced value is permanent. The
+producer cannot be re-run and the value cannot be discarded.
+\item Because there is no \code{value()} and no \code{operator()}, a
+\code{Lazy<T>} does not behave like a value at all. It must be explicitly
+forced at every point of use, which is arguably the correct design: the
+whole point is that reading a lazy cell is a deliberate act.
+\item Because \code{get()} returns a reference, the reference dangles if
+the \code{Lazy} is destroyed, and it dangles if the \code{Lazy} is moved,
+because the move relocates the \code{std::optional} and with it the value
+that the reference pointed at. Storing \code{const T&} obtained from
+\code{get()} is safe only as long as the cell itself outlives it.
+\end{itemize}
+
+The header is explicit that the type is "not thread-safe by default" (line
+7396). Two threads calling \code{get()} on the same cell may both observe
+an empty optional and both run the producer, and the assignment to the
+optional is a race.
+
+\subsection{Using \code{Lazy} to Defer an AST Construction}
+
+The typical use of \code{Lazy} in a DSL is to defer the construction of an
+expensive syntax tree until some operation actually needs it. A grammar that
+is read from a file, or a rule set that is compiled from a table, can be
+built on first use and never rebuilt. Listing~\ref{lst:ch19-deferred} is a
+fragment that does exactly this.
+
+\begin{lstlisting}[style=dslcpp,caption={Deferring the construction of a rule list until a rule is actually needed. The producer is a captureless lambda converted to the \code{std::function<T ()>} that the \code{Lazy} constructor takes; the list is built once, on the first \code{get()}.},label={lst:ch19-deferred}]
+#include "DSLtk.hpp"
+#include <iostream>
+#include <vector>
+
+using Rule = dsl::ASTNode;
+
+// The rules are not built until somebody asks for them.
+dsl::Lazy<std::vector<Rule>> rules ([] {
+  std::vector<Rule> v;
+  v.push_back (dsl::node<"rule"> (dsl::leaf<"name"> ("x"),
+                                  dsl::leaf<"body"> ("y")));
+  return v;
+});
+
+int main ()
+{
+  std::cout << rules.get ().front ().dump () << "\n";   // (rule (name x) (body y))
+}
+\end{lstlisting}
+
+The advantage over building the vector eagerly is not merely that the work
+is skipped when the rules are never consulted. It is that the cost moves
+out of the start-up path and into the first use, which is often where it
+belongs: a program that only ever prints help text never pays for the
+grammar at all.
+
+\section{Eager and Lazy Evaluation}
+
+The distinction the two facilities embody is the distinction between
+\emph{eager} and \emph{lazy} evaluation, and it is worth stating the trade
+precisely rather than in the usual slogans.
+
+An eager computation is performed when the expression is written down. The
+value exists immediately, errors in it surface immediately, and the cost is
+paid whether or not the value is used. A lazy computation is performed when
+the value is demanded. Errors in it surface at the point of demand, which
+may be much later and in a different part of the program; the cost is paid
+only if the value is actually needed.
+
+Lazy evaluation buys three things. It avoids work that is never needed. It
+permits data definitions that are circular in the eager world -- a tree
+node that refers to its parent, a grammar that refers to itself -- because
+the reference is only resolved when it is followed. And it permits a value
+to be shared, since the cached reference can be handed out repeatedly
+without copying.
+
+It costs three things as well. The "forced" state is sticky, so a lazy cell
+cannot be reset and a memoised cache cannot be shrunk except by clearing it
+outright. The point at which an error is reported moves from the point of
+definition to the point of use, which is a genuine debugging cost: a
+misbehaving producer throws from a place that has nothing to do with the
+code that installed it. And the discipline of forcing must be imposed by the
+programmer, because nothing in the type system prevents a lazy cell from
+being ignored entirely, in which case its producer never runs and its
+effects never happen.
+
+The \code{Lazy} type is a very small expression of this trade. It has no
+notion of laziness beyond the single flag, and it makes no attempt to be a
+general thunk language: there is no \code{map}, no \code{flat_map}, no
+composition of thunks. It is a single-shot cell, and it is honest about
+being one.
+
+\section{Choosing Between the Three Facilities}
+
+There are three ways to avoid repeating work in this toolkit, and they are
+not interchangeable.
+
+\code{dsl::memoize} is for a function whose result depends on a single
+hashable argument. It is the right tool when the argument space is small
+and the computation is expensive: a normalisation of a token, a
+canonicalisation of an identifier, a hash of a subtree. The programmer
+writes the function once and gets caching for free, at the cost of having
+to name the key and value types explicitly.
+
+\code{dsl::Lazy<T>} is for a computation with no argument at all, or with
+an argument that has been captured rather than passed. It is the right tool
+when a value is expensive to produce but is usually not needed at all: a
+grammar read from a file, a configuration assembled from the environment, a
+rule set compiled from a table. The single-shot semantics are exactly
+right, because the thing being deferred has no notion of a key.
+
+The \code{Memoization} mixin is for neither of those, and it is the option
+a DSL author is most likely to need. The mixin does not wrap a callable;
+it gives the deriving type a method that empties a map the type owns. The
+DSL author then writes the lookups explicitly, which buys three things
+that \code{memoize} cannot offer. The cache may be keyed on more than one
+thing, for instance on a rule name and a node kind together. The cache may
+be inspected: the DSL can report how many entries it holds, or seed it
+from a table at start-up. And the cache may be invalidated selectively, by
+removing the entries for one key, rather than wholesale.
+
+The price is that the lookups are written by hand, and a hand-written
+lookup can be wrong in ways a wrapper cannot. The canonical form is short
+enough to state: look the key up; if it is present, use the stored value;
+otherwise compute it, store it, and use it. Written that way it is exactly
+the body of \code{MemoizedCallable::operator()}, and a DSL that gets it
+right behaves identically to a wrapped function. Written carelessly -- by
+forgetting to store the computed value, or by storing it under a
+differently-spelled key -- it will recompute silently, and the symptom will
+be a slowdown rather than a failure. That is why the mixin's documentation
+is careful to say only that it empties the map, and says nothing about how
+the map is filled.
+
+\section{Edge Cases and Limits}
+
+\begin{itemize}
+\item \textbf{\code{memoize} does not deduce its template arguments.} Both
+\code{Key} and \code{Value} must be written: \code{dsl::memoize<int, long
+long>(fn)}. Neither can be inferred, because the function's parameter and
+return types are hidden inside a generic lambda, and the header does not
+attempt to inspect them. Writing \code{dsl::memoize(fn)} is a compile error
+with no candidate template.
+
+\item \textbf{\code{memoize} is not \code{constexpr}, and neither is
+\code{Lazy}.} Neither factory is declared \code{constexpr}, and neither
+class has a \code{constexpr} constructor. A cached computation cannot
+therefore participate in a constant expression, which rules out using
+\code{memoize} for compile-time tables.
+
+\item \textbf{The cache has no custom hash or equality.} The map is a plain
+\code{std::unordered_map<Key, Value>}. A key type that needs a custom
+hash must specialise \code{std::hash} for it; there is no template
+parameter for it.
+
+\item \textbf{Cached values are copied on every call.} Both return
+statements in \code{operator()} copy. A \code{Value} that is expensive to
+copy makes the cache less useful than it looks.
+
+\item \textbf{The wrapper is copyable, and copying it copies the cache.}
+\code{MemoizedCallable} has no user-declared copy operations, so the
+implicit ones apply and the \code{unordered_map} is copied along with the
+callable. Copying a memoised callable therefore copies its accumulated
+results, which is occasionally surprising.
+
+\item \textbf{There is no thread safety, and the header says so.} Neither
+facility uses a mutex, an atomic, or any other synchronisation. The
+\code{unordered_map} is not safe for concurrent mutation, and the
+\code{std::optional} flag in \code{Lazy} is not safe for concurrent
+check-then-set. A concurrent caller may also observe a torn value.
+
+\item \textbf{\code{Lazy} stores the producer as a \code{std::function}.}
+That means the producer is type-erased and must be copy-constructible, and
+that a \code{Lazy} capturing a large object by value copies that object
+into the \code{std::function}. The D port does not have this restriction:
+its \code{Lazy} is parameterised on the producer type as well as the value
+type, and it provides a \code{make_lazy} factory that infers the value type
+from the producer. The \cpp{} port has no \code{make_lazy}; the value type
+must be spelled out.
+
+\item \textbf{A forced \code{Lazy} cannot be unforced.} There is no
+\code{reset()} and no way to replace the producer. A \code{Lazy} that has
+been forced behaves like a value that happens to have been computed
+recently.
+
+\item \textbf{The reference returned by \code{get()} can dangle.} It
+dangles if the cell is destroyed, and it dangles if the cell is moved,
+because the move relocates the cached value.
+
+\item \textbf{The \code{Memoization} mixin requires a user-provided
+member.} It calls \code{memo_cache.clear()} on a member of the deriving
+type, with no \code{requires} clause and no default. A DSL that names the
+feature and does not supply the member does not compile.
+
+\item \textbf{The two caches do not interact.} \code{MemoizedCallable}'s
+cache is private and cannot be cleared from outside except through the
+wrapper's own \code{clear_cache()}; the mixin's cache is the user's and is
+never touched by \code{memoize}.
+\end{itemize}
+
+\section{Closing}
+
+The two facilities in this chapter are deliberately small. \code{memoize}
+is a hash map with a wrapper around it, and \code{Lazy} is an optional
+value with a flag. Neither is clever, and neither tries to be; what they
+provide is a standard, auditable place to put a cache, in a library whose
+other facilities are all about making the structure of a computation
+visible. The memoised Fibonacci in Listing~\ref{lst:ch19-memo} computes
+its forty-first distinct input exactly once, and the lazy configuration in
+the same listing is built exactly once, or not at all.
+
+The next chapter changes subject from \emph{when} a computation happens to
+\emph{whether} it succeeds. \code{dsl::Maybe} and \code{dsl::Result} give
+the library a way to represent the absence of a value and the failure of a
+step, and to propagate that failure through a chain of transformations
+without exceptions.

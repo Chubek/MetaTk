@@ -1,0 +1,762 @@
+\chapter{Diagnostics, Semantic Actions, and \texttt{run\_parser}}
+\label{ch:parser-diagnostics}
+{
+
+% \code detokenises its argument, so a long type name cannot be broken
+% across lines and will overflow a narrow table column.  \codel takes
+% two pieces of such a name, places a discretionary break between them,
+% and prints them in a monospaced face.  Because \codel does not
+% detokenise its arguments, an ampersand inside a table cell must be
+% written \&, and an underscore must be written \_.
+\providecommand{\codel}[2]{\texttt{#1\allowbreak#2}}
+
+\section{A parser that fails is not a parser that explains}
+
+Every parser fails eventually.  A user typing a configuration file will
+put a bracket in the wrong place; a program feeding a query language will
+send a token the grammar does not accept.  At that moment the parser
+hands back a \code{ParseError}, and the quality of the answer the user
+gets is entirely determined by two things: how far into the input the
+error points, and how accurately it describes what would have been
+acceptable there.
+
+DSLtk's parser core provides the first of these two things and half of
+the second.  The error record carries a byte offset, and the merge rule
+of Chapter~\ref{ch:parser-core} ensures that the offset is the farthest
+one any alternative reached.  The error record also carries a list of
+labels, and the merge rule ensures that alternatives which failed at the
+same offset contribute their labels to a single list.  What the library
+does \emph{not} provide is the last step: turning a position and a list
+of labels into a sentence.  There is no formatter in the header, no
+\code{format_error}, no \code{to_string} on \code{ParseError}, and no
+notion of a line or a column.  All of that is the user's job, and this
+chapter is largely about doing that job well.
+
+The chapter also covers the two facilities that surround the error
+record: \code{run_parser}, the entry point that runs a parser over a
+whole string and deals with trailing input, and \code{parse_with_action},
+the hook that lets a grammar hand matched text to a semantic action.
+Finally it covers the small registry of compile-time-keyed production
+handlers, which is the shipped mechanism for dispatching to a semantic
+action by production identity.
+
+\section{A worked example}
+
+Listing~\ref{lst:ch23-diagnostics} is a complete program.  It defines a
+tiny grammar --- an assignment of the form \code{name = number} --- and
+three things built on top of it: a message formatter, a line-and-column
+calculator, and a demonstration of the semantic-action hook and of the
+production registry.
+
+\begin{lstlisting}[style=dslcpp,caption={A diagnostic formatter, a semantic action, and a production-handler registry, built on a tiny assignment grammar.},label={lst:ch23-diagnostics}]
+#include "DSLtk.hpp"
+
+#include <cctype>
+#include <iostream>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+// ---------------------------------------------------------------------------
+// 1.  The message formatter.  The header stores a ParseError; turning it
+//     into a sentence is the user's job.
+// ---------------------------------------------------------------------------
+
+static std::string
+format_expected (const std::vector<std::string> &labels)
+{
+  if (labels.empty ())
+    return "<nothing>";
+  std::string s;
+  for (std::size_t i = 0; i < labels.size (); ++i)
+    {
+      if (i)
+        {
+          if (i + 1 == labels.size ())
+            s += (labels.size () == 2) ? " or " : ", or ";
+          else
+            s += ", ";
+        }
+      s += labels[i];
+    }
+  return s;
+}
+
+// ParseError carries a byte offset.  Turning that offset into a line and
+// a column is also the user's job.
+static std::string
+format_error (const std::string &src, const dsl::ParseError &err)
+{
+  std::size_t line = 1;
+  std::size_t column = 1;
+  for (std::size_t i = 0; i < err.pos && i < src.size (); ++i)
+    {
+      if (src[i] == '\n')
+        {
+          ++line;
+          column = 1;
+        }
+      else
+        ++column;
+    }
+  return "line " + std::to_string (line) + ", column "
+         + std::to_string (column) + " (offset " + std::to_string (err.pos)
+         + "): expected " + format_expected (err.expected);
+}
+
+// ---------------------------------------------------------------------------
+// 2.  A tiny grammar:   name = number
+// ---------------------------------------------------------------------------
+
+// lexeme (p) -- match p, then swallow the whitespace that follows.
+template <typename T>
+static dsl::Parser<T>
+lexeme (dsl::Parser<T> p)
+{
+  return dsl::parser (
+      [p] (dsl::ParsecInput &in) -> dsl::ExpectedResult<T>
+      {
+        auto r = p (in);
+        if (!r)
+          return r;
+        while (!in.eof ()
+               && std::isspace (static_cast<unsigned char> (in.peek ())))
+          in.consume ();
+        return *r;
+      });
+}
+
+static dsl::Parser<char>
+digit ()
+{
+  return dsl::satisfy (
+      [] (char c)
+      { return std::isdigit (static_cast<unsigned char> (c)) != 0; },
+      "digit");
+}
+
+static dsl::Parser<char>
+letter ()
+{
+  return dsl::satisfy (
+      [] (char c)
+      { return std::isalpha (static_cast<unsigned char> (c)) != 0; },
+      "letter");
+}
+
+static dsl::Parser<char>
+alnum ()
+{
+  return dsl::satisfy (
+      [] (char c)
+      { return std::isalnum (static_cast<unsigned char> (c)) != 0; },
+      "alphanumeric character");
+}
+
+static dsl::Parser<std::string>
+name ()
+{
+  auto core = dsl::operator& (letter (), dsl::operator* (alnum ()));
+  return lexeme (dsl::parser (
+      [core] (dsl::ParsecInput &in) -> dsl::ExpectedResult<std::string>
+      {
+        auto r = core (in);
+        if (!r)
+          return dsl::ExpectedResult<std::string>::failure (
+              r.error.pos, r.error.kind, r.error.expected);
+        std::string s (1, (*r).first);
+        for (char c : (*r).second)
+          s += c;
+        return s;
+      }));
+}
+
+static dsl::Parser<std::string>
+digits ()
+{
+  auto core = dsl::operator& (digit (), dsl::operator* (digit ()));
+  return lexeme (dsl::parser (
+      [core] (dsl::ParsecInput &in) -> dsl::ExpectedResult<std::string>
+      {
+        auto r = core (in);
+        if (!r)
+          return dsl::ExpectedResult<std::string>::failure (
+              r.error.pos, r.error.kind, r.error.expected);
+        std::string s (1, (*r).first);
+        for (char c : (*r).second)
+          s += c;
+        return s;
+      }));
+}
+
+// assignment := name '=' digits
+static dsl::Parser<std::pair<std::string, std::string>>
+assignment ()
+{
+  auto core = dsl::operator& (
+      dsl::operator& (name (), lexeme (dsl::ch ('='))), digits ());
+  return dsl::parser (
+      [core] (dsl::ParsecInput &in)
+          -> dsl::ExpectedResult<std::pair<std::string, std::string>>
+      {
+        auto r = core (in);
+        if (!r)
+          return dsl::ExpectedResult<std::pair<std::string, std::string>>::
+              failure (r.error.pos, r.error.kind, r.error.expected);
+        return std::make_pair ((*r).first.first, (*r).second);
+      });
+}
+
+// ---------------------------------------------------------------------------
+// 3.  Semantic actions and the production registry.
+// ---------------------------------------------------------------------------
+
+using SemMap = std::unordered_map<std::string, std::string>;
+using Handler = std::function<std::string (const SemMap &, dsl::ParserStage)>;
+
+template <dsl::FixedString Id, typename Fn>
+static void
+register_handler (std::unordered_map<std::string, Handler> &table,
+                  dsl::ProductionHandler<Id, Fn> handler)
+{
+  table[std::string (Id.view ())] = [handler] (const SemMap &sem,
+                                               dsl::ParserStage stage)
+  { return handler.fn (sem, stage); };
+}
+
+static std::unordered_map<std::string, Handler>
+build_handlers ()
+{
+  std::unordered_map<std::string, Handler> table;
+  register_handler (
+      table,
+      dsl::production<"name"> (
+          [] (const SemMap &, dsl::ParserStage stage)
+          { return "name production matched \"" + std::string (stage.span)
+                  + "\""; }));
+  register_handler (
+      table,
+      dsl::production<"value"> (
+          [] (const SemMap &, dsl::ParserStage stage)
+          { return "value production matched \"" + std::string (stage.span)
+                  + "\""; }));
+  return table;
+}
+
+// ---------------------------------------------------------------------------
+// 4.  main
+// ---------------------------------------------------------------------------
+
+static void
+show (const std::string &src)
+{
+  auto outcome = dsl::run_parser (assignment (), src);
+  std::cout << "  input: \"" << src << "\"\n";
+  if (outcome.value)
+    std::cout << "    ok: " << outcome.value->first << " = "
+              << outcome.value->second << "\n";
+  else
+    std::cout << "    " << format_error (src, outcome.error) << "\n";
+}
+
+int
+main ()
+{
+  std::cout << "--- run_parser ---\n";
+  show ("width = 12");
+  show ("width = ");
+  show ("width 12");
+  show ("width = 12 trailing");
+  show ("= 12");
+
+  std::cout << "\n--- parse_with_action ---\n";
+  {
+    dsl::ParsecInput in{ "width = 12", 0 };
+    SemMap semantics;
+    auto out = dsl::parse_with_action (
+        assignment (), in, semantics,
+        [] (const SemMap &sem, dsl::ParserStage stage)
+        {
+          return "action saw span=\"" + std::string (stage.span)
+                 + "\" begin=" + std::to_string (stage.begin)
+                 + " end=" + std::to_string (stage.end)
+                 + " semantics=" + std::to_string (sem.size ());
+        });
+    std::cout << "  " << (out ? *out : std::string ("<no action>")) << "\n";
+  }
+
+  std::cout << "\n--- production registry ---\n";
+  {
+    auto table = build_handlers ();
+    dsl::ParsecInput in{ "width = 12", 0 };
+    SemMap semantics;
+    semantics["name"] = "width";
+    auto stage = dsl::parse_with_action (
+        assignment (), in, semantics,
+        [] (const SemMap &, dsl::ParserStage s) { return s; });
+    if (stage)
+      {
+        auto it = table.find ("name");
+        if (it != table.end ())
+          std::cout << "  " << it->second (semantics, *stage) << "\n";
+      }
+  }
+  return 0;
+}
+\end{lstlisting}
+
+The output is:
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch23-diagnostics}.},label={lst:ch23-diagnostics-out}]
+--- run_parser ---
+  input: "width = 12"
+    ok: width = 12
+  input: "width = "
+    line 1, column 9 (offset 8): expected digit
+  input: "width 12"
+    line 1, column 7 (offset 6): expected =
+  input: "width = 12 trailing"
+    line 1, column 12 (offset 11): expected <end-of-input>
+  input: "= 12"
+    line 1, column 1 (offset 0): expected letter
+
+--- parse_with_action ---
+  action saw span="width = 12" begin=0 end=10 semantics=0
+
+--- production registry ---
+  name production matched "width = 12"
+\end{lstlisting}
+
+Four of those five diagnostics are good.  The fourth is interesting: the
+input \code{"width = 12 trailing"} parses successfully as far as the
+grammar is concerned, and the error comes from \code{run_parser} itself,
+which refuses to leave text behind.  The fifth is the mirror image of
+the second: the error is at offset zero, because the name rule failed
+immediately, and the digit rule was never reached.
+
+\section{The data model}
+
+The diagnostic facilities are five entities: a result type, a runner, a
+stage record, an action hook, and a handler registry.
+
+\begin{table}[htbp]
+\centering
+\caption{The diagnostic and semantic-action facilities of the parser library.}
+\label{tab:ch23-helpers}
+\footnotesize
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{L{2.6cm} L{5.8cm} L{4.8cm}}
+\toprule
+\textbf{Entity} & \textbf{Signature} & \textbf{Behaviour} \\
+\midrule
+\codel{ParseOutcome}{<T>}
+  & \code{std::optional<T> value}, \code{ParseError error}
+  & The result of running a whole parser over a whole input.  It is
+    \emph{not} a variant: both members are always present.  A successful
+    outcome carries a default-constructed error. \\
+\code{run_parser}
+  & \code{template <typename T> ParseOutcome<T> run_parser (const Parser<T>& p, std::string_view source)}
+  & Runs \code{p} on a fresh \code{ParsecInput}.  On failure it returns
+    the parser's error verbatim.  On success, if the input has not been
+    fully consumed it synthesises a \code{Committed} error labelled
+    \code{"<end-of-input>"} at the current offset. \\
+\code{ParserStage}
+  & \code{std::size_t begin}, \code{std::size_t end},
+    \code{std::string_view span}
+  & The extent of a successful match: the offsets it began and ended at,
+    and the text between them. \\
+\code{parse_with_action}
+  & \code{template <typename T, typename ActionFn> auto parse_with_action (const Parser<T>& p, ParsecInput& input, const std::unordered_map<std::string, std::string>& semantics, ActionFn&& action)}
+  & Runs \code{p} on \code{input}, builds a \code{ParserStage} from the
+    consumed span, and calls \code{action(semantics, stage)}.  Returns an
+    empty \code{std::optional} if the parse failed; the error is
+    discarded. \\
+\code{production}
+  & \code{template <FixedString Id, typename Fn> auto production (Fn&& fn)}
+  & Builds a \code{ProductionHandler<Id, Fn>} whose single member
+    \code{fn} is the supplied callable.  The identifier is a compile-time
+    string and appears only in the \emph{type}. \\
+\codel{Production}{Handler<Id, Fn>}
+  & \code{Fn fn}
+  & A registry entry.  It holds the handler and nothing else --- in
+    particular it does \emph{not} expose the identifier, so a registry
+    keyed at run time must be given the key separately. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Two of these deserve a closer reading.
+
+\code{run_parser} is the only function in the library that owns the
+whole-input convention, and it is worth spelling out exactly what it
+does, because the behaviour is not obvious from the name.  It creates a
+\code{ParsecInput} over the given view, runs the parser, and then:
+
+\begin{enumerate}
+\item If the parser failed, the error is returned \emph{unchanged} ---
+    same position, same kind, same labels.  \code{run_parser} does not
+    improve, filter or annotate it.
+\item If the parser succeeded but the cursor is not at the end of the
+    input, a new error is synthesised: offset equal to the cursor's
+    position, kind \code{Committed}, and a single label
+    \code{"<end-of-input>"}.  The value is discarded.
+\item Otherwise the value is returned together with a default-constructed
+    \code{ParseError}.
+\end{enumerate}
+
+The consequence is that a successful parse of a prefix is a
+\emph{failure} as far as \code{run_parser} is concerned, and the
+message says so in a way that is often exactly right --- but not always.
+``expected \code{<end-of-input>}'' is a good message for a program that
+read too much, and a poor one for a program that meant to parse only the
+first record of a file.  The library offers no way to ask
+\code{run_parser} to stop early; a caller that wants a prefix parse must
+call the parser directly and inspect the cursor.
+
+\code{parse_with_action} is the semantic-action hook, and its shape
+deserves attention.  It takes four arguments, not two: the parser, an
+\emph{existing} \code{ParsecInput}, a map of semantics, and the action.
+The input is passed in rather than created, so a caller may run several
+parsers over one input and accumulate results; the map of semantics is
+passed in for the same reason, and is the channel through which
+sub-parsers hand their results to one another.  The action is called
+with the map and a \code{ParserStage}, and its return value is what the
+function returns, wrapped in a \code{std::optional}.  The return type is
+computed from a call of the action with the semantics map and a
+default-constructed stage, so the
+action must be callable with those two arguments and must have a
+deducible return type.
+
+Note what \code{parse_with_action} does \emph{not} do.  It does not
+check that the input has been consumed, and it does not report an error:
+if the parser fails, the function returns an empty \code{std::optional}
+and the \code{ParseError} is thrown away.  A caller that wants the error
+must run the parser itself, or call \code{run_parser} and then invoke
+the action separately.
+
+\section{From a ParseError to a sentence}
+
+The header stops at the error record.  Everything a user reads is written
+by the user, and the job has three parts: find the position, decide
+which labels to show, and put them in a grammatical order.
+
+The position part is a scan.  Because \code{ParseError::pos} is a byte
+offset, the line and the column are found by walking the source from the
+beginning and counting newlines; the column is the number of bytes since
+the last newline, not the number of characters, which is a distinction
+that matters for any input that is not pure ASCII.  The function
+\code{format_error} in Listing~\ref{lst:ch23-diagnostics} does exactly
+this, and the cost is linear in the length of the source.  A tool that
+parses a file of a megabyte should cache the line starts, or should not
+re-scan for every error.
+
+The label part is where the design decision of
+Chapter~\ref{ch:parser-core} becomes visible.  The \code{expected} list
+is a \emph{set} of labels that failed at the same offset, and the
+natural rendering is a disjunction: ``expected X'', ``expected X or Y'',
+``expected X, Y, or Z''.  The formatting has to decide where to put the
+Oxford comma, and Listing~\ref{lst:ch23-diagnostics} uses the rule that
+two labels are joined with ``or'' and three or more with ``, or''.
+
+\begin{pseudocode}[Format an expected set]
+\textbf{function} format\_expected (labels)\\
+\quad if labels is empty then\\
+\qquad return "<nothing>"\\
+\quad s := ""\\
+\quad n := size (labels)\\
+\quad for i from 0 to n - 1 do\\
+\qquad if i > 0 then\\
+\qquad\quad if i = n - 1 then\\
+\qquad\qquad\quad if n = 2 then\\
+\qquad\qquad\qquad\quad s := s + " or "\\
+\qquad\qquad\quad else\\
+\qquad\qquad\qquad\quad s := s + ", or "\\
+\qquad\quad else\\
+\qquad\qquad\quad s := s + ", "\\
+\qquad s := s + labels[i]\\
+\quad return s
+\end{pseudocode}
+
+The grammatical order of the list is itself a decision, and it is one the
+library has already made, accidentally but consistently.  As
+Chapter~\ref{ch:parser-core} explains, \code{operator|} merges the
+\emph{second} alternative's error as the destination, so the first
+alternative's labels are appended to the second's.  A grammar that tries
+\code{digit} first and \code{'('} second therefore reports ``expected
+\code{(} or \code{digit}''.  The set is right; the order is the reverse
+of the source order.  A formatter that wants the source order must sort
+the labels, and a grammar that wants a particular order must control the
+order of the alternatives, because there is no mechanism in the library
+for reordering a label set.
+
+\section{Failure versus diagnostic}
+
+The two words in the title of this section are not synonyms, and the
+distinction is the most useful thing in this chapter.
+
+A \emph{failure} is a control-flow signal.  It says: this alternative
+does not apply, and here is a position and a set of labels that a user
+might find useful \emph{if} no alternative applies.  A failure is
+consumed by the machinery: it is merged, it is swallowed by
+\code{optional}, it is demoted by \code{try_parse}, it is replaced by
+\code{labeled}.  A failure that is never consumed --- that is, a failure
+that reaches the top of the parse --- becomes a diagnostic.
+
+A \emph{diagnostic} is a message for a human.  It wants the furthest
+position that any alternative reached, because that is the point at which
+the parser had the most context and therefore the most to say.  It wants
+the union of the labels of every alternative that failed there, because
+each of them is a thing the user could have written.  And it wants a
+sentence, not a data structure.
+
+The library optimises the first two of those and leaves the third to the
+user.  The consequence is that the quality of a diagnostic is a property
+of the \emph{grammar}, not of the library.  A grammar in which every
+alternative is plausible at the point of failure produces a good
+diagnostic; a grammar in which one alternative is a catch-all produces a
+diagnostic that lists the catch-all's label alongside the meaningful
+ones, and the message becomes worse, not better, as the grammar grows.
+
+The classic example is the \code{factor} rule of
+Chapter~\ref{ch:primitive-parsers}: a factor is a number or a
+parenthesised expression.  At the point where a factor is required, the
+parser has two perfectly good reasons to fail, and the union of their
+labels is ``expected \code{(} or \code{digit}''.  But a user who has
+typed \code{1 +} is not going to be helped by being told that a left
+parenthesis would have been acceptable.  The rule is right, the message
+is noise, and the only cure is at the grammar level: the author must
+decide which alternatives are worth advertising, and must use
+\code{labeled} to say so.
+
+There is a second reason why the union can mislead.  The merge rule
+unions the labels of alternatives that failed at the \emph{same} offset,
+but it does not check that they failed for the same \emph{reason}.  Two
+alternatives can fail at the same offset with completely different
+expectations, and the union then says ``expected X or Y'' when the truth
+is ``expected X, and if not X then Y''.  For a language with a small
+number of alternatives this is a cosmetic problem; for a language with
+dozens, the message becomes a list of the vocabulary of the language
+rather than a diagnosis.
+
+\begin{warnbox}[The union grows with the grammar]
+Every alternative that can fail at a given offset contributes a label to
+the union at that offset.  A grammar with a hundred productions therefore
+produces messages with up to a hundred labels, and the user is left to
+find the relevant one.  The standard remedy is to wrap the individual
+rules in \code{labeled} with a short description of the construct, so
+that the union contains a dozen short phrases rather than a hundred
+single characters.
+\end{warnbox}
+
+\subsection{The merge lattice}
+
+Figure~\ref{fig:ch23-lattice} draws the merge operation as a lattice:
+two error records are combined into one, and the two possible shapes of
+the result --- replacement and union --- are shown side by side.
+
+\begin{dslgraph}
+  \node[dslbox, text width=34mm] (e1) at (-3.4,1.6)
+    {\texttt{e1} : pos 5, soft, \{\texttt{digit}\}};
+  \node[dslbox, text width=34mm] (e2) at (0.2,1.6)
+    {\texttt{e2} : pos 7, soft, \{\texttt{identifier}\}};
+  \node[dslbox, text width=30mm, fill=decisionbg] (m1) at (-1.6,0.2)
+    {merge};
+  \node[dslbox, text width=40mm, fill=termbg] (r1) at (-1.6,-1.1)
+    {pos 7, soft, \{\texttt{identifier}\} \quad (the farther error wins)};
+
+  \node[dslbox, text width=34mm] (e3) at (3.4,1.6)
+    {\texttt{e3} : pos 5, soft, \{\texttt{digit}\}};
+  \node[dslbox, text width=34mm] (e4) at (6.8,1.6)
+    {\texttt{e4} : pos 5, committed, \{\texttt{keyword}\}};
+  \node[dslbox, text width=30mm, fill=decisionbg] (m2) at (5.1,0.2) {merge};
+  \node[dslbox, text width=40mm, fill=termbg] (r2) at (5.1,-1.1)
+    {pos 5, committed, \{\texttt{digit}, \texttt{keyword}\}};
+
+  \draw[dslledge] (e1) -- (m1);
+  \draw[dslledge] (e2) -- (m1);
+  \draw[dslledge] (m1) -- (r1);
+  \draw[dslledge] (e3) -- (m2);
+  \draw[dslledge] (e4) -- (m2);
+  \draw[dslledge] (m2) -- (r2);
+\end{dslgraph}
+\begin{figure}[htbp]
+\centering
+\caption{The two shapes of \code{merge_error}.  On the left the source
+error is farther along and replaces the destination wholesale.  On the
+right the two errors are at the same offset, so their label lists are
+unioned and the kind is promoted to \code{Committed}.}
+\label{fig:ch23-lattice}
+\end{figure}
+
+The promotion to \code{Committed} on a tie is easy to overlook and it has
+a purpose.  Without the promotion, a union could be discarded by a later
+merge: if a third error arrives at the same offset with a single label,
+it would be merged into the union, and the union would survive --- but if
+the third error is \emph{farther} along, the whole union would be
+replaced by that error, losing the two labels that had been collected.
+Promoting the union to \code{Committed} does not by itself prevent that
+replacement, but it does make the union's status visible in the record,
+and it makes the tie case distinguishable from the ordinary soft-failure
+case in any diagnostic the user chooses to write.
+
+\section{Semantic actions}
+
+\code{parse_with_action} is the shipped mechanism for doing something
+with a match beyond turning it into a value.  It has three moving parts.
+
+The \code{ParserStage} records \emph{where} the match happened.  Its
+\code{begin} and \code{end} members are the offsets before and after the
+parser ran, and its \code{span} member is the text between them, taken
+from the input with \code{get_span(begin)}.  The span is a
+\code{std::string_view} into the source, so it is valid exactly as long
+as the source is; a semantic action that wants to keep the matched text
+must copy it.
+
+The \code{semantics} map is the channel between rules.  It is a
+\code{std::unordered_map<std::string, std::string>} from a production
+identifier to the text that production matched, and it is passed to the
+action so that the action can consult what the sub-rules found.  The map
+is passed \emph{by const reference}, so the action reads it and the
+caller owns it; an action that wants to add to it needs a non-const
+reference of its own.
+
+The action itself is an ordinary callable.  It receives the map and the
+stage and returns whatever the caller wants; the return type is deduced
+from a call of the action with the map and a default-constructed stage,
+so the action must be callable with those two arguments and must have a
+return type that can be deduced from that call.
+
+The demonstration in Listing~\ref{lst:ch23-diagnostics} shows the shape
+of the interaction: the action prints the span, the offsets and the size
+of the semantics map, and the map is empty because the grammar of the
+example has no rules that publish to it.
+
+\section{Production handlers}
+
+\codel{production<}{Id>(fn)} and \codel{ProductionHandler<}{Id, Fn>} are a very
+small idea.  A \codel{Production}{Handler} holds one callable and nothing
+else; the identifier is a compile-time \code{FixedString} that appears
+only in the \emph{type} of the handler.  The purpose is to let a grammar
+dispatch to a handler by production identity: the identity is known at
+compile time, so a table of handlers can be built once, and the
+dispatch is a lookup by string at run time.
+
+The catch is that \code{ProductionHandler} does not expose the
+identifier.  There is no \code{id} member, no \code{key()} method and no
+\code{operator string}; the identifier lives in the template parameter
+and nowhere else.  A run-time registry therefore has to be given the key
+by hand, and the natural way to do that is a small template function
+that reads it out of the type:
+
+\begin{lstlisting}[style=dslcpp,caption={Registering a production handler under a run-time key derived from its compile-time identifier.},label={lst:ch23-register}]
+#include "DSLtk.hpp"
+
+#include <functional>
+#include <string>
+#include <unordered_map>
+
+using SemMap = std::unordered_map<std::string, std::string>;
+using Handler = std::function<std::string (const SemMap &, dsl::ParserStage)>;
+
+template <dsl::FixedString Id, typename Fn>
+static void
+register_handler (std::unordered_map<std::string, Handler> &table,
+                  dsl::ProductionHandler<Id, Fn> handler)
+{
+  table[std::string (Id.view ())] = [handler] (const SemMap &sem,
+                                               dsl::ParserStage stage)
+  { return handler.fn (sem, stage); };
+}
+\end{lstlisting}
+
+\code{FixedString::view()} is a \code{constexpr} member that returns the
+characters of the identifier without the terminating null, so the key
+that ends up in the map is exactly the string that appeared in the
+template argument.  The cost of the scheme is one \code{std::string}
+allocation per registered handler, paid once at start-up.
+
+\section{Edge cases and limits}
+
+\begin{itemize}
+\item \textbf{There is no message formatter in the header.}  No
+  \code{to_string}, no \code{format}, no \code{operator<<} for
+  \code{ParseError} or \code{ParseOutcome}.  Everything a user reads is
+  written by the user, and the quality of the message is a property of
+  the grammar as much as of the formatter.
+
+\item \textbf{There is no line or column in the error record.}  Only a
+  byte offset.  The conversion is a linear scan unless the caller caches
+  the line starts.
+
+\item \textbf{The offset is a byte offset, not a character offset.}  A
+  multi-byte UTF-8 character counts as several columns.  A formatter that
+  wants to report a column in characters must decode.
+
+\item \textbf{\code{run_parser} discards the value of a trailing-input
+  failure.}  The \code{ParseOutcome} it returns has an empty value, even
+  though the parser itself succeeded and produced one.  A caller that
+  wants the value anyway must call the parser directly.
+
+\item \textbf{\code{run_parser} always requires the whole input.}  There
+  is no flag for parsing a prefix, and no way to parse a stream of
+  records.  A caller who wants that must drive the parser and the cursor
+  by hand.
+
+\item \textbf{\code{parse_with_action} discards the error.}  A failed
+  parse yields an empty \code{std::optional} and nothing else; the
+  \code{ParseError} is lost.  Combining the action hook with a
+  diagnostic therefore requires running the parser twice, or running it
+  once by hand.
+
+\item \textbf{\code{parse_with_action} does not check for trailing
+  input.}  Unlike \code{run_parser}, it will happily succeed on a
+  prefix.  This is a feature --- it is what makes it possible to parse
+  one record at a time --- but it means the caller must decide whether
+  the rest of the input is acceptable.
+
+\item \textbf{The stage's span is a view.}  \code{ParserStage::span} is
+  a \code{std::string_view} into the source, valid only as long as the
+  source.  A semantic action that stores it in a longer-lived structure
+  must copy it.
+
+\item \textbf{\code{production} does not register anything.}  It builds a
+  value.  There is no global registry, no \code{register_production}
+  function and no lookup; the user builds whatever table is wanted, and
+  the identifier is not available at run time from the handler alone.
+
+\item \textbf{The semantics map is stringly typed.}  A production
+  identifier is a string, and a semantic action that reads the map gets
+  a string; a typo in a key is a runtime failure, not a compile-time
+  one.  The compile-time keying of the handler is the only place where
+  the library offers static checking.
+
+\item \textbf{The label list is never deduplicated within one error.}
+  The de-duplication in \code{merge_error} only happens when two errors
+  are merged; a parser that records the same label twice keeps both.
+
+\item \textbf{There is no recovery.}  Nothing in the library resynchronises
+  the input after an error, finds the next plausible token, or reports
+  more than one error.  A diagnostic is a single position with a single
+  set of labels.
+\end{itemize}
+
+\section{Closing}
+
+The parser library stops at the error record, and that is a deliberate
+choice rather than an omission.  The library computes what it is good at
+--- the furthest position, the union of the labels that were plausible
+there --- and leaves the presentation to the user, who knows what the
+input was, where it came from, and what the user should be told.
+
+The facilities around the error record fill in the rest of the pipeline.
+\code{run_parser} is the entry point that decides what ``the whole
+input'' means.  \code{parse_with_action} is the hook that connects a
+match to a computation, and \code{ParserStage} is the record of where
+the match happened.  \code{production} and \code{ProductionHandler} are
+the dispatch mechanism that lets a grammar route a match to the code
+that knows what to do with it.
+
+The next chapter leaves parsing behind and looks at the other small
+machinery in the header: the task pipeline, whose tasks communicate
+through a shared, stringly typed map.
+}

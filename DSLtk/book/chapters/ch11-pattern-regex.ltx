@@ -1,0 +1,618 @@
+\chapter{The \code{pattern<>} Compile-Time Regex Engine}
+\label{ch:pattern-regex}
+
+\section{A small language for small patterns}
+
+The match table of \chapref{ch:pattern-match} dispatches on a key. Most
+keys are enumerations or integers, and comparing them is trivial. But a
+lexer, a configuration reader and a protocol decoder all need to dispatch
+on \emph{strings}, and a string key that matches exactly one spelling is
+rarely useful. What is needed is a key that describes a \emph{set} of
+spellings: ``a decimal integer'', ``an identifier'', ``a keyword''.
+
+\DSLtk{} provides such a key in the form of \api{dsl::pattern<S>}, a
+compile-time regular expression. The pattern is a template parameter, so
+it is part of the type of the clause that uses it, and the matching
+function is \code{constexpr}, so a match can be performed during constant
+evaluation. A table of pattern keys is therefore entirely a compile-time
+object, and the dispatch it performs is a comparison of the runtime key
+against a set of compile-time shapes.
+
+The facility is deliberately small. \code{dsl::pattern<S>} occupies a
+hundred and seventeen lines, from line 6175 to line 6291, and implements a
+recogniser with a deliberately restricted syntax. This chapter describes
+that syntax exactly, because the difference between what the syntax
+\emph{looks} like and what it \emph{does} is the most important thing a
+user of this facility needs to know.
+
+\begin{warnbox}[Two regex engines in one header]
+\texttt{DSLtk.hpp} contains two independent regular expression engines,
+and they are not interchangeable.
+\code{dsl::pattern<>} is a tiny compile-time matcher with a very restricted
+syntax. \code{dsl::StaticRegex<>}, declared at line 10363, is a full
+Thompson NFA with grouping, alternation, negated classes and anchors.
+They are not interchangeable, and the restrictions described in this
+chapter do \emph{not} apply to \code{StaticRegex}. The two are compared
+feature by feature in Table~\ref{tab:regex-compare}.
+\end{warnbox}
+
+\section{The data model}
+
+The type is a template on a \api{dsl::FixedString}, the compile-time string
+type of \chapref{ch:fixed-string}:
+
+\begin{lstlisting}[style=dslcpp]
+template <FixedString S> struct pattern
+{
+  static constexpr std::string_view value = S.view ();
+
+  static constexpr bool
+  matches (std::string_view input)
+  {
+    return match_here (S.view (), input);
+  }
+
+private:
+  //  match_class, match_one, match_here
+};
+\end{lstlisting}
+
+The public surface is deliberately minimal: one static data member,
+\code{value}, which exposes the pattern text for diagnostics, and one
+static member function, \code{matches}, which tests a string. There is no
+search function, no capture group machinery, no iteration interface, and no
+error reporting: the answer is a single \code{bool}.
+
+The three private helpers implement the matcher. \code{match_class}
+(line 6202) tests a character against the body of a character class.
+\code{match_one} (line 6223) tests a character against a single pattern
+element, which may be a class, a dot, or a literal. \code{match_here}
+(line 6233) is the recursive core.
+
+\section{The algorithm}
+
+\code{match_here} takes two string views: the pattern that remains to be
+matched, and the input that remains to be consumed. Its result is a single
+boolean.
+
+The base case is the anchor. When the pattern is exhausted, the match
+succeeds if and only if the input is also exhausted:
+
+\begin{lstlisting}[style=dslcpp]
+if (pat.empty ())
+  return str.empty ();
+\end{lstlisting}
+
+This single line establishes the most important property of the engine:
+\emph{the match is anchored at both ends}. There is no search mode, and
+there is no way to ask whether a pattern occurs somewhere inside a longer
+string. A pattern matches a string only when it consumes the whole string.
+
+The next step handles a leading circumflex, which is skipped:
+
+\begin{lstlisting}[style=dslcpp]
+if (pat[0] == '^')
+  return match_here (pat.substr (1), str);
+\end{lstlisting}
+
+Because the match is already anchored at the start, this is redundant. It
+is accepted for compatibility with regular expression dialects in which
+the anchor is written explicitly.
+
+The next step parses the first pattern element. If it is an opening
+bracket, the class body is extracted up to the first closing bracket; if
+there is no closing bracket, the match fails immediately. The quantifier
+that follows the element --- if any --- is then read, and the remainder of
+the pattern is computed. What remains is to decide how many times the
+element may be consumed, and that is where the three branches differ.
+
+The \textbf{unquantified} branch consumes exactly one character:
+
+\begin{lstlisting}[style=dslcpp]
+if (str.empty () || !match_one (first, cls, str[0]))
+  return false;
+return match_here (rest, str.substr (1));
+\end{lstlisting}
+
+The \textbf{star} branch implements genuine backtracking. It first tries
+the tail with zero repetitions; if that fails, it consumes one occurrence
+at a time and retries the tail after each consumption:
+
+\begin{lstlisting}[style=dslcpp]
+if (match_here (rest, str))
+  return true;
+while (!str.empty () && match_one (first, cls, str[0]))
+  {
+    str.remove_prefix (1);
+    if (match_here (rest, str))
+      return true;
+  }
+return false;
+\end{lstlisting}
+
+The \textbf{plus} branch is greedy and does \emph{not} backtrack. It
+requires at least one occurrence, consumes as many as it can, and then
+matches the tail exactly once:
+
+\begin{lstlisting}[style=dslcpp]
+if (str.empty () || !match_one (first, cls, str[0]))
+  return false;
+str.remove_prefix (1);
+while (!str.empty () && match_one (first, cls, str[0]))
+  str.remove_prefix (1);
+return match_here (rest, str);
+\end{lstlisting}
+
+The difference between the star and the plus branches is not a matter of
+style; it changes the language that is recognised, as the worked traces
+below show.
+
+\begin{pseudocode}[The matcher: parsing the first element]
+\textbf{function} \code{match_here}(pat, str)\\
+\quad \textbf{if} pat is empty \textbf{then}\\
+\qquad \textbf{return} str is empty\\
+\quad \textbf{if} \code{pat[0]} is \code{^} \textbf{then}\\
+\qquad \textbf{return} \code{match_here} of (pat without its first character, str)\\
+\quad cls \code{<-} empty, advance \code{<-} 1\\
+\quad \textbf{if} \code{pat[0]} is \code{[} \textbf{then}\\
+\qquad end \code{<-} index of the first \code{]} in pat at or after 1\\
+\qquad \textbf{if} no such index exists \textbf{then return} false\\
+\qquad cls \code{<-} the characters of pat between 1 and end\\
+\qquad advance \code{<-} end plus 1\\
+\quad quant \code{<-} none\\
+\quad \textbf{if} advance is less than the length of pat and\\
+\qquad\qquad \code{pat[advance]} is \code{*} or \code{+} \textbf{then}\\
+\qquad\qquad quant \code{<-} \code{pat[advance]}\\
+\qquad\qquad advance \code{<-} advance plus 1\\
+\quad rest \code{<-} the characters of pat from advance onwards
+\end{pseudocode}
+
+\begin{pseudocode}[The matcher: the three consumption branches]
+\quad \textbf{if} quant is \code{*} \textbf{then}\\
+\qquad \textbf{if} \code{match_here(rest, str)} \textbf{then return} true\\
+\qquad \textbf{while} str is not empty and \code{pat[0]} matches \code{str[0]} \textbf{do}\\
+\qquad\qquad remove the first character of str\\
+\qquad\qquad \textbf{if} \code{match_here(rest, str)} \textbf{then return} true\\
+\qquad \textbf{return} false\\
+\quad \textbf{if} quant is \code{+} \textbf{then}\\
+\qquad \textbf{if} str is empty or \code{pat[0]} does not match \code{str[0]} \textbf{then}\\
+\qquad\qquad \textbf{return} false\\
+\qquad remove the first character of str\\
+\qquad \textbf{while} str is not empty and \code{pat[0]} matches \code{str[0]} \textbf{do}\\
+\qquad\qquad remove the first character of str\\
+\qquad \textbf{return} \code{match_here(rest, str)}\\
+\quad \textbf{if} str is empty or \code{pat[0]} does not match \code{str[0]} \textbf{then}\\
+\qquad \textbf{return} false\\
+\quad \textbf{return} \code{match_here(rest, str without its first character)}
+\end{pseudocode}
+
+\begin{figure}[htbp]
+\begin{dslgraph}
+    \node[dsllarge] (st) {matcher state\\\code{(pat, str)}};
+    \node[dsldecision, below=of st] (d) {quantifier?};
+    \node[dslbox, below left=of d] (one) {none\\consume one character};
+    \node[dslbox, below=of d] (star) {\code{*}\\try 0, then 1, 2, \dots};
+    \node[dslbox, below right=of d] (plus) {\code{+}\\consume greedily};
+    \node[dslterm, below=of star] (rec) {recurse on\\\code{(rest, str')}};
+    \draw[dsledge] (st) -- (d);
+    \draw[dsledge] (d) -- node[left, font=\scriptsize] {no} (one);
+    \draw[dsledge] (d) -- node[above, font=\scriptsize] {yes} (star);
+    \draw[dsledge] (d) -- node[right, font=\scriptsize] {yes} (plus);
+    \draw[dsledge] (one) -- (rec);
+    \draw[dsledge] (star) -- (rec);
+    \draw[dsledge] (plus) -- (rec);
+\end{dslgraph}
+  \caption{The recursive matcher. The state is the pair of remaining
+  pattern and remaining input. The three branches differ only in how many
+  times the first element may be consumed, and the star branch is the only
+  one that retries the tail at more than one consumption count.}
+  \label{fig:pattern-matcher}
+\end{figure}
+
+\section{The syntax, exactly}
+
+\begin{table}[htbp]
+  \centering
+  \begin{tabular}{@{}L{0.20\textwidth}L{0.72\textwidth}@{}}
+    \toprule
+    \textbf{Construct} & \textbf{Behaviour} \\
+    \midrule
+    Literal character &
+    Matches that character. Any character other than the special ones
+    below is a literal, including \code{#}, \texttt{\%}, \code{&},
+    \texttt{\textbackslash} and the comma. \\
+    \code{.} &
+    Matches any single character, \emph{including} a newline. \\
+    \code{[abc]} &
+    A character class. Matches one character that is a member of the set. \\
+    \code{[a-z]} &
+    A range inside a class. The bounds are inclusive, so \code{[a-z]}
+    matches \code{a} and \code{z}. A reversed range such as \code{[z-a]}
+    matches nothing. \\
+    \code{[-a]}, \code{[a-]} &
+    A hyphen at either end of the class body is a literal hyphen. A hyphen
+    in the middle is a range separator. \\
+    \code{*} &
+    Zero or more of the preceding element. The preceding element may be a
+    literal, a dot or a class. \\
+    \code{+} &
+    One or more of the preceding element. Greedy; it does not backtrack. \\
+    \code{^} &
+    Skipped when it appears at the start of the remaining pattern. Inside
+    a class it is a literal member of the class. \\
+    \bottomrule
+  \end{tabular}
+  \caption{The constructs that \code{dsl::pattern<>} recognises.}
+  \label{tab:pattern-syntax}
+\end{table}
+
+The following are \emph{not} constructs. Each of them is an ordinary
+character with an ordinary meaning, and using one where a quantifier or an
+operator is expected produces a pattern that does not do what the author
+intended.
+
+\begin{itemize}
+\item \textbf{\code{?} is a literal question mark.} It is not a
+quantifier. The pattern \code{"a?"} matches the two-character string
+\code{"a?"} and does not match \code{"a"}.
+\item \textbf{\code{|} is a literal vertical bar.} There is no
+alternation. The pattern \code{"a|b"} matches the three-character string
+\code{"a|b"}.
+\item \textbf{\code{^} inside a class is a literal member.} There is no
+negated class. A class whose body begins with a circumflex is a class
+whose first member is the circumflex character: the pattern
+\code{"[^a]"} matches a string consisting of the single character
+\code{"^"} or the single character \code{"a"}, and nothing else. \\
+\item \textbf{\code{$} is a literal dollar sign.} The header's documentation
+comment lists \code{$} among the constructs that are ``ignored'', on the
+ground that the match is always anchored at the end. The implementation
+does not special-case \code{$}, so it is matched as a literal character.
+The pattern \code{"a$"} matches \code{"a$"} and not \code{"a"}.
+\item \textbf{There are no groups.} A parenthesis is a literal
+parenthesis. \code{"(a)"} matches the three-character string \code{"(a)"}.
+\item \textbf{There are no escape sequences.} A backslash is a literal
+backslash. \texttt{"\textbackslash d"} matches the two-character string
+\texttt{"\textbackslash d"} and not a digit.
+\end{itemize}
+
+\begin{warnbox}[A doc comment that is half right]
+The documentation comment above \code{matches} lists \code{^} and
+\code{$} as ``ignored''. The \code{^} half is accurate for a circumflex
+at the start of the pattern, where the implementation skips it. The
+\code{$} half is not: \code{$} is never special-cased and is therefore a
+literal. The behaviour of the shipped code is what the pattern engine
+section above describes.
+\end{warnbox}
+
+\section{Worked traces}
+
+Three traces make the semantics concrete. In each case the pattern is
+fixed and the input varies.
+
+\subsection*{\code{pattern<"[0-9]+">::matches("123")}}
+
+The first call is \code{match_here("[0-9]+", "123")}. The pattern is not
+empty and its first character is a bracket, so the class body is read: the
+first \code{]} is at index 4, the body is \code{"0-9"}, and the element
+ends at index 5. The character at index 5 is \code{+}, so the element is
+quantified with a plus, and the rest of the pattern is empty.
+
+The plus branch is taken. The input is not empty, and the first character
+\code{"1"} is a member of the class, because \code{"0"} is less than or
+equal to \code{"1"} and \code{"1"} is less than or equal to \code{"9"}. The
+first character is consumed, leaving \code{"23"}. The greedy loop then
+consumes \code{"2"} and \code{"3"}, leaving the empty string, and stops
+because the input is empty. The tail is matched: \code{match_here("", "")}
+returns true because the pattern is empty and the input is empty.
+
+The result is \code{true}.
+
+\subsection*{\code{pattern<"[0-9]+">::matches("123abc")}}
+
+The same pattern is matched against a longer input. Everything proceeds
+identically until the greedy loop reaches the character \code{"a"}, which
+is not a member of the class \code{"0-9"}, so the loop stops with the input
+still holding \code{"abc"}. The tail is then matched:
+\code{match_here("", "abc")} finds the pattern empty and the input
+non-empty, and returns false.
+
+The result is \code{false}. The engine did not fail to find the number; it
+found the number and then found that the input was not exhausted, and it
+refused the match because the pattern is anchored at the end.
+
+\subsection*{\code{pattern<"ab*">::matches("abbb")}}
+
+The pattern has no class, so the first element is the literal \code{"a"},
+and the character at index 1 is \code{"b"}, which is not a quantifier. The
+element is therefore unquantified, the rest of the pattern is \code{"b*"},
+and the exactly-one branch applies: the first character \code{"a"} matches,
+so the matcher recurses on \code{match_here("b*", "bbb")}.
+
+Now the pattern is \code{"b*"}: the first element is the literal
+\code{"b"}, the character at index 1 is \code{"*"}, and the rest is empty.
+The star branch applies. It first tries the tail with zero repetitions:
+\code{match_here("", "bbb")} returns false, because the input is not
+empty. It then enters the loop. The character \code{"b"} matches the
+element, so it is consumed, leaving \code{"bb"}, and the tail is retried
+and fails. The loop consumes another \code{"b"}, leaving \code{"b"}, and
+the tail fails again. The loop consumes the last \code{"b"}, leaving the
+empty string, and the tail \code{match_here("", "")} succeeds.
+
+The result is \code{true}. The star branch tried the tail four times, once
+for each possible number of repetitions.
+
+\subsection*{Why the asymmetry matters}
+
+The star branch backtracks and the plus branch does not, and the
+consequence is a genuine difference in the recognised language. Consider
+the pattern \code{"a+ab"} and the input \code{"aab"}. The plus branch
+consumes both \code{"a"} characters greedily, leaving \code{"b"}, and then
+matches the tail \code{"ab"} against \code{"b"}, which fails. Because the
+plus branch never retries with a smaller consumption count, the match is
+rejected, even though the string \code{"aab"} plainly starts with a run of
+\code{a}s followed by \code{"ab"}.
+
+The pattern \code{"a*ab"} accepts the same input, because the star branch
+tries the tail after each consumption count: after consuming one
+\code{"a"} the tail \code{"ab"} matches the remaining \code{"ab"}.
+
+The asymmetry is a real limitation, and it is worth remembering whenever a
+pattern mixes a greedy repetition with a suffix that could also be
+consumed by the repetition.
+
+\section{Comparing the two engines}
+
+\api{dsl::StaticRegex<Source>} is declared at line 10363 and is a
+completely different piece of machinery. It compiles its source into a
+Thompson NFA --- a program of \emph{split}, \emph{byte}, \emph{any},
+\emph{class}, \emph{begin}, \emph{end} and \emph{accept} instructions --- and
+simulates the machine over a byte span. Because the simulation tracks the
+\emph{set} of active states rather than a single position, it recognises
+the same language as a backtracking engine but in linear time, and it
+supports the constructs that a backtracking recogniser needs for that to
+be true: groups and alternation.
+
+Table~\ref{tab:regex-compare} compares the two.
+
+\begin{table}[htbp]
+  \centering
+  \begin{tabular}{@{}L{0.28\textwidth}L{0.30\textwidth}L{0.32\textwidth}@{}}
+    \toprule
+    \textbf{Feature} & \textbf{\code{dsl::pattern<>}} &
+    \textbf{\code{dsl::StaticRegex<>}} \\
+    \midrule
+    Declaration & line 6175 & line 10363 \\
+    Algorithm & recursive backtracking & Thompson NFA simulation \\
+    Input type & \code{std::string_view} &
+    \code{std::span<const std::byte>} or \code{std::string_view} \\
+    Entry points & \code{matches} only &
+    \code{matches}, \code{prefix}, \code{search} \\
+    Anchoring & both ends, always &
+    \code{matches} requires the whole input; \code{prefix} takes the
+    longest prefix; \code{search} is leftmost \\
+    Literal characters & yes & yes \\
+    Dot & any character, newline included & any byte, including NUL \\
+    Character classes & yes, inclusive ranges & yes \\
+    Negated classes & \emph{no}; \code{^} is a literal class member &
+    yes \\
+    Star & yes, with backtracking & yes \\
+    Plus & yes, greedy, \emph{no} backtracking & yes \\
+    Question mark & \emph{no}; a literal \code{?} & yes \\
+    Alternation & \emph{no}; a literal \code{|} & yes \\
+    Groups & \emph{no} & yes \\
+    Circumflex anchor & skipped at the start & supported \\
+    Dollar anchor & \emph{no}; a literal \code{$} & supported \\
+    Escapes & \emph{no}; a literal backslash &
+    yes: escaped literals, \texttt{\textbackslash xHH}, \texttt{\textbackslash
+    0}, \texttt{\textbackslash n}, \texttt{\textbackslash r},
+    \texttt{\textbackslash t} \\
+    Digit and word classes & \emph{no} & \emph{no}; \texttt{\textbackslash d}
+    is an escaped literal \\
+    Captures & none & none \\
+    Cost & backtracking; potentially exponential & linear in the length of
+    the input \\
+    \bottomrule
+  \end{tabular}
+  \caption{\code{dsl::pattern<>} and \code{dsl::StaticRegex<>} compared.
+  They share a name and a purpose but nothing else. In particular, the
+  restrictions of the left column do not apply to the right column.}
+  \label{tab:regex-compare}
+\end{table}
+
+\begin{notebox}[Which one should a reader use?]
+If the pattern is a \emph{key of a match table}, use
+\code{dsl::pattern<>}: it is a compile-time type, so it composes with the
+non-type template parameter of \code{dsl::when<>}, and the whole dispatch
+can be evaluated during constant evaluation. \code{dsl::StaticRegex<>} is a
+run-time facility for byte streams, and it is the subject of
+\chapref{ch:static-regex}. They are not substitutes for one another.
+\end{notebox}
+
+\section{A worked example}
+
+Listing~\ref{lst:pattern-complete} classifies tokens into four classes. It
+uses \code{dsl::pattern<>} for the recognition and the match table of
+\chapref{ch:pattern-match} for the dispatch, which is the natural
+combination: the pattern decides what the token is, and the table decides
+what to do about it.
+
+\begin{lstlisting}[style=dslcpp, caption={A complete program that
+classifies tokens into Number, Keyword, Identifier and Other using
+\code{dsl::pattern<>} and the match table.},
+label={lst:pattern-complete}]
+#include "DSLtk.hpp"
+
+#include <iostream>
+#include <string>
+#include <string_view>
+
+enum class LexemeClass
+{
+  Number,
+  Keyword,
+  Identifier,
+  Other
+};
+
+//  Every recogniser below is a constant expression.
+constexpr bool
+is_number (std::string_view t)
+{
+  return dsl::pattern<"[0-9]+">::matches (t);
+}
+
+constexpr bool
+is_identifier (std::string_view t)
+{
+  return dsl::pattern<"[a-zA-Z_][a-zA-Z_0-9]*">::matches (t);
+}
+
+constexpr bool
+is_keyword (std::string_view t)
+{
+  return dsl::pattern<"if">::matches (t) || dsl::pattern<"for">::matches (t)
+         || dsl::pattern<"while">::matches (t);
+}
+
+struct LexerDSL : dsl::DSL<LexerDSL, dsl::PatternMatch>
+{
+  static constexpr auto classify = dsl::match (
+      dsl::when<LexemeClass::Number> (
+          [] (LexemeClass, std::string_view) { return std::string{ "Number" }; }),
+      dsl::when<LexemeClass::Keyword> (
+          [] (LexemeClass, std::string_view) { return std::string{ "Keyword" }; }),
+      dsl::when<LexemeClass::Identifier> (
+          [] (LexemeClass, std::string_view) { return std::string{ "Identifier" }; }),
+      dsl::otherwise (
+          [] (LexemeClass, std::string_view) { return std::string{ "Other" }; }));
+};
+
+int
+main ()
+{
+  //  The documented semantics, checked by the compiler.
+  static_assert (dsl::pattern<"[0-9]+">::matches ("123"));
+  static_assert (!dsl::pattern<"[0-9]+">::matches ("123abc"));
+  static_assert (dsl::pattern<"ab*">::matches ("abbb"));
+  static_assert (!dsl::pattern<"a+ab">::matches ("aab"));
+  static_assert (dsl::pattern<"a?">::matches ("a?"));
+  static_assert (!dsl::pattern<"a?">::matches ("a"));
+
+  for (auto const *text : { "123", "if", "while", "alpha_7", "@bad", "" })
+    {
+      LexemeClass c = LexemeClass::Other;
+      if (is_number (text))
+        c = LexemeClass::Number;
+      else if (is_keyword (text))
+        c = LexemeClass::Keyword;
+      else if (is_identifier (text))
+        c = LexemeClass::Identifier;
+      std::cout << '"' << text << "\" -> " << LexerDSL::classify (c, text) << '\n';
+    }
+}
+\end{lstlisting}
+
+The program prints
+
+\begin{lstlisting}[style=dslcpp]
+"123" -> Number
+"if" -> Keyword
+"while" -> Keyword
+"alpha_7" -> Identifier
+"@bad" -> Other
+"" -> Other
+\end{lstlisting}
+
+Note how the pattern syntax shapes the recognisers. The identifier pattern
+\code{"[a-zA-Z_][a-zA-Z_0-9]*"} is a class followed by a class with a
+star; because the star branch backtracks, the pattern accepts an identifier
+of any length, including the single-character minimum. The number pattern
+\code{"[0-9]+"} uses a plus, which is safe here precisely because no
+suffix follows it: there is nothing for the greedy consumption to conflict
+with.
+
+The keyword test is a disjunction of three separate patterns, because the
+engine has no alternation. This is verbose, and it is the practical cost of
+the restricted syntax. A user who needs a large keyword set should either
+enumerate the patterns or use \code{dsl::StaticRegex<>}. A structural
+\code{StaticRegex} object also supplies the static \code{matches} protocol
+recognized by a match clause, so it can serve as a key. Its NFA matching
+work runs at runtime even though the automaton is compiled from a fixed pattern.
+
+\section{Edge cases and limits}
+
+\begin{itemize}
+\item \textbf{No search mode.} \code{matches} asks whether the \emph{whole}
+input is matched. There is no \code{search}, no \code{find}, and no
+partial-match entry point. A user who wants to find a pattern inside a
+longer text must either write a manual scan or use a different engine.
+
+\item \textbf{No quantifier other than \code{*} and \code{+}.} There is
+no \code{?}, no \code{{n,m}}, and no lazy variant. A pattern that needs
+an optional element must be written as two patterns.
+
+\item \textbf{No alternation and no groups.} Both are ordinary characters.
+Any pattern that appears to use them is matching the punctuation.
+
+\item \textbf{No negated classes.} A leading \code{^} in a class is a
+member of the class. A user who wants a negated class must enumerate the
+complement, which is only practical for small alphabets --- and for those,
+\code{dsl::StaticRegex<>} is the better tool.
+
+\item \textbf{No escapes.} A backslash is a backslash, so a pattern
+cannot match a newline, a tab, or a literal \code{*}. A pattern that
+contains a backslash matches a backslash followed by whatever follows it.
+
+\item \textbf{The class ends at the first closing bracket.} There is no
+syntax for a bracket inside a class, so \code{"[]]"} is the class
+containing nothing followed by a literal \code{]}. A class that is never
+closed makes the whole match fail, rather than raising an error.
+
+\item \textbf{Backtracking can be exponential.} The star branch retries
+the tail at every consumption count, and a pattern such as
+\code{"(a|a)*a"} has no grouping, so a pathological input can force a
+long search. In practice the patterns used as match-table keys are short
+and simple, but the engine offers no bound on the work it does.
+
+\item \textbf{The plus branch does not backtrack.} As the traces show,
+\code{"a+ab"} does not match \code{"aab"}. This is a genuine difference
+from the star branch and from every mainstream regular expression engine,
+and it is the single most likely source of surprise.
+
+\item \textbf{The dot matches a newline.} The engine has no notion of a
+line-oriented mode, so \code{"."} is a wildcard over the whole character
+set.
+
+\item \textbf{Only \code{*} and \code{+} may follow an element.} A
+quantifier applied to a quantifier, as in \code{"a**"}, is parsed as a
+quantified literal, not as an error. Similarly, a leading \code{*} is a
+literal asterisk.
+
+\item \textbf{No captures and no groups.} The engine reports a single
+boolean. A user who needs to know \emph{which} part of the input matched
+must use a different facility.
+
+\item \textbf{The pattern is fixed at compile time.} The pattern is a
+template parameter, so a pattern that must vary at run time is not
+expressible. This is the price of the compile-time dispatch, and it is
+usually the right price.
+
+\item \textbf{Empty patterns are legal.} \code{dsl::pattern<"">} matches
+the empty string and nothing else, because the base case demands that the
+input be empty as well.
+\end{itemize}
+
+\section{Closing}
+
+\code{dsl::pattern<>} is a small recogniser with a small syntax, and its
+value lies in being a \emph{type}: a pattern used as a match-table key
+becomes part of the clause's type, and the dispatch it drives can be
+evaluated during constant evaluation. Its restrictions --- no alternation,
+no groups, no negation, no \code{?}, and a plus that does not backtrack ---
+are the price of a hundred lines of code that fit inside a header and work
+on every conforming compiler.
+
+The next chapter leaves the vocabulary of values and dispatch behind and
+turns to the representation of programs themselves.
+\chapref{ch:astnode} introduces \api{dsl::ASTNode}, the value-type tree
+that the parsing chapters build and the rewriting chapters transform.

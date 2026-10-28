@@ -1,0 +1,566 @@
+\chapter{Enum Reflection: The Embedded \texttt{magic\_enum} v0.9.8}
+\label{ch:enum-reflection}
+
+\section{The problem reflection solves}
+
+A domain-specific language needs to talk about the small closed sets that
+dominate its vocabulary: the token kinds of a lexer, the states of a state
+machine, the access modes of a file handle, the diagnostic severities of a
+compiler front end. In \cpp{} these sets are almost always spelled as
+enumerations, because an enumeration gives the compiler a closed set of
+values, gives the debugger readable names, and gives the type system a way to
+prevent a colour from being passed where a duration is expected.
+
+The trouble is that \cpp{} erases the enumerator names the moment the
+translation unit is compiled. A \code{switch} statement can be written by
+hand, but nothing in the language lets a program ask, at run time, ``what is
+this enumeration value called?'' or, at compile time, ``how many enumerators
+does this type have?'' or, at run time, ``given the string \code{"Read"},
+produce the enumeration value?'' Language implementations that need this
+information \emph{reflect} over the enumeration, recovering the names from
+artefacts the compiler leaves behind.
+
+\DSLtk{} does not attempt to solve that problem itself. Instead it embeds a
+complete, mature solution: the public headers of \texttt{magic\_enum}
+version 0.9.8, byte for byte, and then re-exports that library's API inside
+the \code{dsl} namespace. The result is a header-only toolkit that can
+reflect over enumerations with no external dependency, no build step, and no
+\texttt{magic\_enum::} qualifier anywhere in user code. This chapter
+describes what is embedded, how the embedding is exposed, and — most
+importantly — the one mechanism that governs everything the library can see:
+the bounded search range.
+
+\section{What is embedded, and how it is regenerated}
+
+The embedded region is delimited by two banner comments in
+\texttt{DSLtk.hpp}. The first is
+
+\begin{lstlisting}[style=dslcmd]
+// BEGIN DSLTK EMBEDDED MAGIC_ENUM
+\end{lstlisting}
+
+at line 403, and the second is
+
+\begin{lstlisting}[style=dslcmd]
+// END DSLTK EMBEDDED MAGIC_ENUM
+\end{lstlisting}
+
+at line 5816. Between them, in lines 404 to 5815, lie the amalgamated
+public headers
+of upstream \texttt{magic\_enum} v0.9.8, namely
+\code{magic_enum.hpp}, \code{magic_enum_all.hpp},
+\code{magic_enum_containers.hpp}, \code{magic_enum_flags.hpp},
+\code{magic_enum_format.hpp}, \code{magic_enum_fuse.hpp},
+\code{magic_enum_iostream.hpp}, \code{magic_enum_switch.hpp} and
+\code{magic_enum_utility.hpp}. The banner also records the provenance
+of the block, including the SHA-256 digest of the upstream public headers
+and the URL of the tag from which they were taken.
+
+The block is \emph{generated}, not hand-maintained. The script
+\texttt{DSLtk/scripts/update-magic-enum.py} performs the amalgamation: it
+reads the nine upstream headers, verifies their digest against the recorded
+constant, expands the local \texttt{\#include} directives between them into a
+single translation unit, and splices the result between the two banner
+markers. The script also carries two small local patches, one to keep the
+optional string facilities of \texttt{magic\_enum\_containers.hpp}
+conditional on the element type being an enumeration, and one to make
+\texttt{magic\_enum\_format.hpp} probe for \code{<format>} before the
+standard library has been reached, so that \texttt{DSLtk.hpp} can be the
+first include in a translation unit. The script's \code{--check} mode
+verifies that the embedded block matches the upstream release without
+writing anything, which makes the embedding auditable.
+
+Two consequences follow. First, the embedded code is \emph{upstream} code:
+it carries its own MIT licence and its own include guards, and it is not
+subject to the style of the surrounding \DSLtk{} code. Second, because the
+whole block is regenerated from a pinned tag, a user of \DSLtk{} never has to
+manage a \texttt{magic\_enum} dependency, never has to reconcile version
+conflicts, and never sees a version number of their own.
+
+\section{The \code{dsl} re-export layer}
+
+The \code{dsl} namespace begins at line 5818, immediately after the closing
+banner. The first thing it does is create namespace aliases that point at
+the embedded library's sub-namespaces (lines 5826--5832):
+
+\begin{lstlisting}[style=dslcpp]
+namespace enum_reflection = ::magic_enum;
+namespace customize = ::magic_enum::customize;
+namespace containers = ::magic_enum::containers;
+namespace bitwise_operators = ::magic_enum::bitwise_operators;
+namespace iostream_operators = ::magic_enum::iostream_operators;
+namespace istream_operators = ::magic_enum::istream_operators;
+namespace ostream_operators = ::magic_enum::ostream_operators;
+\end{lstlisting}
+
+Because these are aliases and not new namespaces, a user may write
+\code{dsl::customize::enum_range<Access>} and have that name refer to
+\code{::magic_enum::customize::enum_range<Access>}. Specialising the
+alias therefore specialises the upstream template, which is exactly what is
+needed.
+
+Next come the \emph{using-declarations} that lift the individual functions
+into \code{dsl} proper (lines 5834--5870). They cover the whole public
+surface: \code{enum_name}, \code{enum_cast}, \code{enum_value},
+\code{enum_values}, \code{enum_entries}, \code{enum_count},
+\code{enum_contains}, \code{enum_index}, \code{enum_integer},
+\code{enum_underlying}, \code{enum_type_name}, \code{enum_switch},
+\code{enum_for_each}, \code{enum_fuse}, \code{enum_next_value},
+\code{enum_prev_value} and their circular variants, the flag helpers
+\code{enum_flags_cast}, \code{enum_flags_contains},
+\code{enum_flags_test}, \code{enum_flags_test_any} and
+\code{enum_flags_name}, the case-insensitive tag
+\code{case_insensitive}, the subtype selectors \code{as_flags} and
+\code{as_common}, the trait helpers \code{is_magic_enum_supported},
+\code{is_scoped_enum} and \code{is_unscoped_enum}, and the underlying-type
+aliases \code{underlying_type} and \code{underlying_type_t}.
+
+Exactly one thing is \emph{new} in \DSLtk{} and not inherited: the trait
+\code{dsl::is_flags} (lines 5872--5887). It answers whether a type is
+reflected in flag mode, that is, whether the library will treat its
+enumerators as independent bits that may be combined. Its implementation
+consults the library's internal subtype computation and compares the result
+with \code{as_flags<>}, and it yields \code{false} for any type that is not
+an enumeration at all.
+
+Finally, the feature tag \code{dsl::EnumReflection} (lines 5897--5902)
+exists so that a DSL class can list enum reflection among its features:
+
+\begin{lstlisting}[style=dslcpp]
+struct TokenDSL : dsl::DSL<TokenDSL, dsl::EnumReflection> {};
+\end{lstlisting}
+
+Its mixin is empty. That is deliberate and it is the same pattern used by
+\code{dsl::PatternMatch}: the reflection helpers are free functions in
+\code{dsl}, so there is nothing for a mixin to add, and a user who wants
+them does not have to inherit from anything.
+
+\section{The search-range mechanism}
+
+\begin{featurebox}[The one thing to understand]
+The library can only reflect an enumerator whose underlying value lies in a
+finite range. By default that range is $[-128, 127]$. Enumerators outside
+it are \emph{invisible} to everything except the unbounded
+\code{enum_name<Value>()} form, which recovers a single name directly from
+the compiler's own pretty-printed signature.
+\end{featurebox}
+
+The range is defined by two macros near the top of the embedded block
+(lines 569--580):
+
+\begin{lstlisting}[style=dslcmd]
+#define MAGIC_ENUM_RANGE_MIN -128
+#define MAGIC_ENUM_RANGE_MAX  127
+\end{lstlisting}
+
+Both may be redefined on the command line to change the default for every
+enumeration in the program. A per-type override is also possible:
+specialising \code{dsl::customize::enum_range<E>} replaces the default
+bounds for that one type, and adding a static member
+\code{is_flags} to the specialisation switches the type into flag mode.
+This is precisely what \texttt{DSLtk/examples/25-enum-reflection.cpp} does
+for the type \code{Access}:
+
+\begin{lstlisting}[style=dslcpp]
+template <> struct dsl::customize::enum_range<Access>
+{
+  static constexpr bool is_flags = true;
+};
+\end{lstlisting}
+
+Note that the specialisation sets only \code{is_flags}; the bounds remain
+the defaults, which is why the enumerators \code{Read = 1},
+\code{Write = 2} and \code{Execute = 4} are all within range.
+
+The range matters because the library has no portable way to enumerate the
+members of a \cpp{} enumeration at compile time. What it does instead is
+\emph{scan} the range: for every integer $i$ in $[\mathit{min},
+\mathit{max}]$ it forms the candidate value $\code{static_cast<E>(i)}$ and
+asks whether that value names a real enumerator. The test is performed by
+the library's \code{is_valid<E, V>} predicate, which asks the compiler for
+the pretty-printed signature of the candidate and inspects it. When the
+candidate is not a real enumerator, the compiler prints the numeric value
+rather than a name, the extractor finds nothing, and the candidate is
+rejected. The surviving candidates, in increasing
+value order, become the library's canonical \emph{value table} for the type.
+
+The consequences are direct and worth stating plainly.
+
+\begin{itemize}
+\item An enumerator whose value is outside the range is not reflected. It
+does not appear in \code{enum_values}, it has no name in
+\code{enum_names}, it does not contribute to \code{enum_count}, and it
+cannot be produced by \code{enum_cast}. No diagnostic is issued: the
+enumerator is simply absent. Widening the range for the offending type
+restores it.
+\item The value table is \emph{ordered by underlying value}, not by
+declaration order. This is the ordering that \code{enum_index} uses and
+therefore the ordering that \code{dsl::containers::array} uses.
+\item For a sparse type, such as \code{enum class Token { Number = -1,
+Identifier = 2, End = 7 }}, the library detects the sparsity and switches
+to a table-driven representation. For a dense type it uses a compact
+representation. The choice is made automatically from the density of the
+reflected set.
+\end{itemize}
+
+The unbounded form is the exception that proves the rule.
+\code{enum_name<Value>()}, where \code{Value} is a template argument rather
+than a function argument, does not consult the range at all: it asks the
+compiler for the pretty-printed signature of that one value and extracts the
+identifier from it. Consequently \code{enum_name<Big::Huge>()} yields
+\code{"Huge"} even when \code{Huge} lies far outside the reflected range and
+is therefore missing from \code{enum_values}. The upstream comment calls
+this version ``much lighter on the compile times'' and the observation is
+correct: the unbounded form does not need the range scan, and the range scan
+is the expensive part of reflection.
+
+The algorithm is summarised in the
+pseudocode block that follows.
+
+\begin{pseudocode}[Range-scanning name lookup]
+\textbf{procedure} \code{values<E>()}\\
+\quad lo \code{<-} \code{customize::enum_range<E>::min}\\
+\quad hi \code{<-} \code{customize::enum_range<E>::max}\\
+\quad V \code{<-} empty sequence\\
+\quad \textbf{for} i \code{<-} lo \textbf{to} hi \textbf{do}\\
+\qquad c \code{<-} \code{static_cast<E>(i)}\\
+\qquad \textbf{if} \code{is_valid<E>}(c) \textbf{then}\\
+\qquad\qquad append c to V\\
+\quad \textbf{return} V\\[1ex]
+\textbf{function} \code{enum_name<E, V>()}\\
+\quad \textbf{if} \code{customize::enum_name<E>}(V) carries a custom tag \textbf{then}\\
+\qquad \textbf{return} that custom string\\
+\quad sig \code{<-} the \code{__PRETTY_FUNCTION__} of V\\
+\quad \textbf{if} sig contains no enumerator identifier \textbf{then}\\
+\qquad \textbf{return} the empty string\\
+\quad \textbf{return} the identifier extracted from sig
+\end{pseudocode}
+
+Figure~\ref{fig:enum-pipeline} shows the shape of the whole facility: the
+source enumeration is scanned over the range, the surviving values and their
+names are frozen into a compile-time table, and the call site reads from
+that table.
+
+\begin{figure}[htbp]
+\begin{dslgraph}
+    \node[dslbox] (src) {source enum\\\code{enum class Token}};
+    \node[dslbox, right=of src] (scan) {range scan\\over \code{[-128, 127]}};
+    \node[dslbox, right=of scan] (tab) {name table\\\code{names_v}, \code{values_v}};
+    \node[dslbox, right=of tab] (call) {call site\\\code{enum_name<T>()}};
+    \draw[dsledge] (src) -- (scan);
+    \draw[dsledge] (scan) -- (tab);
+    \draw[dsledge] (tab) -- (call);
+    \draw[dslfeedback] (src) to[bend right=32]
+      node[below, font=\scriptsize] {\code{enum_name<V>()}, unbounded}
+      (call);
+\end{dslgraph}
+  \caption{The reflection pipeline. The solid path is the range scan that
+  produces the compile-time value and name tables; the dotted path is the
+  unbounded single-value lookup, which bypasses the range entirely.}
+  \label{fig:enum-pipeline}
+\end{figure}
+
+\section{Compile-time and runtime}
+
+The facility divides cleanly along a line that is easy to miss. The
+\emph{shape} of an enumeration --- which enumerators exist, what they are
+called, what index each occupies --- is known at compile time, and the
+library materialises it as \code{constexpr} data. The \emph{value} of an
+enumeration held in a variable is not known at compile time, and the
+operations that consume a value are ordinary run-time functions.
+
+That is why \code{enum_name<Value>()} and \code{enum_count<E>()} can be
+used inside a \code{static_assert}, while \code{enum_cast<E>(text)} and
+\code{enum_name(value)} are ordinary calls:
+
+\begin{lstlisting}[style=dslcpp]
+static_assert (dsl::enum_count<Token> () == 3);
+static_assert (dsl::enum_name<Token::Number> () == "Number");
+\end{lstlisting}
+
+The compile-time form is a \emph{template} on the value, so the compiler
+evaluates it while instantiating; there is no code generated for it at all.
+The run-time form takes the value as an argument, so it must produce the
+answer when the program runs, and the lookup is a scan of the frozen table.
+
+The \code{enum_values<E>()} form sits in between. The array it returns is
+itself a \code{constexpr} object, so it can be captured in a constant
+expression; but the idiomatic use of it is a run-time loop, because the
+whole point of materialising the table is to iterate over it:
+
+\begin{lstlisting}[style=dslcpp]
+for (auto [token, name] : dsl::enum_entries<Token> ())
+  std::cout << dsl::enum_integer (token) << ": " << name << '\n';
+\end{lstlisting}
+
+\section{A worked example}
+
+Listing~\ref{lst:enum-complete} is a complete, compilable program that
+exercises the parts of the facility a user is most likely to reach for: the
+compile-time count, the case-insensitive cast from a string, the
+compile-time dispatch of \code{enum_switch}, the flag helpers, and the
+enum-indexed container.
+
+\begin{lstlisting}[style=dslcpp, caption={A complete program using the
+embedded enum reflection. The static assertions are checked by the
+compiler; the remaining output is produced at run time.},
+label={lst:enum-complete}]
+#include "DSLtk.hpp"
+
+#include <iostream>
+
+enum class Token
+{
+  Number = -1,
+  Identifier = 2,
+  End = 7
+};
+
+enum class Access
+{
+  Read = 1,
+  Write = 2,
+  Execute = 4
+};
+
+//  Declaring the type as a flag type switches the library into flag mode.
+template <> struct dsl::customize::enum_range<Access>
+{
+  static constexpr bool is_flags = true;
+};
+
+struct TokenDSL : dsl::DSL<TokenDSL, dsl::EnumReflection> {};
+
+int
+main ()
+{
+  //  The shape of the enumeration is a compile-time fact.
+  static_assert (dsl::enum_count<Token> () == 3);
+  static_assert (dsl::enum_name<Token::Number> () == "Number");
+  static_assert (dsl::is_flags_v<Access>);
+  static_assert (!dsl::is_flags_v<Token>);
+
+  //  The value table, ordered by underlying value.
+  for (auto [token, name] : dsl::enum_entries<Token> ())
+    std::cout << dsl::enum_integer (token) << ": " << name << '\n';
+
+  //  A name-to-value cast, ignoring case.
+  auto token = dsl::enum_cast<Token> ("identifier", dsl::case_insensitive);
+  if (token)
+    dsl::enum_switch ([] (auto constant) {
+      constexpr Token value = decltype (constant)::value;
+      std::cout << "Dispatched " << dsl::enum_name<value> () << '\n';
+    }, *token);
+
+  //  Flag helpers.
+  using namespace dsl::bitwise_operators;
+  std::cout << dsl::enum_flags_name (Access::Read | Access::Write) << '\n';
+
+  //  An enum-indexed container.
+  dsl::containers::array<Token, int> counts{};
+  counts[Token::Identifier] = 42;
+  std::cout << "Identifiers: " << counts[Token::Identifier] << '\n';
+}
+\end{lstlisting}
+
+The program prints
+
+\begin{lstlisting}[style=dslcpp]
+-1: Number
+2: Identifier
+7: End
+Dispatched Identifier
+Read|Write
+Identifiers: 42
+\end{lstlisting}
+
+Two details in the listing deserve comment. The first is the
+\code{enum_switch} call: the callback is handed an
+\code{enum_constant}, that is, a \code{std::integral_constant} whose
+\code{value} member is the enumerator itself. Writing
+\code{constexpr Token value = decltype (constant)::value;} inside the
+lambda recovers a compile-time constant, which is what makes it possible to
+use the \code{enum_name<Value>()} form inside the case body. The second is
+the \code{using namespace dsl::bitwise_operators;} directive. The
+bitwise operators for flag enumerations live in their own namespace so that
+they are not found by argument-dependent lookup unless the user asks for
+them; the trade-off is that the user must ask.
+
+\section{The API surface}
+
+Table~\ref{tab:enum-api} groups the re-exported API by purpose. The
+entries are the names as they are written in \code{dsl}; the descriptions
+apply to the embedded implementation.
+
+\begin{table}[htbp]
+  \centering
+  \begin{tabular}{@{}L{0.28\textwidth}L{0.64\textwidth}@{}}
+    \toprule
+    \textbf{Purpose} & \textbf{Names} \\
+    \midrule
+    Naming &
+    \code{enum_name<Value>()}, \code{enum_name(value)},
+    \code{enum_type_name<E>()}, \code{enum_names<E>()},
+    \code{enum_entries<E>()} \\
+    Enumeration of members &
+    \code{enum_count<E>()}, \code{enum_value<E>(index)},
+    \code{enum_values<E>()}, \code{enum_for_each<E>(f)},
+    \code{enum_index(value)}, \code{enum_index<Value>()} \\
+    Conversion &
+    \code{enum_cast<E>(underlying)}, \code{enum_cast<E>(text)},
+    \code{enum_cast<E>(text, case_insensitive)},
+    \code{enum_contains<E>(value)}, \code{enum_contains<E>(text)} \\
+    Arithmetic on values &
+    \code{enum_integer(value)}, \code{enum_underlying(value)},
+    \code{enum_next_value(value, n)},
+    \code{enum_next_value_circular(value, n)},
+    \code{enum_prev_value(value, n)},
+    \code{enum_prev_value_circular(value, n)} \\
+    Flags &
+    \code{enum_flags_cast<E>(text)}, \code{enum_flags_contains(value)},
+    \code{enum_flags_test(flags, flag)},
+    \code{enum_flags_test_any(lhs, rhs)},
+    \code{enum_flags_name(value)},
+    \code{as_flags<>}, \code{as_common<>}, \code{is_flags<T>} \\
+    Dispatch &
+    \code{enum_switch(f, value)}, \code{enum_switch(f, value, fallback)},
+    \code{enum_fuse(values...)} \\
+    Traits and configuration &
+    \code{is_magic_enum_supported}, \code{is_scoped_enum_v<E>},
+    \code{is_unscoped_enum_v<E>}, \code{customize::enum_range<E>},
+    \code{underlying_type_t<E>} \\
+    \bottomrule
+  \end{tabular}
+  \caption{The re-exported reflection API, grouped by purpose. All names are
+  usable unqualified inside \code{dsl}; the upstream \code{magic_enum}
+  namespace remains available for code that needs the full upstream
+  surface, including the \code{containers} and stream-operator
+  facilities.}
+  \label{tab:enum-api}
+\end{table}
+
+Two of these deserve a note.
+
+\code{enum_switch} is not a run-time dispatch table. It expands, at compile
+time, into a chain of comparisons against the reflected value table, and it
+is usable in a constant expression. Its value is that it is
+\emph{exhaustive}: the expansion covers every enumerator the library knows
+about, so adding an enumerator to the type and rebuilding produces a
+compiler error at the point where the new case is missing, rather than a
+silent fall-through. The library can also be configured to emit a real
+\code{switch} statement through its hash feature macros.
+
+\code{enum_fuse} deserves more explanation than the table can give. Given
+two or more enumerations, it computes a single integer that is a bijective
+mix of their values, so that a pair of enumerations can be used as the key
+of a two-dimensional dispatch without a nested \code{switch}. The result is
+an \code{std::optional} of an opaque enumeration type; the mixed value is
+recovered by casting it to \code{std::uintmax_t}.
+
+\section{Enum-indexed containers and bitwise operators}
+
+Two of the embedded library's sub-libraries deserve separate treatment
+because they change the way one writes code.
+
+\code{dsl::containers::array<E, T>} is a fixed-size array of \code{T} that
+is indexed by an enumeration rather than by a number. Its size is
+\code{enum_count<E>()}, and its index mapping is derived from
+\code{enum_index}, so it is indexed by the enumeration's \emph{position in
+the value table} rather than by its underlying value. For the sparse
+\code{Token} type the array has three elements and
+\code{counts[Token::Identifier]} addresses the second of them. The
+container offers \code{at}, which throws \code{std::out_of_range} for an
+unrecognised position, and \code{operator[]}, which asserts. The same
+header provides a \code{bitset} over an enumeration, an \code{optional}
+over an enumeration, and a \code{set} keyed by enumerations.
+
+\code{dsl::bitwise_operators} provides \code{operator|},
+\code{operator&}, \code{operator^}, \code{operator~}
+and their compound assignments for flag enumerations. They are deliberately
+confined to their own namespace: an unqualified \code{Access::Read |
+Access::Write} will not compile until the user writes
+\code{using namespace dsl::bitwise_operators;}, which keeps the bitwise
+operators from silently hijacking expressions in code that has nothing to do
+with flags.
+
+\section{Edge cases and limits}
+
+\begin{warnbox}[Enumerators outside the range are silently dropped]
+An enumerator whose underlying value lies outside the interval from
+\code{MAGIC_ENUM_RANGE_MIN} to \code{MAGIC_ENUM_RANGE_MAX} is
+absent from the reflection. \code{enum_count} does not count it,
+\code{enum_values} does not list it, \code{enum_cast} cannot produce it,
+and \code{enum_name(value)} returns an empty view for it. The only
+diagnostic is the absence itself, which is easy to miss. If an enumeration
+uses values such as \code{0x10000}, specialise
+\code{dsl::customize::enum_range<E>} for it, or widen the default range
+with the two macros.
+\end{warnbox}
+
+\begin{itemize}
+\item \textbf{Duplicate underlying values are not represented twice.} An
+enumeration with two enumerators sharing a value has one entry in the value
+table. The name that survives is the one the compiler reports for the
+value, and the choice is a compiler detail rather than a specified one.
+
+\item \textbf{The value table is ordered by value, not by declaration.} Any
+code that assumes declaration order --- a hand-written table of strings
+indexed in parallel with \code{enum_values} --- will be wrong whenever the
+declaration order and the value order differ. The shipped
+\texttt{25-enum-reflection.cpp} illustrates the safe pattern: build the
+name and the value from the same iteration.
+
+\item \textbf{\code{enum_value<E>(index)} does not check its argument.} The
+upstream comment is explicit: no bounds checking is performed. The
+compile-time form \code{enum_value<E, I>()} does check, with a
+\code{static_assert}.
+
+\item \textbf{Flag mode is a property of the type, not of the value.} Once
+\code{is_flags} is declared for a type, the library treats its enumerators
+as bits, and \code{enum_count} counts the bits rather than the
+enumerators. Mixing a flag type and a non-flag type in one expression is a
+type error, as it should be.
+
+\item \textbf{The flag helpers require the type to be in flag mode.}
+\code{enum_flags_name} and friends compute over
+\code{detail::enum_subtype::flags} and will not produce a meaningful
+result for an ordinary enumeration.
+
+\item \textbf{Name lookups are case sensitive by default.} The
+\code{case_insensitive} tag is a comparison predicate passed to
+\code{enum_cast} and \code{enum_contains}; it compares ASCII
+case-insensitively and is therefore locale-independent, but it does nothing
+for non-ASCII characters.
+
+\item \textbf{\code{enum_cast} from text returns an optional.} A failed
+cast is not an exception and not a sentinel value; it is an empty
+\code{std::optional}. For an enumeration with a zero enumerator, a
+successful cast and a failed cast are still distinguishable, because the
+optional carries an \code{engaged} flag.
+
+\item \textbf{The reflection is a property of the type, not of the object.}
+Nothing here reflects over the members of a class, and there is no facility
+for reflecting over the fields of a structure. The only reflection
+\DSLtk{} offers is over enumerations.
+
+\item \textbf{Compile-time cost is not negligible.} The range scan is
+performed for every reflected type, and it is why the upstream library
+recommends the unbounded \code{enum_name<Value>()} form in hot template
+code. A translation unit that reflects over many types pays for each of
+them.
+\end{itemize}
+
+\section{Closing}
+
+The embedded \texttt{magic\_enum} gives \DSLtk{} a complete enum
+reflection facility with no dependency, no configuration and no namespace
+pollution: the user writes \code{dsl::enum_name} and never learns that the
+implementation lives in another namespace. The single concept a user must
+carry away is the bounded range, because it is the one thing that can make
+reflection silently return less than the user expects.
+
+With reflection in place, the next two chapters turn to the facilities that
+manipulate values rather than describe them. \chapref{ch:pipeline} covers
+the pipeline feature, in which values flow through a chain of stages;
+\chapref{ch:operators} covers the predicate-composition feature, in which
+conditions are combined into larger conditions.

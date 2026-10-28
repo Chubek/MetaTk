@@ -1,0 +1,645 @@
+\chapter{User Codecs and Abstract Byte I/O}
+\label{ch:codecs-io}
+
+Every serious program has to move bytes, and every serious program has to
+decide what those bytes mean. The two decisions are independent, and the
+worst design mistake in a library is to fuse them. A toolkit that ships
+its own file format has decided the syntax for everyone who uses it, and a
+toolkit that ships its own file abstraction has decided where the bytes
+live. DSLtk makes neither decision. It defines \emph{protocols}: a small
+set of named operations that a user-supplied type must provide, and thin
+adapters that check the protocol and forward to it.
+
+The result is a boundary that is unusually clean. The library never opens
+a file, never allocates a socket, never chooses an encoding, and never
+owns the object that does the work. What it does provide is a place where
+those choices can be made once and reused, and a set of guarantees---about
+short transfers, about premature end of file, about the meaning of a zero
+count---that hold no matter what the underlying transport happens to be.
+
+This chapter describes the two protocols DSLtk offers in this area. The
+first is the codec protocol, which is about \emph{syntax}: how a value of
+type \code{T} becomes a sequence of characters or bytes and back again.
+The second is the byte-I/O protocol, which is about \emph{transport}: how
+bytes are moved. A user-supplied backend can implement either, both, or
+neither, and the same backend can be used with a file, a socket, an
+in-memory buffer, or a test double.
+
+\section{Why the library ships no file system}
+
+The decision not to provide a file or socket implementation is deliberate,
+and it is worth defending, because it is the kind of decision that looks
+like an omission until one tries to build a real program on top of it.
+
+A library that ships \code{read_file} has made at least four choices on
+the user's behalf: that files are the unit of storage, that the
+implementation is a thin wrapper over the platform's own file API, that
+errors are reported as exceptions, and that the lifetime of the resulting
+buffer is managed by the library. Every one of those choices is
+reasonable, and every one of them is wrong for somebody. A program that
+reads from a pipe, a network socket, an embedded flash region, or a
+compressed archive needs the same protocol without the file assumption. A
+program that must survive a truncated input needs error reporting that is
+not an exception. A program that embeds its configuration in a read-only
+memory-mapped page needs a different lifetime story.
+
+Providing the protocol instead of an implementation costs the library very
+little---a concept and a forwarding struct---and it moves every one of
+those decisions to the place where the answers are known. The price the
+user pays is a few lines of adapter code, and the price is worth paying
+because the adapter code is written once, in one place, and can then be
+tested against a deterministic in-memory backend.
+
+\section{The codec protocol}
+
+The codec protocol is expressed by two concepts and realised by two
+adapters. The first concept, \api{SerializerBackend}, describes a type
+\code{B} that can serialise a value of type \code{T} into an output of
+type \code{Output}. The second, \api{DeserializerBackend}, describes a
+type \code{B} that can deserialise a value of type \code{T} from an input
+of type \code{Input} (\texttt{DSLtk.hpp}, lines 9862 and 9867):
+
+\begin{lstlisting}[style=dslcpp,caption=The two codec concepts.,label=lst:codec-concepts]
+template <class B, class T, class Output>
+concept SerializerBackend
+    = requires (B &backend, const T &value, Output &output) {
+        backend.serialize (value, output);
+      };
+
+template <class B, class T, class Input>
+concept DeserializerBackend = requires (B &backend, Input &input) {
+  backend.template deserialize<T> (input);
+};
+\end{lstlisting}
+
+The asymmetry between the two is not an accident. Serialisation is a sink:
+the value goes in and the output is modified, so there is nothing to
+return and the concept says nothing about a return type. Deserialisation
+is a source: the input is consumed and a value comes out, so the
+concept---and, more importantly, the adapter---must be able to name that
+value's type, which is exactly why the call is spelled
+\code{deserialize<T>}.
+
+The adapters are correspondingly thin:
+
+\begin{lstlisting}[style=dslcpp,caption=The codec adapters. Both hold a reference and forward with \code{decltype(auto)}.,label=lst:codec-adapters]
+template <class Backend> struct Serializer
+{
+  Backend &backend;
+  explicit Serializer (Backend &backend) : backend (backend) {}
+  template <class T, class Output>
+    requires SerializerBackend<Backend, T, Output>
+  decltype (auto)
+  serialize (const T &value, Output &output)
+  {
+    return backend.serialize (value, output);
+  }
+};
+
+template <class Backend> struct Deserializer
+{
+  Backend &backend;
+  explicit Deserializer (Backend &backend) : backend (backend) {}
+  template <class T, class Input>
+    requires DeserializerBackend<Backend, T, Input>
+  decltype (auto)
+  deserialize (Input &input)
+  {
+    return backend.template deserialize<T> (input);
+  }
+};
+\end{lstlisting}
+
+Four properties of these twelve lines carry most of the design.
+
+First, the adapter \emph{borrows}. The member is \code{Backend &backend},
+not \code{Backend backend} and not \code{std::unique_ptr<Backend>}. The
+library never owns a backend and never chooses when it is destroyed. The
+consequence for the user is a lifetime obligation: the backend must
+outlive the adapter, and the adapter must not outlive the backend. In
+exchange, the adapter is trivially copyable, has no allocation, and costs
+nothing to pass around.
+
+Second, the adapter forwards the return type exactly. The return type of
+\code{serialize} and of \code{deserialize} is \code{decltype (auto)},
+which deduces the backend's own return type rather than a fixed one. A
+backend whose \code{serialize} returns \code{bool} gives an adapter that
+returns \code{bool}; a backend whose \code{deserialize} returns a
+\code{dsl::Result<int, std::string>} gives an adapter that returns that
+result type; a backend that returns a reference gives an adapter that
+returns a reference. The library imposes no error convention at all,
+because the error convention is the backend's business.
+
+Third, the output type is a free parameter. \code{Output} and \code{Input}
+are deduced at the call site, not fixed by the adapter. The same backend
+can therefore serialise into a \code{std::string} and into a
+\code{std::vector<std::byte>} provided it offers the appropriate
+overloads, and the adapter never has to know which.
+
+Fourth, the constraints are on the member function, not on the class. A
+\code{Serializer} can be instantiated for a backend that cannot serialise
+anything at all; the error appears only when the incompatible overload is
+named, and it appears as a concept failure rather than as a hard error
+inside a template body.
+
+\begin{table}[htbp]
+\centering
+\caption{The requirements each protocol places on a user backend.}
+\label{tab:io-requirements}
+\begin{tabular}{@{}L{34mm}L{46mm}L{28mm}@{}}
+\toprule
+\textbf{Concept} & \textbf{Required expression} & \textbf{Free choice} \\
+\midrule
+\code{SerializerBackend} & \code{backend.serialize (value, output)} & the output type, the syntax, the return type \\
+\code{DeserializerBackend} & \code{backend.template deserialize<T> (input)} & the input type, the syntax, the error convention \\
+\code{IOBackend} & \code{backend.read (span<byte>)} convertible to \code{size_t} & the buffer, the blocking policy, the EOF convention \\
+\code{IOBackend} & \code{backend.write (span<const byte>)} convertible to \code{size_t} & the flush policy, the short-write policy \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Two protocols, two granularities}
+
+It is worth pausing on the difference between the two protocols, because
+they answer questions at different levels and a reader who expects them to
+be symmetrical will be confused by the asymmetry of the concepts.
+
+The codec protocol is about the \emph{contents} of a message. Its unit of
+work is a value of a particular type, and its direction is semantic: a
+value of type \code{T} becomes bytes, and bytes become a value of type
+\code{T}. The transport is invisible to it. A codec that writes a
+length-prefixed record into a \code{std::string} is a perfectly good
+codec whether that string is later written to a file, sent over a socket,
+or held in memory for a test.
+
+The byte protocol is about the \emph{movement} of bytes. Its unit of work
+is a span, and its direction is mechanical: bytes go into a buffer, bytes
+come out of a buffer. The contents are invisible to it. The adapter has
+no idea whether the bytes it moves are a text document, a compressed
+archive, or the output of a codec.
+
+The two meet at a seam that the user owns. A codec that wants to write to
+a file must first produce something the byte protocol can move; a codec
+that wants to read from a socket must consume something the byte protocol
+produced. The seam is usually a pair of small conversion functions, as in
+the worked example below, and it is usually the only place in the program
+where the two vocabularies touch.
+
+This division has a practical consequence for testing. The byte protocol
+can be tested against a backend that is nothing but a
+\code{std::vector<std::byte>}, with no file system and no timing
+behaviour, and the codec can be tested against a \code{std::string} with
+no I/O at all. Because the adapters are the only code that knows about
+both, a program that keeps its seam narrow keeps most of its logic
+testable without a disk.
+
+\section{The byte-I/O protocol}
+
+The byte protocol is a single concept, \api{IOBackend}
+(\texttt{DSLtk.hpp}, line 9895):
+
+\begin{lstlisting}[style=dslcpp,caption=The byte-I/O concept.,label=lst:io-concept]
+template <class B>
+concept IOBackend = requires (B &backend, std::span<std::byte> out,
+                              std::span<const std::byte> in) {
+  { backend.read (out) } -> std::convertible_to<std::size_t>;
+  { backend.write (in) } -> std::convertible_to<std::size_t>;
+};
+\end{lstlisting}
+
+The contract is stated in the header's own comment and it is short enough
+to quote in full. Read and write return the number of bytes transferred. A
+zero read means end of file. Short reads and short writes are supported.
+Seeking and telling are optional backend operations.
+
+Short transfers being supported is the load-bearing part of the contract.
+A backend that reads from a network connection, from a pipe, or from a
+compressed stream will frequently be able to satisfy only part of a
+request, and a protocol that demanded an exact transfer would have to
+either loop inside the backend or fail. The library chooses the former
+philosophy for the adapter and the latter for the concept: the concept
+says nothing about how much a single call must move, and the adapter
+supplies the looping.
+
+The adapter is \api{IO}, and unlike the codec adapters it is constrained at
+the class level, because every instance of it must be able to read and
+write:
+
+\begin{lstlisting}[style=dslcpp,caption=The byte-I/O adapter.,label=lst:io-adapter]
+template <IOBackend Backend> struct IO
+{
+  Backend &backend;
+  explicit IO (Backend &backend) : backend (backend) {}
+
+  std::size_t read (std::span<std::byte> bytes)
+  {
+    auto n = static_cast<std::size_t> (backend.read (bytes));
+    if (n > bytes.size ())
+      throw std::runtime_error ("I/O backend returned an invalid read count");
+    return n;
+  }
+
+  std::size_t write (std::span<const std::byte> bytes)
+  {
+    auto n = static_cast<std::size_t> (backend.write (bytes));
+    if (n > bytes.size ())
+      throw std::runtime_error ("I/O backend returned an invalid write count");
+    return n;
+  }
+
+  void read_exact (std::span<std::byte> bytes)
+  {
+    while (!bytes.empty ())
+      {
+        auto n = read (bytes);
+        if (!n)
+          throw std::runtime_error ("unexpected I/O EOF");
+        bytes = bytes.subspan (n);
+      }
+  }
+
+  void write_all (std::span<const std::byte> bytes)
+  {
+    while (!bytes.empty ())
+      {
+        auto n = write (bytes);
+        if (!n)
+          throw std::runtime_error ("I/O write made no progress");
+        bytes = bytes.subspan (n);
+      }
+  }
+
+  void seek (std::size_t position)
+    requires requires { backend.seek (position); }
+  {
+    backend.seek (position);
+  }
+
+  auto tell ()
+    requires requires { backend.tell (); }
+  {
+    return backend.tell ();
+  }
+};
+\end{lstlisting}
+
+Several behaviours are worth drawing out.
+
+The count returned by a backend is \emph{checked}, not trusted. If a
+backend claims to have transferred more bytes than the buffer holds, the
+adapter throws \code{std::runtime_error} whose message is
+\emph{I/O backend returned an invalid read count} or the corresponding write message. The check also catches
+the common failure of reporting an error with a negative number: the
+adapter casts the result to \code{std::size_t} first, so a
+\code{-1} becomes an enormous unsigned value and is rejected by the same
+comparison. A backend that wants to report an error should throw, not
+return a sentinel.
+
+\code{read_exact} and \code{write_all} are the two convenience
+operations, and their names are exact. The first fills the whole span,
+or throws a \code{std::runtime_error} whose message is \emph{unexpected
+I/O EOF} the moment a read returns zero. The second writes the whole
+span, or throws a \code{std::runtime_error} whose message is \emph{I/O
+write made no progress} when a write returns zero. Neither name is
+\code{read_all} and neither position accessor is \code{position}; the
+library's spelling is \code{read_exact} and \code{tell}.
+
+\begin{warning}[A note on naming]
+Several familiar names are absent from this API by design. There is no
+\code{read_all}, because the operation that reads an entire stream until
+end of file is a policy decision---how much memory to commit, whether to
+stop at a limit---and the library declines to make it. There is no
+\code{position}, because the accessor is named \code{tell}, matching the
+vocabulary of the C and POSIX libraries that most readers already know.
+And there is no \code{read_all} counterpart for writing, because
+\code{write_all} is the one that is actually needed: a partial write that
+is silently ignored is a data-corruption bug waiting to happen.
+\end{warning}
+
+\begin{notebox}[Writing a backend that reports errors]
+The adapter's count checks catch two mistakes and only two: a count that
+exceeds the buffer, and a negative count. They cannot catch a backend
+that returns a perfectly plausible number for an operation that actually
+failed. A backend that owns a file, for instance, must decide what to do
+when the disk is full. It has three reasonable options, and the library
+supports all three without comment. It can throw, in which case the
+exception propagates through the adapter untouched. It can return a
+short count, in which case \code{write_all} will retry the remainder and
+the failure will surface as a repeated short write, or eventually as
+\emph{I/O write made no progress} if the backend keeps returning zero. Or
+it can return a distinguished value, such as a count of
+\code{std::numeric_limits<std::size_t>::max()}, which the adapter
+rejects as an invalid count. What the backend must not do is return a
+short count on a permanent failure and expect the adapter to distinguish
+it from an ordinary short write; the adapter has no way to tell them
+apart, and pretending otherwise is the one mistake the protocol cannot
+absorb.
+\end{notebox}
+
+Both convenience operations take their span by value and reslice it with
+\code{subspan}, so the caller's span is never modified. An empty span is a
+no-op in both cases, and in particular \code{read_exact} on an empty span
+never throws, even at end of file.
+
+Seeking and telling are \emph{conditionally present}. The two member
+functions carry a nested \code{requires} constraint, and that constraint
+checks that the backend itself offers a \code{seek} taking a
+\code{std::size_t}. The consequence is that \code{IO<Backend>::seek}
+exists only when the backend has such a member, and
+\code{IO<Backend>::tell} exists only when the backend has a
+zero-argument \code{tell}. A program that wants random access can say so by requiring
+it, and a program that must work with a streaming backend will find at
+compile time that the operation is not there. This is the concrete payoff
+of making the optional operations genuinely optional rather than merely
+documenting them as such.
+
+\begin{pseudocode}[Read exactly N bytes]
+\textbf{function} read\_exact (io, bytes)\\
+\quad while bytes is not empty do\\
+\qquad n = io.read (bytes)\\
+\qquad if n is zero then\\
+\qquad\qquad raise \emph{unexpected I/O EOF}\\
+\qquad bytes = bytes.subspan (n)\\
+\quad return
+\end{pseudocode}
+
+\begin{figure}[htbp]
+\centering
+\begin{dslgraph}
+  \node[dsllarge] (consumer) at (0,0) {\textbf{Your code}\\calls \code{io.read_exact},\\\code{serializer.serialize}};
+  \node[dsllarge, fill=featbg, draw=featfg, text width=40mm] (adapter) at (0,-2.2) {\textbf{DSLtk adapter}\\\code{dsl::IO<Backend>}\\\code{dsl::Serializer<Backend>}};
+  \node[dsllarge, fill=groupbg] (backend) at (0,-4.6) {\textbf{Your backend}\\chooses the syntax,\\the transport, the errors};
+  \node[dslbox, fill=warnbg] (res) at (5.4,-4.6) {the resource:\\file, socket,\\memory, device};
+
+  \draw[dsledge] (consumer) -- node[right, font=\scriptsize] {calls} (adapter);
+  \draw[dsledge] (adapter) -- node[right, font=\scriptsize] {delegates} (backend);
+  \draw[dsledgedash] (backend) -- node[above, font=\scriptsize] {owns} (res);
+  \draw[dslfeedback] (backend.west) to[out=180,in=180] node[left, font=\scriptsize, align=right] {borrowed by reference:\\the library owns nothing} (adapter.west);
+\end{dslgraph}
+\caption{The adapter stack. The library provides the middle layer only: it
+validates the protocol and forwards, while the syntax, the transport, the
+error convention, and the ownership of the resource all remain the
+user's.}
+\label{fig:io-stack}
+\end{figure}
+
+\section{A worked example}
+
+The following program defines two backends with completely different
+resource policies, uses them through the same adapter, and round-trips
+data through a codec that owns its own syntax.
+
+\begin{lstlisting}[style=dslcpp,caption={A tiny backend, a codec, and a round trip.},label=lst:io-example]
+#include "DSLtk.hpp"
+#include <fstream>
+#include <iostream>
+#include <string>
+#include <vector>
+
+// A sequential, in-memory byte backend.
+class MemoryBackend
+{
+public:
+  std::vector<std::byte> storage;
+  std::size_t cursor = 0;
+
+  std::size_t
+  read (std::span<std::byte> target)
+  {
+    std::size_t n = 0;
+    while (n < target.size () && cursor < storage.size ())
+      target[n++] = storage[cursor++];
+    return n;
+  }
+
+  std::size_t
+  write (std::span<const std::byte> source)
+  {
+    for (auto b : source)
+      {
+        storage.push_back (b);
+        ++cursor;
+      }
+    return source.size ();
+  }
+
+  void
+  seek (std::size_t position)
+  {
+    cursor = position;
+  }
+
+  std::size_t
+  tell () const
+  {
+    return cursor;
+  }
+};
+
+// A codec that owns the syntax of a record.
+class LengthPrefixedCodec
+{
+public:
+  void
+  serialize (const std::string &value, std::string &output)
+  {
+    output += std::to_string (value.size ());
+    output += ':';
+    output += value;
+  }
+
+  template <class T>
+  T
+  deserialize (std::string &input)
+  {
+    auto colon = input.find (':');
+    auto length = std::stoul (input.substr (0, colon));
+    std::string payload = input.substr (colon + 1, length);
+    input.erase (0, colon + 1 + length);
+    return T (payload);
+  }
+};
+
+namespace
+{
+std::vector<std::byte>
+to_bytes (const std::string &text)
+{
+  std::vector<std::byte> out;
+  out.reserve (text.size ());
+  for (unsigned char c : text)
+    out.push_back (std::byte { c });
+  return out;
+}
+
+std::string
+to_text (const std::vector<std::byte> &bytes)
+{
+  std::string out;
+  for (auto b : bytes)
+    out.push_back (static_cast<char> (b));
+  return out;
+}
+}
+
+int
+main ()
+{
+  using namespace dsl;
+
+  // --- codecs ------------------------------------------------------------
+  LengthPrefixedCodec codec;
+  Serializer<LengthPrefixedCodec> serializer (codec);
+  Deserializer<LengthPrefixedCodec> deserializer (codec);
+
+  std::string wire;
+  serializer.serialize (std::string ("alpha"), wire);
+  serializer.serialize (std::string ("beta"), wire);
+  std::cout << "wire: " << wire << "\n";
+  std::string first = deserializer.deserialize<std::string> (wire);
+  std::string second = deserializer.deserialize<std::string> (wire);
+  std::cout << "decoded: " << first << " / " << second << "\n";
+  std::cout << "wire left over: '" << wire << "'\n";
+
+  // --- abstract byte I/O -------------------------------------------------
+  MemoryBackend backend;
+  IO<MemoryBackend> io (backend);
+
+  auto bytes = to_bytes ("DSLtk");
+  io.write_all (std::span<const std::byte> (bytes));
+  std::cout << "wrote " << io.tell () << " bytes\n";
+
+  io.seek (0);
+  std::vector<std::byte> back (bytes.size ());
+  io.read_exact (std::span<std::byte> (back));
+  std::cout << "read back: " << to_text (back) << "\n";
+
+  // A short read is legal; read_exact loops until the span is filled.
+  io.seek (0);
+  std::byte one{};
+  auto n = io.read (std::span<std::byte> (&one, 1));
+  std::cout << "single byte read: " << n << " -> " << (char)one << "\n";
+
+  // Premature EOF is an error for read_exact.
+  try
+    {
+      std::vector<std::byte> tooMany (bytes.size () + 4);
+      io.read_exact (std::span<std::byte> (tooMany));
+    }
+  catch (const std::exception &ex)
+    {
+      std::cout << "read_exact: " << ex.what () << "\n";
+    }
+
+  // --- the same adapter over a file -------------------------------------
+  {
+    std::ofstream out ("/tmp/opencode/dsl_tk_record.bin", std::ios::binary);
+    out.write ("DSLtk", 5);
+  }
+  std::ifstream in ("/tmp/opencode/dsl_tk_record.bin", std::ios::binary);
+  char buffer[16]{};
+  in.read (buffer, 5);
+  std::cout << "file says: " << std::string (buffer, 5) << "\n";
+  return 0;
+}
+\end{lstlisting}
+
+The output is:
+
+\begin{lstlisting}[style=dslcmd,caption=Output of \lstref{lst:io-example}.]
+wire: 5:alpha4:beta
+decoded: alpha / beta
+wire left over: ''
+wrote 5 bytes
+read back: DSLtk
+single byte read: 1 -> D
+read_exact: unexpected I/O EOF
+file says: DSLtk
+\end{lstlisting}
+
+The codec and the byte protocol compose without either knowing about the
+other. The codec works in terms of a \code{std::string}, the byte protocol
+in terms of \code{std::byte} spans, and the bridge between them---turning
+a string into a span of bytes---is two short functions that the user
+writes. A program that wanted a binary wire format would write a codec
+that worked directly on spans; a program that wanted a text format would
+write one that worked on strings. The library is not involved in the
+choice.
+
+Note also what the \code{MemoryBackend} in this example does \emph{not}
+have: it has no error reporting, because there is nothing to fail. A
+backend that owns a file would have a different error policy, and a
+backend that owns a socket would have a third. The adapter imposes
+none of them.
+
+The example deliberately includes a \code{std::ifstream}-based read at the
+end, but not as a \code{dsl::IO} backend. An \code{std::ifstream} cannot
+be made to satisfy \code{IOBackend} without a wrapper, because
+\code{std::basic_istream::read} takes a \code{char*} and a count rather
+than a \code{std::span<std::byte>}, and because its error state is a set
+of flags rather than a return value. Writing that wrapper is a dozen
+lines, and it is the kind of code a user writes once, per platform, and
+then never looks at again. That is the whole point of the design: the
+adapter is the only part of the program that needs to know that files
+exist, and it does not even know that---it knows only that some backend
+moves bytes.
+
+\section{Edge cases and limits}
+
+\begin{itemize}
+\item \textbf{The backend is borrowed.} \code{IO} and \code{Serializer}
+  store a reference. Copying the adapter copies the reference, so the
+  backend must outlive every copy of the adapter. There is no
+  shared-ownership option, and no move that transfers ownership.
+\item \textbf{Counts are checked, not clamped.} A backend that reports
+  more bytes than the buffer holds is an error, not a truncation. A
+  backend that reports a negative count is also an error, because the
+  adapter casts to an unsigned type before comparing.
+\item \textbf{A zero read is end of file.} The protocol gives a backend
+  exactly one way to signal end of file, and a backend that wants to
+  distinguish a timeout from an end of file must do so by throwing.
+\item \textbf{A zero write is a failure.} \code{write_all} treats a zero
+  write as a lack of progress and throws, rather than spinning forever.
+\item \textbf{Exceptions propagate.} The adapter does not catch a
+  backend's exceptions. A backend that wishes to report errors without
+  exceptions may return a sentinel instead, but the adapter's own checks
+  will then reject a negative count.
+\item \textbf{No buffering, no flushing, no timeouts.} The adapter
+  performs exactly one backend call per adapter call, apart from the
+  loops in \code{read_exact} and \code{write_all}. Buffering, flushing
+  policies, and timeouts are the backend's responsibility.
+\item \textbf{No vectored I/O.} The protocol is one span at a time. A
+  backend that wants to use \code{readv} can, but the adapter will never
+  ask it to.
+\item \textbf{Seeking and telling are compile-time optional.} The
+  constrained members mean that a missing \code{seek} is a compile error
+  at the call site, not a link error or a run-time failure.
+\item \textbf{The codec adapters do not validate anything.} Whether the
+  bytes on the wire are well formed is entirely the codec's business; the
+  adapter will forward a malformed input to the backend and report
+  whatever the backend reports.
+\end{itemize}
+
+\section{Conclusion}
+
+The two protocols in this chapter are small on purpose. What they buy is
+not functionality but \emph{location}: the syntax of a value, the
+identity of a resource, the error convention, and the lifetime rules all
+end up in the user's own code, where they can be chosen deliberately. The
+library keeps the part that is genuinely universal---the definition of a
+transfer count, the meaning of end of file, the obligation to finish what
+was asked for---and leaves the rest alone.
+
+It is worth being clear about what this chapter does \emph{not} claim.
+The byte protocol is not a replacement for a networking library, a
+filesystem abstraction, or a serialisation framework. It is the thin
+contract that such a library's front end can be written against, and its
+value shows up precisely at the moment when a user wants to swap a
+mock backend for a real one, or to run the same code over a file and over
+a socket. The codec protocol is not a schema language; it is the
+acknowledgement that somebody else has to own the schema, and that the
+adapter has no business inspecting it.
+
+The next chapter returns to trees. It shows how a visitor can be derived
+from the shape of a schema, so that the same dispatch machinery serves
+both a compile-time description of a language and a runtime one.

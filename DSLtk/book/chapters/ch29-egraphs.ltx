@@ -1,0 +1,609 @@
+\chapter{E-Graphs and Equality Saturation}
+\label{ch:egraphs}
+
+The rewrite engine of \chapref{ch:rewrite-sets} is a bottom-up tree
+rewriter. It walks a tree, replaces subtrees that match a rule, and produces
+a new tree. That model is wonderfully simple, and it is exactly right for
+the many uses where a term has one meaning and the rules are chosen so that
+rewriting is confluent. It is exactly wrong for the other uses, the ones
+where a term has several equivalent readings and the rules do not
+converge on their own.
+
+Consider the two laws
+\begin{quote}
+\code{(add ?x 0) = ?x} \qquad and \qquad \code{(mul ?x 1) = ?x}.
+\end{quote}
+Applied to \code{(mul (add a 0) 1)} they give two different answers. A
+bottom-up engine that rewrites the innermost match first produces
+\code{(mul a 1)}, which then reduces to \code{a}. A bottom-up engine that
+rewrites the outermost match first produces \code{(add a 0)}, which then
+reduces to \code{a}. Both end at \code{a}, but only because these two
+particular laws happen to agree; add a law such as
+\code{(add ?x ?y) = (add ?y ?x)} and the orders begin to disagree, and the
+engine has thrown away the information that would have let it discover
+that.
+
+Equality saturation takes the opposite approach. Instead of computing a
+successor tree, it computes the set of terms that are \emph{equal} to the
+input under the rewrite rules, and it keeps expanding that set until no
+rule can fire. The result is a graph rather than a tree: the nodes are
+terms, and the edges record which nodes are the same. Because the graph
+retains every alternative that was ever derived, an ordering question like
+the one above never arises---there is no ordering, because nothing is
+overwritten. Only at the very end, when a single concrete term is
+required, does a choice get made, and it is made with full knowledge of
+every alternative.
+
+DSLtk's \api{dsl::EGraph} is a compact but complete implementation of this
+idea: hash-consed e-nodes, union-find e-classes, a congruence rebuild, a
+bounded saturation loop, and a minimum-cost extraction. This chapter
+describes each of those parts, in the order the implementation presents
+them.
+
+\section{The data model}
+
+The public vocabulary of the e-graph is five small types and one class.
+\code{EClassId} is a \code{std::size_t} (\texttt{DSLtk.hpp}, line 9358) and
+is the only handle a user ever holds on the graph. \code{ESubstitution} is
+an \code{std::unordered_map<std::string, EClassId>} that maps variable
+names, complete with their leading question mark, to the classes they were
+bound to. \code{EMatch} pairs the matched class with the substitution that
+produced the match, and \code{ERewriteRule} is the triple of a name, a
+left-hand side, and a right-hand side. The two remaining types describe
+the outcome of a saturation run. The listing gathers declarations that
+the header spreads over several hundred lines; it is a transcription, not
+a contiguous excerpt.
+
+\begin{lstlisting}[style=dslcpp,caption={The public value types of the e-graph layer, gathered into one place.},label=lst:egraph-types]
+using EClassId = std::size_t;
+using ESubstitution = std::unordered_map<std::string, EClassId>;
+
+struct EMatch
+{
+  EClassId root;
+  ESubstitution bindings;
+};
+
+struct ERewriteRule
+{
+  std::string name;
+  SExpr lhs, rhs;
+};
+
+struct SaturationLimits
+{
+  std::size_t iterations = 30, nodes = 100000, matches = 100000;
+};
+
+enum class SaturationStop
+{
+  Saturated,
+  IterationLimit,
+  NodeLimit,
+  MatchLimit
+};
+
+struct SaturationResult
+{
+  SaturationStop stop = SaturationStop::IterationLimit;
+  std::size_t iterations = 0, applications = 0;
+  bool
+  saturated () const
+  {
+    return stop == SaturationStop::Saturated;
+  }
+};
+\end{lstlisting}
+
+The three limits have distinct meanings, and confusing them is the most
+common source of surprise. \code{iterations} bounds the number of passes
+over the rule list. \code{nodes} is a budget on the number of distinct
+e-nodes the graph may retain; it is installed for the duration of the
+saturation and removed afterwards. \code{matches} bounds the total number
+of rule applications. A run that stops because of any of the three is
+\emph{not} saturated, and \code{SaturationResult::saturated} returns true
+only for the \code{Saturated} stop reason. The distinction matters because
+a partially saturated graph is a perfectly usable object---it contains
+every equality that was discovered before the budget ran out---but it is
+not a proof that no further equality exists.
+
+\section{Internal representation}
+
+The graph is stored in three pieces. \code{classes_} is a vector of
+\code{EClass} records, each of which holds a union-find parent and a list
+of e-nodes. \code{hash_} maps a canonical string encoding of an e-node
+to the class that contains it. \code{revision_} is a monotonic counter
+that is bumped whenever the graph changes in a way that might enable a new
+match.
+
+\subsection{Hash-consing}
+
+An \code{ENode} is a small record: an operator string, a flag saying
+whether the node is an atom, a flag saying whether the atom was quoted,
+and a vector of child class identifiers. Two e-nodes are the same node if
+and only if their canonical encodings agree, and the canonical encoding is
+a string built by the private \code{key} function (\texttt{DSLtk.hpp},
+line 9481):
+
+\begin{lstlisting}[style=dslcpp,caption=The canonical key of an e-node.,label=lst:egraph-key]
+std::string
+key (ENode &node)
+{
+  std::string out = std::string (node.atom ? "a" : "n")
+                    + (node.quoted ? "q" : "u")
+                    + std::to_string (node.op.size ()) + ":" + node.op;
+  for (auto &child : node.children)
+    {
+      child = find (child);
+      out += ":" + std::to_string (child);
+    }
+  return out;
+}
+\end{lstlisting}
+
+Three details are worth extracting. The one-letter prefixes distinguish an
+atom from a list and a quoted atom from an unquoted one, so \code{(a)} and
+\code{"a"} are different nodes. The length prefix on the operator makes
+the encoding injective, so an operator \code{ab} with no children cannot
+collide with an operator \code{a} followed by a child. And the children are
+\emph{canonicalised} by \code{find} before they are encoded, which is what
+makes the key a function of the equivalence class rather than of a
+particular identifier. Hash-consing then means that inserting a node whose
+key is already present does not create a new class at all; it returns the
+class that already holds that node.
+
+The consequence is that a class may contain several e-nodes. Those are
+the \emph{alternatives}: different spellings of the same value. The
+atom \code{a} and the list \code{(f a)} may end up in the same class when
+a rule equates them, and both remain in the class, so a later match may
+use either.
+
+\subsection{Union-find}
+
+The classes are organised by a union-find with path compression.
+\code{find (id)} walks the parent chain to a root and then rewrites the
+chain so that every node on it points directly at the root
+(\texttt{DSLtk.hpp}, line 9582). \code{unite (a, b)} merges two roots; if
+they differ, the \emph{smaller} identifier wins and becomes the root, and
+the losing class's e-nodes are moved into the winner.
+
+The smaller-id-wins rule is not an optimisation but a design choice. It
+makes the representative of a class a deterministic function of the
+membership of the class, so two runs that perform the same unions in
+different orders agree on the identifiers they hand back. A user who
+stores an \code{EClassId} across a saturation run can rely on it still
+denoting the same value afterwards: identifiers are never reused and
+never invalidated, they simply acquire a different representative.
+
+\subsection{Congruence and rebuilding}
+
+The subtle part of an e-graph is congruence: if two nodes have equivalent
+children, they are themselves equivalent. The graph cannot be correct
+merely by merging classes explicitly, because a union can make two
+previously distinct nodes equal without anyone noticing.
+
+The private \code{rebuild} function (\texttt{DSLtk.hpp}, line 9616)
+implements the congruence closure. It is called lazily: \code{unite} sets
+a \code{dirty_} flag, and the next operation that needs a consistent view
+calls \code{rebuild} first. The function collects every e-node together
+with its owner class, then repeatedly clears the hash table, re-encodes
+every node with canonical child identifiers, and merges the owner of any
+node whose key is already present. It repeats until a pass makes no
+merge, which is the fixed point: once no two distinct nodes have the same
+key, the table is a correct congruence-closed index. Finally it clears the
+per-class node lists and refills them from the surviving distinct nodes,
+so that each class holds exactly the alternatives that are still
+distinct.
+
+The fixed point is necessary rather than merely tidy. Merging two classes
+can make a third pair of nodes equal, which can make a fourth pair equal,
+and so on; a single pass is not enough in general.
+
+\begin{pseudocode}[Rebuild: enforce congruence]
+\textbf{function} rebuild (graph)\\
+\quad if the graph is not dirty then return\\
+\quad collect every e-node together with its owning class\\
+\quad repeat\\
+\qquad\qquad clear the hash table\\
+\qquad\qquad for each collected (owner, node) do\\
+\qquad\qquad\qquad encode the node with canonical child identifiers\\
+\qquad\qquad\qquad if the encoding is already in the table then\\
+\qquad\qquad\qquad\qquad merge the owner with the class in the table\\
+\qquad\qquad\qquad else\\
+\qquad\qquad\qquad\qquad insert the encoding, pointing at the owner's root\\
+\qquad until a whole pass performs no merge\\
+\quad clear the per-class node lists\\
+\quad for each collected (owner, node) do\\
+\qquad\qquad encode the node again\\
+\qquad\qquad if the encoding is new then append the node to its root class\\
+\quad clear the dirty flag
+\end{pseudocode}
+
+\section{The public API}
+
+\begin{table}[htbp]
+\centering
+\caption{The public surface of \code{dsl::EGraph}.}
+\label{tab:egraph-api}
+\begin{tabular}{@{}L{32mm}L{50mm}L{30mm}@{}}
+\toprule
+\textbf{Member} & \textbf{Signature} & \textbf{Meaning} \\
+\midrule
+\code{add} & \code{EClassId add (const SExpr &)} & insert a ground term \\
+\code{add} & \code{EClassId add (std::string_view)} & parse then insert \\
+\code{add} & \code{EClassId add (const ASTNode &)} & convert then insert \\
+\code{find} & \code{EClassId find (EClassId)} & canonical root, with path compression \\
+\code{unite} & \code{bool unite (EClassId, EClassId)} & record an equality \\
+\code{equivalent} & \code{bool equivalent (EClassId, EClassId)} & are the two the same? \\
+\code{when_equal} & \code{bool when_equal (EClassId, EClassId, F &&)} & conditional observer \\
+\code{node_count} & \code{std::size_t node_count ()} & distinct hash-consed e-nodes \\
+\code{class_count} & \code{std::size_t class_count ()} & union-find roots \\
+\code{matches} & \code{std::vector<EMatch> matches (const SExpr &, std::size_t = 100000)} & find the matches of a pattern \\
+\code{saturate} & \code{SaturationResult saturate (rules, limits, on_match)} & run the rules to a fixed point \\
+\code{extract} & \code{SExpr extract (EClassId)} & cheapest finite representative \\
+\code{extract_ast} & \code{ASTNode extract_ast (EClassId)} & the same, as a tree \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Adding terms}
+
+The three \code{add} overloads all funnel into the same implementation.
+\code{add (std::string_view)} parses the text with \code{parse_sexpr}
+and forwards; \code{add (const ASTNode &)} converts the tree with
+\code{ast_to_sexpr} and forwards; \code{add (const SExpr &)} validates
+the term and then instantiates it, creating an e-node for every atom and
+every list and returning the class of the outermost node.
+
+The validation is a genuine restriction and not a formality. The
+validator of \chapref{ch:sexpressions} collects the pattern variables of
+the term, and \code{add} refuses any term that has one. The exception is
+a \code{std::invalid_argument}, and the message is \emph{cannot add an
+unbound pattern to an e-graph}. An e-graph holds \emph{values}; a pattern
+variable is a hole in a pattern, and a hole has no value to occupy. The
+same validator rejects a list whose head is not a literal atom, because a
+node must have an operator name.
+
+\subsection{Matching}
+
+\code{matches} takes a pattern and returns the list of ways it occurs in
+the graph. The implementation walks the \emph{root classes only}
+(\texttt{DSLtk.hpp}, line 9704): a non-root class is by definition the
+same class as its root, so scanning it would produce duplicate matches.
+Each match is an \code{EMatch} whose \code{root} is the class the pattern
+matched and whose \code{bindings} maps the pattern's variables to the
+classes they were bound to.
+
+Matching is a recursive descent over the pattern, and it has two
+properties worth spelling out. A pattern variable matches any class, but
+if the variable has already been bound in this partial match, the class it
+is bound to must be the same class; that is how a repeated variable
+enforces equality of two subterms. And a list pattern matches an e-node
+only when the node's operator and quoted flag agree with the pattern head
+\emph{and} the node has exactly as many children as the pattern has
+arguments. The arity check is exact, not a minimum: there is no notion of
+a variadic operator.
+
+The \code{limit} argument bounds the number of matches returned, and it
+defaults to 100000. A limit of zero returns an empty vector.
+
+\subsection{Observing equality}
+
+\code{when_equal (a, b, fn)} is a conditional observer. It first asks
+whether the two classes are already equivalent; if they are not, it
+returns \code{false} and does nothing. If they are, it invokes the
+callback with the graph and the canonical root identifier and returns
+\code{true}. The callback receives \code{(EGraph &, EClassId)}, so it can
+extract a representative, add new terms, or record what it saw.
+
+The word \emph{conditional} is the important part. The callback fires
+only on equality that already holds; it is not a hook that fires when
+equality is later established. A user who wants to be notified of a
+discovered equality during saturation should use the \code{on_match}
+observer of \code{saturate} instead, which fires after each rule
+application.
+
+\section{Saturation}
+
+\code{saturate} is the engine. It takes a vector of rules, a set of
+limits, and an optional observer, and it runs the rules against the graph
+until nothing more can be derived or a budget is exhausted
+(\texttt{DSLtk.hpp}, line 9726).
+
+The function begins by re-validating every rule, including rules that were
+built by hand rather than parsed. It does this by synthesising the
+S-expression \code{(rewrite name lhs rhs)} for each rule and passing it
+through \code{sexpr_rule}, so a hand-built rule with an unbound
+right-hand variable or a non-literal operator head is rejected with
+exactly the same diagnostics as a parsed one. Validation happens before
+anything else, so a malformed rule never leaves a half-modified graph
+behind.
+
+It then installs the node budget for the duration of the run, using a
+small scope guard that restores the previous budget when the function
+returns, so a saturation never leaves the graph permanently unable to
+grow. Before the loop begins it checks the current node count against the
+budget; a graph that is already over budget stops immediately with
+\code{NodeLimit} and zero iterations.
+
+The loop itself runs at most \code{limits.iterations} passes. Each pass
+rebuilds the graph, snapshots \code{revision_}, and then walks the rule
+list in order. For each rule the graph is asked for the matches of the
+rule's left-hand side, and for each match the right-hand side is
+instantiated against the match's bindings and united with the matched
+class. Each such application increments the application's counter and
+fires the observer. At the end of the pass the graph is rebuilt again and
+the revision counter is compared with the snapshot: if the two are equal,
+nothing changed during the pass, no rule can fire again, and the run stops
+with \code{Saturated}.
+
+\begin{pseudocode}[Saturate to a fixed point]
+\textbf{function} saturate (graph, rules, limits, observer)\\
+\quad validate every rule\\
+\quad install the node budget for the duration of the run\\
+\quad if the node count exceeds the budget then\\
+\qquad return a report stopping with \emph{NodeLimit}\\
+\quad for each pass from one to the iteration limit do\\
+\qquad\qquad rebuild the graph\\
+\qquad\qquad snapshot the revision counter\\
+\qquad\qquad for each rule do\\
+\qquad\qquad\qquad find the matches of the rule's left-hand side\\
+\qquad\qquad\qquad for each match do\\
+\qquad\qquad\qquad\qquad if the match budget is exhausted then\\
+\qquad\qquad\qquad\qquad\qquad return a report stopping with \emph{MatchLimit}\\
+\qquad\qquad\qquad\qquad instantiate the right-hand side\\
+\qquad\qquad\qquad\qquad merge it with the matched class\\
+\qquad\qquad\qquad\qquad count the application and notify the observer\\
+\qquad\qquad rebuild the graph\\
+\qquad\qquad if the revision counter is unchanged then\\
+\qquad\qquad\qquad return a report stopping with \emph{Saturated}\\
+\quad return a report stopping with \emph{IterationLimit}
+\end{pseudocode}
+
+The revision counter is the criterion for saturation, and it is worth
+being precise about what it counts. It is bumped when a node is inserted
+and when two classes are merged. It is \emph{not} bumped when an
+application leaves the graph unchanged, which happens whenever a rule
+fires on a class that is already equal to its right-hand side. A rule
+whose left-hand side is a bare variable, for instance, matches every root
+class and produces a fresh application each time even though no union
+occurs. The application counter therefore grows while the revision counter
+stays still, and it is the revision counter that decides that the run has
+reached its fixed point.
+
+The observer receives \code{(const ERewriteRule &, const EMatch &)} and
+is called after the merge, so the graph it sees already contains the
+newly established equality.
+
+\begin{figure}[htbp]
+\centering
+\begin{dslgraph}
+  \node[dslsmall] (fx) at (-2.4,0) {f(x)};
+  \node[dslsmall] (fy) at (2.4,0) {f(y)};
+  \begin{scope}[on background layer]
+    \node[dslgroupr, fit=(fx)(fy), inner sep=10pt] (c0) {};
+  \end{scope}
+  \node[font=\scriptsize\sffamily] at (0,1.1) {e-class 0};
+
+  \node[dslsmall] (x) at (-1.1,-3.2) {x};
+  \node[dslsmall] (y) at (1.1,-3.2) {y};
+  \begin{scope}[on background layer]
+    \node[dslgroupr, fit=(x)(y), inner sep=10pt] (c1) {};
+  \end{scope}
+  \node[font=\scriptsize\sffamily] at (0,-4.4) {e-class 1};
+
+  \draw[dsledge] (fx.south) -- (c1.north west);
+  \draw[dsledge] (fy.south) -- (c1.north east);
+  \draw[dsledgedash] (c1.east) to[out=0,in=0] node[right, font=\scriptsize, align=left] {congruence:\\equal children\\imply an equal parent} (c0.east);
+\end{dslgraph}
+\caption{Two e-classes and a congruence. The atoms \code{x} and \code{y} lie
+in the same e-class, so the two parent nodes \code{f(x)} and \code{f(y)} have
+the same canonical children and are therefore congruent; the rebuild step
+merges their classes without any rule having fired.}
+\label{fig:egraph-congruence}
+\end{figure}
+
+\section{Extraction}
+
+Saturation leaves the graph holding a set of equivalent terms, but a
+concrete program usually wants one term. \code{extract} computes the
+cheapest finite representative of a class, where the cost of a term is its
+node count.
+
+The computation is a fixed point over the class graph
+(\texttt{DSLtk.hpp}, line 9795). Every class starts with an infinite cost.
+The cost of an e-node is one plus the sum of the costs of its children,
+and a node whose child has an infinite cost has an infinite cost itself.
+A class's cost is the minimum over its alternatives. Because a class's
+cost depends on the costs of strictly smaller classes in the acyclic case,
+and because the loop repeats until nothing changes, the iteration
+converges. The infinity guard is what makes the cyclic case safe: a class
+that contains only cyclic alternatives never acquires a finite cost.
+
+When the computation finishes, the chosen e-node for each class is
+recorded, and a second pass rebuilds the tree from those choices. The
+reconstruction follows child class identifiers, so it is well defined
+precisely because the chosen alternatives are acyclic.
+
+If the requested class has no finite representative at all, \code{extract}
+throws \code{std::runtime_error} whose message is \emph{e-class has no
+finite expression}. The guard turns what would otherwise be an infinite
+reconstruction into a diagnosable error.
+
+It is worth being precise about how reachable that guard is, because the
+answer is not obvious. The public API cannot normally produce such a
+class. Every class is created by \code{insert} from a node whose children
+already exist, and every merge only ever adds nodes to a class, so each
+class permanently retains at least one e-node whose children terminate in
+an atom class; an atom costs one, and the cost therefore always has a
+finite value. The guard is best read as a defensive assertion about the
+shape of the graph rather than as an error a well-behaved program will
+ever see.
+
+\code{extract_ast} is a one-liner on top of \code{extract}. It converts
+the extracted S-expression with the bridge of
+\chapref{ch:sexpressions}, and therefore inherits the
+leaf-versus-inner-node convention described there.
+
+\begin{lstlisting}[style=dslcpp,caption=Saturating an arithmetic e-graph and extracting the minimum.,label=lst:egraph-saturate]
+#include "DSLtk.hpp"
+#include <iostream>
+#include <string>
+
+namespace
+{
+const char *
+stop_name (dsl::SaturationStop stop)
+{
+  switch (stop)
+    {
+    case dsl::SaturationStop::Saturated:
+      return "Saturated";
+    case dsl::SaturationStop::IterationLimit:
+      return "IterationLimit";
+    case dsl::SaturationStop::NodeLimit:
+      return "NodeLimit";
+    case dsl::SaturationStop::MatchLimit:
+      return "MatchLimit";
+    }
+  return "?";
+}
+}
+
+int
+main ()
+{
+  using dsl::EGraph;
+
+  const std::string ruleText = R"(
+(rewrite add-zero (add ?x 0) ?x)
+(rewrite mul-one  (mul ?x 1)  ?x)
+)";
+
+  auto rules = dsl::sexpr_rules (ruleText);
+  std::cout << "rules parsed: " << rules.size () << "\n";
+
+  EGraph graph;
+  auto root = graph.add ("(mul (add a 0) 1)");
+  std::cout << "before: classes=" << graph.class_count ()
+            << " nodes=" << graph.node_count () << "\n";
+
+  int fired = 0;
+  auto report = graph.saturate (
+      rules, dsl::SaturationLimits{},
+      [&] (const dsl::ERewriteRule &rule, const dsl::EMatch &match) {
+        ++fired;
+        std::cout << "  applied " << rule.name << " at class " << match.root
+                  << "\n";
+      });
+
+  std::cout << "stop=" << stop_name (report.stop)
+            << " saturated=" << std::boolalpha << report.saturated ()
+            << " iterations=" << report.iterations
+            << " applications=" << report.applications << " observed=" << fired
+            << "\n";
+  std::cout << "after:  classes=" << graph.class_count ()
+            << " nodes=" << graph.node_count () << "\n";
+  std::cout << "minimum: " << graph.extract (root).dump () << "\n";
+  std::cout << "as AST : " << graph.extract_ast (root).dump () << "\n";
+
+  auto atom = graph.add ("a");
+  bool equal = graph.when_equal (
+      root, atom, [] (EGraph &g, dsl::EClassId id) {
+        std::cout << "  observer saw canonical class " << id << " -> "
+                  << g.extract (id).dump () << "\n";
+      });
+  std::cout << "when_equal fired: " << equal << "\n";
+
+  EGraph bounded;
+  bounded.add ("(add a 0)");
+  auto limited = bounded.saturate (rules, dsl::SaturationLimits{ 1, 100000, 100000 });
+  std::cout << "one-iteration run stops at " << stop_name (limited.stop)
+            << " after " << limited.iterations << " iteration(s), "
+            << limited.applications << " application(s)\n";
+  return 0;
+}
+\end{lstlisting}
+
+The output of \lstref{lst:egraph-saturate} is:
+
+\begin{lstlisting}[style=dslcmd,caption=Output of \lstref{lst:egraph-saturate}.]
+rules parsed: 2
+before: classes=5 nodes=5
+  applied add-zero at class 2
+  applied mul-one at class 4
+  applied add-zero at class 0
+  applied mul-one at class 0
+stop=Saturated saturated=true iterations=2 applications=4 observed=4
+after:  classes=3 nodes=5
+minimum: a
+as AST : (atom a)
+  observer saw canonical class 0 -> a
+when_equal fired: true
+one-iteration run stops at IterationLimit after 1 iteration(s), 1 application(s)
+\end{lstlisting}
+
+The trace is instructive. The graph starts with five classes and five
+nodes: the atom \code{a}, the atom \code{0}, the node \code{(add a 0)},
+the atom \code{1}, and the node \code{(mul (add a 0) 1)}. The first
+application merges the class of \code{(add a 0)} with the class of
+\code{a}, which is the \emph{add-zero} law. The second application merges
+the class of the multiplication with the same class, which is the
+\emph{mul-one} law. The third and fourth applications fire again, this
+time against the merged class, and establish nothing new---which is
+exactly why the revision counter, not the application counter, decides
+that the run has saturated.
+
+The graph ends with three classes and five nodes: the merged class
+holding the atom \code{a} together with the two derived list nodes, and
+two singleton classes holding the atoms \code{0} and \code{1}. The
+extraction picks \code{a}, because an atom costs one node and the list
+nodes cost three. Had the rules included a law that made \code{a} itself
+expand, the extraction would have chosen the cheaper of the two
+alternatives, and it would have done so with the whole class in view.
+
+\section{Edge cases and limits}
+
+\begin{itemize}
+\item \textbf{No deletion.} A rule never removes an alternative. The
+  graph only ever grows, or stays the same. This is the whole point, but
+  it means the node budget, not the rule set, is what bounds a run.
+\item \textbf{Ground terms only.} \code{add} refuses a term containing a
+  pattern variable. There is no way to add a schematic term to the graph
+  and match against it.
+\item \textbf{Literal operators.} A list whose head is a pattern variable
+  is not a valid e-graph term, and a list whose head is itself a list is
+  not either.
+\item \textbf{Exact arity.} A list pattern matches an e-node only when
+  the arities agree. There are no variadic operators and no implicit
+  padding.
+\item \textbf{Node budget.} The budget is installed only for the duration
+  of a saturation. A graph that is grown by \code{add} calls outside a
+  saturation is unbounded.
+\item \textbf{No cost model.} \code{extract} minimises node count and
+  nothing else. There is no user-supplied weight for operators, no
+  preference for one alternative over another, and no way to extract a
+  term that is not the cheapest one.
+\item \textbf{Iteration semantics.} A rule applies at most once per
+  matched class per pass, but a class that changes during a pass may be
+  matched again by a later rule in the same pass. The pass boundary is
+  the only synchronisation point.
+\item \textbf{One extraction per class.} \code{extract} returns a single
+  representative. Asking for several representatives of the same class
+  means asking several times, and each call returns the same answer.
+\item \textbf{Match cost.} \code{matches} is a full scan of the root
+  classes for every call, and \code{saturate} calls it once per rule per
+  pass. The cost of a saturation is therefore roughly the number of passes
+  times the number of rules times the size of the graph.
+\end{itemize}
+
+\section{Conclusion}
+
+The e-graph is the mechanism that makes a rewrite system able to answer
+``are these two things the same?'' rather than only ``what does this
+thing rewrite to?''. Its three moving parts---hash-consed e-nodes,
+union-find classes, and a congruence rebuild---are individually simple,
+and their interaction is what makes the whole thing work. The next two
+chapters turn to the boundaries of the toolkit: how a user supplies their
+own data syntax and their own byte transport, and how a user derives a
+visitor from the shape of a tree.

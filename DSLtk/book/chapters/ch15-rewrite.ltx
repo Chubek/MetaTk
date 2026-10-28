@@ -1,0 +1,563 @@
+\chapter{The Rewrite Feature: Rules and Predicates}
+\label{ch:rewrite}
+
+\section{The problem: expressing a transformation without a language}
+
+A tree is easy to build and easy to print. Turning one tree into another is
+harder, because the transformation is a piece of program, and a piece of
+program needs somewhere to live. Three designs are common in practice.
+
+The first embeds the transformation in the node type: every node carries a
+virtual \code{rewrite} method, and each node kind knows how to transform
+itself. This makes the transformation hard to write, hard to compose, and
+impossible to change without rebuilding the tree type.
+
+The second writes the transformation as a function over the tree, with a
+big \code{switch} on the node's tag. This works, but the switch has to be
+rewritten for every new kind of transformation, and the two concerns ---
+what a node \emph{is} and how it should be \emph{changed} --- end up in the
+same function.
+
+The third, and the one \DSLtk{} implements, separates the two. A
+\emph{rule} is a self-contained pair: a predicate that decides whether the
+rule applies to a node, and a transformer that produces the replacement.
+Rules are ordinary values, they can be written down in isolation, they can
+be tested one at a time, and they can be collected into a set and applied
+repeatedly until nothing changes.
+
+The whole mechanism is four hundred lines of \texttt{DSLtk.hpp}, from line
+6754 to line 6941. Most of it is a single class template and a factory
+function. This chapter is about the class template; the next chapter is
+about the set and the fixpoint loop.
+
+\section{A worked example}
+
+The program below defines three rules --- double-negation elimination,
+\code{x + 0} collapsing to \code{x}, and constant folding --- and applies
+them to a small expression tree.
+
+\begin{lstlisting}[style=dslcpp,caption={Three rewrite rules and their application.},label={lst:rewrite-demo}]
+#include "DSLtk.hpp"
+#include <iostream>
+#include <string>
+#include <string_view>
+
+using dsl::ASTNode;
+
+bool
+tag_is (ASTNode const &n, std::string_view tag)
+{
+  return !n.is_leaf () && n.tag () == tag;
+}
+
+bool
+is_num (ASTNode const &n, std::string_view text)
+{
+  return n.is_leaf () && n.tag () == "num" && n.value () == text;
+}
+
+// Rule 1: not(not(x)) -> x
+constexpr auto double_negation
+    = dsl::rule<"elim-double-neg"> (
+        [] (ASTNode const &n) {
+          return tag_is (n, "not") && n.size () == 1 && tag_is (n.child (0), "not")
+                 && n.child (0).size () == 1;
+        },
+        [] (ASTNode const &n) { return n.child (0).child (0); });
+
+// Rule 2: add(x, 0) -> x  and  add(0, x) -> x
+constexpr auto add_zero
+    = dsl::rule<"add-zero"> (
+        [] (ASTNode const &n) {
+          if (!tag_is (n, "add") || n.size () != 2)
+            return false;
+          return is_num (n.child (0), "0") || is_num (n.child (1), "0");
+        },
+        [] (ASTNode const &n) {
+          return is_num (n.child (0), "0") ? n.child (1) : n.child (0);
+        });
+
+// Rule 3: add(num a, num b) -> num (a + b)
+constexpr auto fold_constants
+    = dsl::rule<"fold-constants"> (
+        [] (ASTNode const &n) {
+          if (!tag_is (n, "add") || n.size () != 2)
+            return false;
+          return n.child (0).is_leaf () && n.child (0).tag () == "num"
+                 && n.child (1).is_leaf () && n.child (1).tag () == "num";
+        },
+        [] (ASTNode const &n) {
+          return dsl::leaf<"num"> (std::stoi (n.child (0).value ())
+                                   + std::stoi (n.child (1).value ()));
+        });
+
+// A DSL that exposes the rule set through the Rewrite feature mixin.
+struct Optimiser : dsl::DSL<Optimiser, dsl::AST, dsl::Rewrite>
+{
+  static inline auto rules
+      = dsl::rewrite_set (double_negation, add_zero, fold_constants);
+};
+
+int
+main ()
+{
+  // The rule name is a compile-time constant, never read by the engine.
+  std::cout << "rule name: " << decltype (double_negation)::name << '\n';
+
+  // try_apply is the only entry point: it returns nullopt when the
+  // predicate rejects the node.
+  ASTNode notnot = dsl::node<"not"> (dsl::node<"not"> (dsl::leaf<"x"> (1)));
+  auto hit = double_negation.try_apply (notnot);
+  std::cout << "try_apply: " << (hit ? hit->dump () : std::string ("no match")) << '\n';
+
+  ASTNode plain = dsl::leaf<"x"> (1);
+  std::cout << "try_apply: "
+            << (double_negation.try_apply (plain) ? std::string ("match")
+                                                  : std::string ("no match"))
+            << '\n';
+
+  // The whole set, applied to a tree.
+  ASTNode tree = dsl::node<"add"> (dsl::node<"not"> (dsl::node<"not"> (dsl::leaf<"x"> (1))),
+                                   dsl::leaf<"num"> (0));
+  std::cout << "before   : " << tree.dump () << '\n';
+
+  auto rules = dsl::rewrite_set (double_negation, add_zero, fold_constants);
+  std::cout << "after    : " << rules.apply (tree).dump () << '\n';
+
+  Optimiser o;
+  std::cout << "mixin    : " << o.rewrite (tree).dump () << '\n';
+  return 0;
+}
+\end{lstlisting}
+
+The output is
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:rewrite-demo}.},label={lst:rewrite-demo-out}]
+rule name: elim-double-neg
+try_apply: (x 1)
+try_apply: no match
+before   : (add (not (not (x 1))) (num 0))
+after    : (x 1)
+mixin    : (x 1)
+\end{lstlisting}
+
+The result \code{"(x 1)"} is the composition of all three rules. The
+inner \code{not(not(x))} is removed by the first rule; the \code{add} node
+then has a \code{num 0} on the right, which the second rule removes; and
+what remains is the leaf \code{(x 1)}. Which rule fires, and in what
+order, is the subject of \chapref{ch:rewrite-sets}.
+
+\section{The rule type}
+
+\api{RewriteRule} is declared at line 6768 as a three-parameter class
+template. \code{Tag} is a \api{FixedString} naming the rule; \code{Pred}
+and \code{Trans} are the callable types.
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}L{5.4cm}C{1.0cm}L{6.8cm}@{}}
+\toprule
+\textbf{Member} & \textbf{Line} & \textbf{Semantics} \\
+\midrule
+\code{Pred pred}
+  & 6770
+  & The predicate, stored \emph{by value} in a public data member. Called
+    as \code{pred (n)}, where \code{n} is a \code{const ASTNode&}. \\
+\code{Trans trans}
+  & 6771
+  & The transformer, stored by value in a public data member. Called as
+    \code{trans (n)}. \\
+\code{static constexpr} \newline \code{std::string_view name}
+  & 6772
+  & The rule's name, taken from \code{Tag.view()}. A debugging aid. The
+    engine never reads it. \\
+\code{constexpr RewriteRule(Pred p, Trans t)}
+  & 6774
+  & Constructs the rule, moving both callables into place. \\
+\code{std::optional<ASTNode>} \newline \code{try_apply(const ASTNode&) const}
+  & 6784
+  & The only member function. Returns the transformed node when the
+    predicate accepts the argument, and \code{std::nullopt} otherwise. \\
+\bottomrule
+\end{tabular}
+\caption{The complete interface of \api{RewriteRule}. There is no
+\code{apply}, no \code{matches}, and no \code{name()} accessor.}
+\label{tab:rewriterule-api}
+\end{table}
+
+The absence of \code{apply} and \code{matches} is worth dwelling on,
+because a rule-oriented library might reasonably provide them. The
+toolkit does not, and the reason is that they would be redundant.
+\code{matches(n)} would be \code{pred(n)}, and \code{pred} is a public
+member: a user who wants to test a rule without transforming anything can
+write \code{rule.pred (n)} directly. Likewise, \code{try_apply(n)} is the
+whole of the "apply" operation. One method is enough, and the toolkit
+provides one.
+
+\begin{pseudocode}[Applying one rule to one node]
+\textbf{function} try\_apply (rule, n)\\
+\quad \textbf{if} rule.pred (n) \textbf{then}\\
+\qquad \textbf{return} rule.trans (n)\\
+\quad \textbf{return} empty
+\end{pseudocode}
+
+The predicate is consulted exactly once. The transformer is consulted at
+most once, and only when the predicate accepted. The transformer receives
+the same node the predicate saw --- not a copy, not a modified version ---
+so a transformer that wants to inspect the node may do so.
+
+\subsection{The factory}
+
+\api{rule} is declared at line 6800. It is a thin deduction helper:
+
+\begin{lstlisting}[style=dslcpp,caption={The rule factory, verbatim from the header.},label={lst:rule-impl}]
+template <FixedString Tag, typename Pred, typename Trans>
+constexpr auto
+rule (Pred &&p, Trans &&t)
+{
+  return RewriteRule<Tag, std::decay_t<Pred>, std::decay_t<Trans>>{
+    std::forward<Pred> (p), std::forward<Trans> (t)
+  };
+}
+\end{lstlisting}
+
+The \code{std::decay_t} is what makes the rule's type independent of how
+the callables were passed. A rule built from a function name, a lambda
+stored in a variable, and a lambda stored in a \code{const} variable all
+have the same type, because the decay strips the reference and the
+top-level \code{const}. The \code{constexpr} on both the factory and the
+constructor means that a rule built from captureless lambdas is a
+constant expression, which is what allows \code{constexpr auto} at
+namespace scope, as in Listing~\ref{lst:rewrite-demo}.
+
+\subsection{Matching is the predicate's job}
+
+The engine does not match anything. There is no pattern language, no
+pattern variable, no substitution, and no unification. A rule fires
+exactly when its predicate returns \code{true}, and the predicate is an
+ordinary C++ function that inspects whatever it likes.
+
+In practice a predicate inspects the node's tag and the tags and shapes of
+its children:
+
+\begin{lstlisting}[style=dslcpp,caption={A predicate that matches a specific shape.},label={lst:predicate-shape}]
+[] (dsl::ASTNode const &n) {
+  return !n.is_leaf () && n.tag () == "add" && n.size () == 2
+         && !n.child (0).is_leaf () && n.child (0).tag () == "num"
+         && !n.child (1).is_leaf () && n.child (1).tag () == "num";
+}
+\end{lstlisting}
+
+This is more code than a pattern would be, and it buys several things in
+return. The predicate is ordinary C++ and can use any library the user
+likes. It can consult state captured by reference --- a symbol table, a
+type environment, a counter. It can throw, in which case the whole
+rewrite aborts with an exception rather than silently failing to match.
+And it can be tested in isolation, without a tree, by calling
+\code{rule.pred (node)} on a hand-built node.
+
+The cost is that matching is not composable in the way a pattern language
+is. Two predicates that both match \code{add} nodes cannot be combined by
+the toolkit; the user must combine them by hand, with \code{&&} or with a
+helper.
+
+The header's own example, at lines 6761--6766, is the canonical shape:
+
+\begin{lstlisting}[style=dslcpp,caption={The header's example rule: remove a double negation.},label={lst:header-rule-example}]
+auto r = dsl::rule<"elim-double-neg">(
+    [](const ASTNode& n){ return n.tag()=="not" &&
+                          n.child(0).tag()=="not"; },
+    [](const ASTNode& n){ return n.child(0).child(0); }
+);
+\end{lstlisting}
+
+Two things about this example deserve a note. The first is that it calls
+\code{n.child(0)} without checking \code{n.size()}, and therefore relies
+on the tree always having the shape it expects; a tree that reached this
+rule with a \code{not} node of arity zero would throw
+\code{std::out_of_range}, as \chapref{ch:traversal} explained. The
+second is that the predicate does not check that \code{n} is an inner node
+at all --- a leaf's \code{tag()} is compared happily --- so a
+\code{not}-tagged \emph{leaf} would satisfy the first half of the
+conjunction and then throw on \code{n.child(0)}. The example is short
+because it is an illustration, not a specification.
+
+\subsection{\code{std::optional<ASTNode>} as the no-match signal}
+
+The return type of \api{try_apply} is \code{std::optional<ASTNode>}. The
+optional distinguishes two outcomes that would otherwise be
+indistinguishable: the predicate rejected the node, and the predicate
+accepted it but the transformer produced a node that happens to be equal
+to the input. In the first case the caller learns that the rule does not
+apply; in the second the caller learns that the rule applies and what it
+produced.
+
+The transformer must return an \api{ASTNode} \emph{by value}. It cannot
+return nothing, it cannot return a reference, and it cannot return a
+different type. A transformer that wants to express "no change" must
+return the node it was given --- which the engine will then treat as a
+change, because the rule fired. This is an important subtlety and
+\chapref{ch:rewrite-sets} returns to it.
+
+\section{The \code{Rewrite} feature mixin}
+
+The feature tag \api{dsl::Rewrite} is declared at line 6922. Its mixin
+contributes exactly one member:
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}L{5.4cm}C{1.0cm}L{6.8cm}@{}}
+\toprule
+\textbf{Member} & \textbf{Line} & \textbf{Semantics} \\
+\midrule
+\code{ASTNode rewrite(const ASTNode& tree) const}
+  & 6934
+  & Applies \code{Derived::rules} to \code{tree} and returns the result.
+    The call is forwarded to \code{Derived::rules.apply (tree)}. \\
+\bottomrule
+\end{tabular}
+\caption{The \code{Rewrite} feature mixin. Its single member is guarded
+by a nested requirement expression that demands a \texttt{rules} member
+on the derived class.}
+\label{tab:rewrite-mixin}
+\end{table}
+
+The guard is worth reading carefully:
+
+\begin{lstlisting}[style=dslcpp,caption={The rewrite member and its constraint.},label={lst:rewrite-mixin-impl}]
+ASTNode
+rewrite (const ASTNode &tree) const
+  requires requires { Derived::rules; }
+{
+  return Derived::rules.apply (tree);
+}
+\end{lstlisting}
+
+The constraint is a \emph{nested} requirement expression. The inner
+\code{requires \{ Derived::rules; \}} checks that the expression
+\code{Derived::rules} is well formed --- that the derived class has a
+member called \code{rules} and that it is accessible from the mixin. It
+does \emph{not} check the type of that member, and it does not check that
+it has an \code{apply} member. The constraint is satisfied by an
+\code{int}, and the failure then occurs inside the function body, as a
+hard error rather than as a substitution failure:
+
+\begin{lstlisting}[style=dslcpp,caption={A mis-typed \code{rules} member fails in the body, not in the constraint.},label={lst:rules-int}]
+struct Bad : dsl::DSL<Bad, dsl::Rewrite> {
+  static inline int rules = 42;
+};
+// error: request for member 'apply' in 'Bad::rules',
+//        which is of non-class type 'int'
+\end{lstlisting}
+
+This is a defensible design --- the constraint's job is to say "this mixin
+requires the derived class to have a \code{rules} member", and the
+diagnostic for a wrongly typed member is clear enough --- but it is worth
+knowing that the constraint will not protect a user from a typo in the
+member's type.
+
+One more detail about the mixin's member: it is \code{const}, and it takes
+the tree by \code{const ASTNode&}. The tree is therefore not copied on
+the way in --- but it \emph{is} copied inside, because
+\api{RewriteSet::apply} takes its argument by value. The rewrite of
+\chapref{ch:rewrite-sets} explains why, and what it costs.
+
+The mixin also does not require \code{Derived::rules} to be static. The
+header's example uses a static member, and a static member is the natural
+choice because the rule set is normally the same for every instance of the
+DSL; but a non-static member would satisfy the constraint, and the call
+\code{Derived::rules.apply (tree)} would then read the member of the
+object on which \code{rewrite} was called.
+
+The mixin requires nothing of the derived class beyond the existence of
+\code{rules}. It does not require the member to be static, although the
+example in the header uses a static one; it does not require the member to
+be a \api{RewriteSet}; and it does not require the derived class to be
+complete at the point of the mixin's definition.
+
+\subsection{Writing predicates that do not crash}
+
+Because a predicate is ordinary code, it is ordinary code's problem to
+check its preconditions. The failure mode is specific and unforgiving: a
+predicate that calls \code{n.child(0)} on a node with no children throws
+\code{std::out_of_range}, and the exception propagates out of the rewrite
+pass, out of \api{apply}, and out of the user's program. Nothing catches
+it, and the diagnostic names a vector rather than a rule.
+
+The defensive style that works is a sequence of short-circuiting guards,
+each of which establishes one more fact about the node:
+
+\begin{lstlisting}[style=dslcpp,caption={A predicate that establishes its preconditions one at a time.},label={lst:guarded-predicate}]
+[] (dsl::ASTNode const &n) {
+  if (n.is_leaf ())          // not an inner node
+    return false;
+  if (n.tag () != "add")     // wrong tag
+    return false;
+  if (n.size () != 2)        // wrong arity
+    return false;
+  if (!n.child (0).is_leaf () || n.child (0).tag () != "num")
+    return false;
+  return n.child (1).is_leaf () && n.child (1).tag () == "num";
+}
+\end{lstlisting}
+
+The order matters. The cheapest and most selective test comes first, so
+that a node of the wrong shape is rejected before any child is touched.
+Factoring the repeated shape test into a helper --- as the
+\code{tag_is} and \code{is_num} functions of
+Listing~\ref{lst:rewrite-demo} do --- keeps the predicate readable and
+makes the guards consistent between rules.
+
+\section{Type erasure and run-time rule lists}
+
+The type-level encoding of a rule set has an immediate consequence: a
+\api{RewriteSet} has a fixed, compile-time number of rules. There is no
+\code{RewriteSet<std::vector<Rule>>} and no way to build a set whose size
+is known only at run time, because the set's template arguments are the
+rule types.
+
+Type erasure is nevertheless available, by choosing \code{std::function}
+as the predicate and transformer types when the rule is created:
+
+\begin{lstlisting}[style=dslcpp,caption={A type-erased rule.},label={lst:erased-rule}]
+using Pred  = std::function<bool (dsl::ASTNode const &)>;
+using Trans = std::function<dsl::ASTNode (dsl::ASTNode const &)>;
+
+auto r = dsl::rule<"erased"> (
+    Pred  ([](dsl::ASTNode const &n) { return !n.is_leaf () && n.tag () == "not"; }),
+    Trans ([](dsl::ASTNode const &n) { return n.child (0); }));
+\end{lstlisting}
+
+This compiles and behaves exactly as the un-erased rule does. What is lost
+is the fine-grained type identity: every type-erased rule built with the
+same tag has the same type, because the closure types have been replaced
+by the two \code{std::function} types. A run-time list of rules is
+therefore expressible --- as a \code{std::vector} of such rules, applied
+one at a time by the user --- but it is not a \api{RewriteSet}, and it
+does not enjoy the fixpoint loop of \chapref{ch:rewrite-sets} without
+additional machinery.
+
+\section{The type-level encoding}
+
+Every rule object has a distinct C++ type, and the type encodes three
+things: the tag, the predicate's type, and the transformer's type. Two
+rules built with the same tag but different lambdas have different types,
+because the closure types differ; two rules built from the same two
+lambdas have the same type.
+
+This matters because \api{RewriteSet} of \chapref{ch:rewrite-sets} stores
+its rules in a \code{std::tuple<Rules...>}, whose element types are
+template arguments. The type of a rule set is therefore a compile-time
+record of exactly which rules it contains and in what order. Two sets with
+the same rules in a different order have different types, and a set with
+one extra rule has a different type again.
+
+That encoding buys three things. It makes the rule list inspectable at
+compile time: \code{std::tuple_size_v} of the set's \code{rules} member
+is the number of rules, and the set's type can be named. It makes the set
+a distinct type per configuration, so that a function taking
+\code{RewriteSet<R1, R2>} cannot be handed a set with different rules by
+accident. And it means the engine can be written with plain \code{std::apply}
+over a tuple, with no dynamic dispatch and no type erasure --- which is
+exactly what the shipped implementation does.
+
+\section{The flow of a single rule}
+
+\figref{fig:rule-flow} shows what happens when one rule is offered one
+node.
+
+\begin{figure}[htbp]
+\begin{dslgraph}
+  \node[dsllarge] (node) {ASTNode \code{n}};
+
+  \node[dslbox, below=9mm of node] (pred)
+    {\\code{rule.pred (n)}\\user-supplied predicate};
+  \node[dsldecision, below=9mm of pred] (test)
+    {\\code{pred (n)} true?};
+
+  \node[dslbox, below=9mm of test, xshift=-24mm] (no)
+    {\\code{std::nullopt}\\no match};
+  \node[dslbox, below=9mm of test, xshift=24mm] (yes)
+    {\\code{rule.trans (n)}\\user-supplied transformer};
+
+  \node[dslbox, below=9mm of yes] (out)
+    {\\code{std::optional}\\\code{<ASTNode>}\\holds the replacement};
+
+  \draw[dsledge] (node) -- (pred);
+  \draw[dsledge] (pred) -- (test);
+  \draw[dsledge] (test) -- node[above] {no} (no);
+  \draw[dsledge] (test) -- node[below] {yes} (yes);
+  \draw[dsledge] (yes) -- (out);
+  \draw[dslfeedback] (out.east) to[out=0, in=0] (no.east);
+\end{dslgraph}
+\caption{The control flow of \texttt{try\_apply}. The predicate is called
+exactly once; the transformer is called only if the predicate accepted.}
+\label{fig:rule-flow}
+\end{figure}
+
+Two paths leave \api{try_apply}. On the left, the predicate rejected the
+node and the function returns an empty optional. On the right, the
+transformer produced a replacement and the function returns an optional
+holding it. There is no third path: the transformer is not called when the
+predicate rejects, and there is no way for a rule to report an error other
+than by throwing.
+
+\section{Edge cases and limits}
+
+\paragraph{There is no \code{apply} and no \code{matches}.}
+The single method is \code{try_apply}. A user who wants a boolean test
+calls the public \code{pred} member; a user who wants to transform
+unconditionally calls the public \code{trans} member. Neither is wrapped.
+
+\paragraph{The tag is never read by the engine.}
+\code{RewriteRule::name} exists, is public, and is a constant expression.
+Nothing in the engine consults it: the engine calls \code{try_apply} and
+nothing else. The tag's real function is to distinguish rule \emph{types},
+which is what lets a rule set record its contents at compile time.
+
+\paragraph{Predicates and transformers are stored by value.}
+Both callables are copied into the rule. A rule that captures a large
+object by value carries that object; a rule that captures by reference
+carries a reference, and the referenced object must outlive the rule. A
+static rule set that captures a local variable by reference is a dangling
+reference waiting to happen.
+
+\paragraph{The transformer must return an \api{ASTNode}.}
+There is no \code{std::optional} return type on the transformer and no way
+to signal "leave this node alone". A transformer that returns the node it
+was given will be treated by the engine as having changed the node, which
+is what makes the engine's fixpoint test conservative. \chapref{ch:rewrite-sets}
+returns to this.
+
+\paragraph{The predicate is called once per node per pass.}
+There is no caching, no memoisation, and no short-circuit across rules. A
+predicate that is expensive is expensive once per node per pass, and the
+number of passes is the number of iterations of the fixpoint loop.
+
+\paragraph{No pattern variables, no unification, no substitution.}
+The toolkit's \api{pattern} of \chapref{ch:pattern-regex} is a compile-time
+string matcher and is not connected to the rewrite machinery. The
+e-graph subsystem of \chapref{ch:egraphs} does have variables and
+substitution, in the \code{?name} convention of its S-expression rules.
+
+\paragraph{No way to report a failure other than an exception.}
+A predicate or transformer that cannot proceed has two options: return
+\code{false}, meaning "this rule does not apply", or throw. There is no
+diagnostic channel, no error node, and no recovery.
+
+\paragraph{Node kinds are opaque strings.}
+Because the tag of an \api{ASTNode} is a runtime string, a predicate
+compares it against a string literal at every node it examines. The
+comparison is a \code{std::string} comparison, which for short tags is
+cheap but not free, and it happens once per rule per node per pass.
+
+\section{Closing}
+
+A rule in \DSLtk{} is a predicate and a transformer, stored by value, with
+a name that exists for the reader rather than for the engine. The engine
+knows only one thing about a rule: it can be asked whether it applies to a
+node, and if so what it would replace that node with. Everything else ---
+the shape of the tree the rule matches, the order in which rules are
+tried, the number of times they are tried --- is decided by the user and
+by the set that holds them. \chapref{ch:rewrite-sets} takes the rule and
+builds the set, the pass, and the fixpoint loop around it.

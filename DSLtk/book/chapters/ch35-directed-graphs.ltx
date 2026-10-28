@@ -1,0 +1,614 @@
+\chapter{Directed Graphs: Structure, Traversal, and DOT}
+\label{ch:directed-graphs}
+
+Almost every non-trivial domain-specific language has a graph hiding inside
+it. A dependency graph says which module must be built before which. A
+program graph says which instruction can reach which. A term graph, which
+is the subject of \chapref{ch:terms-and-reduction}, says which subterm
+occurs inside which. What these have in common is that they are
+\emph{shared}: the same node appears in several places at once, the same
+edge is traversed many times, and the identity of a node has to survive
+being referred to from somewhere else. A tree cannot represent that, and
+rebuilding a tree whenever the graph changes is not viable.
+
+DSLtk therefore provides a general-purpose directed graph. It is not
+attached to any of the language-construction machinery: the feature tag
+\code{dsl::Graphs} is an empty marker with no mixin at all, and
+\code{dsl::DirectedGraph} is a free-standing class that a program uses
+directly, like \code{std::vector}. That is a deliberate choice. A graph is
+a data structure, not a language feature, and the facilities that need one
+--- the term graph of the next chapter, for instance --- use it as an
+ordinary library type.
+
+The class is generic over two payload types, so it can carry any
+information the application wants on its nodes and its edges. The default
+is \code{std::string} for both. The rest of this chapter is about the three
+things that make the implementation interesting: the slot-based storage,
+which gives identifiers a lifetime guarantee that most graph libraries do
+not offer; the traversal routines, which are written to be iterative and to
+have precisely defined orders; and the \code{redirect} operation, which is
+the primitive that makes in-place rewriting possible.
+
+\section{The graph and the rest of the toolkit}
+
+It is worth being explicit about what \code{DirectedGraph} is not. DSLtk
+defines four feature tags in this area --- \code{dsl::Graphs},
+\code{dsl::Terms}, \code{dsl::TermRewriting} and \code{dsl::GraphReduction}
+--- and every one of them is an empty marker: a struct with a single empty
+\code{Mixin} template and no members at all. None of them contributes
+anything when it is mixed in, and none of them can be used to extend a DSL
+class.
+
+This is not an oversight but a deliberate statement about the relationship
+between these facilities and the language-construction machinery. The PEG
+subsystem, the rewrite feature and the expression template mixin are all
+\emph{opt-in components} of a DSL: a class opts in by listing a feature tag
+in its base clause, and the mixin then supplies members and operators. The
+graph is not like that. It is a data structure that a program uses
+directly, exactly as it would use \code{std::unordered_map}. Mixing it
+into a DSL would give every DSL an \code{add_node} member and a name
+collision with whatever the user had wanted to call it.
+
+The consequence is that the graph has to be good enough on its own rather
+than good enough as a component of something else. That is why it has
+stable identifiers, deterministic traversal orders, and a DOT exporter: it
+has to earn its place.
+
+\section{A worked example}
+
+The program below builds a small dependency graph, computes a topological
+order and a shortest path, runs both traversals, prints the graph as DOT,
+and then removes a node to show that identifiers are never recycled.
+
+\begin{lstlisting}[style=dslcpp,caption={Building a dependency graph and querying it.},label={lst:ch35-graph}]
+#include "DSLtk.hpp"
+
+#include <iostream>
+#include <string>
+
+int
+main ()
+{
+  dsl::DirectedGraph<std::string, std::string> graph;
+
+  auto core = graph.add_node ("core");
+  auto net = graph.add_node ("net");
+  auto util = graph.add_node ("util");
+  auto cli = graph.add_node ("cli");
+  auto doc = graph.add_node ("doc");
+
+  graph.add_edge (cli, core, "needs");
+  graph.add_edge (cli, net, "needs");
+  graph.add_edge (core, util, "needs");
+  graph.add_edge (net, util, "needs");
+  graph.add_edge (doc, util, "needs");
+
+  std::cout << "nodes: " << graph.node_count ()
+            << ", edges: " << graph.edge_count () << '\n';
+
+  std::cout << "topological order:";
+  for (auto id : graph.topological_sort ())
+    std::cout << ' ' << graph.value (id);
+  std::cout << '\n';
+
+  if (auto path = graph.shortest_path (cli, util))
+    {
+      std::cout << "shortest path:";
+      for (auto id : *path)
+        std::cout << ' ' << graph.value (id);
+      std::cout << '\n';
+    }
+
+  std::cout << "breadth first from cli:";
+  for (auto id : graph.breadth_first (cli))
+    std::cout << ' ' << graph.value (id);
+  std::cout << '\n';
+
+  std::cout << "depth first from cli:";
+  for (auto id : graph.depth_first (cli))
+    std::cout << ' ' << graph.value (id);
+  std::cout << '\n';
+
+  std::cout << "post-order depth first from cli:";
+  for (auto id : graph.depth_first (cli, true))
+    std::cout << ' ' << graph.value (id);
+  std::cout << '\n';
+
+  std::cout << "strongly connected components: " << graph.strongly_connected_components ().size ()
+            << '\n';
+
+  std::cout << graph.to_dot ("dependencies");
+
+  // Removing a node leaves a hole: identifiers are never recycled.
+  graph.remove_node (net);
+  auto late = graph.add_node ("late");
+  std::cout << "after removing net: node_count = " << graph.node_count ()
+            << ", the new node's id is " << late << '\n';
+
+  // dot_quote escapes the characters that would otherwise break a label.
+  std::cout << "quoted: " << dsl::dot_quote ("a \"quote\" and a\nnewline")
+            << '\n';
+
+  return 0;
+}
+\end{lstlisting}
+
+The output is:
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch35-graph}.},label={lst:ch35-output}]
+nodes: 5, edges: 5
+topological order: cli doc core net util
+shortest path: cli core util
+breadth first from cli: cli core net util
+depth first from cli: cli core util net
+post-order depth first from cli: util core net cli
+strongly connected components: 5
+digraph "dependencies" {
+  n0 [label="core"];
+  n1 [label="net"];
+  n2 [label="util"];
+  n3 [label="cli"];
+  n4 [label="doc"];
+  n3 -> n0 [label="needs"];
+  n3 -> n1 [label="needs"];
+  n0 -> n2 [label="needs"];
+  n1 -> n2 [label="needs"];
+  n4 -> n2 [label="needs"];
+}
+after removing net: node_count = 5, the new node's id is 5
+quoted: "a \"quote\" and a\nnewline"
+\end{lstlisting}
+
+Two of those lines are worth reading closely.
+
+The depth-first traversals differ in more than order. The pre-order
+traversal from \code{cli} visits \code{cli}, \code{core}, \code{util},
+\code{net}: it goes as deep as it can before backtracking. The post-order
+traversal visits \code{util}, \code{core}, \code{net}, \code{cli}: each node
+is reported only after all of its descendants. The two orders are the
+standard ones, but they are not the same order, and a program that uses one
+where it needs the other will produce subtly wrong answers.
+
+The last line shows the identifier guarantee. After \code{net} --- which had
+identifier 1 --- was removed, the graph still had four live nodes; adding
+one more produced identifier 5, not 1. The slot that \code{net} occupied is
+still there, holding nothing. This is what makes the graph safe to use as
+the backing store for a structure in which identifiers are handed out and
+referred to over a long period, such as the term graph of the next
+chapter.
+
+\section{The data model}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}L{0.31\textwidth}L{0.61\textwidth}@{}}
+\toprule
+\textbf{Member} & \textbf{Meaning} \\
+\midrule
+\code{contains (id)} &
+True if the node identifier refers to a live node. \\
+\code{contains_edge (id)} &
+True if the edge identifier refers to a live edge. \\
+\code{add_node (value)} &
+Appends a node carrying \code{value} and returns its identifier. \\
+\code{add\_edge (source, target, value = {})} &
+Appends an edge from \code{source} to \code{target} and returns its
+identifier. Both endpoints must exist. \\
+\code{value (id)} / \code{set_value (id, value)} &
+Read and write the payload of a node. \\
+\code{edge (id)} &
+The \code{Edge} record of an edge: \code{source}, \code{target} and
+\code{value}. \\
+\code{nodes ()} / \code{edges ()} &
+Dense vectors of the live identifiers, in ascending order. \\
+\code{node_count ()} / \code{edge_count ()} &
+The number of live nodes and live edges. \\
+\code{incoming (id)} / \code{outgoing (id)} &
+The identifiers of the edges incident to a node, in edge-insertion order. \\
+\code{successors (id)} / \code{predecessors (id)} &
+The identifiers of the neighbouring nodes, again in edge-insertion order. \\
+\code{remove_edge (id)} &
+Removes an edge and unlinks it from both of its endpoints. \\
+\code{remove_node (id)} &
+Removes a node, first removing every edge incident to it. \\
+\code{redirect (from, to)} &
+Retargets the edges that point \emph{into} \code{from} so that they point
+into \code{to} instead. \\
+\code{breadth_first (root)} &
+The nodes reachable from \code{root}, in breadth-first order. \\
+\code{depth_first (root, postorder = false)} &
+The nodes reachable from \code{root}, in depth-first order, pre-order or
+post-order. \\
+\code{topological_sort ()} &
+A topological order of the live nodes. Throws if the graph has a cycle. \\
+\code{shortest_path (source, target)} &
+The shortest path from \code{source} to \code{target}, or an empty optional
+if there is none. \\
+\code{strongly_connected_components ()} &
+The strongly connected components, each as a vector of identifiers. \\
+\code{to_dot (node_label, edge_label, name = "G")} &
+The graph in the Graphviz DOT language, with caller-supplied label
+functions. \\
+\code{to_dot (name = "G")} &
+The graph in DOT, with the payloads streamed through an
+\code{std::ostringstream} to produce the labels. \\
+\midrule
+\end{tabular}
+\caption{The API of \code{dsl::DirectedGraph}.}
+\label{tab:ch35-api}
+\end{table}
+
+The payload types are template parameters, so the graph may carry anything
+copyable and assignable. The edge payload is optional: \code{add_edge}
+defaults it to a value-initialised \code{EdgeValue}, which is an empty
+string for the default instantiation.
+
+\subsection{Slot-based storage}
+
+The internal representation is the interesting part of this class, and it
+is worth understanding because it explains several otherwise surprising
+behaviours.
+
+\begin{figure}[htbp]
+\begin{dslgraph}
+\node[anchor=south, font=\small\sffamily] at (5.5,3.9)
+  {\code{nodes_} : \code{std::vector<std::optional<Node>>}};
+\node[draw=nodefg, fill=nodebg, minimum width=2.0cm, minimum height=1.0cm,
+      font=\scriptsize\sffamily, align=center] (s0) at (0.6,2.7) {``alpha''};
+\node[draw=nodefg, fill=nodebg, minimum width=2.0cm, minimum height=1.0cm,
+      font=\scriptsize\sffamily, align=center] (s1) at (2.8,2.7) {``beta''};
+\node[draw=nodefg, fill=groupbg, dashed, minimum width=2.0cm,
+      minimum height=1.0cm, font=\scriptsize\sffamily, align=center] (s2) at (5.0,2.7) {removed};
+\node[draw=nodefg, fill=nodebg, minimum width=2.0cm, minimum height=1.0cm,
+      font=\scriptsize\sffamily, align=center] (s3) at (7.2,2.7) {``delta''};
+\node[draw=nodefg, fill=groupbg, dashed, minimum width=2.0cm,
+      minimum height=1.0cm, font=\scriptsize\sffamily, align=center] (s4) at (9.4,2.7) {removed};
+
+\node[below=2pt of s0, font=\scriptsize\sffamily] {id 0};
+\node[below=2pt of s1, font=\scriptsize\sffamily] {id 1};
+\node[below=2pt of s2, font=\scriptsize\sffamily] {id 2};
+\node[below=2pt of s3, font=\scriptsize\sffamily] {id 3};
+\node[below=2pt of s4, font=\scriptsize\sffamily] {id 4};
+
+\draw[dslfeedback] (s4.east) -- ++(0.7,0)
+  node[right, font=\scriptsize, align=left, text width=2.9cm]
+  {slots are never reused, so the next \code{add_node} returns id 5};
+\end{dslgraph}
+\caption{The slot-based storage of \code{DirectedGraph}. Nodes live in a
+vector of optionals; removing a node resets its slot and leaves a hole. The
+identifier of a node is its index, and because indices are never recycled
+an identifier that has been removed can never refer to a different node
+later.}
+\label{fig:ch35-slots}
+\end{figure}
+
+The graph stores its nodes in a \code{std::vector<std::optional<Node>>} and
+its edges in a \code{std::vector<std::optional<Edge>>}. A node identifier is
+simply the index of its slot, and an edge identifier is the index of its
+own slot. Each live node keeps two vectors of incident edge identifiers,
+one for the edges that point into it and one for the edges that point out
+of it.
+
+Three consequences follow, and all three are visible in
+Figure~\ref{fig:ch35-slots}.
+
+First, identifiers are \emph{stable}. A node's identifier never changes
+while the node lives, and it is never handed to a different node. This is
+the guarantee that makes the graph safe to use as the backing store for a
+structure whose sub-components are referred to by identifier --- which is
+exactly what the term graph of the next chapter does.
+
+Second, identifiers are \emph{not recycled}. Removing a node resets its
+slot and leaves a hole. The vector grows monotonically in the number of
+nodes that have ever been added, and the identifiers of a long-lived graph
+become sparse. This is a deliberate trade: the guarantee is worth more than
+the memory, because the alternative --- reusing slots -- would silently
+invalidate every identifier a caller was holding.
+
+Third, the dense accessors skip the holes. \code{nodes ()} and
+\code{edges ()} return only the live identifiers, in ascending order, and
+\code{node_count ()} and \code{edge_count ()} are their sizes. The
+identifier space itself is sparse.
+
+The error behaviour is uniform. \code{value}, \code{set_value},
+\code{incoming} and \code{outgoing} throw
+\code{std::out_of_range} with the message \code{"invalid graph node"} for
+an identifier that does not refer to a live node; \code{edge} throws
+\code{std::out_of_range} with the message \code{"invalid graph edge"};
+and \code{add_edge} validates both endpoints before it does anything.
+
+\section{Traversal}
+
+Both traversals start from a root and visit only the nodes reachable from
+it. They return a vector of identifiers.
+
+\code{breadth_first} is the simpler of the two. It uses the result vector
+itself as the queue, keeping an index into it, and marks nodes as seen at
+the moment they are enqueued. The order is therefore the textbook
+breadth-first order: all the nodes at distance one, then all the nodes at
+distance two, and so on.
+
+\code{depth_first} is written with an explicit stack of pairs, and the
+pair is what makes it support both orders. The first component of the pair
+is a node identifier; the second is a flag saying whether the node has
+already been expanded. The flag is what allows post-order to be expressed
+without recursion.
+
+\begin{pseudocode}[Depth-first search]
+\textbf{function} depth\_first (root, postorder)\\
+\quad pending = a stack containing the pair (root, not expanded)\\
+\quad seen = an empty set\\
+\quad result = an empty list\\
+\quad \textbf{while} pending is not empty\\
+\qquad id, expanded = pop from pending\\
+\qquad \textbf{if} expanded\\
+\qquad \qquad\qquad\qquad append id to result\\
+\qquad \qquad\qquad\qquad continue\\
+\qquad \textbf{if} id is already in seen\\
+\qquad \qquad\qquad\qquad continue\\
+\qquad \qquad\qquad\qquad insert id into seen\\
+\qquad \textbf{if} postorder\\
+\qquad \qquad\qquad\qquad push the pair (id, expanded) onto pending\\
+\qquad \textbf{else}\\
+\qquad \qquad\qquad\qquad append id to result\\
+\qquad \textbf{for} each successor of id taken in reverse order\\
+\qquad \qquad\qquad\qquad push the pair (successor, not expanded) onto pending\\
+\quad \textbf{return} result
+\end{pseudocode}
+
+Three properties of this implementation are worth stating precisely,
+because each of them is a decision rather than an accident.
+
+The stack discipline determines the visit order. The successors of a node
+are pushed in \emph{reverse} order, so that they pop off the stack in
+forward order and are visited left to right in the order the edges were
+added. A graph in which node \code{a} has successors \code{b} and
+\code{c}, in that insertion order, visits \code{b} before \code{c}.
+
+The \code{seen} set is updated at \emph{pop} time, not at push time. A node
+may therefore be pushed several times --- once for each edge that reaches
+it --- but it is expanded exactly once, and it appears exactly once in the
+result. The cost of this choice is that the stack can hold redundant
+entries; the benefit is that the marking happens at the moment the node is
+actually visited, which is what makes the traversal safe in the presence of
+cycles.
+
+Cycles are cut by the \code{seen} set. A back edge to an ancestor is
+simply ignored, because the ancestor has already been marked. Note the
+difference from a naive recursive implementation: in the recursive version
+the "visited" mark is usually placed on entry to the node, and a cycle back
+to an ancestor is detected by an explicit test against the recursion stack.
+Here the \code{seen} set does both jobs.
+
+The post-order flag is pushed \emph{before} the successors, so it sits
+underneath them on the stack and pops off after them. That is what makes
+the post-order output correct: a node is reported only once all of its
+descendants have been reported.
+
+The two orders can be read off the output of the listing. The pre-order
+traversal from \code{cli} reports \code{cli}, then \code{core}, then
+\code{util}, then \code{net}. It descends from \code{cli} into its first
+successor \code{core}, from \code{core} into \code{util}, and only then
+backtracks to \code{cli}'s second successor \code{net}. The post-order
+traversal reports the same nodes in the reverse order of their completion:
+\code{util} is finished first, then \code{core}, then \code{net}, and
+finally \code{cli}. A post-order traversal of a dependency graph visits a
+node only after everything it depends on, which is why it is the order a
+bottom-up analysis wants; a pre-order traversal is the order a top-down
+analysis wants.
+
+\section{Algorithms}
+
+\code{topological_sort} is Kahn's algorithm. It computes the in-degree of
+every live node --- the number of edges pointing into it --- and repeatedly
+emits a node whose in-degree has fallen to zero, decrementing the
+in-degree of its successors as it goes. The result is a vector of
+identifiers in which every edge points forwards.
+
+If the graph contains a cycle, the algorithm cannot exhaust the nodes, and
+the method throws \code{std::invalid_argument} with the message
+\code{"graph contains a cycle"}. Note that the check is on the \emph{number}
+of nodes emitted, so a self-loop is detected just as reliably as a longer
+cycle.
+
+\code{shortest_path} is a breadth-first search that remembers the parent
+of each node as it is discovered. When the target is reached, the parent
+chain is walked backwards and reversed. The result is the path from source
+to target inclusive, or an empty \code{std::optional} if the target is not
+reachable. Because the search is breadth-first, the path found is a
+shortest one in the unweighted sense; the method does not take edge
+weights, and the \code{EdgeValue} payload is not consulted.
+
+\code{strongly_connected_components} is Kosaraju's algorithm, written
+iteratively. The first pass performs a depth-first traversal over every
+node and records the nodes in post-order. The second pass walks that
+post-order backwards and expands each component through the
+\emph{predecessors} of its members --- that is, over the reversed graph.
+The two passes together identify every maximal set of nodes that can reach
+one another.
+
+The implementation of the first pass is the same stack-of-pairs pattern as
+\code{depth_first}, and the second pass is a breadth-first expansion over
+the predecessor lists. Both are iterative, so a graph with a million nodes
+in a chain will not overflow the call stack.
+
+\section{Redirection}
+
+\code{redirect (from, to)} is the operation that distinguishes this graph
+from a plain adjacency-list container, and it is the one that
+\chapref{ch:terms-and-reduction} builds on.
+
+\begin{pseudocode}[Redirecting the incoming edges of a node]
+\textbf{function} redirect (from, to)\\
+\quad \textbf{if} from equals to then return\\
+\quad \textbf{for} each edge e in the incoming list of from\\
+\qquad \qquad\qquad set the target of e to to\\
+\qquad \qquad\qquad append e to the incoming list of to\\
+\quad clear the incoming list of from
+\end{pseudocode}
+
+The operation retargets the edges that point \emph{into} \code{from} so
+that they point into \code{to} instead. Everything else is left alone.
+Specifically:
+
+The outgoing edges of \code{from} are untouched. \code{from} continues to
+point at whatever it pointed at.
+
+The outgoing edges of \code{to} are untouched. \code{to} does not gain any
+successors.
+
+The incoming list of \code{from} is cleared, because none of its edges
+point into it any more; the incoming list of \code{to} grows by exactly
+the number of retargeted edges.
+
+The source of each retargeted edge is unchanged, so the outgoing list of
+that source still correctly contains it.
+
+Redirecting a node to itself does nothing at all.
+
+This is precisely the operation needed to splice a replacement into a
+shared structure. If a node \code{r} is being rewritten and its
+replacement is a node \code{s}, then redirecting \code{r} to \code{s} makes
+every parent that pointed at \code{r} point at \code{s} instead, after
+which \code{r} itself can be removed. The parents' other children are
+untouched, and \code{r}'s own children are discarded along with it.
+
+It is worth walking through that pattern in detail, because it is what the
+next chapter builds on. Suppose a graph has three nodes: \code{p}, with an
+edge to \code{r}, and \code{r}, with an edge to \code{c}. Now suppose
+\code{r} is to be replaced by a new node \code{s}. Redirecting \code{r} to
+\code{s} moves the edge \code{p} to \code{r} over to \code{p} to
+\code{s}: the edge's target becomes \code{s}, and the edge is appended to
+\code{s}'s incoming list. The incoming list of \code{r} is now empty, and
+its outgoing edge to \code{c} is untouched. Removing \code{r} then deletes
+that outgoing edge and leaves \code{p} pointing at \code{s}. The parent's
+own identity is unchanged, and any other edge out of \code{p} is unchanged
+as well.
+
+The children of the discarded node do not survive: the edge from \code{r}
+to \code{c} is removed along with \code{r}. That is not an accident of the
+implementation but a semantic decision, and it is the right one for
+rewriting --- a rule that replaces a term replaces the whole term,
+arguments included --- but it does mean that a graph rewrite cannot be used
+to graft the children of the replaced node onto its replacement. A user
+who wants that behaviour has to rewire the edges explicitly.
+
+\section{DOT output}
+
+\code{to_dot} produces a Graphviz DOT document. The general form takes two
+callables --- one that renders a node's payload and one that renders an
+edge's payload --- and a graph name:
+
+\begin{lstlisting}[style=dsldot,caption={The DOT produced by Listing~\ref{lst:ch35-graph}.},label={lst:ch35-dot}]
+digraph "dependencies" {
+  n0 [label="core"];
+  n1 [label="net"];
+  n2 [label="util"];
+  n3 [label="cli"];
+  n4 [label="doc"];
+  n3 -> n0 [label="needs"];
+  n3 -> n1 [label="needs"];
+  n0 -> n2 [label="needs"];
+  n1 -> n2 [label="needs"];
+  n4 -> n2 [label="needs"];
+}
+\end{lstlisting}
+
+The node names in the output are \code{n} followed by the identifier, so
+they are stable and readable, and they correspond exactly to the
+identifiers the program uses. The convenience overload
+\code{to_dot (name = "G")} renders both labels by streaming the payloads
+through an \code{std::ostringstream}, which means it only compiles when
+both payload types are streamable.
+
+All of the label text goes through \code{dot_quote}, a free function that
+wraps the text in double quotes and escapes the characters that would
+otherwise terminate or corrupt the label: a double quote becomes
+\code{\textbackslash"}, a backslash becomes \code{\textbackslash\textbackslash},
+a newline becomes \code{\textbackslash n} and a carriage return becomes
+\code{\textbackslash r}.
+
+There is one inconsistency in that list, and it is worth knowing about
+because a label containing a tab will render differently from what one
+might expect: a tab is emitted as a \emph{raw} tab character rather than as
+the two-character escape \code{\textbackslash t}. Every other control
+character --- anything below the space character, and the delete character
+--- is rejected outright with \code{std::invalid_argument} and the message
+\code{"unsupported control character in DOT label"}. Rejecting them is
+better than escaping them, because DOT has no escape for them and a
+silent corruption of the output would be far worse than an exception.
+
+\section{Edge cases and limits}
+
+\begin{warnbox}[Identifiers are never recycled]
+Because identifiers are indices into a vector that only grows, a graph
+that is created and destroyed repeatedly will accumulate holes. The
+identifier space grows without bound even though the number of live nodes
+stays small, and the vectors holding the nodes and edges never shrink. For
+a graph that is built once and queried many times this is exactly what you
+want. For a graph that is used as a scratch buffer in a loop, it is a
+memory leak by construction.
+\end{warnbox}
+
+The remaining limits are these.
+
+\textbf{The traversals are not generic.} \code{breadth_first} and
+\code{depth_first} take a root and visit everything reachable from it.
+There is no way to traverse only the edges out of a set of roots, no way to
+stop early, and no visitor overload; a program that wants early exit has
+to call the method and discard the tail.
+
+\textbf{The orders are determined by edge-insertion order.} The successors
+of a node come back in the order the edges were added, and the traversals
+inherit that order. This is deterministic, but it means that reordering the
+edges reorders the traversals, and that the traversal order is not
+canonical in any sense.
+
+\textbf{There are no edge weights.} \code{shortest_path} is a
+breadth-first search, so it finds a path with the fewest edges. The
+\code{EdgeValue} payload is carried but never consulted, so a weighted
+shortest path has to be written by the user.
+
+\textbf{Parallel edges are allowed and are not collapsed.} Two edges
+between the same pair of nodes are two distinct edges with distinct
+identifiers, and both appear in the adjacency lists. This matters for
+\code{topological_sort}, whose in-degrees count edges rather than distinct
+predecessors; the counting is self-consistent, but a graph with many
+parallel edges has correspondingly large degrees.
+
+\textbf{Self-loops are allowed.} A self-loop contributes one to a node's
+in-degree and can never be discharged, so a graph containing one has no
+topological order and \code{topological_sort} throws. In
+\code{strongly_connected_components} a self-loop is harmless.
+
+\textbf{\code{remove_node} is not atomic with respect to its edges.} It
+removes the outgoing edges first and then the incoming ones, each of which
+unlinks the edge from both endpoints. The observable result is correct, but
+the intermediate state --- in which the node still exists and some of its
+edges do not --- would be visible to a concurrent observer. The class is
+not thread-safe in any case.
+
+\textbf{\code{redirect} does not check for a cycle.} Redirecting a node
+into its own descendant creates a cycle, which \code{topological_sort}
+will subsequently refuse. The class performs no reachability analysis of
+its own.
+
+\textbf{There is no \code{reserve}.} The vectors grow by doubling, and
+there is no way to tell the graph how many nodes it is about to hold.
+
+\section{Closing}
+
+\code{dsl::DirectedGraph} is a small, unremarkable graph library, and that
+is its virtue. It is a free-standing class rather than a language feature,
+it stores its nodes and edges in vectors of optionals so that identifiers
+are stable and never recycled, and it offers exactly the traversals that a
+compiler or a symbolic engine needs: breadth-first, depth-first in both
+orders, topological sort, unweighted shortest path and strongly connected
+components.
+
+The operation that gives it a character of its own is \code{redirect},
+which retargets a node's incoming edges without disturbing anything else.
+That is the primitive that lets a graph be edited in place while other
+parts of the program continue to hold identifiers to it --- and it is
+exactly what the term graph of the next chapter uses to implement
+rewriting over a shared structure.

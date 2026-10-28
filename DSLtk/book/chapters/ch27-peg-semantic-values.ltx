@@ -1,0 +1,551 @@
+\chapter{PEG Semantic Values and AST Construction}
+\label{ch:peg-semantic-values}
+
+\section{From Matches to Trees}
+
+The two PEG layers of \DSLtk{} produce matches: a span of text, the rule that
+recognised it, the channel it was routed into, and a position. What they do
+not produce is a tree. This is not an oversight in the implementation but a
+division of labour that the design makes explicit: the matching layer
+answers \emph{what was matched here}, and the question \emph{what does the
+whole thing mean} is the user's, to be answered by a semantic action.
+
+That answer has three possible shapes, and \DSLtk{} offers all three, at
+different levels of convenience. A hand-written recursive-descent parser
+built on \code{dsl::Parser<T>} makes the semantic value the parser's own
+result type, and the tree is assembled by the parser as it goes. A PEG
+grammar with actions makes the semantic value something the action
+manufactures from the match, usually by pushing and popping on a stack that
+the action closes over. The Earley parser of \chapref{ch:cfg-earley} builds
+the tree itself, as a by-product of the recognition algorithm, because the
+algorithm has to keep the partial derivations anyway.
+
+This chapter is about the middle option, and it is deliberately candid about
+its difficulties. The action model of the PEG layer is the simplest of the
+three to write and the most awkward to scale, and the reasons why are
+structural rather than incidental.
+
+\section{The Match Record}
+
+Everything an action can see is in \code{PEGMatch}, a plain aggregate with
+nine members and one method.
+
+\begin{table}[ht]
+\centering
+\caption{The members of \code{PEGMatch} (\code{DSLtk.hpp}, lines 8191--8210).
+The structure is copied by value wherever it is stored, so a match may be
+kept, but it carries no ownership of the text it describes.}
+\label{tab:ch27-match}
+\small
+\begin{tabular}{@{}L{0.16\textwidth}L{0.24\textwidth}L{0.45\textwidth}@{}}
+\toprule
+\textbf{Member} & \textbf{Type} & \textbf{Meaning} \\
+\midrule
+\code{value} & \code{std::string_view} & The matched text, as a view
+\emph{into the source}. It is not a copy, and it is not owned by the match.
+\\
+\code{begin} & \code{std::size_t} & The offset of the first matched
+character. \\
+\code{end} & \code{std::size_t} & The offset one past the last matched
+character. \\
+\code{rule} & \code{PEGRule *} & The rule that produced the match, or null
+for a wildcard match from the streaming matcher. \\
+\code{channel} & \code{PEGChannel} & The channel the match was routed into.
+\\
+\code{user_data} & \code{void *} & An untyped slot, null on entry. See
+Section~\ref{sec:ch27-userdata}. \\
+\code{line} & \code{std::size_t} & The one-based line of \code{begin}. \\
+\code{column} & \code{std::size_t} & The one-based column of
+\code{begin}. \\
+\code{ignored} & \code{bool} & True when the channel is
+\code{"@IGNORE"}. \\
+\code{length()} & \code{std::size_t} & \code{end - begin}. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The type of an action is \code{PEGSemanticAction}, an alias for
+\code{std::function<void (PEGMatch &)>}. It is attached to a rule through
+\code{PEGRule::semantic_action}, or supplied at the call site as the
+callback of a matcher arm.
+
+Three properties of the match record shape everything that follows.
+
+The \code{value} view is not owned. In the definition layer it is a
+substring of the \code{std::string_view} that was passed to \code{parse},
+so it points into the caller's buffer. The header describes
+it as valid only for the duration of the parse that produced it, which is
+conservative: it is valid exactly as long as the buffer the caller supplied
+is alive. If the caller passes a temporary \code{std::string}, the view
+dangles as soon as the parse returns, and an action that stores it -- in a
+tree, say -- stores a dangling pointer. Storing \code{std::string(m.value)}
+is the safe move, and it is what a tree-building action must do.
+
+The \code{rule} pointer is the only way back to the grammar. A match does
+not carry a tag, a name, or any other description of the rule beyond the
+pointer, so an action that wants to know \emph{which} kind of token it has
+seen must either compare the pointer against a rule it captured, or compare
+\code{m.value} against a string. Both work; the first is faster and the
+second is more robust, since a rule pointer is only stable while the
+grammar is not being modified.
+
+The \code{user_data} slot is null on entry and is never read by the
+subsystem. Section~\ref{sec:ch27-userdata} returns to it.
+
+\section{The Action Model}
+
+An action runs when its rule matches. In the definition layer it is
+\code{PEGDefinition::parse} that fires it, and the conditions are precise:
+the action runs unless the rule is negated and the rule's \code{fire_on_neg}
+flag is false. In the streaming matcher the action is the callback of the
+arm that fired; if the arm has no callback of its own, the rule's own
+semantic action is used instead.
+
+What the action can do is the subject of this section, and the answer has
+three parts.
+
+First, it can read the match. This is the ordinary case: the action reads
+\code{m.value}, or \code{m.length()}, or the position, and uses what it
+finds.
+
+Second, it can write to \code{m.user_data}. The slot exists for this
+purpose, and writing to it is well defined -- it is a plain
+\code{void *}. What writing to it does \emph{not} do is carry a value to the
+next match; Section~\ref{sec:ch27-userdata} explains why, and it is the
+single most common misconception about this layer.
+
+Third, it can mutate the match. The action receives a non-const reference,
+so it may change \code{m.value}, \code{m.begin}, \code{m.end},
+\code{m.channel} or \code{m.ignored}. Those changes are, however, local to
+the action. The definition layer discards the match as soon as the action
+returns, and the streaming matcher sets the cursor \emph{before} it runs the
+action, so a match whose \code{end} was changed does not move the cursor.
+Mutating a match is therefore a way of computing something and stowing it
+elsewhere, not a way of influencing the parse.
+
+That last point is the defining limitation of the whole model: an action
+fires \emph{after} the match is known. It cannot influence whether the rule
+matches, how much it consumes, or which rule is tried next. There is no
+mechanism in the PEG layers by which an action could refuse a match or
+request more input. Semantic actions are observers with side effects, not
+participants in the parse.
+
+\section{Actions and the Other Rule Hooks}
+
+The action is not the only way a rule can be given behaviour, and the two
+other hooks interact with it in ways that are easy to get wrong.
+
+\code{fire_on_neg} decides whether the action of a negated rule runs. By
+default it does not: a negated rule that succeeds has matched precisely
+because its pattern did \emph{not} match, and the text it has consumed is
+the single character the driver took to guarantee progress, so reporting it
+as a token would usually be wrong. Setting \code{fire_on_neg} makes the
+action run anyway, which is what Listing~\ref{lst:ch25-negated} does in
+order to report the character that a negated rule skipped over.
+
+\code{if_succeed} is a pointer to a second rule that is attempted at the
+same position once the first has matched, and whose own action runs if it
+matches. Two consequences follow. The second rule is attempted at the
+position of the first, not at the end of the first rule's match, so it sees
+the same text; and the second rule's match does not advance the cursor, so
+the pair consumes exactly what the first rule consumed. In effect
+\code{if_succeed} is a zero-width secondary observation, and it is the
+mechanism to use when one piece of text needs to be reported under two
+different labels -- a keyword that is also a valid identifier, say.
+
+Neither hook changes the matching behaviour, and neither can make a rule
+match that would not otherwise match. They are reporting hooks, and like
+the action itself they observe the parse rather than participate in it.
+
+\section{Building a Tree with a Stack}
+
+The way to build a tree from a flat token stream is a stack discipline, and
+the way to implement it in this layer is to close over the stack.
+
+The pattern has two kinds of action. A \emph{terminal} action pushes a leaf
+node. An \emph{operator} action pushes an operator marker. And a terminal
+action that finds an operator marker on top of the stack pops the marker
+and the left operand, and pushes the node that combines them. This is the
+classic shift-reduce construction, and it produces a left-associative tree.
+
+Listing~\ref{lst:ch27-tree} is a complete program that does this. The
+grammar is the expression grammar \code{Expr := Term ("+" Term)*} over
+tokens, and the result is a real \code{dsl::ASTNode} tree that is printed
+with \code{dump()}.
+
+\begin{lstlisting}[style=dslcpp,caption={Building an \code{ASTNode} tree from PEG matches. The stack is captured by every action, so it outlives any individual match.},label={lst:ch27-tree}]
+#include "DSLtk.hpp"
+
+#include <iostream>
+#include <string>
+#include <vector>
+
+int
+main ()
+{
+  // The semantic-value stack.  It is captured by every action, so it
+  // outlives any single match.
+  std::vector<dsl::ASTNode> stack;
+
+  auto grammar = dsl::create_peg_definition ();
+
+  {
+    auto &ws = grammar.add_rule<"[ \t\n]+"> (
+        [&stack] (dsl::PEGMatch &m)
+        {
+          // user_data is a scratch slot on this match only.
+          m.user_data = &stack;
+        });
+    ws.channel = dsl::PEGIgnoreChannel;
+  }
+  {
+    grammar.add_rule<"[0-9]+"> (
+        [&stack] (dsl::PEGMatch &m)
+        {
+          dsl::ASTNode rhs = dsl::leaf<"num">(m.value);
+          if (!stack.empty () && stack.back ().tag () == "op")
+            {
+              dsl::ASTNode op = stack.back ();
+              stack.pop_back ();
+              dsl::ASTNode lhs = stack.back ();
+              stack.pop_back ();
+              std::string tag = (op.value () == "+") ? "add" : "mul";
+              stack.push_back (dsl::ASTNode{ tag, { lhs, rhs } });
+            }
+          else
+            stack.push_back (rhs);
+        });
+  }
+  {
+    grammar.add_rule<"+"> (
+        [&stack] (dsl::PEGMatch &m)
+        { stack.push_back (dsl::leaf<"op">(m.value)); });
+  }
+  {
+    grammar.add_rule<"*"> (
+        [&stack] (dsl::PEGMatch &m)
+        { stack.push_back (dsl::leaf<"op">(m.value)); });
+  }
+
+  auto result = grammar.parse ("1 + 2 + 3 * 4");
+
+  std::cout << "parse " << (result.ok () ? "succeeded" : "failed")
+            << ", stack depth " << stack.size () << "\n";
+  std::cout << "tree: " << stack.back ().dump () << "\n";
+
+  return 0;
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch27-tree}. The tree is left-associative, which is what the flat token stream can express.},label={lst:ch27-tree-out}]
+parse succeeded, stack depth 1
+tree: (mul (add (add (num 1) (num 2)) (num 3)) (num 4))
+\end{lstlisting}
+
+The tree is exactly what the grammar says. \code{Expr := Term ("+" Term)*}
+with left recursion gives \code{(add (add (num 1) (num 2)) (num 3))}, and
+the multiplication, which the same flat construction folds in the same
+left-associative way, gives the outer \code{mul}. A grammar with
+precedence -- \code{Expr := Term ("+" Term)*}, \code{Term := Factor ("*"
+Factor)*} -- would require the reduction to happen in a different order,
+and the flat token stream cannot express that. This is the point at which
+the definition layer stops being enough, and the combinator layer of
+\chapref{ch:peg-combinators} takes over: there, the recursion is written
+out, and the tree falls out of the parser's own structure.
+
+The mechanics of the construction are worth spelling out, because they are
+the whole technique. The operator action pushes a node with the tag
+\code{"op"} and the operator as its value; the number action inspects the
+top of the stack, and if it finds an operator marker it pops the marker and
+the operand below it and pushes the combined node. The distinction between
+an operator marker and an operand is made by the tag, so the stack holds
+only \code{ASTNode} values and no side table is needed.
+
+The node is built with \code{dsl::ASTNode{tag, {lhs, rhs}}}, the
+two-argument constructor that takes a tag and a vector of children. The
+compile-time tagged factory \code{dsl::node<"add">(lhs, rhs)} cannot be used
+here, because the tag is only known at run time: the grammar distinguishes
+addition from multiplication by the text of the operator, and there is no
+compile-time string to hand to the template.
+
+The pseudocode below states the construction formally.
+
+\begin{pseudocode}[Building a tree with a value stack]
+\textbf{function} build (definition, text)\\
+\quad stack = empty \quad // a stack of ASTNode\\
+\quad \textbf{for each} match m \textbf{produced by} definition.parse(text) \textbf{do}\\
+\qquad \textbf{if} m is an operator \textbf{then}\\
+\qquad\quad push leaf("op", m.value) \textbf{onto} stack\\
+\qquad \textbf{else} \textbf{if} the top of stack is an operator \textbf{then}\\
+\qquad\quad op = pop(stack)\\
+\qquad\quad lhs = pop(stack)\\
+\qquad\quad push node(op.tag, lhs, leaf("num", m.value)) \textbf{onto} stack\\
+\qquad \textbf{else}\\
+\qquad\quad push leaf("num", m.value) \textbf{onto} stack\\
+\quad \textbf{return} the single node left on stack
+\end{pseudocode}
+
+Figure~\ref{fig:ch27-stack} shows the stack evolving as the input
+\code{1 + 2 + 3} is consumed.
+
+\begin{figure}[ht]
+\centering
+\begin{dslgraph}
+  \node[dslnode] (src) {the next match arrives};
+  \node[dslbox, below=8mm of src, text width=56mm] (st1) {\texttt{stack: [(num 1)]}};
+  \node[dslbox, below=5mm of st1, text width=56mm] (st2) {\texttt{stack: [(num 1), (op +)]}};
+  \node[dslbox, below=5mm of st2, text width=56mm] (st3) {\texttt{stack: [(add (num 1) (num 2))]}};
+  \node[dslbox, below=5mm of st3, text width=56mm] (st4) {\texttt{stack: [(add (num 1) (num 2)), (op +)]}};
+  \node[dslbox, below=5mm of st4, text width=56mm] (st5) {\texttt{stack: [(add (add (num 1) (num 2)) (num 3))]}};
+
+  \draw[dsledge] (src) -- node[right, font=\scriptsize] {number \texttt{1}} (st1);
+  \draw[dsledge] (st1) -- node[right, font=\scriptsize] {operator \texttt{+}} (st2);
+  \draw[dsledge] (st2) -- node[right, font=\scriptsize] {number \texttt{2}: pop 2, push 1} (st3);
+  \draw[dsledge] (st3) -- node[right, font=\scriptsize] {operator \texttt{+}} (st4);
+  \draw[dsledge] (st4) -- node[right, font=\scriptsize] {number \texttt{3}: pop 2, push 1} (st5);
+\end{dslgraph}
+\caption{The semantic-value stack during the reduction of \code{1 + 2 + 3}.
+A terminal pushes a leaf; a terminal that finds an operator on top of the
+stack pops the operator and the left operand and pushes the combined node.}
+\label{fig:ch27-stack}
+\end{figure}
+
+\section{The \code{user_data} Slot}
+\label{sec:ch27-userdata}
+
+The \code{user_data} member deserves a section of its own, because it is
+the one part of the match record that a reader is most likely to
+misunderstand.
+
+The slot is there, it is writable, and it is null on entry to every action.
+What it is not is a channel between matches. The definition layer builds a
+fresh \code{PEGMatch} for each match, fills in the fields it cares about,
+and hands it to the action; the match is then discarded when the action
+returns. Nothing copies it, nothing stores it, and the next match starts
+from a new record with \code{user_data} set to null. Writing a pointer
+into the slot therefore has no effect beyond the duration of the action.
+
+Listing~\ref{lst:ch27-userdata} demonstrates this directly.
+
+\begin{lstlisting}[style=dslcpp,caption={The \code{user_data} slot is a per-match scratch pad. The pointer written by the first action is not visible to the second.},label={lst:ch27-userdata}]
+#include "DSLtk.hpp"
+
+#include <iostream>
+
+int
+main ()
+{
+  int payload = 7;
+
+  auto grammar = dsl::create_peg_definition ();
+
+  {
+    auto &ws = grammar.add_rule<"[ \t\n]+"> ([] (dsl::PEGMatch &) {});
+    ws.channel = dsl::PEGIgnoreChannel;
+  }
+  grammar.add_rule<"[a-z]+"> (
+      [&] (dsl::PEGMatch &m)
+      {
+        std::cout << "first match, user_data = "
+                  << (m.user_data ? "set" : "null") << "\n";
+        m.user_data = &payload;
+        std::cout << "first match, user_data = "
+                  << (m.user_data ? "set" : "null") << " (written)\n";
+      });
+  grammar.add_rule<"[0-9]+"> (
+      [&] (dsl::PEGMatch &m)
+      {
+        std::cout << "second match, user_data = "
+                  << (m.user_data ? "set" : "null") << "\n";
+      });
+
+  auto result = grammar.parse ("ab 12");
+  std::cout << "parse " << (result.ok () ? "succeeded" : "failed") << "\n";
+  return 0;
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch27-userdata}.},label={lst:ch27-userdata-out}]
+first match, user_data = null
+first match, user_data = set (written)
+second match, user_data = null
+parse succeeded
+\end{lstlisting}
+
+The second action sees a null slot even though the first action wrote a
+pointer into it. The value did not travel.
+
+There is one place where a \code{PEGMatch} is copied and its
+\code{user_data} travels with it: the combinator layer. A
+\code{Parser<PEGMatch>} that produces a match, whose result is collected by
+\code{peg_many} or \code{peg_many1}, produces a vector or a pair of
+matches, and the slot is copied along with the rest of the record. A
+hand-written parser that sets \code{m.user_data} to point at a node can
+therefore propagate that node up through a repetition, and the consumer can
+recover the tree from the vector. This is the closest the toolkit comes to a
+typed semantic value in the PEG layers, and it is worth knowing about, but
+it is an accident of the copying rather than a designed facility.
+
+The practical consequence for tree building is simple: keep the semantic
+state in a variable that the action closes over, as
+Listing~\ref{lst:ch27-tree} does, and treat \code{user_data} as a scratch
+pad for values that are consumed within a single action.
+
+\section{Three Ways to Build a Tree}
+
+It is worth setting the PEG action model against the other two ways
+\DSLtk{} can produce a tree, because the differences are not ones of taste.
+
+A hand-written recursive-descent parser over \code{dsl::Parser<T>} makes
+the semantic value the parser's result type. The parser for a rule returns
+the subtree that the rule denotes, and the rule's parser combines the
+subtrees of its parts. The value is typed, statically, all the way down;
+there is no stack discipline to maintain by hand, and no tag strings to
+compare at run time. The price is that every rule is a function, the
+recursion is explicit, and the tree shape is whatever the composition of the
+parsers says it is. This is the approach of \chapref{ch:parser-core} and
+\chapref{ch:primitive-parsers}, and it is the right default.
+
+The PEG action model inverts the responsibility. The matching layer knows
+nothing about values; the user manufactures them from matches, usually with
+a stack. The advantage is that the matching layer is simple and the actions
+are ordinary C++ that can do anything. The cost is that the value has no
+type, the tree shape is implicit in the order the actions happen to fire,
+and the whole construction is a protocol between the grammar and the
+actions that only the author of both knows about.
+
+The Earley parser of \chapref{ch:cfg-earley} takes the third route. Its
+input is a vector of tokens rather than a string, it accepts a genuine
+context-free grammar with left recursion and ambiguity, and it returns the
+tree directly: \code{CFG::parse} fills in a \code{CFGParseResult} whose
+\code{tree} member is a \code{std::optional<ASTNode>}. The tree is built by
+the algorithm itself, because the algorithm keeps the partial derivations
+and the tree is what falls out of them. It handles far more grammars than
+either of the other two, and it costs more: the chart is quadratic in the
+worst case, the token vector must be built by a lexer you write yourself,
+and for an unambiguous grammar the Earley machinery is doing far more work
+than a recursive-descent parser would.
+
+The three routes are not exclusive, and the toolkit's own examples mix
+them. A natural pipeline for a language with a real grammar is to use the
+definition layer as a lexer -- it is fast, it is linear, and it produces
+tokens with positions -- to hand the resulting token vector to the Earley
+parser of \chapref{ch:cfg-earley}, which wants tokens rather than
+characters, and to keep the PEG actions for whatever the tokens mean
+outside the grammar. Another natural pipeline is to use the definition
+layer for the tokens and the combinator layer for the expression grammar on
+top of them, as \chapref{ch:peg-combinators} does; there the tree is
+assembled by the structure of the parser rather than by a stack discipline,
+and the actions of the definition layer are left with the job of
+classifying tokens.
+
+\begin{table}[ht]
+\centering
+\caption{Three ways to build a tree with \DSLtk{}.}
+\label{tab:ch27-compare}
+\small
+\begin{tabular}{@{}L{0.16\textwidth}L{0.22\textwidth}L{0.22\textwidth}L{0.25\textwidth}@{}}
+\toprule
+\textbf{Aspect} & \textbf{Recursive descent} & \textbf{PEG actions} &
+\textbf{Earley} \\
+\midrule
+Where the tree comes from & The parser's result type & The actions, by
+hand & The recognition algorithm \\
+\midrule
+Type of the value & \code{Parser<T>}, with \code{T} the subtree type &
+Untyped; a \code{void *} slot and a stack the action closes over &
+\code{std::optional<ASTNode>} \\
+\midrule
+Left recursion & Not supported & Not supported & Supported \\
+\midrule
+Ambiguity & Not applicable; the first match wins & Not applicable; ordered
+choice takes the first alternative & Resolved arbitrarily, to the first
+derivation discovered \\
+\midrule
+Precedence & Written into the parser structure & Written into the order of
+the reductions & Written into the grammar \\
+\midrule
+Cost & Linear, with recursion depth equal to the nesting depth &
+Linear, with a stack & At least quadratic in the worst case \\
+\midrule
+Best for & A language you control & A lexer with a small amount of
+structure & A grammar you did not write \\
+\midrule
+Verbosity & The most code & The least code & The least code \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Edge Cases and Limits}
+
+\paragraph{An action cannot influence the match.} The action fires after
+the match has been decided, the span has been fixed and the cursor has been
+advanced. In the streaming matcher the cursor is set before the action
+runs, so even a change to \code{m.end} has no effect on where the next
+match starts. There is no mechanism for an action to reject a match, to
+consume more input, or to request a different rule.
+
+\paragraph{\code{value} is a view, and it is easy to dangle.} The view
+points into the buffer the caller supplied to \code{parse}. If that buffer
+is a temporary, the view is dead as soon as the parse returns, and a tree
+that stored it would store a dangling pointer. Copy the text into the tree.
+
+\paragraph{\code{user_data} does not carry anything.} It is null on entry
+to every action and is never copied to the next match. See
+Section~\ref{sec:ch27-userdata}. Semantic state that must outlive a match
+belongs in a variable the action closes over.
+
+\paragraph{There is no left recursion.} Neither PEG layer can express a
+rule that refers to itself at the left, because matching is a linear scan
+with no recursion at all. A grammar such as \code{Expr := Expr "+" Term}
+cannot be written, and \code{Expr := Term ("+" Term)*} is the standard
+workaround -- with the consequence that the resulting tree is
+left-associative and that operator precedence must be encoded by the order
+of the reductions rather than by the grammar.
+
+\paragraph{The tree shape is a convention, not a guarantee.} Nothing in the
+subsystem checks that the actions of a grammar agree with each other. If
+one action pushes two nodes and another pops one, the stack is corrupted
+and the failure appears much later, as a malformed tree or an out-of-range
+access. The layer provides no consistency checking, and a malformed stack
+is not diagnosed at all.
+
+\paragraph{The rule pointer is unstable.} The pointer in
+\code{PEGMatch::rule} points into the definition's vector of rules, and
+that vector may be reallocated by a later \code{add_rule} call, as
+described in \chapref{ch:peg-definition}. An action that compares
+\code{m.rule} against a captured rule pointer is comparing against a
+pointer that may no longer designate that rule.
+
+\paragraph{Only the flat token stream is available.} The definition layer
+sees one token at a time, with no structure above it. A tree with more than
+one level of nesting has to be reconstructed by the actions, and the shape
+of the reconstruction is limited by the order in which the tokens arrive.
+A grammar with real precedence needs the combinator layer, where the
+recursion is written out.
+
+\paragraph{Positions are recomputed from the start.} The line and column
+of a match are computed by scanning the source text from its beginning, so
+a long input costs a quadratic amount of work in the position arithmetic
+alone, before any action runs.
+
+\paragraph{There is no error recovery.} An action cannot fail a parse, and
+there is no mechanism for skipping a bad token and carrying on. A parse
+that fails has failed, and whatever the actions built up to that point is
+discarded unless the caller kept it.
+
+\section{Closing}
+
+The PEG layers give you matches and spans and leave the tree to you. That
+separation is a real virtue in a lexer, where the tree is often not wanted
+at all, and a real limitation in a parser, where it usually is. The stack
+discipline of Listing~\ref{lst:ch27-tree} is the idiom that closes the gap:
+push terminals, push operators, reduce on the next terminal, and the tree
+assembles itself as the tokens arrive.
+
+The two things to keep in mind are the two limits that the design imposes
+rather than the programmer. An action observes; it does not participate. And
+the value a match carries is a view into somebody else's buffer, not a
+piece of the tree. Everything else -- how to type the values, how to shape
+the tree, how to get left recursion -- is a choice the user makes, and the
+three routes through \DSLtk{} make different choices.

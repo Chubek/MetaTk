@@ -1,0 +1,665 @@
+\chapter{The Preprocessor and Optional Lua}
+\label{ch:preprocessor}
+
+A preprocessor is a source-to-source pass. It runs over a piece of text,
+recognises a small vocabulary of directives, rewrites what it recognises,
+and hands the result to whatever comes next --- a lexer, a parser, or a
+human being. Every general-purpose programming language has one, and every
+domain-specific language eventually wishes it had one too, because a
+language that has to be recompiled in order to change a configuration
+constant is a language that is annoying to use.
+
+DSLtk's preprocessor is deliberately small, and its smallness is the point.
+It implements object-like and function-like macros, the six conditional
+directives, \texttt{\#define}, \texttt{\#undef}, \texttt{\#include}, \texttt{\#error}
+and a scripting hook, and it does all of that in about five hundred lines.
+What it does \emph{not} do is touch the filesystem or embed a scripting
+language. Both of those are delegated to the user through a pair of
+\code{std::function} members, and the library will not work at all until
+they are supplied.
+
+That division is worth dwelling on, because it is the design principle that
+runs through the whole of DSLtk. The library provides \emph{mechanism}; the
+embedding application provides \emph{policy}. A preprocessor that opened
+files itself would be unusable in a language server, in a build tool that
+wants virtual files, or in a sandbox. A preprocessor that embedded Lua
+would drag a scripting language into every program that used DSLtk. By
+exposing \code{std::function<std::string(std::string_view)> include} and
+\code{std::function<std::string(std::string_view, std::string_view)> script},
+the preprocessor stays a few kilobytes of header code while remaining
+usable in every one of those settings.
+
+The consequences of the policy separation are visible in the details. The
+resolver receives the path text of an \texttt{\#include} with its delimiters
+removed, and it cannot tell whether the original was written with quotes or
+with angle brackets --- the library does not distinguish them, because the
+only consumer of the answer is the user's resolver, and a resolver that
+wants to distinguish them can be given a path that encodes the difference.
+Likewise the scripting hook is asked for a language name and a body of code
+and must return a string; the library does not care which language that is,
+and in fact the only hook that ships with DSLtk is a Lua one, which is
+compiled in only when the user defines \code{DSLTK_ENABLE_LUA}.
+
+\section{A worked example}
+
+The program below defines a few macros, supplies an in-memory include
+resolver, and preprocesses a source string containing an include, two
+conditionals, a function-like macro, a comment and a string literal. It
+prints the result.
+
+\begin{lstlisting}[style=dslcpp,caption={Preprocessing a source string with macros, conditionals and an in-memory include.},label={lst:ch34-preprocess}]
+#include "DSLtk.hpp"
+
+#include <iostream>
+#include <map>
+#include <stdexcept>
+#include <string>
+
+int
+main ()
+{
+  dsl::Preprocessor pp;
+
+  // Object-like and function-like macros.
+  pp.define ("NAME", "world");
+  pp.define_function ("SQUARE", { "x" }, "((x) * (x))");
+  pp.define ("VERSION", "3");
+
+  // An in-memory include resolver.  The library never touches the
+  // filesystem; it just hands the path to this function.
+  std::map<std::string, std::string> files{
+      { "config.h", "#define ENABLED 1\n" },
+      { "greeting.h", "greeting NAME\n" },
+  };
+  pp.include = [&files] (std::string_view path) -> std::string
+    {
+      auto found = files.find (std::string (path));
+      if (found == files.end ())
+        throw std::runtime_error ("unknown include: " + std::string (path));
+      return found->second;
+    };
+
+  std::cout << "---- expand only ----\n";
+  std::cout << pp.expand ("SQUARE(NAME) and NAME\n");
+
+  std::string source =
+      "#include \"config.h\"\n"
+      "#include \"greeting.h\"\n"
+      "#if VERSION >= 3 && defined(ENABLED)\n"
+      "int value = SQUARE(4);\n"
+      "#elif VERSION == 2\n"
+      "int value = 2;\n"
+      "#else\n"
+      "int value = 0;\n"
+      "#endif\n"
+      "#ifdef ENABLED\n"
+      "const char *mode = \"enabled\";\n"
+      "#endif\n"
+      "#undef NAME\n"
+      "// a line comment mentioning NAME\n"
+      "const char *who = \"NAME is not expanded here\";\n";
+
+  std::cout << "---- processed ----\n";
+  std::cout << pp.process (source);
+
+  std::cout << "---- an unknown directive ----\n";
+  try
+    {
+      pp.process ("#pragma once\n");
+    }
+  catch (const std::exception &error)
+    {
+      std::cout << "caught: " << error.what () << '\n';
+    }
+
+  return 0;
+}
+\end{lstlisting}
+
+The output is:
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch34-preprocess}.},label={lst:ch34-output}]
+---- expand only ----
+((world) * (world)) and world
+---- processed ----
+greeting world
+int value = ((4) * (4));
+const char *mode = "enabled";
+// a line comment mentioning NAME
+const char *who = "NAME is not expanded here";
+---- an unknown directive ----
+caught: unknown preprocessor directive pragma
+\end{lstlisting}
+
+Five things in that output are worth pointing out, because each of them is a
+behaviour that a naive implementation would get wrong.
+
+The \texttt{\#include "config.h"} directive produces \emph{nothing} in the
+output. The included text is a \texttt{\#define}, and a \texttt{\#define}
+produces no output; it only changes the macro table. The macro
+\code{ENABLED} is nonetheless defined afterwards, which is why the
+\texttt{\#ifdef ENABLED} branch was taken.
+
+The \texttt{\#if VERSION >= 3 \&\& defined(ENABLED)} condition is true, and it
+is true because \code{VERSION} is an object-like macro whose replacement
+\code{3} is evaluated as an expression --- not because the preprocessor
+knows anything about version numbers.
+
+The function-like macro \code{SQUARE(4)} expands to \code{((4) * (4))}. The
+argument is substituted into the replacement text and the result is
+expanded again, so a macro whose body mentions another macro works as
+expected.
+
+The line comment mentioning \code{NAME} is copied verbatim, and so is the
+string literal. This is the single most important property of a
+preprocessor that operates on arbitrary text: a comment is not text, and a
+string literal is not text. A macro named \code{NAME} must not be expanded
+inside either of them. The implementation achieves this by handling
+comments and quoted strings before it ever looks for an identifier.
+
+Finally, \texttt{\#pragma} is not a directive this preprocessor knows, so it
+raises \code{"unknown preprocessor directive pragma"}. That is the honest
+behaviour for a directive that is not implemented: an error rather than
+silence.
+
+\section{The data model}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}L{0.26\textwidth}L{0.66\textwidth}@{}}
+\toprule
+\textbf{Member} & \textbf{Meaning} \\
+\midrule
+\code{PreprocessorMacro::replacement} &
+The replacement text of a macro. \\
+\code{PreprocessorMacro::parameters} &
+The parameter names of a function-like macro; empty for an object-like
+one. \\
+\code{PreprocessorMacro::function} &
+True for a function-like macro. \\
+\code{Preprocessor::macros} &
+The macro table, a public
+\code{std::unordered_map<std::string, PreprocessorMacro>}. It may be
+inspected and modified directly; \code{define} and \code{define_function}
+are conveniences over it. \\
+\code{Preprocessor::include} &
+The include resolver, a
+\code{std::function<std::string(std::string_view)>}. It receives the path
+text with its delimiters stripped and must return the text to insert. \\
+\code{Preprocessor::script} &
+The scripting hook, a
+\code{std::function<std::string(std::string_view, std::string_view)>}. It
+receives a language name and a body of code and must return a string. \\
+\code{Preprocessor::max_expansion_depth} &
+The limit on recursive macro expansion. Defaults to 100. \\
+\code{Preprocessor::max_include_depth} &
+The limit on nested \texttt{\#include} processing. Defaults to 32. \\
+\code{Preprocessor::define} &
+\code{define (name, replacement)} defines an object-like macro. \\
+\code{Preprocessor::define_function} &
+\code{define_function (name, parameters, replacement)} defines a
+function-like macro. \\
+\code{Preprocessor::expand} &
+\code{expand (source)} performs macro expansion only, with no directive
+processing. \\
+\code{Preprocessor::process} &
+\code{process (source, depth = 0)} performs the full pass: continuations,
+directives, conditionals, includes, scripting and macro expansion. \\
+\midrule
+\end{tabular}
+\caption{The public surface of \code{dsl::Preprocessor}.}
+\label{tab:ch34-api}
+\end{table}
+
+The two entry points are not redundant. \code{expand} is the pure macro
+expander, and it is what a user wants when the macros are known and the
+text is not a program --- in a documentation generator, or in a build
+system that wants to resolve constants in a configuration file.
+\code{process} is the full pass, and it is the one that understands
+directives.
+
+Two implementation details are private and worth knowing about only because
+they explain observable behaviour. The first is \code{in_comment_}, a
+boolean member that records whether a block comment is currently open. It
+persists across calls, which is what allows a file to be processed in
+pieces, and it is also why the comment state of an inactive conditional
+branch still has to be maintained (see below). The second is
+\code{Preprocessor::substitute}, a private member function that performs
+parameter substitution. It is unrelated to the free function
+\code{dsl::substitute} of \chapref{ch:terms-and-reduction}, which operates
+on terms and bindings; the two share a name and nothing else.
+
+\section{How the preprocessor works}
+
+\subsection{The pipeline}
+
+\begin{figure}[htbp]
+\begin{dslgraph}
+\node[dslsmall, fill=termbg] (src) at (0,0) {source\\text};
+\node[dslsmall, fill=nodebg] (cont) at (3.0,0) {join\\backslash-newline};
+\node[dslsmall, fill=nodebg] (lines) at (6.2,0) {split into\\lines};
+\node[dsldecision, fill=decisionbg, text width=18mm] (dir) at (9.6,0) {is it a\\directive?};
+\node[dslsmall, fill=nodebg] (handler) at (9.6,2.6) {directive\\handler};
+\node[dslsmall, fill=nodebg] (expand) at (9.6,-2.6) {macro expander\\\code{expand_impl}};
+\node[dslsmall, fill=nodebg] (cond) at (13.2,2.6) {conditional\\stack};
+\node[dslsmall, fill=termbg] (out) at (13.2,0) {output\\text};
+\node[dslsmall, fill=termbg] (res) at (6.2,4.4) {include resolver\\\code{user callback}};
+
+\draw[dsledge] (src) -- (cont);
+\draw[dsledge] (cont) -- (lines);
+\draw[dsledge] (lines) -- (dir);
+\draw[dsledge] (dir) -- node[right, font=\scriptsize] {yes} (handler);
+\draw[dsledge] (dir) -- node[right, font=\scriptsize] {no} (expand);
+\draw[dsledge] (handler) -- node[above, font=\scriptsize] {text} (out);
+\draw[dsledge] (expand) -- (out);
+\draw[dsledgedash] (handler) -- node[above, font=\scriptsize] {\#if} (cond);
+\draw[dsledgedash] (handler) -- node[above, font=\scriptsize] {\#include} (res);
+\draw[dsledgedash] (res) -- (lines);
+\end{dslgraph}
+\caption{The preprocessor pipeline. Source text is first stripped of
+backslash-newline continuations and then split into lines. A line whose
+first non-blank character is a hash is a directive and goes to the
+directive handler; everything else goes to the macro expander. The
+conditional stack records which branches are live. The include resolver is
+supplied by the user and its output re-enters the pipeline at the line
+splitter, which is what makes includes recursive; the depth of that
+recursion is bounded by \code{max_include_depth}.}
+\label{fig:ch34-pipeline}
+\end{figure}
+
+Figure~\ref{fig:ch34-pipeline} shows the shape of the whole pass. The
+source is first copied with backslash-newline sequences removed, so a
+directive may be spread over several physical lines. The result is then
+walked one line at a time. A line whose first non-blank character is a hash
+is a directive; every other line is passed through the macro expander and
+appended to the output.
+
+There is one subtlety in the handling of lines that are not directives.
+When the current conditional branch is \emph{inactive}, the line is still
+fed through the macro expander, but with every macro name pre-disabled and
+the result discarded. The purpose is not expansion at all; it is to keep
+the block-comment state consistent. A \code{/*} inside a disabled branch
+must still open a comment, or the text after the \texttt{\#endif} would be
+misparsed.
+
+\subsection{The macro expander}
+
+The expander is a single left-to-right scan. At each position it asks what
+kind of thing it is looking at, and it handles the cases in an order that
+matters: comments and strings first, identifiers last.
+
+\begin{pseudocode}[Expanding an identifier]
+\textbf{function} expand\_impl (source, disabled, depth)\\
+\quad if depth is greater than the limit then fail with a depth error\\
+\quad out = empty text\\
+\quad i = 0\\
+\quad \textbf{while} i is less than the length of source\\
+\qquad \textbf{if} a block comment is open\\
+\qquad \qquad\qquad copy through the closing delimiter and clear the flag\\
+\qquad \textbf{else if} the rest of the line is a line comment\\
+\qquad \qquad\qquad copy the rest of the line and stop\\
+\qquad \textbf{else if} source[i] opens a quoted string\\
+\qquad \qquad\qquad copy the string verbatim, honouring backslash escapes\\
+\qquad \textbf{else if} source[i] begins an identifier\\
+\qquad \qquad\qquad read the whole identifier\\
+\qquad \qquad\qquad \textbf{if} it names a macro that is not disabled\\
+\qquad \qquad \qquad\qquad \textbf{if} the macro is function-like\\
+\qquad \qquad \qquad\qquad\qquad scan the argument list\\
+\qquad \qquad \qquad\qquad\qquad \qquad substitute the parameters\\
+\qquad \qquad \qquad\qquad\qquad \qquad i = past the argument list\\
+\qquad \qquad \qquad\qquad\qquad disable the macro name\\
+\qquad \qquad \qquad\qquad\qquad \qquad out = out plus expand(replacement)\\
+\qquad \qquad \qquad\qquad\qquad re-enable the macro name\\
+\qquad \qquad \qquad\qquad \textbf{else}\\
+\qquad \qquad \qquad\qquad\qquad disable the macro name\\
+\qquad \qquad \qquad\qquad\qquad \qquad out = out plus expand(replacement)\\
+\qquad \qquad \qquad\qquad\qquad re-enable the macro name\\
+\qquad \qquad \qquad\qquad \textbf{else}\\
+\qquad \qquad \qquad\qquad\qquad out = out plus the identifier\\
+\qquad \textbf{else}\\
+\qquad \qquad\qquad out = out plus source[i] and advance i\\
+\quad \textbf{return} out
+\end{pseudocode}
+
+Two features of this scan are worth spelling out.
+
+The first is the \emph{disabled} set. Before a macro's replacement is
+expanded, the macro's own name is inserted into the set, and it is removed
+again afterwards. A macro whose replacement mentions the macro itself ---
+\texttt{\#define SELF SELF} --- therefore expands to the literal text
+\code{SELF} and terminates. The same mechanism breaks mutual recursion:
+with \texttt{\#define A B} and \texttt{\#define B A}, expanding \code{A}
+yields \code{A}. The alternative, a special case for self-reference, would
+handle only the trivial case; the set handles the general one.
+
+The second is that the depth counter is checked on entry to
+\code{expand_impl}. Each nested expansion increments it, so a long chain of
+distinct macros eventually trips the limit and the preprocessor throws
+\code{"macro expansion depth exceeded"}. Note that the disabled set will
+usually stop a recursion first: \texttt{\#define X X} never reaches the
+depth limit, because the disabled set stops it at the second expansion. The
+limit exists for chains of \emph{distinct} macros.
+
+\subsection{Function-like macros}
+
+A function-like macro is invoked only if the next non-space character after
+its name is a left parenthesis. If it is not, the name is copied through
+unchanged, which is why \code{F} and \code{F (1)} behave differently when
+\code{F} is defined with parameters: the first is not an invocation, the
+second is.
+
+The argument list is scanned with a nesting counter. A left parenthesis
+increments the counter and a right parenthesis decrements it; a comma
+splits an argument only when the counter is one. Quoted strings are skipped
+over whole, so a comma inside a string does not split an argument and a
+parenthesis inside a string does not affect the nesting. Each argument is
+then trimmed of surrounding whitespace.
+
+If the macro has no parameters and the argument list turns out to be a
+single empty argument --- the text \code{F()} --- the argument list is
+cleared, so that the macro is called with zero arguments rather than one.
+Otherwise the argument count must equal the parameter count, or the
+preprocessor throws \code{"macro argument count mismatch for X"}, where
+\code{X} is the macro's name. An argument list that is never closed throws
+\code{"unterminated macro invocation"}.
+
+Arguments are macro-expanded before substitution, and the substituted
+replacement is then macro-expanded in turn. That ordering is what makes
+\code{SQUARE(NAME)} expand to \code{((world) * (world))} in the example
+above: the argument \code{NAME} is expanded to \code{world} first, then
+substituted into the body, and the body is expanded again.
+
+The substitution itself is performed by the private
+\code{Preprocessor::substitute}, which scans the replacement text and
+replaces every identifier that matches a parameter name, skipping over
+quoted strings. It is a plain textual substitution: the parameter value is
+inserted verbatim, and it is the subsequent expansion pass that gives the
+value its meaning.
+
+\subsection{Conditionals}
+
+The conditional directives are \texttt{\#if}, \texttt{\#ifdef}, \texttt{\#ifndef},
+\texttt{\#elif}, \texttt{\#else} and \texttt{\#endif}. Their state is a stack of
+branches, each of which records four booleans: whether the enclosing
+branch was active when this one was pushed (\code{parent}), whether any
+branch of this conditional has been taken (\code{taken}), whether this
+branch is currently active (\code{active}), and whether an \texttt{\#else}
+has been seen (\code{seen_else}).
+
+\texttt{\#ifdef NAME} is true when \code{NAME} is in the macro table, and
+\texttt{\#ifndef NAME} is its negation. Neither consults the disabled set,
+so a macro that is currently being expanded still counts as defined.
+
+\texttt{\#if} evaluates an expression with a small recursive-descent
+evaluator. The grammar it accepts is:
+
+\begin{itemize}
+\item the negation \code{!};
+\item parenthesised expressions;
+\item \code{defined(X)} and \code{defined X};
+\item identifiers, which are either macros or zero;
+\item signed integer literals in decimal or hexadecimal;
+\item the comparisons \code{==}, \code{!=}, \code{<=}, \code{>=},
+\code{<} and \code{>};
+\item conjunction \texttt{\&\&} and disjunction \texttt{\|\|}.
+\end{itemize}
+
+An identifier that names an object-like macro is evaluated by recursively
+evaluating the macro's replacement as an expression, with the macro's own
+name added to the disabled set. So \texttt{\#define VERSION 3} makes
+\texttt{\#if VERSION >= 3} work, and \texttt{\#define FLAG (1 < 2)} works too.
+An identifier that names a function-like macro, that names a macro which is
+currently disabled, or that names nothing at all, evaluates to zero.
+
+Integer literals may carry a sign and may be written in hexadecimal with a
+\code{0x} prefix. There is no octal syntax.
+
+The evaluator does not short-circuit: the right-hand side of \texttt{\&\&} and
+\texttt{\|\|} is always evaluated. Since the only values are integers this
+cannot cause a fault, but it does mean that a \texttt{\#if} expression
+mentioning a macro with an undefined expansion will throw rather than
+evaluate to false.
+
+If the evaluator does not consume the whole expression text it throws
+\texttt{"unsupported \#if expression"}. Other failures are
+\texttt{"missing ')' in \#if"}, \code{"invalid defined expression"},
+\texttt{"expected integer or identifier in \#if"} and
+\texttt{"invalid \#if integer"}.
+
+The errors thrown by the conditional machinery itself are
+\code{"unmatched or duplicate conditional branch"} for a second
+\texttt{\#else} or an \texttt{\#elif} after an \texttt{\#else},
+\texttt{"unmatched \#endif"} for an \texttt{\#endif} with nothing open, and
+\code{"unterminated preprocessor conditional"} for a conditional that is
+still open when the source ends.
+
+\subsection{The directives}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}L{0.20\textwidth}L{0.30\textwidth}L{0.42\textwidth}@{}}
+\toprule
+\textbf{Directive} & \textbf{Form} & \textbf{Effect} \\
+\midrule
+\texttt{\#define} &
+\texttt{\#define NAME text} &
+Defines an object-like macro whose replacement is \code{text}. The text is
+\emph{not} expanded at definition time. \\
+\texttt{\#define} &
+\texttt{\#define NAME(a, b) text} &
+Defines a function-like macro. The parameter list must be parenthesised
+with no space between the name and the left parenthesis, otherwise the
+definition is object-like. \\
+\texttt{\#undef} &
+\texttt{\#undef NAME} &
+Removes the macro if it is defined; otherwise does nothing. \\
+\texttt{\#if} &
+\texttt{\#if expression} &
+Begins a conditional. The expression is evaluated with the evaluator
+described above. \\
+\texttt{\#ifdef} &
+\texttt{\#ifdef NAME} &
+Begins a conditional that is true when \code{NAME} is defined. \\
+\texttt{\#ifndef} &
+\texttt{\#ifndef NAME} &
+Begins a conditional that is true when \code{NAME} is not defined. \\
+\texttt{\#elif} &
+\texttt{\#elif expression} &
+An alternative branch, considered only if no earlier branch of the same
+conditional was taken. \\
+\texttt{\#else} &
+\texttt{\#else} &
+The final alternative branch of a conditional. \\
+\texttt{\#endif} &
+\texttt{\#endif} &
+Closes a conditional. \\
+\texttt{\#include} &
+\texttt{\#include "path"} or \texttt{\#include <path>} &
+Expands the directive text, requires it to be quoted or angle-bracketed,
+and inserts the text returned by the user's \code{include} resolver. The
+included text is processed recursively. \\
+\texttt{\#lua} &
+\texttt{\#lua code} &
+Calls the \code{script} hook with the language \code{"lua"} and the
+remaining text as the code. \\
+\texttt{\#script} &
+\texttt{\#script language code} &
+Calls the \code{script} hook with the given language and the remaining text
+as the code. \\
+\texttt{\#error} &
+\texttt{\#error text} &
+Throws \code{std::runtime_error} carrying the text. \\
+anything else &
+&
+Throws \code{"unknown preprocessor directive X"}. In particular there is
+\textbf{no} \texttt{\#warning} and \textbf{no} \texttt{\#pragma}. \\
+\midrule
+\end{tabular}
+\caption{Every directive the preprocessor understands.}
+\label{tab:ch34-directives}
+\end{table}
+
+Two details of the \texttt{\#define} directive are easy to get wrong. The
+replacement text is not expanded when the macro is defined; it is expanded
+each time the macro is used. This is the same lazy semantics as C, and it
+is what allows a macro to be defined before the macros it mentions. The
+second detail is that the parameter list must follow the name immediately.
+\texttt{\#define F (x) body} defines an \emph{object-like} macro whose
+replacement is the text \code{(x) body}, because the directive parser
+looks at the very next character after the name to decide whether a
+parameter list is present.
+
+The \texttt{\#include} directive deserves a note of its own, because the
+policy separation is most visible here. The directive's text is macro
+expanded first, so \texttt{\#include HEADER} works if \code{HEADER} is a
+macro whose value is a quoted path. The expanded text must then be a
+quoted string or an angle-bracketed name; if it is neither, or if no
+resolver has been installed, the preprocessor throws
+\texttt{"\#include requires a resolver and a quoted or angle-bracket path"}.
+The resolver receives the path with its delimiters removed --- the text
+\code{"config.h"} and the text \code{<config.h>} both arrive as
+\code{config.h} --- and must return the text to insert. That text is then
+processed recursively through the whole pipeline, so an included file may
+itself contain directives, conditionals and includes. The recursion is
+bounded: a call at depth greater than \code{max_include_depth} throws
+\code{"preprocessor include depth exceeded"}.
+
+\section{The Lua bridge}
+
+DSLtk ships exactly one script hook implementation, and it is compiled in
+only when the user defines \code{DSLTK_ENABLE_LUA} and links against a
+Lua library. The hook is a factory function that takes the user's
+\code{lua_State} and returns a callable suitable for assignment to
+\code{Preprocessor::script}.
+
+\begin{lstlisting}[style=dslcpp,caption={Installing the Lua hook. This fragment requires \code{DSLTK_ENABLE_LUA} and a Lua library; it is not part of the compiled program above.},label={lst:ch34-lua}]
+#if defined(DSLTK_ENABLE_LUA)
+#include <lua.hpp>
+#include <iostream>
+
+#include "DSLtk.hpp"
+
+int
+main ()
+{
+  lua_State *state = luaL_newstate ();
+  dsl::Preprocessor pp;
+  pp.script = dsl::lua_script_hook (state);
+
+  // The body of the directive is handed to Lua and must return a string.
+  std::cout << pp.process ("#lua return 'hello '\n");
+
+  lua_close (state);
+  return 0;
+}
+#endif
+\end{lstlisting}
+
+The hook behaves as follows. It rejects a null state, and it rejects any
+language other than \code{"lua"}, with the message
+\code{"invalid Lua script backend"}. It then saves the current stack top
+with \code{lua_gettop} and installs a small RAII guard that restores it
+with \code{lua_settop} when the call returns --- on success and on
+failure alike, so that a failing script cannot leave junk on the caller's
+stack. The code is compiled with \code{luaL_loadbuffer} and run with
+\code{lua_pcall} expecting one result. If either step fails, the hook
+throws \code{std::runtime_error} carrying the message from
+\code{lua_tostring (state, -1)}. Finally, the result must be convertible
+to a string; if it is not, the hook throws
+\code{"Lua preprocessing must return a string"}.
+
+The user owns the state. The hook does not create it, does not close it,
+and does not keep a reference to it beyond the lifetime of the closure.
+
+It is worth being explicit about what the Lua bridge is \emph{not}. It is
+not a macro-expansion callback: there is no hook that is invoked when a
+macro is expanded, and no way to compute a macro's replacement in Lua.
+The only place a script can be invoked is a \texttt{\#lua} or \texttt{\#script}
+directive, and its result is treated as ordinary text that is then
+macro-expanded before being added to the output.
+
+\section{Edge cases and limits}
+
+\begin{warnbox}[The preprocessor is a text processor and not a parser]
+The preprocessor has no notion of the language it is preprocessing. It
+recognises comments and quoted strings because those are lexically
+recognisable in almost every language, but it does not know about raw
+strings, nested comments, or languages in which \texttt{\#} is an ordinary
+character. A C++ raw string literal \texttt{R"(...\#define X...)"} will be
+mangled, and a language that uses \texttt{\#} for something other than a
+directive will be mangled too.
+\end{warnbox}
+
+The remaining limits are these.
+
+\textbf{Directives are line-oriented.} A directive must be the first
+non-blank thing on its line. There is no way to write a directive in the
+middle of an expression, and there is no block form of \texttt{\#if}. The
+only escape from the line rule is the backslash-newline continuation,
+which is stripped before anything else happens, so a directive may be
+spread over several lines.
+
+\textbf{The preprocessor never sees the language.} Because it works on
+text, it cannot know that a macro name occurring inside a comment-like
+construct of the target language is not a comment. Languages with nested
+block comments, or with a syntax in which \code{/*} appears inside a
+string, will confuse it.
+
+\textbf{There is no \texttt{\#warning} and no \texttt{\#pragma}.} Both fall
+through to the unknown-directive error. This is a deliberate choice: a
+preprocessor that silently ignored \texttt{\#pragma} would hide typos, and one
+that implemented \texttt{\#warning} would need a warning channel that the
+library does not otherwise have.
+
+\textbf{Macros are not hygienic.} A macro's replacement is substituted
+textually, so a parameter whose value happens to contain the name of
+another macro will be expanded. There is no gensym mechanism and no
+hygienic capture.
+
+\textbf{There is no \texttt{\#} stringification and no token pasting.} The
+replacement text is not re-tokenised, so there is no way to build a macro
+name from its arguments.
+
+\textbf{The script hook must return a string, and the result is
+re-expanded.} A script that returns a number, a table or nothing at all
+raises \code{"Lua preprocessing must return a string"}. The returned text
+is macro-expanded before it reaches the output, so a script cannot be used
+to inject text that must survive expansion.
+
+\textbf{The comment state leaks between calls.} Because \code{in_comment_}
+is a member and not a local, calling \code{process} on a fragment that ends
+inside a block comment leaves the preprocessor in a state where the next
+call will treat its first characters as comment text. There is no public
+way to reset it.
+
+\textbf{There is no way to report errors with a line number.} Every
+diagnostic is a message with no position information. This is a significant
+limitation for a tool that wants to point at the offending line.
+
+\textbf{The output preserves the input's line structure only
+approximately.} Directive lines are removed entirely, ordinary lines are
+copied with their newline, and an included file's text is inserted at the
+point of the \texttt{\#include}. The result is that the output's line
+numbering does not necessarily correspond to the input's.
+
+\section{Closing}
+
+DSLtk's preprocessor is a small, sharp tool. It does macros properly ---
+including function-like macros with nested argument lists, proper
+substitution order and a termination guarantee --- and it does conditionals
+with a real expression evaluator rather than a textual hack. What it
+deliberately does not do is anything that would require the library to make
+a policy decision on the user's behalf: it opens no files and it embeds no
+scripting language. Both are delegated through a pair of function objects,
+and the Lua bridge is the one implementation of the latter that ships.
+
+The pattern --- a mechanism in the library, a policy in the embedding
+application --- is the same pattern that the whole of DSLtk follows, and it
+is why a header-only toolkit can offer an \code{IO} abstraction, a
+visitor framework and a graph library without any of them dictating how the
+host application should be structured.
+
+The next chapter turns to the last of DSLtk's data structures: the
+directed graph, with stable node identifiers, breadth-first and depth-first
+traversal, topological sorting, shortest paths, strongly connected
+components and a DOT exporter.

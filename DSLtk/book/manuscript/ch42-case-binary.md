@@ -1,0 +1,369 @@
+# Case Study V: A Binary Protocol Toolchain
+
+## The problem: a record format and a transport are different layers
+
+The final case study constructs a small binary protocol toolchain. A frame
+contains an ASCII-like identifier such as `sensor_7`. The encoder writes a
+magic value, version, length, payload, and checksum. The decoder validates
+the record and returns an owned `Frame`. A deliberately short-transfer
+backend exercises the I/O adapter's completion loops.
+
+DSLtk provides `BinaryStream`, explicit-endian integer operations,
+`StaticRegex`, codec adapters, and byte I/O adapters. The application defines
+the wire format, length bound, identifier vocabulary, checksum, and decode
+transaction. No single toolkit type supplies the whole protocol. The
+interesting work is composing the boundaries so a complete transfer does
+not get confused with a valid frame.
+
+The example uses an in-memory backend to make every transfer deterministic.
+Reads return at most two bytes and writes at most three. Even a fourteen-byte
+frame therefore requires several operations. This is more revealing than a
+backend that always completes the entire requested span in one call, because
+it tests the partial-progress behavior that the adapter is intended to handle.
+
+## The wire format
+
+| Field | Width | Encoding |
+|---|---|---|
+| Magic | Two bytes | ASCII `D`, `T` |
+| Version | One byte | Unsigned value 1 |
+| Payload length | Two bytes | Unsigned big endian |
+| Payload | Declared length | Lowercase identifier bytes |
+| Checksum | One byte | Sum of payload bytes modulo 256 |
+
+The payload must match `[a-z][a-z0-9_]*` and contain at most sixty-four
+bytes. The regex requires a nonempty identifier beginning with a lowercase
+letter. The format uses bytes, not Unicode characters. An application needing
+Unicode identifiers would need a different vocabulary and length policy,
+including a decision about whether its length counts bytes or decoded code
+points.
+
+The checksum is a small accidental-corruption check chosen for transparency.
+It is not an authentication mechanism, and the case study makes no security
+claim about it. Its role here is to demonstrate a trailer that must be
+validated after the payload has been read. A stronger checksum or authenticated
+format could replace it without changing the adapter layering.
+
+## Encoding validates before it emits
+
+The codec first checks the payload length and whole-string regex. Only then
+does it write the magic, version, big-endian length, payload bytes, and
+checksum. This ordering avoids emitting a partial record for a payload that
+is already known to violate the format. A complex encoder could instead
+stage an entire record and publish it after all validation succeeds.
+
+The length is cast to a sixteen-bit integer only after checking the much
+smaller sixty-four-byte bound. The bound therefore justifies the conversion.
+Writing the integer with explicit big endian makes the wire representation
+independent of the host machine's byte order. The payload itself is a byte
+view of the string and is appended to the owned stream buffer.
+
+`BinaryStream::write` appends; it does not write at the read cursor. The
+encoder starts with an empty stream, so this behavior naturally constructs
+the complete record. The cursor remains available for a subsequent decoding
+pass over the same buffer. Treating the object as a conventional seekable
+file with one read/write position would lead to different expectations.
+
+## Decoding is a cursor transaction
+
+The decoder saves the input cursor before reading any field. It checks the
+magic and version, reads the declared length, enforces the bound, reads the
+payload, validates the identifier, and checks the checksum. Only after all
+checks succeed does it return the decoded frame. On any exception it restores
+the saved cursor and rethrows.
+
+This rollback policy is possible because the input is already buffered in a
+`BinaryStream`. A nonseekable external transport could not generally undo
+consumed bytes without retaining them. The application deliberately separates
+transport loading from record decoding so the decoder's transactional
+contract is simple and testable.
+
+Restoring the cursor does not mean all arbitrary side effects are rolled
+back. The decoder in this case only creates local values and reads the
+buffer, so cursor restoration is enough. A decoder that updated a global
+registry before checksum validation would need a broader transaction policy.
+As in the configuration case study, delayed publication is easier to reason
+about than undoing every intermediate side effect.
+
+## Borrowed spans become an owned payload
+
+`read(length)` returns a view into the stream's byte vector. The decoder
+constructs an owned string from that view before returning. The resulting
+`Frame` does not depend on the input stream remaining alive or unchanged.
+The view is used only while the buffer is stable during decoding.
+
+This copying decision is intentional. A zero-copy frame type could retain
+an owner for the input buffer and store a span or offset range, but that
+would change the frame's lifetime contract. For a payload capped at sixty-four
+bytes, the simple owned representation is easy to audit. Optimization should
+follow evidence that this copy matters rather than silently introducing
+borrowed state into an apparently self-contained result.
+
+The checksum iterates through unsigned byte values, avoiding signed-character
+interpretation. The accumulator is reduced modulo 256 when producing the
+eight-bit checksum. The payload vocabulary is ASCII-like, but explicit
+unsigned treatment still documents the intended byte arithmetic.
+
+## Codec adapters preserve the application format
+
+The `Codec` object provides `serialize` and a templated `deserialize<T>`.
+The deserializer statically restricts `T` to the application `Frame` type.
+`dsl::Serializer` and `dsl::Deserializer` borrow this object and forward
+the operations. They do not add a second framing layer or choose a hidden
+binary encoding for the C++ struct.
+
+This demonstrates what the generic codec protocol actually buys: a consistent
+adapter interface around user-defined semantics. A different frame type or
+version can have another codec while using the same byte stream and transport
+completion mechanisms. The protocol's format remains visible in application
+code rather than inferred from memory layout or reflection.
+
+The codec object outlives both adapters in `main`. The adapters are local
+borrowers, and all calls finish before the codec is destroyed. This is a
+small ownership fact, but making it obvious is preferable to returning an
+adapter that refers to a temporary backend.
+
+## Partial transfers exercise the real I/O contract
+
+The `ShortBuffer` backend stores bytes and a read cursor. Its write operation
+appends at most three bytes from the requested span. Its read operation
+copies at most two available bytes into the destination and advances its
+cursor. When no input remains, it returns zero, which the I/O protocol
+interprets as EOF.
+
+`encoded.save(io)` uses write-all, so the short writes must eventually
+transfer the complete record. `BinaryStream::load(io,1024)` repeatedly reads
+until EOF and enforces an overall input bound of 1024 bytes. That buffer
+limit is separate from the codec's sixty-four-byte payload limit. One
+constrains the loaded artifact; the other constrains a field in each frame.
+
+The backend's read cursor remains within its stored data, so remaining-size
+subtraction is well defined. A production backend with a public seek method
+would need to preserve or check that invariant as well. The adapter validates
+returned counts, but it cannot prove that the backend copied the correct
+bytes. The round-trip equality check supplies evidence for the combined path.
+
+## The complete implementation
+
+The source is `projects/binary/main.cpp`. Build it with `make build/binary`.
+The program is also part of the aggregate examples target and includes
+rejection tests for every truncated prefix and for a corrupted checksum.
+
+```{=latex}
+\lstinputlisting[style=dslcpp,caption={Case study V: an explicit binary frame codec over short-transfer I/O.},label={lst:case-binary}]{projects/binary/main.cpp}
+```
+
+The observed output is:
+
+```text
+frame=sensor_7 bytes=14 partial-I/O round trip OK
+```
+
+For `sensor_7`, the payload length is eight and the checksum is decimal
+forty-eight, hexadecimal 30. The full frame bytes are:
+
+```text
+44 54 01 00 08 73 65 6e 73 6f 72 5f 37 30
+```
+
+That explicit byte sequence is an independent description of the format.
+It checks the two-byte magic, version, big-endian length, payload spelling,
+and trailer. A successful encoder-decoder round trip alone would not detect
+a mutually consistent but incorrectly little-endian implementation.
+
+## Truncation tests establish a strong boundary property
+
+The program creates every proper prefix of the encoded record, from zero
+bytes through one byte short of completion. Each prefix must be rejected by
+the decoder, and the cursor must return to its original zero position.
+This tests header, length, payload, and checksum truncation without needing
+a separate hand-written case for every field boundary.
+
+The test is meaningful because the frame format requires all of those bytes
+for acceptance. A decoder that accidentally accepted a missing checksum or
+used an unchecked span would violate the property. Checking cursor restoration
+also verifies the transactional contract, not merely that an exception was
+thrown somewhere.
+
+The checksum corruption test copies the complete encoded stream, flips one
+bit of the trailer, and requires an invalid-argument rejection with the
+cursor restored. This distinguishes complete malformed input from incomplete
+input. The current API reports both through exceptions, but the tests retain
+their conceptual difference.
+
+## Multiple records and incremental transport
+
+The decoder consumes one frame and leaves the cursor after it. The example
+checks EOF because its input contains exactly one record. A multi-record
+consumer could call the decoder again while bytes remain, provided it has a
+policy for trailing malformed or incomplete data. The codec itself should
+not silently discard a suffix merely because one valid frame was found.
+
+For an incremental network stream, incomplete input may mean more bytes will
+arrive rather than final truncation. A production streaming decoder could
+return a distinct need-more-input status and preserve the buffered prefix.
+The current count-based I/O adapter treats zero read as EOF, so a nonblocking
+would-block condition needs another representation or driver policy. The
+buffered example deliberately avoids conflating these cases.
+
+Versioning also needs an explicit policy. Version one is the only accepted
+value here. A future version can change field meanings only if the decoder
+knows how to distinguish and interpret it. Unknown versions should be
+rejected or retained according to a documented forwarding policy, not
+interpreted opportunistically as version one because the first few fields
+happen to look familiar.
+
+## What the five studies establish together
+
+The units study separated lexical conversion from dimensional meaning. The
+query study separated generic rewriting from semantic laws. Configuration
+separated recognition from all-or-nothing publication. Saturation separated
+known equality, resource limits, and extraction cost. Binary framing now
+separates format validation, cursor ownership, and transport completion.
+
+These are the recurring design decisions behind DSL construction. DSLtk
+supplies compact representations and algorithms, while the application must
+state what values mean, who owns them, how failure is represented, and what
+evidence supports an optimization or conversion. The primary C++ header and
+secondary D module express those mechanisms differently, and the book has
+treated those differences as implementation facts rather than smoothing them
+away behind feature names.
+
+The final artifact is therefore more than a collection of syntax examples.
+It is a method for reading and using a small language toolkit: follow the
+actual implementation, separate static information from runtime work,
+preserve domain distinctions in representations, and verify the boundaries
+that connect one stage to the next. Those habits remain useful when the
+language grows beyond the modest case studies presented here.
+
+## Wire compatibility as a separate test oracle
+
+The expected fourteen bytes give the encoder a reference independent of its
+decoder. A compatibility test can compare each produced byte with that
+sequence and report the first differing offset. The reverse test feeds the
+known bytes directly to the decoder without first invoking the encoder.
+Together they check both directions against a stated format instead of
+merely checking that two pieces of application code share the same mistake.
+
+The length field is especially important because this host may be little
+endian while the format is big endian. For an eight-byte payload, the two
+length bytes must be `00 08`. A length of eight is large enough to distinguish
+the ordering and small enough to make the frame easy to inspect. Additional
+tests at the sixty-four-byte boundary exercise the application limit, while
+sixty-five bytes should be rejected before encoding and after reading a
+declared length during decoding.
+
+Magic and version tests should modify the corresponding header bytes in an
+otherwise valid frame. This isolates the reason for rejection. A checksum
+test should similarly leave the header and payload length intact. Random
+corruption can be useful, but a collection of targeted mutations explains
+which validation obligations the decoder actually enforces and makes a
+regression easier to diagnose.
+
+The decoder's rollback contract can also be tested from a nonzero cursor.
+Place a valid prefix record or unrelated bytes before the candidate frame,
+seek to the candidate's beginning, and attempt a failing decode. The cursor
+must return to that saved beginning rather than to absolute zero. The
+implementation saves its starting cursor, and the current truncation loop
+tests the zero-position instance of that more general property.
+
+## Separating record limits from transport limits
+
+The stream loader's 1024-byte bound limits the entire buffered input. The
+codec's sixty-four-byte bound limits one payload. With multiple records, an
+input can contain individually valid frames yet exceed the overall buffer
+budget. Conversely, a small input can declare an excessive payload length
+and should be rejected by the codec even though the loader's bound was not
+reached. These checks protect different invariants and should produce
+diagnostics that identify the violated boundary.
+
+The short-transfer backend makes progress by returning a positive count
+until the request is complete or the available input ends. A real backend
+must follow the same count contract. Returning more bytes than requested
+is a protocol violation. Returning zero during a write-all operation cannot
+complete the remaining write. Returning zero during reading represents EOF
+in this interface, which is why a nonblocking transport needs a separate
+policy for temporary lack of data.
+
+The format's checksum says nothing about whether the full frame reached
+its destination. Write completion and frame validation are separate facts.
+Likewise, successful loading only means the bytes were obtained under the
+loader's policy; it does not establish magic, version, identifier syntax,
+or checksum correctness. The explicit layering lets each test target the
+fact it is intended to establish.
+
+## Evolving a protocol while keeping the implementation readable
+
+If version two adds a timestamp, choose its width, signedness, byte order,
+and epoch as part of the wire specification. Writing the native memory of
+a time object would import host layout and library choices into the format.
+If a field becomes optional, define how absence is represented and whether
+older decoders reject or skip it. A version byte is useful only when each
+accepted version has a precise interpretation.
+
+An incremental decoder can reuse the same validation sequence while
+returning a richer status: complete frame, incomplete prefix, or malformed
+record. It would retain enough bytes to retry after more input arrives and
+publish a frame only after the trailer is validated. This is the streaming
+analogue of the current cursor transaction. The bounded buffered design is
+a useful starting specification because the success and rejection behavior
+can be understood without transport scheduling.
+
+Finally, keep diagnostic formatting outside the codec's core decisions.
+A command-line inspector may want hexadecimal offsets, an application may
+want a structured error code, and a test may want the precise validation
+category. Those consumers can share one format implementation if the error
+information is retained. The case study's exceptions are deliberately small,
+but the staged validation and saved cursor provide clear points for adding
+that information as the protocol grows.
+
+
+## Implementation map and review
+
+The following diagram summarizes the chapter's central dependency or state
+transition. Arrows denote logical dependence, not elapsed time or measured
+performance. The contracts below separate what the library provides from the
+conditions that the application must establish.
+
+```{=latex}
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}
+\node[dslsmall] (n0) {Frame};
+\node[dslsmall, right=5mm of n0] (n1) {Codec};
+\draw[dsledge] (n0) -- (n1);
+\node[dslsmall, right=5mm of n1] (n2) {Partial byte I/O};
+\draw[dsledge] (n1) -- (n2);
+\node[dslsmall, right=5mm of n2] (n3) {Validated frame};
+\draw[dsledge] (n2) -- (n3);
+\end{tikzpicture}
+\caption{Case study V separates wire framing from transport completion.}
+\label{fig:atlas-42}
+\end{figure}
+\begin{table}[htbp]
+\centering\small
+\begin{tabular}{L{0.28\linewidth}L{0.61\linewidth}}
+\toprule Contract & Interpretation \\
+\midrule
+Wire order & The record length is a big-endian unsigned integer. \\
+Transaction & Decode failure restores the input cursor. \\
+Lifetime & Decoded text is copied before borrowed storage can change. \\
+\bottomrule
+\end{tabular}
+\caption{Implementation contracts for this chapter.}
+\label{tab:atlas-42}
+\end{table}
+\begin{pseudocode}[Operational summary]
+\textbf{1.} Validate the outgoing payload vocabulary and length.\\
+\textbf{2.} Write magic, version, length, payload, and checksum.\\
+\textbf{3.} Complete partial transfers through the I/O adapter.\\
+\textbf{4.} Decode under a saved cursor checkpoint.\\
+\textbf{5.} Commit the decoded frame only after all checks pass.
+\end{pseudocode}
+```
+
+### Review questions
+
+1. Why does a checksum not authenticate a peer?
+
+2. How would a streaming decoder distinguish incomplete input from a malformed complete record?

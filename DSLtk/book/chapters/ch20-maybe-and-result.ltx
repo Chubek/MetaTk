@@ -1,0 +1,590 @@
+\chapter{\texttt{Maybe} and \texttt{Result}: Monadic Error Handling}
+\label{ch:maybe-and-result}
+
+\section{Two Ways to Say "It Did Not Work"}
+
+A DSL that parses, rewrites, or evaluates has to represent two kinds of
+failure, and they are not the same kind. The first is the absence of
+something: the input contained no identifier, the rule did not apply, the
+optional field was not present. The second is the failure of something: the
+token was unterminated, the rewrite diverged, the task exited with a
+non-zero status. The first is usually not an error at all; it is a normal
+outcome that the caller handles by supplying a default. The second is an
+error that the caller must be told about, in enough detail to diagnose it
+and to decide what to do.
+
+\DSLtk{} provides one type for each. \code{dsl::Maybe<T>} is a container
+that may or may not hold a value. \code{dsl::Result<T, E>} holds either a
+value of type \code{T} or an error of type \code{E}. Both offer a small
+algebra of transformations -- \code{map}, \code{flat_map}, \code{filter},
+\code{and_then} -- that compose without the caller having to test for
+absence or failure at every step.
+
+The word \emph{monadic} in this chapter's title is not decoration. Both
+types support the operations that make a monad a monad, and
+Section~\ref{sec:ch20-laws} explains what those operations must satisfy
+for the composition to be predictable. The implementations in the shipped
+header are compact enough to read in a few minutes, and they depart from
+the more familiar \code{std::optional} and \code{std::expected} in ways
+that are worth knowing before they are used.
+
+\section{A Worked Example}
+
+Listing~\ref{lst:ch20-both} is a complete program that exercises both
+types, including the failure paths.
+
+\begin{lstlisting}[style=dslcpp,caption={Both error-handling types in one program. \code{Maybe} models the absence of a value; \code{Result} models the failure of a step. The final two lines show that the free factories \code{Ok} and \code{Err} produce plain wrapper structs, not \code{Result} objects.},label={lst:ch20-both}]
+#include "DSLtk.hpp"
+#include <iostream>
+#include <string>
+#include <variant>
+
+struct ParseError
+{
+  std::string message;
+};
+
+int main ()
+{
+  std::cout << std::boolalpha;
+
+  // ------------------------- Maybe -------------------------
+  dsl::Maybe<int> some{ 42 };
+  dsl::Maybe<int> none;
+
+  std::cout << "some.has_value() = " << some.has_value () << "\n";
+  std::cout << "none.has_value() = " << none.has_value () << "\n";
+  std::cout << "some.as_optional().value_or(-1) = "
+            << some.as_optional ().value_or (-1) << "\n";
+
+  auto doubled = some.map ([] (int x) { return x * 2; });
+  std::cout << "some.map(x->2x).or_else(-1)  = " << doubled.or_else (-1)
+            << "\n";
+  std::cout << "none.map(x->2x).or_else(-1)  = "
+            << none.map ([] (int x) { return x * 2; }).or_else (-1) << "\n";
+
+  auto positive = some.filter ([] (int x) { return x > 0; });
+  std::cout << "some.filter(x>0).has_value() = " << positive.has_value ()
+            << "\n";
+  auto negative = some.filter ([] (int x) { return x < 0; });
+  std::cout << "some.filter(x<0).has_value() = " << negative.has_value ()
+            << "\n";
+
+  auto nested = some.flat_map (
+      [] (int x) -> dsl::Maybe<double> {
+        return x > 0 ? dsl::Maybe<double>{ x * 1.5 } : dsl::Maybe<double>{};
+      });
+  std::cout << "some.flat_map(...)             = " << nested.or_else (0.0)
+            << "\n";
+
+  // ------------------------- Result -------------------------
+  using R = dsl::Result<int, ParseError>;
+
+  R ok = R::from_ok (7);
+  R bad = R::from_err (ParseError{ "unterminated token" });
+
+  std::cout << "ok.is_ok()   = " << ok.is_ok () << "\n";
+  std::cout << "bad.is_err() = " << bad.is_err () << "\n";
+  std::cout << "ok.unwrap()  = " << ok.unwrap () << "\n";
+  std::cout << "bad.unwrap_or(-1) = " << bad.unwrap_or (-1) << "\n";
+  std::cout << "ok.map(x->x+1).unwrap_or(-1)   = "
+            << ok.map ([] (int x) { return x + 1; }).unwrap_or (-1) << "\n";
+  std::cout << "bad.map(x->x+1).unwrap_or(-1)  = "
+            << bad.map ([] (int x) { return x + 1; }).unwrap_or (-1) << "\n";
+
+  auto renamed = bad.map_err (
+      [] (const ParseError &e) { return e.message.size (); });
+  std::cout << "bad.map_err(...).is_err()      = " << renamed.is_err ()
+            << "\n";
+
+  R chained = ok.and_then (
+      [] (int x) -> R { return R::from_ok (x * 10); });
+  std::cout << "ok.and_then(x->10x).unwrap()   = " << chained.unwrap ()
+            << "\n";
+
+  R chained2 = bad.and_then (
+      [] (int x) -> R { return R::from_ok (x * 10); });
+  std::cout << "bad.and_then(x->10x).is_err()  = " << chained2.is_err ()
+            << "\n";
+
+  try
+    {
+      (void) bad.unwrap ();
+    }
+  catch (const std::runtime_error &e)
+    {
+      std::cout << "runtime_error: " << e.what () << "\n";
+    }
+
+  // The free factories produce plain wrappers, not Results.
+  auto okw = dsl::Ok (5);
+  auto errw = dsl::Err (ParseError{ "boom" });
+  std::cout << "dsl::Ok(5).value   = " << okw.value << "\n";
+  std::cout << "dsl::Err(...).error= " << errw.error.message << "\n";
+}
+\end{lstlisting}
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch20-both}. Notice that \code{map} on an absent \code{Maybe} produces an absent result rather than a default, and that \code{and_then} on an \code{Err} leaves the error in place without ever calling the supplied function.},label={lst:ch20-both-out}]
+some.has_value() = true
+none.has_value() = false
+some.as_optional().value_or(-1) = 42
+some.map(x->2x).or_else(-1)  = 84
+none.map(x->2x).or_else(-1)  = -1
+some.filter(x>0).has_value() = true
+some.filter(x<0).has_value() = false
+some.flat_map(...)             = 63
+ok.is_ok()   = true
+bad.is_err() = true
+ok.unwrap()  = 7
+bad.unwrap_or(-1) = -1
+ok.map(x->x+1).unwrap_or(-1)   = 8
+bad.map(x->x+1).unwrap_or(-1)  = -1
+bad.map_err(...).is_err()      = true
+ok.and_then(x->10x).unwrap()   = 70
+bad.and_then(x->10x).is_err()  = true
+runtime_error: dsl::Result::unwrap called on Err
+dsl::Ok(5).value   = 5
+dsl::Err(...).error= boom
+\end{lstlisting}
+
+\section{\code{Maybe}: The Shape of the Type}
+
+\code{dsl::Maybe<T>} (lines 7451--7510) is a thin wrapper around a
+\code{std::optional<T>}. Its private member is exactly that: a
+\code{std::optional<T> value_}. Everything else is a method.
+
+The constructors are a default constructor, one taking a \code{T}, and one
+taking a \code{std::optional<T>}. All three are implicit, so
+\code{dsl::Maybe<int> m = 5;} compiles, as does
+\code{dsl::Maybe<int> m = std::optional<int>{5};}.
+
+The members are \code{has_value()}, which is \code{const noexcept} and
+reports presence; \code{as_optional()}, which returns a
+\code{const std::optional<T> &}; and the four transformations \code{map},
+\code{flat_map}, \code{filter} and \code{or_else}.
+
+\subsection{What Is Missing, and Why It Matters}
+
+The following are \emph{absent} from \code{dsl::Maybe<T>}:
+\code{some}, \code{none}, \code{map_or}, \code{and_then},
+\code{value_or}, \code{operator bool}, \code{operator*} and
+\code{operator->}.
+
+Two of these absences have consequences that run through the whole type.
+
+Because there is no \code{operator bool}, a \code{Maybe} cannot be used
+directly in an \code{if}. The compiler's diagnostic is
+\code{"could not convert 'm' from 'dsl::Maybe<int>' to 'bool'"}. The
+programmer must write \code{if (m.has_value())}. This is a deliberate
+choice in most designs, and it is the right one for a type whose whole
+purpose is to make the empty case explicit, but it does mean that a
+\code{Maybe} cannot be dropped into a context that expects a truth value.
+
+Because there is no \code{operator*} and no \code{operator->}, a
+\code{Maybe} cannot be dereferenced. The value must be reached through
+\code{or_else} (which copies it out) or through \code{as_optional()}
+(which returns the underlying \code{optional}, on which \code{operator*}
+does exist). The second route is the only one that avoids a copy, and it is
+also the only one that gives access to the value without providing a
+fallback.
+
+The absence of \code{value_or} and \code{map_or} is a matter of naming:
+\code{or_else} plays the role of \code{value_or}, and there is no
+counterpart to \code{map_or} because \code{map} followed by
+\code{or_else} expresses the same thing.
+
+\subsection{The \code{map} Subtlety}
+
+\code{Maybe::map} (lines 7474--7482) has a declaration and a body that
+disagree slightly about value category, and the disagreement is worth
+understanding because it constrains what the callable may look like.
+
+The declared return type is shown in Listing~\ref{lst:ch20-decls}. The
+argument to \code{std::declval<T>()} is an \emph{rvalue} of type
+\code{T}, so the declared type is computed from calling \code{fn} on an
+rvalue.
+
+The body, however, computes the type of \code{fn(*value_)}. The operand of
+\code{*value_} is a \code{const T &}, so that is a call on a \emph{const
+lvalue}, and the value is in fact passed to the function as a const lvalue.
+
+\begin{lstlisting}[style=dslcpp,caption={The three declared return types that share the same value-category subtlety: \code{Maybe::map}, \code{Maybe::flat_map} and \code{Result::and_then}, transcribed from \code{DSLtk.hpp}. Each is computed from a call of the supplied function on an \emph{rvalue} of the value type, while the bodies call the function on a \emph{const lvalue}.},label={lst:ch20-decls}]
+  // dsl::Maybe<T>::map, line 7476
+  auto map (Fn &&fn) const -> Maybe<decltype (fn (std::declval<T> ()))>
+
+  // dsl::Maybe<T>::flat_map, line 7485
+  auto flat_map (Fn &&fn) const -> decltype (fn (std::declval<T> ()))
+
+  // dsl::Result<T, E>::and_then, line 7593
+  auto and_then (Fn &&fn) const -> decltype (fn (std::declval<T> ()))
+\end{lstlisting}
+
+The two agree for the overwhelming majority of callables: anything taking
+\code{T} by value or \code{const T &} yields the same type either way.
+They disagree for a callable that takes a non-const \code{T &}. In that
+case the \emph{declaration} is what fails, because a non-const lvalue
+reference cannot bind to the rvalue that \code{std::declval<T>()}
+produces. The compiler's diagnostic is explicit:
+\code{"cannot bind non-const lvalue reference of type 'int&' to an rvalue
+of type 'int'"}. So \code{map} cannot be used with a lambda that mutates
+its argument in place; such a lambda must take its argument by value.
+
+\code{flat_map} has the same shape, with one addition: its body names the
+chained type \code{R} and returns \code{R{}} when the cell is empty. The
+empty case therefore requires that \code{R} be default-constructible, which
+is true of \code{Maybe<U>} but not of every type a caller might want to
+chain into.
+
+\subsection{The Free Helpers Are Not for \code{Maybe}}
+
+The namespace also contains four free functions, \code{map},
+\code{flat_map}, \code{filter} and \code{or_else} (lines 7511--7541).
+They are generic over a parameter named \code{Opt}, and they look as though
+they should work with \code{Maybe}. They do not.
+
+\code{dsl::map} is declared over a parameter named \code{Opt}, and it
+dereferences its argument with \code{*opt} while testing it for truth with
+\code{!opt}. A \code{Maybe} has neither \code{operator*} nor
+\code{operator bool}, so the call does not compile; the diagnostic names
+\code{operator*} on \code{dsl::Maybe<int>} and says there is no match. The
+return type is \code{std::optional<...>} regardless of \code{Opt}, so even
+if the body compiled the result would not be a \code{Maybe}.
+
+These helpers are for \code{std::optional}, and they exist because
+\code{std::optional} has no member \code{map} of its own before \cpp{23}.
+The D port has the same four functions, with the same restriction: they are
+declared over \code{Nullable!T}. In the \cpp{} port they are used by the
+shipped example \code{20-monadic.cpp}, which applies them to a
+\code{std::optional<int>} and not to a \code{Maybe}.
+
+\section{\code{Result}: Success or Failure}
+
+\code{dsl::Result<T, E>} (lines 7543--7636) stores its payload in a
+\code{std::variant<T, E>}. The variant is held in a private member
+\code{data_}, and the alternative in use determines everything else.
+
+The two constructors are both implicit. The first constructs the variant
+with the success alternative in place; the second constructs it with the
+error alternative in place. The second is constrained by
+\code{requires (!std::same_as<T, E>)}, which is the source of the type's
+most significant limitation, discussed below.
+
+The present API is \code{from_ok} and \code{from_err}, both static
+factories; \code{is_ok()} and \code{is_err()}; \code{unwrap()} and
+\code{unwrap_or()}; and the three transformations \code{map},
+\code{map_err} and \code{and_then}.
+
+The following are \emph{absent}: \code{ok()}, \code{err()}, \code{value()},
+\code{error()}, \code{expect()} and \code{value_or()}. The absence of
+\code{ok()} and \code{err()} means that the payload of a \code{Result}
+cannot be extracted without either unwrapping or transforming it; there is
+no way to ask "give me the error if there is one, and give me nothing
+otherwise". The absence of \code{expect()} means there is no way to attach
+a diagnostic message to a failure, which is a real limitation for a parser,
+where the useful information is usually a position and a set of expected
+tokens.
+
+\code{unwrap()} is the escape hatch. It returns the value, or throws
+\code{std::runtime_error} with the fixed message
+\code{"dsl::Result::unwrap called on Err"}. The message names the type and
+the operation and nothing else: it does not include the error payload, so a
+caller that catches it learns that a failure occurred but not what it was.
+
+\code{and_then} (lines 7591--7599) is the interesting one; its declared
+return type appears in Listing~\ref{lst:ch20-decls}. The callable must
+itself return something \code{Result}-shaped. The body then needs to
+construct an error of that type, and it does so by calling
+\code{R::from_err}. The requirement that falls out of this is that the
+callable's return type \code{R} must have a static \code{from_err} that
+accepts an \code{E}. For the natural case, where \code{R} is
+\code{Result<U, E>} with the same error type, this is satisfied
+automatically. For a chain that changes the error type, it is not, and the
+call does not compile unless the new error type is implicitly constructible
+from the old one.
+
+\code{map_err} (lines 7608--7616) is the opposite transformation: it
+leaves a success value alone and applies the function to an error,
+producing a \code{Result<T, E2>} with a different error type. It is the
+mechanism by which a low-level error type is refined into a richer one as
+the failure propagates outwards.
+
+\subsection{The \code{T == E} Restriction}
+
+The constraint \code{requires (!std::same_as<T, E>)} removes the ambiguous
+error constructor when payload types coincide. Indexed factories can still
+construct either alternative, and \code{std::variant<T, E>} permits repeated
+types. Normal result inspection fails because \code{std::get<T>} and
+\code{std::holds_alternative<T>} both require the alternative to occur
+exactly once.
+
+This is not a theoretical restriction. The \code{dsl::Task} type at line
+8002 and the \code{dsl::TaskState} type at line 7993 both use
+\code{Result<std::string, std::string>}, and the task pipeline therefore
+does not compile. The failure surfaces at \code{dsl::run}, at line 8040,
+which calls \code{result.is_err()}; that in turn calls
+\code{std::holds_alternative<E>} on a
+\code{std::variant<std::string, std::string>}, and the standard library
+rejects it with the static assertion "T must occur exactly once in
+alternatives". Chapter~\ref{ch:task-pipeline} takes this apart in detail.
+
+The D port does not have the restriction. Its \code{Result} stores a
+boolean flag alongside the two payloads rather than a variant, and its
+comment says so: "Explicitly tagged storage also supports identical
+success/error types."
+
+\subsection{The \code{Ok} and \code{Err} Markers}
+
+The header also declares two aggregate structs and two free factories
+(lines 7637--7656):
+
+\begin{lstlisting}[style=dslcpp,caption={The \code{OkWrap} and \code{ErrWrap} markers and their factories, transcribed from \code{DSLtk.hpp} lines 7637--7656. In the \cpp{} port they are plain aggregates with no relationship to \code{Result}; in the D port they are the constructors of \code{Result}.},label={lst:ch20-wraps}]
+template <typename T> struct OkWrap
+{
+  T value;
+};
+template <typename E> struct ErrWrap
+{
+  E error;
+};
+template <typename T>
+OkWrap<T>
+Ok (T value)
+{
+  return { std::move (value) };
+}
+template <typename E>
+ErrWrap<E>
+Err (E error)
+{
+  return { std::move (error) };
+}
+\end{lstlisting}
+
+In the \cpp{} port these are \emph{unambiguous markers with no conversion
+to \code{Result}}. There is no constructor from \code{OkWrap<T>} to
+\code{Result<T, E>}, no assignment operator, and no implicit conversion of
+any kind. Writing \code{dsl::Result<int, ParseError> r = dsl::Ok (5);} is
+a compile error. The markers can only be used as markers: as a way of
+naming the two cases in an interface of one's own, or as a temporary
+container from which the payload is extracted by hand.
+
+The D port uses them for something more substantial. There,
+\code{Result} has constructors from \code{OkWrap!T} and \code{ErrWrap!E},
+and its \code{from_ok} and \code{from_err} are implemented in terms of
+them (\code{DSLtk.d}, lines 576--577 and 606--607). The tags there solve
+the same ambiguity problem that the \cpp{} port solves with the constrained
+constructor, and they solve it in a way that also permits
+\code{T == E}.
+
+\subsection{Chaining Results}
+
+Figure~\ref{fig:ch20-andthen} draws the shape of a chain. Along the upper
+lane, each step receives the previous step's value and produces a new
+\code{Result}. Along the lower lane, an error skips every step untouched.
+
+\begin{figure}[ht]
+\centering
+\begin{dslgraph}
+  \node[dslbox, text width=26mm, font=\footnotesize\sffamily] (r0) at (0,0) {Result<int,E>};
+  \node[dslsmall, text width=25mm, font=\footnotesize\sffamily] (f) at (2.7,0) {f : int to\\Result<string,E>};
+  \node[dslbox, text width=26mm, font=\footnotesize\sffamily] (r1) at (5.4,0) {Result<string,\\E>};
+  \node[dslsmall, text width=25mm, font=\footnotesize\sffamily] (g) at (8.1,0) {g : string to\\Result<int,E>};
+  \node[dslbox, text width=26mm, font=\footnotesize\sffamily] (r2) at (10.8,0) {Result<int,E>};
+
+  \draw[dsledge] (r0) -- (f);
+  \draw[dsledge] (f) -- (r1);
+  \draw[dsledge] (r1) -- (g);
+  \draw[dsledge] (g) -- (r2);
+
+  \node[dslsmall, text width=34mm] (err) at (5.2,-2.4)
+    {the error payload E is carried\\unchanged to the end of the chain};
+  \draw[dslfeedback] (r0.south) -- (0,-2.4) -- (err.west);
+  \draw[dslfeedback] (err.east) -- (10.4,-2.4) -- (r2.south);
+\end{dslgraph}
+\caption{A chain of chained steps. A successful value passes through every
+step; an error bypasses all of them and arrives at the end unchanged, with
+none of the supplied functions ever called.}
+\label{fig:ch20-andthen}
+\end{figure}
+
+Algorithm~\ref{alg:ch20-propagate} states the rule that the implementation
+follows, and it is the rule that makes \code{and_then} different from
+\code{map}.
+
+\begin{pseudocode}[Propagating an error through a chain]
+\textbf{function} and\_then (result, step)\\
+\quad \textbf{if} result carries an error then\\
+\qquad \textbf{return} an error carrying the same payload\\
+\quad \textbf{return} step (the value carried by result)
+\label{alg:ch20-propagate}
+\end{pseudocode}
+
+The distinction between \code{map} and \code{and_then} is the distinction
+between transforming a value and running a fallible step. \code{map}
+applies its function to the value and wraps the outcome back into the same
+shape; the function cannot fail. \code{and_then} applies its function to
+the value and takes the outcome as it is, which means the function can
+itself fail, and the failure is propagated rather than flattened. In
+functional terms, \code{map} is the functorial operation and
+\code{and_then} is the monadic one.
+
+\section{The Monadic Laws, Plainly}
+\label{sec:ch20-laws}
+
+The header's own comment on \code{Maybe} says that "Monadic laws
+(left identity/right identity/associativity) apply when map/flat\_map
+functions are pure and side-effect free." That is the right caveat: the
+laws are properties of the composition, not of the container, and they hold
+only when the functions involved are deterministic.
+
+The three laws, in plain terms, are these. \emph{Left identity}: wrapping a
+value and then unwrapping it changes nothing.
+\code{map(f, Just(x))} must equal \code{Just(f(x))}, and
+\code{and_then(f, Just(x))} must equal \code{f(x)}. \emph{Right identity}:
+handing a function that does nothing but return its input must not change
+the value, so \code{map(f, Just(x))} must equal \code{Just(x)} when
+\code{f} is the identity, and \code{and_then(id, r)} must equal \code{r}.
+\emph{Associativity}: two ways of chaining three steps must agree.
+\code{and_then(g, and_then(f, r))} must equal
+\code{and_then(compose(g, f), r)}.
+
+For \code{Maybe}, all three hold by inspection of the implementation, with
+one caveat that the laws do not mention: the empty case propagates
+through \code{map} and \code{and_then} alike, and \code{filter} adds a
+fourth property, idempotence, which says that filtering twice is the same
+as filtering once. \code{filter} is not part of the monad; it is a
+convenience that happens to be lawful.
+
+For \code{Result}, the same three laws hold with the error payload playing
+the role of the empty case, and they hold for \code{map} and
+\code{and_then} together, since \code{and_then} is the one that
+propagates errors unchanged. The one law that is \emph{not} automatic is
+the error side of left identity: \code{map(f, Err(e))} must produce an
+error carrying the same \code{e}. It does, because the body of \code{map}
+constructs the error branch with \code{Result<U, E>::from_err(std::get<E>
+(data_))}, which copies the payload across unchanged.
+
+The practical value of the laws is compositional: if each step of a chain
+obeys them, then the chain as a whole is predictable, and a programmer can
+refactor a chain without changing its meaning. The practical cost is that
+the laws constrain the functions used with \code{map} and
+\code{and_then} to be pure; a function with a side effect that is applied
+inside a chain will not be applied at all when the chain short-circuits, and
+the laws do not describe that behaviour.
+
+\section{Comparison with the Standard Library}
+
+Table~\ref{tab:ch20-compare} places the two \DSLtk{} types beside
+\code{std::optional} and \code{std::expected}, the latter being the
+\cpp{23} type that most closely resembles \code{Result}.
+
+\begin{table}[ht]
+\centering
+\caption{\code{dsl::Maybe}, \code{dsl::Result}, \code{std::optional} and
+\code{std::expected} compared. The last two columns describe the standard
+library types as of \cpp{23}.}
+\label{tab:ch20-compare}
+\small
+\begin{tabular}{@{}L{0.19\textwidth}L{0.24\textwidth}L{0.24\textwidth}L{0.25\textwidth}@{}}
+\toprule
+\textbf{Aspect} & \code{dsl::Maybe<T>} & \code{dsl::Result<T,E>} & \code{std::optional<T>} and \code{std::expected<T,E>} \\
+\midrule
+Models & an absent value & a value or an error & absent value; value or error \\
+Storage & \code{std::optional<T>} & \code{std::variant<T,E>} & \code{optional<T>}; \code{variant<T,E>} \\
+Constructors & default, \code{T}, \code{optional<T>} & \code{T} and \code{E}, both implicit & \code{optional}: default, \code{T}, nullopt; \code{expected}: default, \code{T}, \code{E} \\
+Success equals failure type & not applicable & \emph{not allowed} & \code{optional}: n/a; \code{expected}: allowed \\
+Presence test & \code{has_value()} & \code{is_ok()} & \code{has_value()}, \code{operator bool} \\
+Error access & none & none: no \code{err()} & \code{optional}: none; \code{expected}: \code{error()} \\
+Value access & \code{or_else}, \code{as_optional} & \code{unwrap}, \code{unwrap_or} & \code{value()}, \code{operator*}, \code{value_or} \\
+Transformations & \code{map}, \code{flat_map}, \code{filter} & \code{map}, \code{map_err}, \code{and_then} & \code{optional}: \code{transform}, \code{and_then} in \cpp{23}; \code{expected}: the same, plus \code{or_else} \\
+Failure signal & none & \code{std::runtime_error} from \code{unwrap} & \code{optional}: \code{bad_optional_access}; \code{expected}: \code{bad_expected_access} \\
+Custom message & not applicable & not available: no \code{expect()} & \code{optional}: no; \code{expected}: \code{expect()} \\
+\midrule
+\multicolumn{4}{@{}L{0.92\textwidth}@{}}{\emph{Note}: the free functions
+\code{dsl::map}, \code{dsl::flat_map}, \code{dsl::filter} and
+\code{dsl::or_else} work with \code{std::optional} and \emph{not} with
+\code{dsl::Maybe}.} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The comparison shows what \DSLtk{} gained and what it left out. Compared
+with \code{std::optional}, \code{Maybe} adds a fluent transformation
+vocabulary and nothing else: it has no truth test, no dereference, and no
+way to read the value without either a fallback or a copy. Compared with
+\code{std::expected}, \code{Result} adds nothing at all in terms of
+surface area, and it lacks the two features that matter most in practice,
+namely \code{error()} and \code{expect()}. Its contribution is that it
+exists in \cpp{20} and that it composes with the rest of the toolkit.
+
+\section{Edge Cases and Limits}
+
+\begin{itemize}
+\item \textbf{\code{Maybe} cannot be tested or dereferenced.} There is no
+\code{operator bool} and no \code{operator*}, so a \code{Maybe} cannot
+appear in an \code{if} condition and cannot be starred. The only ways to
+reach the value are \code{or_else}, which copies it out, and
+\code{as_optional()}, which exposes the underlying \code{optional}.
+
+\item \textbf{The free helpers do not accept \code{Maybe}.} They require
+\code{*opt} and truthiness, which \code{Maybe} does not have, and their
+return types are \code{std::optional} rather than \code{Maybe}.
+
+\item \textbf{\code{Maybe::map} cannot take a mutable lvalue reference.}
+The declared return type is computed from a call on an rvalue, so a
+callable taking \code{T &} fails to compile even though the body would
+have been fine.
+
+\item \code{flat_map} requires the chained type to be
+default-constructible, because the empty branch returns \code{R{}}.
+
+\item \textbf{Identical success and error types cannot be queried.}
+Construction is possible, but type-based variant access requires a unique
+alternative. The shipped task types use this specialization, preventing
+normal driver instantiation.
+
+\item \textbf{\code{unwrap()} throws a message that omits the error.} The
+message is fixed by the header, and it names the type and the operation but
+not the payload. There is no \code{expect()} with which to attach a
+diagnostic of one's own.
+
+\item \textbf{\code{and_then} constrains the error type of the chain.}
+The callable's return type must have a static \code{from_err} accepting
+the current error type. Chaining to a \code{Result} with a different error
+type does not compile unless the new type is implicitly constructible from
+the old one.
+
+\item \textbf{\code{Ok} and \code{Err} do not build a \code{Result}.}
+They are plain aggregates in the \cpp{} port. A \code{Result} must be built
+with \code{from_ok} or \code{from_err}, or with the implicit
+constructors.
+
+\item \textbf{Neither type is thread-safe, and neither is copy-cheap.}
+\code{Maybe} copies its \code{optional} on every copy; \code{Result} copies
+a \code{variant}. A \code{Result} carrying a large payload is copied on
+every \code{map}, because \code{map} constructs a new \code{Result} with
+the transformed value.
+
+\item \textbf{The parser combinators do not use \code{Result}.}
+\code{dsl::ExpectedResult<T>} (line 7717) is a separate type with its own
+error structure: a \code{std::optional<T>} value, a \code{dsl::ParseError}
+carrying a position, a failure kind and a list of expected tokens, and an
+\code{explicit operator bool}. It is a richer type than \code{Result} for
+the parsing case, and it is not built on \code{Result}.
+\end{itemize}
+
+\section{Closing}
+
+\code{Maybe} and \code{Result} are small types with large ambitions. The
+implementations fit in a couple of hundred lines, and the transformations
+they support -- \code{map}, \code{flat_map}, \code{filter},
+\code{and_then}, \code{map_err} -- are the ones that make a chain of
+fallible steps expressible without a test at every step. What they do not
+offer is the ergonomics of the standard library: no truth test, no
+dereference, no error accessor, no custom failure message. A programmer
+coming from Rust's \code{Option} and \code{Result}, or from \cpp{23}'s
+\code{std::expected}, will find the shapes familiar and the conveniences
+missing.
+
+The next chapter begins the parsing half of the toolkit, with the input
+stream, the error type, and the parser combinator that ties them together.

@@ -1,0 +1,770 @@
+\chapter{Context-Free Grammars and Earley Parsing}
+\label{ch:cfg-earley}
+
+DSLtk ships two fundamentally different parsing technologies, and they sit at
+opposite ends of the design space. The PEG subsystem of
+\chapref{ch:peg-definition} is a \emph{deterministic} formalism: rules are
+ordered, an ordered choice commits to its first alternative that can match,
+and the matcher never explores more than one path through the grammar at a
+time. That determinism is what makes PEG parsing fast and what makes its
+error messages good, and it is also its main limitation. A PEG cannot be
+left-recursive, because the matcher would recurse forever before it could
+ever consume a token; it cannot express the unambiguous context-free
+grammar of a natural language, because ordered choice has no notion of
+ambiguity to resolve; and it cannot express a grammar that is genuinely
+ambiguous, because the order of the alternatives silently becomes part of the
+language definition.
+
+The facility in this chapter takes the opposite approach. A grammar is an
+ordinary \emph{context-free grammar}: a set of nonterminals, each of which
+may expand in several ways, and a set of terminals. Such a grammar may be
+left-recursive, may contain epsilon productions, and may be ambiguous, and
+all three are perfectly legal. The parser is the Earley recogniser, which
+can handle any context-free grammar in \(O(n^{3})\) time, and which builds
+the parse tree as it goes.
+
+The price of that generality is speed and precision. Earley parsing is
+markedly slower than PEG matching, and the ambiguity resolution policy is
+crude: when a grammar admits more than one derivation, the parser keeps the
+first one it discovers and discards the rest. That policy is deterministic,
+which is a genuine virtue --- the same input always yields the same tree ---
+but it means the rule order in the grammar is part of the semantics, and it
+means the tree you get back is not necessarily the one a language designer
+had in mind. Section~\ref{sec:ch33-ambiguity} returns to this.
+
+One more design decision governs everything else, and it is stated in the
+header comment above \api{dsl::CFG}: \emph{``Grammar terminals are tokens,
+not characters. The user's lexer chooses the token syntax.''} A terminal in
+this system is matched by \emph{string equality} against the text of the
+next token in the input. The grammar therefore never sees the raw characters
+of the source; it sees whatever the user's lexer chose to produce. This is
+the right design for a language toolkit, because every real language has a
+lexer anyway, and it means the same grammar can be fed by a hand-written
+lexer, by one built from \api{dsl::pattern<>}, or by a lexer that emits
+symbolic tokens for a compiler front end.
+
+\section{A worked example}
+
+The program below defines one small grammar twice --- once with typed
+productions and once as an S-expression --- parses a token list with both,
+and shows that they agree. It then exercises the parts of the facility that
+are easy to get wrong: a failed parse with its diagnostic, an ambiguous
+grammar, a left-recursive grammar and an epsilon production.
+
+\begin{lstlisting}[style=dslcpp,caption={Defining a grammar two ways and parsing tokens into an \code{ASTNode}.},label={lst:ch33-grammar}]
+#include "DSLtk.hpp"
+
+#include <iostream>
+#include <string>
+#include <vector>
+
+namespace
+{
+
+// A tiny lexer for the example language.  Grammar terminals are token
+// texts, so the lexer decides what a token looks like.
+std::vector<std::string>
+lex (const std::string &source)
+{
+  std::vector<std::string> tokens;
+  for (std::size_t i = 0; i < source.size ();)
+    {
+      if (source[i] == ' ')
+        {
+          ++i;
+          continue;
+        }
+      if (source[i] == '(' || source[i] == ')')
+        {
+          tokens.push_back (std::string (1, source[i]));
+          ++i;
+          continue;
+        }
+      auto begin = i;
+      while (i < source.size () && source[i] != ' ' && source[i] != '('
+             && source[i] != ')')
+        ++i;
+      tokens.push_back (source.substr (begin, i - begin));
+    }
+  return tokens;
+}
+
+} // namespace
+
+int
+main ()
+{
+  // ---- the grammar, written with typed productions --------------------
+  using Formula = dsl::CFGNonterminal<"Formula">;
+  using Atom = dsl::CFGNonterminal<"Atom">;
+  using True = dsl::CFGTerminal<"true">;
+  using False = dsl::CFGTerminal<"false">;
+  using Not = dsl::CFGTerminal<"not">;
+  using Open = dsl::CFGTerminal<"(">;
+  using Close = dsl::CFGTerminal<")">;
+
+  auto typed = dsl::make_cfg<"Formula"> (
+      dsl::CFGProduction<"Formula", Atom> (),
+      dsl::CFGProduction<"Atom", True> (),
+      dsl::CFGProduction<"Atom", False> (),
+      dsl::CFGProduction<"Atom", Not, Atom> (),
+      dsl::CFGProduction<"Atom", Open, Formula, Close> ());
+
+  // ---- the same grammar, written as an S-expression --------------------
+  auto sexpr = dsl::sexpr_grammar (R"sexpr(
+    (grammar
+      (start Formula)
+      (rule Formula (Atom))
+      (rule Atom ("true") ("false") ("not" Atom) ("(" Formula ")")))
+  )sexpr");
+
+  auto tokens = lex ("not not true");
+  std::cout << "tokens:";
+  for (auto &token : tokens)
+    std::cout << ' ' << token;
+  std::cout << '\n';
+
+  auto result = typed.parse (tokens);
+  std::cout << "typed ok: " << result.ok () << '\n';
+  if (result.tree)
+    std::cout << "typed tree: " << result.tree->dump () << '\n';
+
+  auto other = sexpr.parse (tokens);
+  std::cout << "sexpr ok: " << other.ok () << '\n';
+  if (other.tree)
+    std::cout << "sexpr tree: " << other.tree->dump () << '\n';
+
+  std::cout << "the two trees agree: "
+            << (result.tree && other.tree && *result.tree == *other.tree
+                    ? "yes"
+                    : "no")
+            << '\n';
+
+  // ---- a failure ------------------------------------------------------
+  auto bad = typed.parse (lex ("not"));
+  std::cout << "bad ok: " << bad.ok () << '\n';
+  std::cout << "bad position: " << bad.position << '\n';
+  std::cout << "bad expected:";
+  for (auto &name : bad.expected)
+    std::cout << ' ' << name;
+  std::cout << '\n';
+
+  // ---- an ambiguous grammar: the first derivation discovered wins ------
+  dsl::CFG ambiguous;
+  ambiguous.start = "S";
+  ambiguous.add ("S", { dsl::CFGSymbol::nonterminal ("A") });
+  ambiguous.add ("S", { dsl::CFGSymbol::nonterminal ("B") });
+  ambiguous.add ("A", { dsl::CFGSymbol::nonterminal ("C") });
+  ambiguous.add ("B", { dsl::CFGSymbol::nonterminal ("C") });
+  ambiguous.add ("C", { dsl::CFGSymbol::token ("x") });
+
+  auto amb = ambiguous.parse (std::vector<std::string> { "x" });
+  std::cout << "ambiguous tree: "
+            << (amb.tree ? amb.tree->dump () : "<none>") << '\n';
+
+  // ---- a left-recursive grammar ---------------------------------------
+  dsl::CFG left;
+  left.start = "E";
+  left.add ("E", { dsl::CFGSymbol::nonterminal ("E"),
+                   dsl::CFGSymbol::token ("+"),
+                   dsl::CFGSymbol::nonterminal ("T") });
+  left.add ("E", { dsl::CFGSymbol::nonterminal ("T") });
+  left.add ("T", { dsl::CFGSymbol::token ("n") });
+
+  auto lr = left.parse (std::vector<std::string> { "n", "+", "n" });
+  std::cout << "left recursive tree: "
+            << (lr.tree ? lr.tree->dump () : "<none>") << '\n';
+
+  // ---- an epsilon production ------------------------------------------
+  dsl::CFG nullable;
+  nullable.start = "S";
+  nullable.add ("S", { dsl::CFGSymbol::nonterminal ("A"),
+                       dsl::CFGSymbol::token ("x") });
+  nullable.add ("A", {});
+
+  auto eps = nullable.parse (std::vector<std::string> { "x" });
+  std::cout << "epsilon tree: "
+            << (eps.tree ? eps.tree->dump () : "<none>") << '\n';
+
+  return 0;
+}
+\end{lstlisting}
+
+The output is:
+
+\begin{lstlisting}[style=dslcmd,caption={Output of Listing~\ref{lst:ch33-grammar}.},label={lst:ch33-output}]
+tokens: not not true
+typed ok: 1
+typed tree: (Formula (Atom (token not) (Atom (token not) (Atom (token true)))))
+sexpr ok: 1
+sexpr tree: (Formula (Atom (token not) (Atom (token not) (Atom (token true)))))
+the two trees agree: yes
+bad ok: 0
+bad position: 1
+bad expected: true false not (
+ambiguous tree: (S (A (C (token x))))
+left recursive tree: (E (E (T (token n))) (token +) (T (token n)))
+epsilon tree: (S (A) (token x))
+\end{lstlisting}
+
+Three details in that listing are worth flagging before the machinery is
+described.
+
+The first is a syntactic wart. \code{make_cfg} takes its productions
+\emph{by value}, so each production must be spelled with a trailing pair of
+parentheses: \code{dsl::CFGProduction<"Atom", True> ()}. Writing
+\code{dsl::CFGProduction<"Atom", True>} without the parentheses does not
+compile, because a template-id is a type and not an expression. The
+production types are empty structs, so the parentheses simply value-initialise
+a temporary, and the factory then calls the static \code{rule()} member on
+it.
+
+The second is that the two spellings of the grammar really are the same
+grammar. The typed version and the S-expression version produce byte-identical
+trees, which is the check that matters: the S-expression front end is a
+convenience, not a second implementation.
+
+The third is the ambiguity line. The grammar \code{S -> A | B},
+\code{A -> C}, \code{B -> C}, \code{C -> "x"} has two derivations
+of the single token \code{x}, and the parser returns the one that goes
+through \code{A}. Section~\ref{sec:ch33-ambiguity} explains why, and what
+that means in practice.
+
+\section{The data model}
+
+\begin{table}[htbp]
+\centering
+\begin{tabular}{@{}L{0.26\textwidth}L{0.66\textwidth}@{}}
+\toprule
+\textbf{Type} & \textbf{Members and meaning} \\
+\midrule
+\code{CFGSymbol} &
+A grammar symbol: a \code{bool terminal} and a \code{std::string name}.
+Built by \code{CFGSymbol::token (text)}, which sets \code{terminal} to
+\code{true}, and \code{CFGSymbol::nonterminal (name)}, which sets it to
+\code{false}. \\
+\code{CFGRule} &
+One production: a left-hand side \code{std::string lhs} and a
+\code{std::vector<CFGSymbol> rhs}. One rule is exactly one alternative;
+several alternatives for the same nonterminal are several rules. \\
+\code{CFGParseResult} &
+The outcome of a parse: an \code{std::optional<ASTNode> tree}, a
+\code{std::size_t position}, and a \code{std::vector<std::string> expected}
+of terminal names. The \code{ok()} member reports whether the tree is
+present. \\
+\code{CFG} &
+The grammar itself: a public \code{std::string start} and a public
+\code{std::vector<CFGRule> productions}, plus \code{add (lhs, rhs)},
+\code{validate ()} and \code{parse (tokens)}. \\
+\code{CFGTerminal<Text>} &
+A compile-time terminal. Exposes \code{static CFGSymbol symbol ()}. \\
+\code{CFGNonterminal<Name>} &
+A compile-time nonterminal. Exposes \code{static CFGSymbol symbol ()}. \\
+\code{CFGProduction<LHS, Symbols...>} &
+A compile-time production. Exposes \code{static CFGRule rule ()}. \\
+\code{make_cfg<Start>(...)} &
+Free function template that assembles a \code{CFG} from production types and
+validates it. \\
+\code{sexpr_grammar(...)} &
+Free function that builds a \code{CFG} from an S-expression, either as a
+\code{dsl::SExpr} or as a \code{std::string_view}. \\
+\midrule
+\end{tabular}
+\caption{The context-free grammar API.}
+\label{tab:ch33-api}
+\end{table}
+
+Note what is \emph{not} in that table. There is no \code{recognize ()}
+member; recognition is \code{parse (tokens).ok ()}. There is no
+\code{describe ()}, no \code{first_set ()}, no \code{follow_set ()}, and no
+way to ask the grammar which nonterminals it mentions. The grammar is a
+plain data structure, and the parser is the only thing that interrogates it.
+
+\code{CFGParseResult} is the whole diagnostic surface. On success the tree
+is present and \code{position} equals the number of tokens consumed, which
+is always all of them. On failure the tree is absent, \code{position} is the
+furthest position at which the parser made progress, and \code{expected}
+lists the terminals that the items sitting at that position were waiting
+for. The special name \code{"<end-of-input>"} is appended when the parser
+reached the end of the input but the grammar wanted more.
+
+\section{Three ways to write a grammar}
+
+\subsection{Typed productions}
+
+The typed form is the most direct. Each symbol is a type alias for one of
+two templates, and each rule is a type alias for \code{CFGProduction}.
+
+\begin{lstlisting}[style=dslcpp,caption={A grammar written with typed productions. The fragment assumes that \code{DSLtk.hpp} has been included.},label={lst:ch33-typed}]
+using Formula = dsl::CFGNonterminal<"Formula">;
+using Atom    = dsl::CFGNonterminal<"Atom">;
+using True    = dsl::CFGTerminal<"true">;
+using Not     = dsl::CFGTerminal<"not">;
+
+auto grammar = dsl::make_cfg<"Formula"> (
+    dsl::CFGProduction<"Formula", Atom> (),
+    dsl::CFGProduction<"Atom", True> (),
+    dsl::CFGProduction<"Atom", Not, Atom> ());
+\end{lstlisting}
+
+The advantage of this form is that the symbol names are checked by the
+compiler: a misspelled nonterminal is a different type, and a terminal used
+where a nonterminal was intended is a different type. The disadvantage is
+that it is verbose, and that the grammar is spread across a dozen type
+aliases.
+
+\subsection{An S-expression grammar}
+
+The S-expression form is more compact and is the natural choice for a
+grammar that is stored as data rather than written in code. The syntax is
+\code{(grammar (start Expr) (rule Expr (Expr "+" Term) (Term)) ...)}.
+
+\begin{lstlisting}[style=dslsexpr,caption={A grammar written as an S-expression.},label={lst:ch33-sexpr}]
+(grammar
+  (start Formula)
+  (rule Formula (Atom))
+  (rule Atom ("true") ("false") ("not" Atom) ("(" Formula ")")))
+\end{lstlisting}
+
+The convention that makes this work is short but essential:
+\emph{quoted atoms are terminals, unquoted atoms are nonterminals}. A
+quoted atom such as \code{"not"} becomes a terminal whose text is
+\code{not}; an unquoted atom such as \code{Atom} becomes a nonterminal.
+This is exactly the convention the S-expression reader already uses
+elsewhere in DSLtk, and it means the same reader, the same quoting rules
+and the same \code{;} comment syntax apply to grammars as to rewrite rules.
+
+Two consequences follow. First, an operator terminal \emph{must} be quoted:
+an unquoted \code{+} would be read as a nonterminal named \code{+}, and the
+grammar would fail validation with \code{"undefined CFG nonterminal +"}.
+Second, an alternative is always a list, even when it contains a single
+symbol, so a rule whose right-hand side is one terminal is written
+\code{("true")} and not \code{"true"}; writing the latter raises
+\code{"CFG alternative must be a list"}.
+
+An empty list \code{()} is the epsilon production. The
+\code{(rule A ())} alternative produces a rule with an empty right-hand
+side, which is how nullable nonterminals are written.
+
+Each alternative of a \code{(rule ...)} becomes a separate \code{CFGRule},
+so \code{(rule Atom ("true") ("false"))} contributes two rules, both with
+left-hand side \code{Atom}.
+
+\subsection{Programmatically}
+
+The third route is to fill in the public members directly. This is the
+route to take when the grammar is computed rather than written.
+
+\begin{lstlisting}[style=dslcpp,caption={A grammar assembled programmatically. The fragment is a statement sequence and belongs inside a function body.},label={lst:ch33-programmatic}]
+dsl::CFG grammar;
+grammar.start = "S";
+grammar.add ("S", { dsl::CFGSymbol::nonterminal ("A") });
+grammar.add ("S", { dsl::CFGSymbol::nonterminal ("B") });
+grammar.add ("A", { dsl::CFGSymbol::nonterminal ("C") });
+grammar.add ("B", { dsl::CFGSymbol::nonterminal ("C") });
+grammar.add ("C", { dsl::CFGSymbol::token ("x") });
+\end{lstlisting}
+
+\code{add} takes its arguments by value and appends to \code{productions}.
+Note that the programmatic route does not validate: \code{validate ()} is
+called by \code{make_cfg} and by \code{sexpr_grammar}, but a grammar built
+by hand is only checked when \code{parse} is called, because \code{parse}
+begins with a call to \code{validate ()}.
+
+\subsection{What validation checks}
+
+\code{CFG::validate ()} performs three checks and throws
+\code{std::invalid_argument} if any of them fails.
+
+\begin{itemize}
+\item Every left-hand side must be non-empty; otherwise the error is
+\code{"empty CFG nonterminal name"}.
+\item The start symbol must be defined by some rule; otherwise the error is
+\code{"undefined CFG start symbol"}.
+\item Every nonterminal appearing on a right-hand side must be defined by
+some rule; otherwise the error is
+\code{"undefined CFG nonterminal "} followed by the name.
+\end{itemize}
+
+Terminals are not checked, because a terminal is matched by string equality
+against the input and there is nothing to define. A grammar may mention a
+terminal that never appears in any input; it simply never matches.
+
+\section{The Earley algorithm}
+
+The parser is an implementation of the classical Earley recogniser with
+tree construction grafted on. It maintains a \emph{chart}: one set of items
+per input position. Position zero is before the first token, position
+\(k\) is after the first \(k\) tokens, so there are \(n+1\) sets for \(n\)
+tokens.
+
+Each item records four things.
+
+\begin{description}
+\item[\code{rule}] the index of the production the item is an instance of.
+\item[\code{dot}] the position in that production's right-hand side, i.e.\ how
+much of the production has been recognised so far.
+\item[\code{origin}] the input position at which the left-hand side of the
+production began.
+\item[\code{children}] the sub-trees collected so far, one per symbol
+already passed by the dot.
+\end{description}
+
+A production \code{A -> B C} at dot position one with origin three is
+written \code{A -> B . C}, meaning that the parser is in the middle of
+matching \code{A}, has already matched a \code{B} beginning at position
+three, and is now looking for a \code{C}.
+
+Before parsing begins, the grammar is copied and an augmented rule
+\code{$start -> start} is inserted at index zero. The parser then starts
+from the item \code{$start -> . start} at position zero with origin zero.
+On success the tree that is returned is the child of that augmented item ---
+that is, the tree is rooted at the start nonterminal, and the artificial
+\code{$start} node never appears in the output.
+
+\begin{figure}[htbp]
+\begin{dslgraph}
+\node[anchor=north west, draw=nodefg, fill=nodebg, rounded corners=2pt,
+      text width=3.9cm, align=left, font=\scriptsize, inner sep=4pt] (c0) at (0,0)
+  {\textbf{position 0}\\
+   $\rightarrow$ . S\\
+   S $\rightarrow$ . A B\\
+   A $\rightarrow$ . a};
+\node[anchor=north west, draw=nodefg, fill=nodebg, rounded corners=2pt,
+      text width=3.9cm, align=left, font=\scriptsize, inner sep=4pt] (c1) at (4.6,0)
+  {\textbf{position 1}\\
+   A $\rightarrow$ a .\\
+   S $\rightarrow$ A . B\\
+   B $\rightarrow$ . b};
+\node[anchor=north west, draw=nodefg, fill=nodebg, rounded corners=2pt,
+      text width=3.9cm, align=left, font=\scriptsize, inner sep=4pt] (c2) at (9.2,0)
+  {\textbf{position 2}\\
+   B $\rightarrow$ b .\\
+   S $\rightarrow$ A B .\\
+   $\rightarrow$ S .};
+\node[draw=nodefg, fill=termbg, rounded corners=1pt, inner sep=2pt,
+      font=\scriptsize] (ta) at (4.6,2.6) {$a$};
+\node[draw=nodefg, fill=termbg, rounded corners=1pt, inner sep=2pt,
+      font=\scriptsize] (tb) at (9.2,2.6) {$b$};
+\draw[dslfeedback] (ta.south) -- (4.6,1.7);
+\draw[dslfeedback] (tb.south) -- (9.2,1.7);
+\end{dslgraph}
+\caption{An Earley chart for the grammar \code{S -> A B}, \code{A -> a},
+\code{B -> b} over the input \code{ab}. Each column is one input
+position; the dots mark how far each production has been recognised. The
+dotted arrows indicate which token is consumed to move from one column to
+the next. The item \code{-> . S} is the augmented rule, and the
+final column contains both the completed \code{S -> A B .} and the
+completed augmented rule \code{-> S .}, which is the item that
+proves the parse succeeded.}
+\label{fig:ch33-chart}
+\end{figure}
+
+Figure~\ref{fig:ch33-chart} shows the chart for a tiny grammar. The three
+columns are the three input positions; the dotted arrows mark the tokens
+consumed on the way from one column to the next. Notice that the chart is
+not a simple path: the column at position one contains three items, because
+the parser has not yet decided whether the \code{S} it is building will be
+completed with a \code{B} or not.
+
+\subsection{The three operations}
+
+The heart of the algorithm is a loop over positions, and within a position a
+loop over the items of that position's set. Each item is handled by exactly
+one of three operations, determined by what the dot is pointing at.
+
+\textbf{Scanning} applies when the dot points at a terminal. If the
+terminal's name is equal to the text of the token at the current position,
+the dot advances by one, a child \code{ASTNode ("token", token-text)} is
+appended, and the advanced item is inserted into the set for the next
+position. If the names differ, nothing happens: the item simply dies.
+
+\textbf{Prediction} applies when the dot points at a nonterminal. Every rule
+whose left-hand side is that nonterminal is inserted into the current
+position's set with the dot at zero and the origin at the current position.
+This is the step that makes left recursion work: the rule \code{E -> E +
+T} predicts itself, producing an item \code{E -> . E + T} at the same
+position, and the insertion guard described below refuses to insert it a
+second time, so the recursion terminates.
+
+Prediction is followed by an \emph{epsilon fix-up}. If a nullable production
+of the predicted nonterminal has already been completed at this position,
+then the item being predicted can advance past the nonterminal immediately.
+The fix-up searches the current position's set for items that are complete,
+whose origin is the current position and whose left-hand side is the
+predicted nonterminal, and for each of them inserts an advanced copy of the
+item under consideration with the completed sub-tree as the new child.
+
+\textbf{Completion} applies when the dot is at the end of the right-hand
+side. The item's collected children are wrapped in a node
+\code{ASTNode (rule.lhs, children)}, and then every item in the set at the
+item's \emph{origin} that was waiting for this nonterminal is advanced: its
+dot moves past the nonterminal and the new sub-tree becomes its child. This
+is the step that propagates a completed nonterminal back to its parents.
+
+\begin{pseudocode}[Predict, scan and complete]
+\textbf{function} process (chart, pos, item)\\
+\quad rule = rules[item.rule]\\
+\quad \textbf{if} item.dot equals the length of rule.rhs\\
+\qquad \qquad \textbf{// completion}\\
+\qquad \qquad tree = ASTNode(rule.lhs, item.children)\\
+\qquad \qquad \textbf{for} each waiting in chart[item.origin]\\
+\qquad \qquad \qquad \textbf{if} waiting expects the nonterminal rule.lhs\\
+\qquad \qquad \qquad\qquad waiting.dot = waiting.dot plus 1\\
+\qquad \qquad \qquad\qquad append tree to waiting.children\\
+\qquad \qquad \qquad\qquad insert (chart, pos, waiting)\\
+\quad \textbf{else if} rule.rhs[item.dot] is a terminal\\
+\qquad \qquad \textbf{// scanning}\\
+\qquad \qquad \textbf{if} pos is less than the token count\\
+\qquad \qquad \qquad \textbf{and} rule.rhs[item.dot].name equals tokens[pos]\\
+\qquad \qquad \qquad\qquad item.dot = item.dot plus 1\\
+\qquad \qquad \qquad\qquad append ASTNode("token", tokens[pos])\\
+\qquad \qquad \qquad\qquad insert (chart, pos plus 1, item)\\
+\quad \textbf{else}\\
+\qquad \qquad \textbf{// prediction}\\
+\qquad \qquad \textbf{for} each rule with the same left-hand side\\
+\qquad \qquad \qquad\qquad insert (chart, pos, item with dot zero)\\
+\qquad \qquad \textbf{// epsilon fix-up}\\
+\qquad \qquad \textbf{for} each completed in chart[pos]\\
+\qquad \qquad \qquad\qquad \textbf{if} completed derives the predicted nonterminal\\
+\qquad \qquad \qquad\qquad\qquad \textbf{then} advance the item with it
+\end{pseudocode}
+
+\subsection{The insertion guard}
+
+The single most important detail in the implementation is the insertion
+guard. Every insertion into the chart goes through a lambda that first
+scans the target set for an item with the same triple of
+\code{(rule, dot, origin)}; if one exists, the new item is discarded.
+
+\begin{pseudocode}[The chart insertion guard]
+\textbf{function} insert (chart, position, item)\\
+\quad \textbf{for} each old in chart[position]\\
+\qquad \qquad \textbf{if} old.rule equals item.rule\\
+\qquad \qquad \qquad \textbf{and} old.dot equals item.dot\\
+\qquad \qquad \qquad \textbf{and} old.origin equals item.origin\\
+\qquad \qquad \qquad\qquad \textbf{return}\\
+\quad append item to chart[position]
+\end{pseudocode}
+
+This guard has two distinct jobs, and it is worth keeping them apart,
+because only one of them is about ambiguity.
+
+The first job is termination. Without the guard, prediction of a
+left-recursive rule would insert the same item forever. The guard turns
+the infinite tree of possible derivations into a finite chart. This is
+precisely what distinguishes Earley parsing from the naive recursive
+descent that a left-recursive grammar would otherwise provoke.
+
+The second job is ambiguity resolution. Two different derivations of the
+same nonterminal at the same position would, in general, produce items with
+the same \code{(rule, dot, origin)} triple but different children. The
+guard keeps the first and discards the second. Since the guard is applied
+at every insertion --- not just at prediction --- the first derivation
+discovered for a given configuration wins throughout, and the tree that
+emerges is the first derivation the search happened to reach.
+
+\subsection{The main loop}
+
+The outer loop runs over the positions, and the inner loop runs over the
+items of the current position's set. The inner loop's bound is
+\code{chart[pos].size ()}, re-evaluated on every iteration, and the item is
+\emph{copied} out of the set before it is processed.
+
+That re-evaluation is essential rather than an optimisation. Prediction
+inserts into the current position's set, and so does the epsilon fix-up;
+those items must themselves be processed before the parser moves on to the
+next position, or nullable productions and left recursion would be handled
+incorrectly. Because the bound is re-read, the loop naturally extends to
+cover them. Copying the item before processing it is what allows the
+processing to append to the very set being iterated over without
+invalidating the iteration.
+
+\subsection{Reading the result}
+
+When the loop finishes, the parser looks at the last set in the chart --- the
+one at position \(n\) --- and searches it for the item with rule index zero
+(the augmented rule), dot one and origin zero. If that item is there, the
+parse succeeded: the tree is that item's first child, and the position is
+the token count.
+
+If the item is not there, the parse failed. The parser then finds the
+largest position whose set is not empty and reports that as the failure
+position, and collects the names of the terminals that the items in that set
+were waiting for, de-duplicated. If no item was waiting for a terminal but
+the parser stopped before the end of the input, the list
+\code{"<end-of-input>"} is appended, because the only way forward from that
+point would have been to stop.
+
+\section{Why Earley, and what it costs}
+
+\subsection{Left recursion, epsilon and ambiguity}
+
+The three properties that distinguish Earley parsing from a recursive-descent
+parser are all consequences of the chart.
+
+\textbf{Left recursion} is handled because the parser never recurses. The
+rule \code{E -> E + T} is not expanded by calling the parser on \code{E};
+it is expanded by predicting an item \code{E -> . E + T} in the current
+chart set, and the guard then prevents that item from being predicted
+again. The result is a chart that represents the left-recursive derivation
+without any call stack, and the tree that comes out is left-associative:
+parsing \code{n + n} with \code{E -> E + T | T} and
+\code{T -> n} yields \code{(E (E (T (token n))) (token +) (T (token n)))},
+as the listing shows. A recursive-descent parser written in the obvious way
+would loop forever on that grammar; a parser written with the usual
+left-factoring trick would need the grammar to be rewritten by hand.
+
+\textbf{Epsilon productions} are handled by two mechanisms working together.
+The prediction step inserts an item for a nullable rule at the current
+position, and because that item's dot is immediately at the end of its
+right-hand side, it is completed there and then. The epsilon fix-up in the
+prediction step handles the case where the completion of a nullable
+production has already happened before the item that needs it was processed,
+by advancing that item past the nonterminal directly. The listing shows the
+grammar \code{S -> A x} with \code{A} nullable parsing the single token
+\code{x} into \code{(S (A) (token x))}: the \code{A} node appears with no
+children, because it derived the empty string.
+
+\textbf{Ambiguity} is not solved but rather decided. See
+Section~\ref{sec:ch33-ambiguity}.
+
+\subsection{The cost}
+
+The classical bound for Earley parsing is \(O(n^{3})\) time for an input of
+\(n\) tokens and a grammar of bounded size. The cubic term comes from the
+completion step: every completed item scans the entire set at its origin in
+order to find the items waiting for it, and there are \(O(n^{2})\) items in
+the chart overall.
+
+The chart itself holds \(O(n^{2})\) items, since an item is identified by a
+rule, a dot and an origin, and there are \(O(n)\) positions and \(O(n)\)
+origins. Each item additionally carries a \code{std::vector<ASTNode>} of
+children, and each child is a whole sub-tree, so the memory used by the
+parser is dominated by the tree being built rather than by the chart
+structure. On a grammar with many long productions this is a substantial
+allocation load.
+
+For comparison, a PEG matcher consumes each token once per rule and never
+allocates a chart, so it is typically an order of magnitude faster on the
+same input. The Earley facility earns its cost only when the grammar
+genuinely needs the generality: left recursion, epsilon, or ambiguity that a
+PEG cannot express at all.
+
+\section{Ambiguity: the first derivation wins}
+\label{sec:ch33-ambiguity}
+
+Consider the grammar of the listing: \code{S -> A | B},
+\code{A -> C}, \code{B -> C}, \code{C -> x}. The token \code{x} has
+two derivations, through \code{A} and through \code{B}, and the parser
+returns \code{(S (A (C (token x))))}.
+
+The reason is the guard. Both derivations eventually try to insert the item
+\code{S -> A .} or \code{S -> B .} at the same position with the same
+origin, and more importantly both try to advance the augmented item
+\code{-> . S} at position zero with a completed \code{S}. The
+first advance wins the race; the second is refused because the triple
+\code{(rule 0, dot 1, origin 0)} is already present at that position. The
+derivation that reached the guard first is the one that is kept.
+
+Three consequences follow, and they are worth stating precisely.
+
+First, the policy is \emph{deterministic}. The same grammar and the same
+input always produce the same tree, on every run and on every platform.
+That is a real property, and it is what distinguishes this from a parser
+that returns an arbitrary member of the set of parse trees.
+
+Second, the policy is \emph{order-dependent}. The grammar's rule order is
+part of the semantics. In the example, the rule \code{S -> A} was added
+before \code{S -> B}, and the derivation through \code{A} was found
+first. Swapping the two rules would swap the result. An ambiguous grammar
+is therefore a grammar whose meaning depends on how it was written down,
+which is exactly the property that makes ambiguity dangerous in practice.
+
+Third, the policy is \emph{not} a disambiguation by precedence or
+associativity. There is no notion of a preferred alternative beyond "the one
+the search reached first", and no way to ask for a different one. If a
+grammar is ambiguous and the tree you want is not the one you get, the
+answer is to remove the ambiguity from the grammar --- by factoring the
+common prefix, by introducing a precedence nonterminal, or by splitting the
+terminal vocabulary so that the two derivations are distinguishable.
+
+\section{Edge cases and limits}
+
+\begin{warnbox}[Terminals are token texts]
+A terminal in this system matches a token by \emph{string equality}. There
+is no way to say ``a terminal that matches any token whose text looks like
+an integer''. If the lexer emits the text \code{number} for every numeric
+literal, then the grammar can have a terminal \code{"number"}, but the tree
+will record the token text \code{number} and not the literal value. A
+grammar that needs to see the value of a numeric literal must therefore
+either put the value into the token text and match it exactly, or use a
+different mechanism --- such as a PEG or a hand-written recursive-descent
+parser --- to carry the value alongside the tree.
+\end{warnbox}
+
+The remaining limits are as follows.
+
+\textbf{No error recovery.} A failed parse yields a position and a list of
+expected terminals, and nothing else. There is no attempt to resynchronise,
+no partial tree, and no list of every failure. For a compiler front end
+this is usually what you want; for an interactive editor it is not.
+
+\textbf{The expected list is derived, not predicted.} The names in
+\code{expected} are the terminals that the items sitting at the failure
+position happened to be waiting for. They are a good approximation of what
+the grammar could have accepted there, but they are not a complete
+first-set computation, and they will not mention a terminal that the
+grammar could have accepted through a derivation that was pruned by the
+guard.
+
+\textbf{Empty input.} Parsing an empty token list succeeds if and only if
+the start symbol is nullable. The tree in that case is the start symbol
+with no children. The empty string is not a special case anywhere in the
+implementation.
+
+\textbf{Grammar size is not checked against the input.} The parser makes no
+attempt to detect useless or unreachable rules, and it does not report
+rules that can never match. A grammar with a typo in a terminal name simply
+never matches that terminal.
+
+\textbf{Validation is shallow.} \code{validate ()} checks that the start
+symbol is defined and that every nonterminal on a right-hand side is
+defined. It does not check for left recursion, for ambiguity, for
+unreachable symbols, or for the possibility of an infinite derivation. A
+grammar that is valid under \code{validate ()} may still be useless, and
+the parser will simply fail on every input.
+
+\textbf{No left factoring is performed.} If two rules for the same
+nonterminal share a prefix, the parser will explore both, which is correct
+but quadratic in the shared prefix length. Writing the grammar in factored
+form is the user's job.
+
+\textbf{The tree is not shared.} Every completed item allocates a fresh
+\code{ASTNode} for its sub-tree, so a grammar in which the same
+nonterminal is derived many times produces many copies of the same tree. For
+large inputs this is the dominant cost, and it is the reason the graph-based
+facilities of \chapref{ch:terms-and-reduction} exist: they encode a term
+once and share the repeated parts.
+
+\section{Closing}
+
+The context-free grammar facility is DSLtk's answer to the question that
+the PEG subsystem cannot answer: how do you write the grammar you actually
+mean? It accepts left-recursive rules, nullable rules and ambiguous rules,
+it builds an \code{ASTNode} as it recognises, and it produces the same tree
+every time for the same input. What it gives up in exchange is speed, and
+the ability to choose between competing derivations.
+
+The three ways of writing a grammar --- typed productions, an
+S-expression, and programmatic assembly --- are three spellings of the same
+data structure, and the first two exist because grammars are often better
+written down than computed. The parser itself is a textbook Earley
+recogniser with tree construction attached, and the insertion guard that
+makes it terminate is also the thing that decides what happens when a
+grammar admits more than one derivation.
+
+With this chapter the book has covered DSLtk's parsing facilities. The next
+chapter moves up one more level of abstraction, from languages that are
+parsed to languages that are \emph{written}: a built-in preprocessor with
+macros, conditionals, includes and an optional scripting hook.
