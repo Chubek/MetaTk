@@ -11,12 +11,17 @@
 #include <vector>
 
 namespace metajit {
+struct NativeFrame;
 namespace detail {
 template<class T> struct Signature { static constexpr bool supported = false; };
 template<class R, class... A> struct Signature<R (*)(A...)> {
     static constexpr bool supported = std::is_same_v<R, std::int64_t> &&
         (std::is_same_v<A, std::int64_t> && ...) && sizeof...(A) <= 6;
     static constexpr std::size_t arity = sizeof...(A);
+};
+template<> struct Signature<std::int64_t (*)(NativeFrame *)> {
+    static constexpr bool supported = true;
+    static constexpr std::size_t arity = 1;
 };
 }
 
@@ -40,10 +45,11 @@ public:
     Executable &operator=(Executable &&other) noexcept;
 
     /** Signature must be an int64_t function pointer with up to six int64_t
-     * arguments. Throws for an absent entry, wrong arity, or empty owner. */
+     * arguments, or the internal NativeFrame transition ABI from OSR.hpp.
+     * Throws for an absent entry, wrong arity, or empty owner. */
     template<class Signature> Signature get(std::string_view name) const {
         static_assert(detail::Signature<Signature>::supported,
-                      "MetaJIT functions accept/return int64_t, with at most six arguments");
+                      "MetaJIT requires an int64 signature or NativeFrame transition");
         auto address = lookup(name, detail::Signature<Signature>::arity);
         Signature function{};
         static_assert(sizeof function == sizeof address);
@@ -70,6 +76,7 @@ class CodeBuffer {
 public:
     static constexpr std::size_t max_size = 64 * 1024 * 1024;
     void append(std::initializer_list<std::uint8_t> bytes);
+    void append(const std::vector<std::uint8_t> &bytes);
     void patch64(std::size_t offset, std::uint64_t value);
     void entry(std::string name, std::size_t offset, std::size_t arity);
     Executable finalize() const;

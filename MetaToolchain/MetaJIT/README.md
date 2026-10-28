@@ -3,6 +3,8 @@
 MetaJIT preprocesses inline MetaIL blocks into C++ that constructs native code.
 It uses the real GPPX and MetaIL libraries. Execution currently requires Linux
 x86-64 with the System V ABI; preprocessing does not execute generated code.
+It also provides a [VM-backed tracing runtime](TRACING.md), with a portable
+interpreter fallback, native hot-loop compilation, OSR and deoptimization.
 
 ## Build and verify
 
@@ -60,11 +62,9 @@ remains alive. There is deliberately no eviction/invalidation API that could
 silently dangle a borrowed native pointer. This cache neither validates machine
 code safety nor compiles MetaIL on its own.
 
-## Unimplemented subsystems
+## Tracing, OSR and deoptimization
 
-`TracingJIT.hpp`, `OSR.hpp`, and `Deopt.hpp` are still empty placeholders, not
-working APIs. Implementing them requires decisions absent from the current
-runtime: an interpreter/trace recording interface, frame and live-value maps,
-safe transition points, and guard/side-exit recovery semantics. The method
-cache above does **not** claim to supply these facilities. MetaIL's scope remains
-a scalar signed-64 intermediate language, not a tracing runtime.
+`TracingJIT.hpp`, `OSR.hpp`, and `Deopt.hpp` now implement the version-1 VM
+transition contract. Link `MetaJIT::Tracing`; see [the tracing guide](TRACING.md)
+for architecture, ownership, limits and an executable API example. The tracing
+runtime is separate from the raw method cache and does not change MetaIL's scope.

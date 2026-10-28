@@ -44,6 +44,10 @@ void CodeBuffer::append(std::initializer_list<std::uint8_t> bytes) {
     if (bytes.size() > max_size - bytes_.size()) throw std::length_error("MetaJIT: code size limit exceeded");
     bytes_.insert(bytes_.end(), bytes.begin(), bytes.end());
 }
+void CodeBuffer::append(const std::vector<std::uint8_t> &bytes) {
+    if (bytes.size() > max_size - bytes_.size()) throw std::length_error("MetaJIT: code size limit exceeded");
+    bytes_.insert(bytes_.end(), bytes.begin(), bytes.end());
+}
 void CodeBuffer::patch64(std::size_t offset, std::uint64_t value) {
     if (offset > bytes_.size() || bytes_.size() - offset < 8)
         throw std::out_of_range("MetaJIT: immediate patch outside code");
