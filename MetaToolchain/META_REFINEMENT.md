@@ -1,5 +1,10 @@
 # Meta* refinement — first verified batch
 
+**Historical checkpoint:** the runtime gaps listed below were subsequently
+implemented under the approved baseline. See [META_RUNTIME_REPORT.md](META_RUNTIME_REPORT.md)
+for current APIs, contracts and verification; the first-pass results remain here
+as an audit trail.
+
 ## API additions and behavior changes
 
 - `metajit::MethodBasedJIT` is now implemented in the formerly empty

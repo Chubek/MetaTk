@@ -4,6 +4,19 @@ All notable changes are documented here, following Keep a Changelog.
 
 ## [Unreleased]
 
+### Added — MetaVM and tracing execution
+- Version-1 scalar register bytecode, bounded binary decoding/serialization,
+  portable signed-64 interpreter, explicit host calls and resumable budgets.
+- Optional MetaIL-to-bytecode compiler with initialization/CFG checking, lazy
+  select lowering, ordered effects, and the `vmweave compile/run` CLI.
+- Native hot-loop recording/compilation, materialized-frame OSR, guarded side
+  exits and owning deoptimization snapshots in MetaJIT; Linux x86-64 native
+  execution with an interpreter-only fallback elsewhere.
+- Documented bytecode/frame ABIs, limits and ownership; differential execution,
+  hostile-input mutation, boundary/trap, suspension and CLI regressions.
+- Optional `MetaVM::VM`, `MetaVM::Weave` and `MetaJIT::Tracing` CMake targets;
+  existing C11 ABIs and pure-C core builds remain unchanged.
+
 ### Added — MetaAS and MetaLD embedding APIs
 - Versioned C11 opaque-handle APIs and C++20 RAII wrappers for assembly and
   linking in one process, with owned results/copied inputs and documented

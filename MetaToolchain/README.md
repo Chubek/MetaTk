@@ -31,6 +31,12 @@ versioned C11 APIs and C++20 RAII wrappers for in-memory assembly/linking,
 custom directives, host symbol definitions and lazy symbol resolvers. Link
 `MetaAS::metaas` and `MetaLD::metald` together to compile and link in one process.
 
+**Execution:** [MetaVM](MetaVM/README.md) supplies a versioned scalar register VM
+and optional MetaIL-to-bytecode compiler. [MetaJIT](MetaJIT/README.md) supplies
+inline native preprocessing, lazy method compilation and VM-backed tracing with
+OSR/deoptimization. Enable `ARCHDB_BUILD_METAJIT=ON` for the integrated runtime,
+or `ARCHDB_BUILD_METAVM=ON` for just the portable core; both default OFF.
+
 For cross-language use, see [the bindings guide](docs/BINDINGS.md):
 `MetaArchABI.h` provides opaque C ABI v1 handles, `MetaArchAPI.hpp` provides an
 independent C++17 RAII API, `bindings/d/metaarch.di` provides D declarations,

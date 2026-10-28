@@ -1,5 +1,11 @@
 # MetaArch — native and cross-language API checkpoint
 
+## MetaVM / MetaJIT runtime completion (2026-10-28)
+
+The approved scalar VM, MetaIL adapter, trace compiler, OSR and deoptimization
+implementation has a dedicated [runtime report](META_RUNTIME_REPORT.md).
+Existing C ABI v1 APIs remain unchanged. The older checkpoints below are retained.
+
 ## MetaAS / MetaLD embedding APIs (2026-10-24; report finalized 2026-10-27)
 
 ### API additions and compatibility
