@@ -62,22 +62,44 @@ local function each_expr(fn,callback)
   for _,s in ipairs(fn.statements) do if s.expr then s.expr=callback(s.expr) end end
 end
 local function assignments(f)
-  -- Stable conservative fixed point. A RHS call is a side effect: preserve it as eval.
-  local any=false
-  for _=1,64 do
-    local used={}
-    for _,s in ipairs(f.statements) do if s.expr then ir.vars(s.expr,used) end end
-    local kept,changed={},false
-    for _,s in ipairs(f.statements) do
-      if s.kind=='let' and not used[s.name] then
-        if not ir.pure(s.expr) then kept[#kept+1]={kind='eval',expr=s.expr} end
-        changed=true
-      else kept[#kept+1]=s end
+  -- Backward liveness over the real CFG, including loops and joins. Ignore
+  -- reads from discardable dead RHSs so long dead chains need no round limit.
+  local graph=analysis.cfg(f)
+  local inputs={};for i in ipairs(graph.blocks) do inputs[i]={} end
+  local function transfer(b,removed)
+    local live={}
+    for _,next in ipairs(b.succ) do for name in pairs(inputs[next]) do live[name]=true end end
+    for i=b.last,b.first,-1 do
+      local s=f.statements[i]
+      local dead=s.kind=='let' and not live[s.name]
+      if dead and removed then removed[i]=true end
+      if s.kind=='let' then live[s.name]=nil end
+      -- Calls and possibly trapping operations must still be evaluated, even
+      -- when the assigned value is never read.
+      if s.expr and (not dead or not ir.pure(s.expr)) then ir.vars(s.expr,live) end
     end
-    f.statements=kept
-    if not changed then break end
-    any=true
+    return live
   end
+  local changed=true
+  while changed do
+    changed=false
+    for i=#graph.blocks,1,-1 do
+      local live=transfer(graph.blocks[i])
+      for name in pairs(live) do
+        if not inputs[i][name] then inputs[i][name]=true;changed=true end
+      end
+    end
+  end
+  local removed={}
+  for _,b in ipairs(graph.blocks) do transfer(b,removed) end
+  local kept,any={},false
+  for i,s in ipairs(f.statements) do
+    if removed[i] then
+      any=true
+      if not ir.pure(s.expr) then kept[#kept+1]={kind='eval',expr=s.expr} end
+    else kept[#kept+1]=s end
+  end
+  f.statements=kept
   return any
 end
 local function local_propagate(f,kind)

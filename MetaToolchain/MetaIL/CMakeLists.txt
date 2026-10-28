@@ -107,6 +107,7 @@ add_test(NAME dsl-rewrite-semantics COMMAND ${Python3_EXECUTABLE}
 add_test(NAME integration COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/run.sh $<TARGET_FILE:metail>)
 add_test(NAME numeric-binding COMMAND metail lua ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_numeric.lua $<TARGET_FILE:metanum_native>)
 add_test(NAME weighstone-optimizations COMMAND metail lua ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_weighstone.lua)
+add_test(NAME dead-assignments COMMAND metail lua ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_dead_assignments.lua)
 add_test(NAME runtime-hardening COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/runtime_tests.py $<TARGET_FILE:metail>)
 add_test(NAME generated-kernels COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_kernels.py --check)
 find_program(LUA_54_EXECUTABLE NAMES lua5.4)
