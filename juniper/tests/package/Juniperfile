@@ -1,0 +1,4 @@
+@module(package_test)
+@fn(twice, (x))
+  @return(mul(x,2))
+@end

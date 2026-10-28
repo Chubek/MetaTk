@@ -1,0 +1,7 @@
+// A build input and an IR module are the same thing in Juniper.
+#include "profile.xpp"
+@module(affine)
+@fn(scale, (x, y))
+  @let(product, mul(x, y))
+  @return(add(product, 7))
+@end

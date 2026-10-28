@@ -1,0 +1,5 @@
+@module(control)
+@fn(choose, (condition, divisor))
+  // tick() and division execute only in the selected arm.
+  @return(select(condition, tick(), div(64, divisor)))
+@end

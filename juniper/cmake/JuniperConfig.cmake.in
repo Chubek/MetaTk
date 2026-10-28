@@ -1,0 +1,5 @@
+@PACKAGE_INIT@
+include(CMakeFindDependencyMacro)
+find_dependency(MetaIL CONFIG)
+include("${CMAKE_CURRENT_LIST_DIR}/JuniperTargets.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/JuniperCompile.cmake")

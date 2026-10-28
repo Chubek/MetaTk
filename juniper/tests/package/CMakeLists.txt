@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.24)
+project(JuniperPackageConsumer LANGUAGES CXX)
+find_package(Juniper CONFIG REQUIRED)
+add_executable(consumer main.cpp)
+target_link_libraries(consumer PRIVATE Juniper::Juniper)
+juniper_compile(package_ir INPUT Juniperfile OUTPUT result.json MODE schedule)
+add_custom_target(package-artifact ALL DEPENDS package_ir)
