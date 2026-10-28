@@ -1,0 +1,13 @@
+#include "macros/arithmetic.xpp"
+#ifndef USE_FUSION
+#define @USE_FUSION 1
+#endif
+#if @USE_FUSION
+#include "profiles/fused.xpp"
+#else
+#include "profiles/base.xpp"
+#endif
+@module(affine_capstone)
+@fn(affine, (x, factor, bias))
+  @return(@affine_expression(x, factor, add(bias, 0)))
+@end

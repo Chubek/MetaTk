@@ -2,6 +2,8 @@
 #define @__juniper_standard_library 1
 #define @module module #1;
 #define @fn fn #1 #2 {
+#define @extern extern fn #1 #2 -> #3 from #4;
+#define @extern_symbol extern fn #1 #2 -> #3 from #4 symbol #5;
 #define @end }
 #define @let let #1 = #2;
 #define @return return #1;

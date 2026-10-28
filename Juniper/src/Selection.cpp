@@ -14,6 +14,8 @@ struct Plan {
 };
 class Selector {
     const Backend& backend_;
+    const std::vector<ExternalFunction>& externals_;
+    const std::unordered_map<std::string, std::size_t>& import_indices_;
     MachineFunction function_;
     std::unordered_map<const Expr*, Plan> plans_;
     std::size_t temporary_ = 0, label_ = 0, statement_ = 0;
@@ -96,8 +98,14 @@ class Selector {
             emit("LABEL", {}, {label(done)}, true, 1, "control");
         } else if (e.kind == METAIL_CALL) {
             std::vector<Operand> args{{Operand::Kind::symbol, e.name, 0}};
+            std::optional<std::size_t> external;
+            if (auto found = import_indices_.find(e.name); found != import_indices_.end()) {
+                external = found->second; args[0].name = externals_[*external].symbol;
+            }
             for (const auto& arg : e.args) args.push_back(expression(arg));
-            emit("CALL", result, std::move(args), true, 1, "control");
+            const bool is_void = external && externals_[*external].result == "void";
+            emit("CALL", is_void ? std::string{} : result, std::move(args), true, 1, "control");
+            function_.instructions.back().external = external;
         } else {
             std::vector<Operand> operands;
             for (const auto& leaf : selected.leaves) {
@@ -110,7 +118,9 @@ class Selector {
         return reg(std::move(result));
     }
 public:
-    Selector(const Backend& b, const Function& f) : backend_(b) { function_.name = f.name; function_.params = f.params; }
+    Selector(const Backend& b, const Function& f, const std::vector<ExternalFunction>& externals,
+             const std::unordered_map<std::string, std::size_t>& indices)
+        : backend_(b), externals_(externals), import_indices_(indices) { function_.name = f.name; function_.params = f.params; }
     MachineFunction run(const Function& f) {
         for (const auto& s : f.statements) {
             switch (s.kind) {
@@ -133,7 +143,10 @@ Result<MachineModule> select(const Module& m, const char* home) {
     auto valid = compiler.check(m); if (!valid) return *valid.error();
     try {
         MachineModule out; out.name = m.name; out.backend = m.backend;
-        for (const auto& f : m.functions) out.functions.push_back(Selector(m.backend, f).run(f));
+        out.externals = m.externals;
+        std::unordered_map<std::string, std::size_t> indices;
+        for (std::size_t i = 0; i < m.externals.size(); ++i) indices.emplace(m.externals[i].name, i);
+        for (const auto& f : m.functions) out.functions.push_back(Selector(m.backend, f, m.externals, indices).run(f));
         return out;
     } catch (const SelectionFailure& f) { return f.diagnostic; }
 }

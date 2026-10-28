@@ -1,0 +1,6 @@
+@module(external_calls)
+@extern_symbol(magnitude, (i64), i64, "c", "labs")
+@extern_symbol(custom, (i64), i64, "./libcustom.so", "custom_function")
+@fn(example, (x))
+  @return(custom(magnitude(x)))
+@end

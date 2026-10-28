@@ -1,0 +1,13 @@
+@module(manual_loop)
+@fn(sum_to_n, (n))
+  @let(index, 0)
+  @let(total, 0)
+@label(test)
+  @br(lt(index, n), body, done)
+@label(body)
+  @let(total, add(total, index))
+  @let(index, add(index, 1))
+  @goto(test)
+@label(done)
+  @return(total)
+@end

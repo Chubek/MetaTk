@@ -1,0 +1,5 @@
+#ifndef project_arithmetic_loaded
+#define @project_arithmetic_loaded 1
+#include "macros/constants.xpp"
+#define @project_scale mul(#1, @project_factor)
+#endif

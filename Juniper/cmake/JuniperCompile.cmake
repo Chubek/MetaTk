@@ -1,6 +1,6 @@
 include_guard(GLOBAL)
 
-# juniper_compile(name INPUT file OUTPUT file MODE emit|metail|optimize|select|schedule
+# juniper_compile(name INPUT file OUTPUT file MODE emit|metail|linkage|optimize|select|schedule
 #                 [INCLUDE_DIRECTORIES ...] [DEFINES NAME=value ...] [DEPENDS ...])
 # Dependencies from the real macro expansion are supplied to Make/Ninja through
 # a depfile, including conditional and nested includes and the standard library.
@@ -12,7 +12,7 @@ function(juniper_compile name)
   if(NOT J_MODE)
     set(J_MODE emit)
   endif()
-  if(NOT J_MODE MATCHES "^(emit|metail|optimize|select|schedule)$")
+  if(NOT J_MODE MATCHES "^(emit|metail|linkage|optimize|select|schedule)$")
     message(FATAL_ERROR "Unknown Juniper output mode: ${J_MODE}")
   endif()
   get_filename_component(input "${J_INPUT}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_SOURCE_DIR}")

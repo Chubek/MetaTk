@@ -46,6 +46,13 @@ struct Function {
     std::vector<std::string> params;
     std::vector<Statement> statements;
 };
+// C ABI signature and link dependency; scalar IR values are still signed-64.
+// Libraries are logical linker names or explicit paths containing '/'.
+struct ExternalFunction {
+    std::string name, symbol, library, result = "i64";
+    std::vector<std::string> params;
+    bool variadic = false;
+};
 
 struct Pattern {
     enum class Kind { reg, immediate, operation } kind = Kind::reg;
@@ -76,6 +83,7 @@ struct Module {
     std::string name;
     std::vector<Function> functions;
     Backend backend = Backend::portable();
+    std::vector<ExternalFunction> externals;
 };
 
 struct PreprocessOptions {
@@ -108,6 +116,7 @@ public:
     Result<bool> check(const Module&);
     Result<std::string> emit(const Module&); // complete, macro-free Juniper IR
     Result<std::string> emit_metail(const Module&);
+    Result<std::string> linkage(const Module&); // version-1 linker manifest JSON
     Result<Module> optimize(const Module&, const std::string& passes = "all", int rounds = 2);
     Result<std::string> analyze(const Module&, const std::string& passes = "all");
 };
@@ -126,6 +135,7 @@ struct Instruction {
     bool barrier = false;
     std::vector<std::size_t> dependencies; // original IDs, filled by schedule
     std::optional<std::uint64_t> cycle;
+    std::optional<std::size_t> external; // CALL import index; absent for legacy/internal calls
 };
 struct MachineFunction {
     std::string name;
@@ -137,6 +147,7 @@ struct MachineModule {
     Backend backend;
     std::vector<MachineFunction> functions;
     bool scheduled = false;
+    std::vector<ExternalFunction> externals;
 };
 // Deterministic minimum-cost tree covering. No commutation, duplication, CSE,
 // implicit legalization, physical register allocation, or ABI lowering.
@@ -147,6 +158,8 @@ Result<MachineModule> select(const Module&, const char* metail_home = nullptr);
 // critical-path list scheduling. Input is not modified, IDs remain stable.
 Result<MachineModule> schedule(const MachineModule&);
 std::string emit_machine_json(const MachineModule&);
+// Serialization of validated imports, without loading libraries or invoking a shell.
+std::string emit_linkage_json(const std::vector<ExternalFunction>&);
 std::string format(const Diagnostic&);
 
 } // namespace juniper

@@ -1,0 +1,5 @@
+#include "macros/arithmetic.xpp"
+@module(include_demo)
+@fn(scale, (x))
+  @return(@project_scale(x))
+@end

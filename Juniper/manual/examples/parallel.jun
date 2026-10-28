@@ -1,0 +1,7 @@
+@backend(manual_parallel)
+  @issue(2)
+  @resource(alu, 2)
+@end
+@fn(pair_product, (a, b, c, d))
+  @return(add(mul(a, b), mul(c, d)))
+@end

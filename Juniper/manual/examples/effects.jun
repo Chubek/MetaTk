@@ -1,0 +1,7 @@
+@module(manual_effects)
+@fn(observed, (x, divisor))
+  @let(sample, tick())
+  @let(quotient, div(x, divisor))
+  @eval(notify(sample))
+  @return(add(quotient, sample))
+@end

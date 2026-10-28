@@ -1,0 +1,4 @@
+@backend(capstone_base)
+  @issue(2)
+  @resource(alu, 2)
+@end

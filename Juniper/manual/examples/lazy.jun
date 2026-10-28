@@ -1,0 +1,4 @@
+@module(manual_lazy)
+@fn(choose, (enabled, divisor))
+  @return(select(enabled, device_read(), div(64, divisor)))
+@end

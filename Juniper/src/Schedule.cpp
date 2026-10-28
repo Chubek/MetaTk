@@ -1,13 +1,15 @@
 #include "Internal.hpp"
 #include <algorithm>
 #include <queue>
+#include <locale>
 #include <set>
 #include <sstream>
 #include <unordered_map>
 
 namespace juniper {
 namespace {
-Result<MachineFunction> schedule_function(const MachineFunction& input, const Backend& backend) {
+Result<MachineFunction> schedule_function(const MachineFunction& input, const Backend& backend,
+                                         const std::vector<ExternalFunction>& externals) {
     const auto n = input.instructions.size();
     if (n > 200000) return detail::error("JUN-E400", "machine instruction budget exceeded", input.name);
     MachineFunction out = input;
@@ -27,6 +29,16 @@ Result<MachineFunction> schedule_function(const MachineFunction& input, const Ba
         if (!inst.barrier && (inst.opcode == "CALL" || inst.opcode == "RET" || inst.opcode == "ASSUME" ||
             inst.opcode == "LABEL" || inst.opcode == "BR" || inst.opcode == "JUMP"))
             return detail::error("JUN-E400", "structural effect/control instruction must be a barrier", input.name);
+        if (inst.external) {
+            if (*inst.external >= externals.size() || inst.opcode != "CALL" || inst.operands.empty() ||
+                inst.operands[0].kind != Operand::Kind::symbol)
+                return detail::error("JUN-E400", "invalid external call reference", input.name);
+            const auto& f = externals[*inst.external];
+            if (inst.operands[0].name != f.symbol || inst.operands.size() - 1 < f.params.size() ||
+                (!f.variadic && inst.operands.size() - 1 != f.params.size()) ||
+                (f.result == "void" && !inst.result.empty()))
+                return detail::error("JUN-E400", "external call disagrees with its declaration", input.name);
+        }
         std::set<std::size_t> deps;
         std::set<std::string> uses;
         for (const auto& a : inst.operands) {
@@ -98,24 +110,52 @@ Result<MachineFunction> schedule_function(const MachineFunction& input, const Ba
 } // namespace
 Result<MachineModule> schedule(const MachineModule& input) {
     auto valid = detail::validate_backend(input.backend); if (!valid) return *valid.error();
+    auto imports = detail::validate_externals(input.externals); if (!imports) return *imports.error();
     if (input.functions.size() > 200000) return detail::error("JUN-E400", "function budget exceeded");
     MachineModule out; out.name = input.name; out.backend = input.backend; out.scheduled = true;
+    out.externals = input.externals;
     for (const auto& f : input.functions) {
-        auto scheduled = schedule_function(f, input.backend);
+        auto scheduled = schedule_function(f, input.backend, input.externals);
         if (!scheduled) return *scheduled.error();
         out.functions.push_back(std::move(*scheduled.get()));
     }
     return out;
 }
+std::string emit_linkage_json(const std::vector<ExternalFunction>& externals) {
+    using detail::quote;
+    std::vector<std::string> libraries;
+    std::set<std::string> seen;
+    for (const auto& f : externals)
+        if (seen.insert(f.library).second) libraries.push_back(f.library);
+    std::ostringstream out; out.imbue(std::locale::classic());
+    out << "{\"arguments\":[";
+    for (std::size_t i = 0; i < libraries.size(); ++i) {
+        const auto& lib = libraries[i];
+        out << (i ? "," : "") << quote(lib.find('/') == std::string::npos ? "-l" + lib : lib);
+    }
+    out << "],\"imports\":[";
+    for (std::size_t i = 0; i < externals.size(); ++i) {
+        const auto& f = externals[i];
+        out << (i ? "," : "") << "{\"calling_convention\":\"c\",\"library\":" << quote(f.library)
+            << ",\"name\":" << quote(f.name) << ",\"parameters\":[";
+        for (std::size_t p = 0; p < f.params.size(); ++p) out << (p ? "," : "") << quote(f.params[p]);
+        out << "],\"result\":" << quote(f.result) << ",\"symbol\":" << quote(f.symbol)
+            << ",\"variadic\":" << (f.variadic ? "true" : "false") << '}';
+    }
+    out << "],\"libraries\":[";
+    for (std::size_t i = 0; i < libraries.size(); ++i) out << (i ? "," : "") << quote(libraries[i]);
+    return out.str() + "],\"schema\":1}";
+}
 std::string emit_machine_json(const MachineModule& m) {
     using detail::quote;
     std::ostringstream out;
+    out.imbue(std::locale::classic());
     out << "{\"schema\":1,\"module\":" << quote(m.name) << ",\"backend\":" << quote(m.backend.name)
         << ",\"scheduled\":" << (m.scheduled ? "true" : "false") << ",\"issue_width\":" << m.backend.issue_width
         << ",\"resources\":{";
     bool comma = false;
     for (const auto& [name, n] : m.backend.resources) { if (comma) out << ','; comma = true; out << quote(name) << ':' << n; }
-    out << "},\"functions\":[";
+    out << "},\"linkage\":" << emit_linkage_json(m.externals) << ",\"functions\":[";
     for (std::size_t f = 0; f < m.functions.size(); ++f) {
         if (f) out << ',';
         const auto& fn = m.functions[f];
@@ -141,6 +181,8 @@ std::string emit_machine_json(const MachineModule& m) {
             for (std::size_t d = 0; d < inst.dependencies.size(); ++d) { if (d) out << ','; out << inst.dependencies[d]; }
             out << "],\"cycle\":";
             if (inst.cycle) out << *inst.cycle; else out << "null";
+            out << ",\"external\":";
+            if (inst.external) out << *inst.external; else out << "null";
             out << '}';
         }
         out << "]}";

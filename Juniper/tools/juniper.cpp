@@ -21,7 +21,7 @@ template<class T> T take(juniper::Result<T> result) {
 std::string help() {
     return "Juniper 0.1.0 — GPPX macro IR for MetaIL / MetaArch\n"
         "Usage: juniper COMMAND [FILE=Juniperfile] [options]\n"
-        "Commands: preprocess, check, emit, metail, optimize, analyze, select, schedule\n"
+        "Commands: preprocess, check, emit, metail, linkage, optimize, analyze, select, schedule\n"
         "  -o FILE             output (default stdout; '-' means stdout)\n"
         "  -I DIR              macro include directory (repeatable)\n"
         "  -D NAME[=VALUE]      define @NAME (repeatable)\n"
@@ -102,7 +102,7 @@ int run(int argc, char** argv) {
     std::string command = argv[1];
     if (command == "--help" || command == "-h") { std::cout << help(); return 0; }
     if (command == "--version") { std::cout << "Juniper 0.1.0\n"; return 0; }
-    const std::set<std::string> commands{"preprocess", "check", "emit", "metail", "optimize", "analyze", "select", "schedule"};
+    const std::set<std::string> commands{"preprocess", "check", "emit", "metail", "linkage", "optimize", "analyze", "select", "schedule"};
     if (!commands.contains(command)) fail(2, "unknown command: " + command);
     std::string input = "Juniperfile", output = "-", depfile, passes = "all", home;
     bool got_input = false, end_options = false, expand = true, optimize = false;
@@ -162,6 +162,7 @@ int run(int argc, char** argv) {
         if (command == "check") { (void)take(compiler.check(module)); return 0; }
         if (command == "emit" || command == "optimize") artifact = take(compiler.emit(module));
         else if (command == "metail") artifact = take(compiler.emit_metail(module));
+        else if (command == "linkage") artifact = take(compiler.linkage(module));
         else if (command == "analyze") artifact = take(compiler.analyze(module, passes));
         else {
             auto machine = take(juniper::select(module, home.empty() ? nullptr : home.c_str()));

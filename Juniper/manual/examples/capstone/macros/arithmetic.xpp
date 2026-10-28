@@ -1,0 +1,4 @@
+#ifndef capstone_arithmetic_loaded
+#define @capstone_arithmetic_loaded 1
+#define @affine_expression add(mul(#1, #2), #3)
+#endif

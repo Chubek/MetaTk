@@ -105,6 +105,13 @@ Result<bool> validate_structure(const Module& m) {
         return true;
     };
     bool ok = text(m.name) && m.functions.size() <= 200000;
+    if (m.externals.size() > 200000) ok = false;
+    for (const auto& f : m.externals) {
+        if (!ok || ++items > 200000 || !text(f.name) || !text(f.symbol) || !text(f.library) || !text(f.result) ||
+            f.params.size() > 200000 - items) { ok = false; break; }
+        items += f.params.size();
+        for (const auto& p : f.params) ok = ok && text(p);
+    }
     for (const auto& f : m.functions) {
         if (!ok || ++items > 200000 || !text(f.name) || f.params.size() > 200000 - items) { ok = false; break; }
         items += f.params.size();
@@ -121,6 +128,42 @@ Result<bool> validate_structure(const Module& m) {
         }
     }
     if (!ok) return error("JUN-E103", "invalid IR kind, embedded NUL, or IR budget exceeded (256 depth, 200000 items, 8 MiB strings)");
+    return true;
+}
+// Machine modules can be built without the frontend. Check their import table
+// without loading a Lua runtime during scheduling.
+Result<bool> validate_externals(const std::vector<ExternalFunction>& externals) {
+    std::set<std::string> names, symbols;
+    std::size_t items = 0, bytes = 0;
+    auto text = [&](const std::string& s) {
+        if (s.size() > 8 * 1024 * 1024 - bytes || s.find('\0') != std::string::npos) return false;
+        bytes += s.size(); return true;
+    };
+    auto type = [](const std::string& s) {
+        return s == "i8" || s == "u8" || s == "i16" || s == "u16" || s == "i32" || s == "u32" ||
+            s == "i64" || s == "u64" || s == "ptr";
+    };
+    auto symbol = [](const std::string& s) {
+        return !s.empty() && (identifier(s.substr(0, 1)) || s[0] == '.') &&
+            s.find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.$") == std::string::npos;
+    };
+    auto library = [](const std::string& s) {
+        return !s.empty() && s[0] != '-' && s[0] != '@' &&
+            std::none_of(s.begin(), s.end(), [](unsigned char c) { return c < 32 || c >= 127; }) &&
+            (s.find('/') != std::string::npos ||
+             s.find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_+.-") == std::string::npos);
+    };
+    if (externals.size() > 200000) return error("JUN-E400", "external import budget exceeded");
+    for (const auto& f : externals) {
+        if (++items > 200000 || f.params.size() > 200000 - items || !text(f.name) || !text(f.symbol) ||
+            !text(f.library) || !text(f.result)) return error("JUN-E400", "external import budget exceeded or embedded NUL");
+        items += f.params.size();
+        if (!identifier(f.name) || metail_operator_arity(f.name.c_str()) >= 0 || f.name == "true" || f.name == "false" ||
+            !names.insert(f.name).second || !symbols.insert(f.symbol).second || !symbol(f.symbol) || !library(f.library) ||
+            (!type(f.result) && f.result != "void") || (f.variadic && f.params.empty()))
+            return error("JUN-E400", "invalid or duplicate external declaration: " + f.name);
+        for (const auto& p : f.params) if (!text(p) || !type(p)) return error("JUN-E400", "invalid external parameter type");
+    }
     return true;
 }
 static std::string pattern_text(const Pattern& p) {
@@ -153,6 +196,13 @@ const metail_expr* Bridge::expression(const Expr& e) {
     return &out;
 }
 Bridge::Bridge(const Module& m) : params(m.functions.size()), statements(m.functions.size()) {
+    external_params.resize(m.externals.size());externals.reserve(m.externals.size());
+    for (std::size_t i = 0; i < m.externals.size(); ++i) {
+        const auto& f = m.externals[i];
+        for (const auto& p : f.params) external_params[i].push_back(p.c_str());
+        externals.push_back({f.name.c_str(), f.symbol.c_str(), f.library.c_str(), f.result.c_str(),
+            external_params[i].data(), external_params[i].size(), f.variadic ? 1 : 0});
+    }
     functions.reserve(m.functions.size());
     for (std::size_t i = 0; i < m.functions.size(); ++i) {
         const auto& f = m.functions[i];
@@ -166,7 +216,7 @@ Bridge::Bridge(const Module& m) : params(m.functions.size()), statements(m.funct
         }
         functions.push_back({f.name.c_str(), params[i].data(), params[i].size(), statements[i].data(), statements[i].size()});
     }
-    module = {m.name.empty() ? nullptr : m.name.c_str(), functions.data(), functions.size()};
+    module = {m.name.empty() ? nullptr : m.name.c_str(), functions.data(), functions.size(), externals.data(), externals.size()};
 }
 static Expr import_expression(const metail_expr& e) {
     Expr out; out.kind = e.kind; out.value = e.value;
@@ -177,6 +227,12 @@ static Expr import_expression(const metail_expr& e) {
 }
 Module import_module(const metail_module& m, Backend b) {
     Module out; out.name = m.name ? m.name : ""; out.backend = std::move(b);
+    for (std::size_t i = 0; i < m.external_count; ++i) {
+        const auto& f = m.externals[i];
+        ExternalFunction external{f.name, f.symbol, f.library, f.result, {}, f.variadic != 0};
+        for (std::size_t j = 0; j < f.param_count; ++j) external.params.emplace_back(f.params[j]);
+        out.externals.push_back(std::move(external));
+    }
     for (std::size_t i = 0; i < m.function_count; ++i) {
         const auto& f = m.functions[i];
         Function fn; fn.name = f.name;
@@ -248,6 +304,15 @@ Result<std::string> Compiler::emit_metail(const Module& m) {
 Result<std::string> Compiler::emit(const Module& m) {
     auto body = emit_metail(m); if (!body) return *body.error();
     return detail::emit_backend(m.backend) + *body.get();
+}
+Result<std::string> Compiler::linkage(const Module& m) {
+    auto valid = check(m); if (!valid) return *valid.error();
+    detail::Bridge bridge(m);
+    char* raw = nullptr;
+    if (metail_module_linkage(context_.get(), &bridge.module, &raw) != METAIL_OK)
+        return detail::error("JUN-E100", metail_last_error(context_.get()));
+    std::unique_ptr<char, decltype(&metail_free)> owned(raw, metail_free);
+    return std::string(raw);
 }
 Result<Module> Compiler::optimize(const Module& m, const std::string& passes, int rounds) {
     auto valid = check(m); if (!valid) return *valid.error();

@@ -9,6 +9,7 @@ inline Diagnostic error(std::string code, std::string message, std::string file 
 bool identifier(std::string_view);
 Result<bool> validate_backend(const Backend&);
 Result<bool> validate_structure(const Module&);
+Result<bool> validate_externals(const std::vector<ExternalFunction>&);
 std::string emit_backend(const Backend&);
 std::string quote(std::string_view);
 Module import_module(const metail_module&, Backend);
@@ -21,6 +22,8 @@ struct Bridge {
     std::vector<std::vector<const char*>> params;
     std::vector<std::vector<metail_stmt>> statements;
     std::vector<metail_function> functions;
+    std::vector<std::vector<const char*>> external_params;
+    std::vector<metail_external> externals;
     metail_module module{};
     const metail_expr* expression(const Expr&);
     explicit Bridge(const Module&);

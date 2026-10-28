@@ -1,0 +1,5 @@
+@module(manual_affine)
+@fn(affine, (x, factor, bias))
+  @let(product, mul(x, factor))
+  @return(add(product, add(bias, 0)))
+@end

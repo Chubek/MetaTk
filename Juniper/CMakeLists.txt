@@ -102,6 +102,14 @@ if(JUNIPER_BUILD_TESTS)
     add_executable(juniper_test_metaarch tests/test_metaarch.cpp)
     target_link_libraries(juniper_test_metaarch PRIVATE Juniper::MetaArch)
     add_test(NAME juniper-metaarch COMMAND juniper_test_metaarch)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$" AND NOT CMAKE_CROSSCOMPILING)
+      add_executable(juniper_test_external_native tests/test_external_native.cpp)
+      target_link_libraries(juniper_test_external_native PRIVATE Juniper::MetaArch)
+      add_test(NAME juniper-external-native COMMAND ${CMAKE_COMMAND}
+        -DCC=${CMAKE_C_COMPILER} -DEMITTER=$<TARGET_FILE:juniper_test_external_native>
+        -DDB=${JUNIPER_METAARCH_ROOT}/MetaArchDB -DWORK=${CMAKE_CURRENT_BINARY_DIR}/external-native
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/external_native.cmake")
+    endif()
   endif()
 endif()
 if(JUNIPER_BUILD_EXAMPLES)
@@ -123,6 +131,8 @@ install(DIRECTORY stdlib/ DESTINATION ${CMAKE_INSTALL_DATADIR}/juniper/stdlib)
 install(DIRECTORY examples/ DESTINATION ${CMAKE_INSTALL_DATADIR}/juniper/examples)
 install(FILES README.md DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/juniper)
 install(DIRECTORY docs/ DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/juniper/docs)
+install(DIRECTORY manual/ DESTINATION ${CMAKE_INSTALL_DATADIR}/doc/juniper/manual
+  PATTERN "__pycache__" EXCLUDE PATTERN "*.pyc" EXCLUDE)
 install(EXPORT JuniperTargets NAMESPACE Juniper:: DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Juniper)
 configure_package_config_file(cmake/JuniperConfig.cmake.in "${CMAKE_CURRENT_BINARY_DIR}/JuniperConfig.cmake"
   INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/Juniper)

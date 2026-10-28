@@ -156,6 +156,39 @@ int main(int argc, char** argv) {
         require(!take(c.analyze(loaded, "ControlFlowGraph")).empty(), "analysis absent");
         auto optimized = take(c.optimize(take(c.parse("fn f(x) { return add(x,0); }")), "AddZeroRight"));
         require(take(c.emit_metail(optimized)).find("return x;") != std::string::npos, "real MetaIL rewrite did not run");
+        auto foreign = take(c.parse(R"(
+          extern fn magnitude(i64) -> i64 from "c" symbol "labs";
+          extern fn custom(i64) -> i64 from "./libcustom.so" symbol "custom_fn";
+          extern fn release(ptr) -> void from "c" symbol "free";
+          fn foreign(x) { eval release(0); return custom(magnitude(x)) * 0; }
+        )"));
+        auto foreign_text = take(c.emit(foreign));
+        require(take(c.emit(take(c.parse(foreign_text)))) == foreign_text, "external declarations did not round trip");
+        auto foreign_optimized = take(c.optimize(foreign));
+        require(foreign_optimized.externals.size() == 3, "optimization dropped imports");
+        require(take(c.emit_metail(foreign_optimized)).find("custom(magnitude(x))") != std::string::npos, "external effects eliminated");
+        auto foreign_machine = take(juniper::select(foreign_optimized));
+        auto foreign_scheduled = take(juniper::schedule(foreign_machine));
+        require(foreign_scheduled.externals.size() == 3 && foreign_scheduled.externals[1].symbol == "custom_fn", "machine output lost linkage");
+        require(juniper::emit_linkage_json(foreign_scheduled.externals) + '\n' == take(c.linkage(foreign)), "frontend and machine linker manifests differ");
+        std::size_t imported_calls = 0;
+        for (const auto& inst : foreign_scheduled.functions[0].instructions) if (inst.opcode == "CALL") {
+            require(inst.external.has_value() && inst.barrier, "external call is not an indexed effect barrier");
+            const auto& f = foreign_scheduled.externals[*inst.external];
+            require(inst.operands[0].name == f.symbol, "external alias was not resolved");
+            require(f.result != "void" || inst.result.empty(), "void call defines a result");
+            ++imported_calls;
+        }
+        require(imported_calls == 3, "external call count changed");
+        auto invalid_external = foreign_machine;
+        for (auto& inst : invalid_external.functions[0].instructions) if (inst.external) { inst.external = 999; break; }
+        require(!juniper::schedule(invalid_external), "invalid external call index accepted");
+        invalid_external = foreign_machine; invalid_external.externals[0].library = "@response/file";
+        require(!juniper::schedule(invalid_external), "invalid native-built external metadata accepted");
+        require(!c.parse("extern fn f(i64) -> i64 from \"c\"; fn main(){return f();}"), "invalid external arity accepted");
+        require(!c.parse("extern fn f() -> void from \"c\"; fn main(){return f();}"), "void result consumed");
+        foreign.externals[0].library.push_back('\0');
+        require(!c.check(foreign), "NUL in external metadata accepted");
         for (const auto* bad : {"juniper 2; fn f(){return 0;}", "backend b { issue 0; } fn f(){return 0;}",
              "backend b { rule a : add(reg) => ADD; } fn f(){return 0;}",
              "backend b { rule a : select(reg,reg,reg) => S; } fn f(){return 0;}",

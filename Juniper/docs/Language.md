@@ -23,6 +23,8 @@ Standard macros:
 |---|---|
 | `@module(name)` | `module name;` |
 | `@fn(name, (p1,p2))` | `fn name (p1,p2) {` |
+| `@extern(name, (types), result, "library")` | C ABI external declaration |
+| `@extern_symbol(name, (types), result, "library", "symbol")` | import with an explicit exported symbol |
 | `@end` | `}` |
 | `@let(name,value)` | `let name = value;` |
 | `@return(value)`, `@eval(value)`, `@assume(value)` | corresponding statement |
@@ -66,7 +68,7 @@ traps (`div`, `mod`, `shl`, `shr`) can only appear at a rule's root.
 ## Program semantics
 
 The body is the actual MetaIL language: optional `module name;`, then one or more
-`fn name(parameters) { statements }`. Statements are mutable `let`, `return`,
+`fn name(parameters) { statements }`, with optional external declarations. Statements are mutable `let`, `return`,
 `eval`, `assume`, labels, `goto`, and `br condition,yes,no;`. Expressions are
 signed-64 literals, locals, calls, and canonical unary/binary operators or their
 infix spelling. `select(condition,yes,no)` evaluates only the chosen arm; logical
@@ -81,6 +83,25 @@ the optimization under the canonical effect/trap contract.
 Validation checks structure and CFG targets, **not** definite assignment, call
 resolution or termination. Variables are mutable, not SSA values. Functions and
 modules own their contents; no borrowed MetaIL objects escape public methods.
+
+External declarations use MetaIL's canonical syntax:
+
+```text
+extern fn magnitude(i64) -> i64 from "c" symbol "labs";
+extern fn print(ptr, ...) -> i32 from "c" symbol "printf";
+extern fn release(ptr) -> void from "c" symbol "free";
+```
+
+ABI types: `i8/u8/i16/u16/i32/u32/i64/u64/ptr`; `void` is a result only, consumed
+only by a direct `eval` statement. Variadic declarations require a fixed parameter.
+The target backend must implement conversions, pointer width validation and
+variadic ABI setup; all IR expressions remain signed-64. The parser checks declared
+call arity but does not prove runtime library/symbol availability. Calls without
+declarations remain legal, with no inferred link dependency. Quoted metadata
+supports `\"`, `\\`, `\n`, `\r`, `\t`; library validation rejects controls, options
+and response-file prefixes. A library is an ASCII linker name or path containing
+`/`; local library filenames must use `./`. Symbols use assembler identifiers
+(`[A-Za-z_.][A-Za-z0-9_.$]*`); local names keep the ordinary IR identifier syntax.
 
 ## Limits and diagnostics
 

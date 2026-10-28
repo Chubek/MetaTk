@@ -1,6 +1,7 @@
 #pragma once
 #include <juniper/Juniper.hpp>
 #include <MetaArch.hpp>
+#include <MetaArchIR/MetaArchIR.hpp>
 #include <span>
 
 namespace juniper {
@@ -49,5 +50,36 @@ inline Result<metaarch::Encoded> encode_instruction(const metaarch::Spec& spec,
         return fail(message.empty() ? "MetaArch form encoding failed" : message);
     }
     return std::move(*encoded.get());
+}
+
+// The branch relocation is explicit, just like FormBinding. This does NOT move
+// arguments/results, align the stack, or save caller-clobbered registers. Those
+// ABI operations must already have been supplied by the backend/caller.
+struct ExternalCallBinding {
+    std::string encoder, parameter = "sym";
+    std::int64_t addend = 0;
+    std::vector<mair::Binding> inputs; // any additional encoder parameters
+};
+inline Result<mair::Image> encode_external_call(const MachineModule& module,
+    const Instruction& instruction, const ExternalCallBinding& binding, const mair::Target& target) {
+    auto fail = [](std::string message) -> Result<mair::Image> {
+        return Diagnostic{"JUN-E500", {}, std::move(message), 0, 0};
+    };
+    if (instruction.opcode != "CALL" || !instruction.barrier || !instruction.external ||
+        *instruction.external >= module.externals.size() || instruction.operands.empty())
+        return fail("expected a declared external CALL");
+    const auto& imported = module.externals[*instruction.external];
+    if (instruction.operands[0].kind != Operand::Kind::symbol || instruction.operands[0].name != imported.symbol ||
+        instruction.operands.size() - 1 < imported.params.size() ||
+        (!imported.variadic && instruction.operands.size() - 1 != imported.params.size()))
+        return fail("external CALL disagrees with its declaration");
+    try {
+        mair::Program program;
+        for (const auto& f : module.externals) program.extern_function(f.name, f.library, f.symbol);
+        auto inputs = binding.inputs;
+        inputs.push_back({binding.parameter, mair::symbol(imported.name, binding.addend)});
+        program.encode(binding.encoder, inputs);
+        return mair::assemble(program, target);
+    } catch (const mair::Error& error) { return fail(error.what()); }
 }
 } // namespace juniper

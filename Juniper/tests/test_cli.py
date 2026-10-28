@@ -30,6 +30,25 @@ assert not selected['scheduled'] and scheduled['scheduled']
 assert all(i['cycle'] is not None for f in scheduled['functions'] for i in f['instructions'])
 assert any(i['opcode'] == 'ADDI' for f in selected['functions'] for i in f['instructions'])
 run('schedule', source / 'examples/Juniperfile', '--optimize', '--passes', 'ConstantFolding')
+# Imports survive real GPPX, canonical MetaIL, optimization, selection and scheduling.
+foreign = source / 'examples/external.jun'
+foreign_ir = run('emit', foreign)
+assert foreign_ir == run('emit', '-', '--no-preprocess', input=foreign_ir)
+linkage = json.loads(run('linkage', foreign))
+assert linkage['arguments'] == ['-lc', './libcustom.so']
+assert linkage['imports'][0]['symbol'] == 'labs'
+assert linkage['imports'][1]['parameters'] == ['i64']
+assert json.loads(run('linkage', '-', '--no-preprocess', input=run('metail', foreign))) == linkage
+foreign_optimized = run('optimize', foreign)
+assert json.loads(run('linkage', '-', '--no-preprocess', input=foreign_optimized)) == linkage
+for command in ('select', 'schedule'):
+    machine = json.loads(run(command, foreign, '--optimize'))
+    assert machine['linkage'] == linkage
+    calls = [i for f in machine['functions'] for i in f['instructions'] if i['opcode'] == 'CALL']
+    assert [i['operands'][0]['value'] for i in calls] == ['labs', 'custom_function']
+    assert [i['external'] for i in calls] == [0, 1]
+    assert all(i['barrier'] for i in calls)
+run('check', '-', '--no-preprocess', input='extern fn f(i64) -> i64 from "c"; fn main(){return f();}', status=1)
 previous_home = os.environ.get('METAIL_HOME')
 try:
     os.environ['METAIL_HOME'] = str(work / 'invalid-runtime')

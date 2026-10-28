@@ -50,6 +50,14 @@ typed operands (`reg`, `imm`, `label`, `symbol`), resource, latency, barrier,
 dependencies and cycle (`null` before scheduling). JSON is an inspection artifact;
 the round-trippable source IR is produced by `emit`, not by `select`.
 
+External `CALL`s resolve the local import name to the exported symbol and carry
+an `external` index into `linkage.imports`; other instructions have `external:null`.
+The manifest contains `schema:1`, declaration-ordered, deduplicated `libraries`
+and driver `arguments`, plus imports with `name`, `symbol`, `library`,
+`calling_convention:"c"`, `parameters`, `result`, `variadic`. Void calls define no
+result. Scheduling preserves the import table and call fences and validates import
+indices, call arity and symbol agreement. Imported calls are never presumed pure.
+
 ## MetaArch boundary
 
 Enable `-DJUNIPER_WITH_METAARCH=ON` to build/test `Juniper::MetaArch` in a source
@@ -78,3 +86,19 @@ The caller must provide valid physical register assignments and any ABI/control
 lowering. This API encodes selected instructions; it does not silently turn a
 virtual-register function into executable machine code. No architecture database
 files, generated backends, encoders or ISA semantics are modified by Juniper.
+
+### External branch encoding
+
+```cpp
+juniper::ExternalCallBinding binding{"call", "sym", -4, {}}; // amd64 PLT32
+auto image = juniper::encode_external_call(machine, call_instruction, binding, target);
+```
+
+Here `target` is a `mair::Target`. The adapter produces an owned MetaArchIR image,
+with the exported symbol, explicit relocation and library imports intact. All
+module imports are retained, even when encoding one call. Extra encoder bindings
+go in `binding.inputs`. No mnemonic/addend is guessed for other architectures;
+choose their database encoder explicitly. This encodes the branch only: the caller
+must arrange argument/result registers, save/restore, stack alignment and variadic
+setup. Native `.mair` callers can use `extern name, "library" [, symbol]` plus
+`call_extern name [, mnemonic]` instead, with the same explicit ABI responsibility.
