@@ -33,6 +33,25 @@ int main(int argc, char **argv) {
         auto object = moved.compile(".text\n.globl _start\n_start:\n.exit\n");
         check(invoked == 1 && !object.bytes().empty());
         auto l = metald::options(); l.catalogue = catalogue.c_str();
+        metald::Linker strings(l);
+        const std::string nul("safe\0hidden", 11);
+        rejects([&] { strings.define(nul, 1); }, "embedded NUL");
+        rejects([&] { strings.add(nul); }, "embedded NUL");
+        rejects([&] { strings.add(nul, object.bytes()); }, "embedded NUL");
+        rejects([&] { strings.symbol(nul); }, "embedded NUL");
+        rejects([&] { strings.write_executable(nul); }, "embedded NUL");
+        rejects([&] { strings.write_executable("unused", nul); }, "embedded NUL");
+        rejects([&] { strings.write_map(nul); }, "embedded NUL");
+        check(strings.state() == METALD_COLLECTING);
+        // Resolver ownership must follow move-assignment, not just construction.
+        metald::Linker assigned(l);
+        assigned.resolver([](auto) -> std::optional<uint64_t> { return 99; });
+        metald::Linker incoming(l);
+        incoming.add("assigned.o", object.bytes()).resolver([](auto) -> std::optional<uint64_t> { return 37; });
+        assigned = std::move(incoming);
+        rejects([&] { incoming.link(); }, "moved-from");
+        assigned.link();
+        check(assigned.symbol("exit_status") == 37);
         metald::Linker linker(l);
         linker.add("in-memory.o", object.bytes()).resolver([](std::string_view name) -> std::optional<uint64_t> {
             if (name == "exit_status") return 37;

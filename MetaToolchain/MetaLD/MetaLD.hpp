@@ -12,6 +12,13 @@
 #include <vector>
 
 namespace metald {
+namespace detail {
+inline const char *cstring(const std::string &value) {
+    if (value.find('\0') != std::string::npos)
+        throw std::invalid_argument("embedded NUL in MetaLD string argument");
+    return value.c_str();
+}
+}
 inline MetaLDOptions options() { MetaLDOptions o; metald_options_init(&o); return o; }
 struct Error : std::runtime_error {
     int32_t code;
@@ -19,7 +26,8 @@ struct Error : std::runtime_error {
 };
 struct Symbol { std::string name; uint64_t address, size; };
 /* Move-only C++20 owner. Mutators throw Error/std::bad_alloc. Image is borrowed
- * until destruction; symbols() copies names. Same lifecycle/thread rules as C. */
+ * until destruction; symbols() copies names. Embedded NUL arguments throw
+ * invalid_argument. Same lifecycle/thread rules as C. */
 class Linker {
 public:
     using Resolver = std::function<std::optional<uint64_t>(std::string_view)>;
@@ -46,10 +54,18 @@ public:
         if (!linker_) throw Error(error);
     }
     Linker(Linker &&) noexcept = default;
-    Linker &operator=(Linker &&) noexcept = default;
-    Linker &add(const std::string &path) { check(metald_add_file(linker_.get(), path.c_str())); return *this; }
-    Linker &add(std::string name, std::span<const uint8_t> data) { check(metald_add_memory(linker_.get(), name.c_str(), data.data(), data.size())); return *this; }
-    Linker &define(const std::string &name, uint64_t address) { check(metald_define(linker_.get(), name.c_str(), address)); return *this; }
+    Linker &operator=(Linker &&other) noexcept {
+        if (this != &other) {
+            // Release the old C handle before its resolver's captured objects.
+            linker_.reset();
+            resolver_ = std::move(other.resolver_);
+            linker_ = std::move(other.linker_);
+        }
+        return *this;
+    }
+    Linker &add(const std::string &path) { check(metald_add_file(linker_.get(), detail::cstring(path))); return *this; }
+    Linker &add(std::string name, std::span<const uint8_t> data) { check(metald_add_memory(linker_.get(), detail::cstring(name), data.data(), data.size())); return *this; }
+    Linker &define(const std::string &name, uint64_t address) { check(metald_define(linker_.get(), detail::cstring(name), address)); return *this; }
     Linker &resolver(Resolver fn) {
         auto next = fn ? std::make_unique<Resolver>(std::move(fn)) : nullptr;
         check(metald_set_resolver(linker_.get(), next ? invoke : nullptr, next.get()));
@@ -61,7 +77,7 @@ public:
     uint64_t base() const { return metald_image_base(linker_.get()); }
     std::optional<uint64_t> symbol(const std::string &name) const {
         uint64_t value;
-        auto rc = metald_find_symbol(linker_.get(), name.c_str(), &value);
+        auto rc = metald_find_symbol(linker_.get(), detail::cstring(name), &value);
         if (rc == METALD_NOT_FOUND) return {};
         if (rc != METALD_OK) throw std::logic_error("symbol lookup requires a linked context");
         return value;
@@ -76,8 +92,8 @@ public:
         }
         return result;
     }
-    void write_executable(const std::string &path, const std::string &entry = "_start") { check(metald_write_executable(linker_.get(), path.c_str(), entry.c_str())); }
-    void write_map(const std::string &path) { check(metald_write_map(linker_.get(), path.c_str())); }
+    void write_executable(const std::string &path, const std::string &entry = "_start") { check(metald_write_executable(linker_.get(), detail::cstring(path), detail::cstring(entry))); }
+    void write_map(const std::string &path) { check(metald_write_map(linker_.get(), detail::cstring(path))); }
 };
 }
 #endif
