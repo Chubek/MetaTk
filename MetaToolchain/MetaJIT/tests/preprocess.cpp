@@ -1,5 +1,6 @@
 #include "Preprocess.hpp"
 #include <iostream>
+#include <locale>
 #include <stdexcept>
 
 namespace {
@@ -16,6 +17,10 @@ void rejects(const metajit::Preprocess &p, const std::string &source, const std:
     throw std::runtime_error("accepted invalid source: " + source);
 }
 std::string block(const std::string &body) { return "@jit_begin code\n" + body + "\n@jit_end\n"; }
+struct GroupedNumbers : std::numpunct<char> {
+    char do_thousands_sep() const override { return ','; }
+    std::string do_grouping() const override { return "\1"; }
+};
 }
 int main() {
     try {
@@ -27,6 +32,11 @@ int main() {
         require(cpp.find("metajit_detail_buffer.append") != cpp.npos, "no inline emission");
         require(cpp.find("metajit_detail_buffer.entry(\"add\"") != cpp.npos, "missing entry");
         require(cpp == p.process(source), "output is nondeterministic");
+        const auto original_locale = std::locale();
+        std::locale::global(std::locale(original_locale, new GroupedNumbers));
+        const auto localized_cpp = p.process(source);
+        std::locale::global(original_locale);
+        require(localized_cpp == cpp, "numeric locale changed generated machine code");
         require(p.process("@if 0\n" + block("nonsense") + "@endif\n").empty(), "disabled block processed");
         require(p.process("@define VALUE 42\n" + block("fn f() { return $(VALUE); }")).find("append") != cpp.npos,
                 "GPPX macro not expanded");

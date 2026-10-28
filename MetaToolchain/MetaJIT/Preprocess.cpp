@@ -8,6 +8,7 @@
 #include <deque>
 #include <fstream>
 #include <limits>
+#include <locale>
 #include <map>
 #include <memory>
 #include <set>
@@ -264,6 +265,7 @@ std::string generate(metail_context *context, const std::string &source,
     for (std::size_t i = 0; i < bindings.size(); ++i)
         if (!used.count(i)) fail("unused binding: " + bindings[i].first);
     std::ostringstream out;
+    out.imbue(std::locale::classic());
     out << "[&]() -> metajit::Executable {\n";
     for (std::size_t i = 0; i < bindings.size(); ++i)
         out << "const std::uint64_t metajit_detail_value_" << i << " = static_cast<std::uint64_t>(("
