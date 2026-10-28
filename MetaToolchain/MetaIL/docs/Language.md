@@ -7,7 +7,10 @@ A MetaIL module declares one or more functions. Functions have positional scalar
 ### EBNF (overview)
 
 ```ebnf
-program     = [ "module" identifier ";" ], function, { function } ;
+program     = [ "module" identifier ";" ], (function | external), { function | external } ;
+external    = "extern", "fn", identifier, "(", [abi_type, {",", abi_type}, [",", "..."]], ")",
+              "->", (abi_type | "void"), "from", string, ["symbol", string], ";" ;
+abi_type    = "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" | "ptr" ;
 function    = "fn", identifier, "(", [ identifier, { ",", identifier } ], ")", "{", { statement }, "}" ;
 statement   = identifier, ":"
             | "let", identifier, "=", expression, ";"
@@ -54,6 +57,30 @@ expression nesting/tree depth 256. Malformed or over-limit programs are rejected
 
 MetaNum statistics use Lua binary64 numbers outside this scalar integer IR.
 Their floating-point results are analysis reports, never integer rewrite facts.
+
+## External C ABI declarations
+
+At least one function definition is still required. External declarations record
+the local callee, exported symbol (defaults to the local name), library and ABI
+signature, and survive every optimizer pass. They do not imply purity, nor do they
+load a library while compiling. Declared calls have checked fixed/minimum variadic
+arity; void results may only appear directly in `eval`. Other calls retain legacy
+unresolved-call semantics. External/local definition conflicts and duplicate
+local/exported names are errors.
+
+Quoted metadata accepts `\"`, `\\`, `\n`, `\r`, `\t`; controls are rejected in library
+names, which are ASCII linker names or paths containing `/`. Paths beginning `-`
+or `@` are rejected to prevent option/response-file interpretation. Symbols use
+`[A-Za-z_.][A-Za-z0-9_.$]*`; local names use ordinary IR identifiers.
+
+`metail linkage` and the C/C++ linkage APIs emit a version-1 JSON manifest, with
+declaration-ordered imports and deduplicated library/driver-argument arrays.
+`"c"` becomes `-lc`; `"./libfoo.so"` remains one path argument. Append these after
+referring objects without a shell. Library resolution and runtime loader paths
+belong to the link driver. Integer extension, pointer narrowing checks and
+variadic ABI setup belong to a target lowerer; ABI types do not change signed-64
+expression semantics. Extra variadic expressions are signed-64 scalar arguments,
+not implicitly floating-point or aggregate values. See [README](../README.md#libc-and-shared-library-imports).
 
 ## Extending the language
 

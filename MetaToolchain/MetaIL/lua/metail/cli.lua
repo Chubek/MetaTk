@@ -12,6 +12,7 @@ MetaIL + Optikern (Lua 5.4)
 Usage:
   metail check <program.mi>
   metail emit <program.mi> [--out FILE]
+  metail linkage <program.mi> [--out FILE]  # linker libraries, arguments, imports
   metail kernels [--search WORDS] [--tag TAG ...] [--use WORDS] [--kind KIND]
                  [--json | --paths | --source] [--kernel-dir DIR]
   metail optimize <program.mi> [--passes all|Name1,Name2] [--repeat N] [--out FILE] [--stats FILE]
@@ -65,10 +66,10 @@ local function execute()
     io.write('valid MetaIL: '..#p.functions..' function(s)\n')
     return 0
   end
-  if cmd=='emit' then
-    assert(arg[2],'usage: metail emit FILE [--out FILE]')
+  if cmd=='emit' or cmd=='linkage' then
+    assert(arg[2],'usage: metail '..cmd..' FILE [--out FILE]')
     local opts=options(3,{['--out']=true});local p=parser.program(read(arg[2]),arg[2]);validate(p)
-    write(opts.out,ir.emit(p));return 0
+    write(opts.out,cmd=='emit' and ir.emit(p) or (json.encode(ir.linkage(p))..'\n'));return 0
   end
   api.ensure_kernels()
   if cmd=='kernels' then

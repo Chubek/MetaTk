@@ -21,6 +21,20 @@ local function tokenize(text,file)
     elseif c:match('%s') then i=i+1
     elseif text:sub(i,i+1)=='//' or text:sub(i,i)=='#' or text:sub(i,i+1)=='--' then
       local j=text:find('\n',i,true); i=j or (#text+1)
+    elseif c=='"' then
+      local value={};i=i+1
+      while i<=#text and text:sub(i,i)~='"' do
+        local ch=text:sub(i,i)
+        assert(ch:byte()>=32,file..':'..line..': control character in string')
+        if ch=='\\' then
+          i=i+1;ch=text:sub(i,i)
+          ch=({['\\']='\\',['"']='"',n='\n',r='\r',t='\t'})[ch]
+          assert(ch,file..':'..line..': invalid string escape')
+        end
+        value[#value+1]=ch;i=i+1
+      end
+      assert(i<=#text,file..':'..line..': unterminated string')
+      add('string',table.concat(value));i=i+1
     elseif c:match('[%a_$]') then
       local j=i+1
       while j<=#text and text:sub(j,j):match('[%w_$]') do j=j+1 end
@@ -46,7 +60,8 @@ local function tokenize(text,file)
       i=j
     else
       local op=text:sub(i,i+1)
-      if binop[op] then add('symbol',op);i=i+2
+      if text:sub(i,i+2)=='...' then add('symbol','...');i=i+3
+      elseif binop[op] or op=='->' then add('symbol',op);i=i+2
       elseif c:match('[%(%){%}%[%],:;=+*/%%&|%^~!<>%-]') then add('symbol',c);i=i+1
       else error(file..':'..line..': unexpected character '..string.format('%q',c)) end
     end
@@ -62,7 +77,11 @@ function P.reader(text,file)
   local R={}
   function R.peek(n) return tokens[pos+(n or 0)] end
   function R.take() local t=tokens[pos];pos=pos+1;return t end
-  function R.accept(s) if R.peek().value==s then R.take();return true end return false end
+  function R.accept(s)
+    local t=R.peek()
+    if (t.kind=='word' or t.kind=='symbol') and t.value==s then R.take();return true end
+    return false
+  end
   function R.fail(s)
     error(string.format('%s:%d: expected %s, found %s',file or '<source>',R.peek().line,s,tostring(R.peek().value)),0)
   end
@@ -70,6 +89,10 @@ function P.reader(text,file)
   function R.word()
     local t=R.peek();if t.kind~='word' or not t.value:match('^[%a_][%w_]*$') then R.fail('identifier') end
     R.take();return t.value
+  end
+  function R.string()
+    if R.peek().kind~='string' then R.fail('quoted string') end
+    return R.take().value
   end
   function R.expr(minprec)
     nesting=nesting+1
@@ -93,15 +116,15 @@ function P.reader(text,file)
       else
         n={tag=t.value:sub(1,1)=='$' and 'hole' or 'var',name=t.value}
       end
-    elseif t.value=='(' then n=R.expr();R.expect(')')
-    elseif t.value=='-' and R.peek().kind=='min-magnitude' then
+    elseif t.kind=='symbol' and t.value=='(' then n=R.expr();R.expect(')')
+    elseif t.kind=='symbol' and t.value=='-' and R.peek().kind=='min-magnitude' then
       R.take();n={tag='int',value=math.mininteger}
-    elseif t.value=='-' and R.peek().kind=='int' then
+    elseif t.kind=='symbol' and t.value=='-' and R.peek().kind=='int' then
       n={tag='int',value=-R.take().value}
-    elseif prefix[t.value] then n={tag='op',op=prefix[t.value],args={R.expr(11)}}
+    elseif t.kind=='symbol' and prefix[t.value] then n={tag='op',op=prefix[t.value],args={R.expr(11)}}
     else error((file or '<source>')..':'..t.line..': unexpected expression token '..tostring(t.value),0) end
     while true do
-      local b=binop[R.peek().value]
+      local b=R.peek().kind=='symbol' and binop[R.peek().value]
       if not b or b[2]<minprec then break end
       R.take()
       local right=R.expr(b[2]+1)
@@ -126,9 +149,24 @@ function P.expression(src,filename)
 end
 function P.program(src,filename)
   local r=P.reader(src,filename or '<MetaIL>')
-  local module,functions=nil,{}
+  local module,functions,externals=nil,{},{}
   if r.accept('module') then module=r.word();r.expect(';') end
   while r.peek().kind~='eof' do
+    if r.accept('extern') then
+      r.expect('fn');local name=r.word();r.expect('(')
+      local params,variadic={},false
+      if not r.accept(')') then
+        repeat
+          if r.accept('...') then variadic=true;break end
+          params[#params+1]=r.word()
+        until not r.accept(',')
+        r.expect(')')
+      end
+      r.expect('->');local result=r.word();r.expect('from');local library=r.string()
+      local symbol=name;if r.accept('symbol') then symbol=r.string() end
+      r.expect(';')
+      externals[#externals+1]={name=name,symbol=symbol,library=library,params=params,result=result,variadic=variadic}
+    else
     r.expect('fn');local name=r.word();r.expect('(')
     local params={}
     if not r.accept(')') then
@@ -140,6 +178,7 @@ function P.program(src,filename)
     while not r.accept('}') do
       local tok=r.peek()
       if tok.kind=='eof' then r.fail('}') end
+      if tok.kind~='word' then r.fail('statement or label') end
       local word=r.take().value
       local s
       if word=='let' then
@@ -161,9 +200,10 @@ function P.program(src,filename)
       stmts[#stmts+1]=s
     end
     functions[#functions+1]={name=name,params=params,statements=stmts}
+    end
   end
   if #functions==0 then r.fail('at least one fn') end
   r.done()
-  return {module=module,functions=functions}
+  return {module=module,functions=functions,externals=externals}
 end
 return P

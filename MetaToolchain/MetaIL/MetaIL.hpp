@@ -211,13 +211,26 @@ struct Function {
         return append({METAIL_BRANCH,{},std::move(expr),{},std::move(yes),std::move(no)});
     }
 };
+struct ExternalFunction {
+    std::string name, symbol, library, result = "i64";
+    std::vector<std::string> params;
+    bool variadic = false;
+};
 struct Module {
     std::optional<std::string> name;
     std::vector<Function> functions;
+    std::vector<ExternalFunction> externals;
     explicit Module(std::string name_={}) {
         if (!name_.empty()) { detail::identifier(name_);name=std::move(name_); }
     }
     Module &add(Function function) { functions.push_back(std::move(function));return *this; }
+    Module &extern_function(std::string name_, std::string library, std::vector<std::string> params={},
+                            std::string result="i64", std::string symbol={}, bool variadic=false) {
+        detail::identifier(name_);
+        if (symbol.empty()) symbol=name_;
+        externals.push_back({std::move(name_),std::move(symbol),std::move(library),std::move(result),std::move(params),variadic});
+        return *this;
+    }
     // Reference remains valid until functions is reallocated, as with std::vector.
     Function &function(std::string name_, std::vector<std::string> params={}) {
         functions.emplace_back(std::move(name_),std::move(params));return functions.back();
@@ -259,6 +272,8 @@ class NativeModule {
     std::vector<std::vector<const char *>> params_;
     std::vector<std::vector<metail_stmt>> statements_;
     std::vector<metail_function> functions_;
+    std::vector<std::vector<const char *>> external_params_;
+    std::vector<metail_external> externals_;
     static const char *cstring(const std::string &s) {
         if (s.find('\0')!=std::string::npos) throw Error("embedded NUL in IR string");
         return s.c_str();
@@ -283,6 +298,14 @@ public:
     metail_module value{};
     explicit NativeModule(const Module &module) {
         value.name=module.name ? cstring(*module.name) : nullptr;
+        external_params_.resize(module.externals.size());externals_.reserve(module.externals.size());
+        for (std::size_t i=0;i<module.externals.size();++i) {
+            const auto &f=module.externals[i];
+            for (const auto &p:f.params) external_params_[i].push_back(cstring(p));
+            externals_.push_back({cstring(f.name),cstring(f.symbol),cstring(f.library),cstring(f.result),
+                external_params_[i].data(),external_params_[i].size(),f.variadic ? 1 : 0});
+        }
+        value.externals=externals_.data();value.external_count=externals_.size();
         params_.resize(module.functions.size());statements_.resize(module.functions.size());
         functions_.reserve(module.functions.size());
         for (std::size_t i=0;i<module.functions.size();++i) {
@@ -309,6 +332,12 @@ inline Expr from_native(const metail_expr &e) {
 }
 inline Module from_native(const metail_module &m) {
     Module result(m.name ? m.name : "");
+    for (std::size_t i=0;i<m.external_count;++i) {
+        const auto &f=m.externals[i];
+        ExternalFunction external{f.name,f.symbol,f.library,f.result,{},f.variadic!=0};
+        for (std::size_t j=0;j<f.param_count;++j) external.params.emplace_back(f.params[j]);
+        result.externals.push_back(std::move(external));
+    }
     for (std::size_t i=0;i<m.function_count;++i) {
         const auto &f=m.functions[i];Function function(f.name);
         for (std::size_t j=0;j<f.param_count;++j) function.params.emplace_back(f.params[j]);
@@ -371,6 +400,11 @@ public:
         auto status=metail_module_emit(get(),&native.value,&output);
         String owned(output,metail_free);check_status(status);return owned.get();
     }
+    std::string linkage(const Module &module) const {
+        detail::NativeModule native(module);char *output=nullptr;
+        auto status=metail_module_linkage(get(),&native.value,&output);
+        String owned(output,metail_free);check_status(status);return owned.get();
+    }
     std::string analyze(const Module &module, const std::string &passes="all") const {
         detail::NativeModule native(module);char *output=nullptr;
         auto status=metail_module_analyze(get(),&native.value,cstring(passes),&output);
@@ -389,6 +423,11 @@ public:
     std::string emit(const std::string &source, const std::string &name="<memory>") const {
         char *output=nullptr;
         auto status=metail_emit(get(),cstring(source),cstring(name),&output);
+        String owned(output,metail_free);check_status(status);return owned.get();
+    }
+    std::string linkage(const std::string &source, const std::string &name="<memory>") const {
+        char *output=nullptr;
+        auto status=metail_linkage(get(),cstring(source),cstring(name),&output);
         String owned(output,metail_free);check_status(status);return owned.get();
     }
     OptimizationResult optimize(const std::string &source, const std::string &passes="all",

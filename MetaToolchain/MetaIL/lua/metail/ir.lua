@@ -5,16 +5,26 @@ local operators = {
   neg=1,bnot=1,lnot=1,select=3,
 }
 M.operators=operators
+M.abi_types={i8=true,u8=true,i16=true,u16=true,i32=true,u32=true,i64=true,u64=true,ptr=true}
+local function library_name(name)
+  assert(type(name)=='string' and #name>0 and name:sub(1,1)~='-' and name:sub(1,1)~='@' and
+    not name:find('[%z\1-\31\127-\255]'),'invalid library name or path')
+  assert(name:find('/',1,true) or name:match('^[A-Za-z0-9_+%.%-]+$'),'invalid linker library name')
+end
+local function symbol_name(name)
+  assert(type(name)=='string' and name:match('^[A-Za-z_%.][A-Za-z0-9_%.$]*$'),'invalid external symbol')
+end
 -- Shared structural checks for parser-built and native-built programs.
 function M.validate(program)
   local count=0
+  local imports={}
   local function item()
     count=count+1;assert(count<=200000,'IR item limit exceeded')
   end
   local function identifier(name)
     assert(type(name)=='string' and name:match('^[A-Za-z_][A-Za-z0-9_]*$'),'invalid IR identifier: '..tostring(name))
   end
-  local function expr(n,depth)
+  local function expr(n,depth,discard)
     item();assert(depth<=256,'IR expression depth limit exceeded')
     assert(type(n)=='table','expression must be a table')
     if n.tag=='int' then assert(math.type(n.value)=='integer','literal must be signed-64 integer')
@@ -26,19 +36,38 @@ function M.validate(program)
       else
         identifier(n.name)
         assert(not operators[n.name] and n.name~='true' and n.name~='false','reserved call name: '..n.name)
+        local f=imports[n.name]
+        if f then
+          assert(#n.args>=#f.params and (f.variadic or #n.args==#f.params),'external call arity mismatch: '..n.name)
+          assert(f.result~='void' or discard,'void external call is only valid as an eval statement: '..n.name)
+        end
       end
       for _,arg in ipairs(n.args) do expr(arg,depth+1) end
     else error('invalid expression tag: '..tostring(n.tag)) end
   end
   assert(type(program)=='table' and type(program.functions)=='table' and #program.functions>0,'module requires at least one function')
   if program.module then identifier(program.module) end
+  local symbols={}
+  for _,f in ipairs(program.externals or {}) do
+    item();identifier(f.name);symbol_name(f.symbol);library_name(f.library)
+    assert(not operators[f.name] and f.name~='true' and f.name~='false','reserved external name: '..f.name)
+    assert(not imports[f.name],'duplicate external function: '..f.name)
+    assert(not symbols[f.symbol],'duplicate external symbol: '..f.symbol)
+    imports[f.name]=f;symbols[f.symbol]=true
+    assert(M.abi_types[f.result] or f.result=='void','invalid external result type: '..tostring(f.result))
+    assert(type(f.params)=='table','external parameter types required')
+    assert(type(f.variadic)=='boolean','external variadic flag must be boolean')
+    assert(not f.variadic or #f.params>0,'variadic external requires a fixed parameter')
+    for _,p in ipairs(f.params) do item();assert(M.abi_types[p],'invalid external parameter type: '..tostring(p)) end
+  end
   for _,f in ipairs(program.functions) do
     item();identifier(f.name)
+    assert(not imports[f.name] and not symbols[f.name],'external function conflicts with local definition: '..f.name)
     for _,p in ipairs(f.params) do item();identifier(p) end
     for _,s in ipairs(f.statements) do
       item()
       if s.kind=='let' then identifier(s.name);expr(s.expr,1)
-      elseif s.kind=='return' or s.kind=='eval' or s.kind=='assume' then expr(s.expr,1)
+      elseif s.kind=='return' or s.kind=='eval' or s.kind=='assume' then expr(s.expr,1,s.kind=='eval')
       elseif s.kind=='label' then
         identifier(s.name)
         assert(not ({let=true,['return']=true,eval=true,assume=true,['goto']=true,br=true})[s.name],
@@ -133,6 +162,12 @@ end
 function M.emit(program)
   local out={}
   if program.module then out[#out+1]='module '..program.module..';' end
+  for _,f in ipairs(program.externals or {}) do
+    local params=M.copy(f.params)
+    if f.variadic then params[#params+1]='...' end
+    out[#out+1]='extern fn '..f.name..'('..table.concat(params,', ')..') -> '..f.result..
+      ' from '..string.format('%q',f.library)..' symbol '..string.format('%q',f.symbol)..';'
+  end
   for _,f in ipairs(program.functions) do
     out[#out+1]='fn '..f.name..'('..table.concat(f.params,', ')..') {'
     for _,s in ipairs(f.statements) do
@@ -150,5 +185,18 @@ function M.emit(program)
     out[#out+1]='}'
   end
   return table.concat(out,'\n')..'\n'
+end
+-- Stable, declaration-ordered driver metadata. Never interpreted as shell text.
+function M.linkage(program)
+  local libraries,arguments,imports,seen={},{},{},{}
+  for _,f in ipairs(program.externals or {}) do
+    if not seen[f.library] then
+      seen[f.library]=true;libraries[#libraries+1]=f.library
+      arguments[#arguments+1]=f.library:find('/',1,true) and f.library or ('-l'..f.library)
+    end
+    imports[#imports+1]={name=f.name,symbol=f.symbol,library=f.library,calling_convention='c',
+      result=f.result,parameters=M.copy(f.params),variadic=f.variadic}
+  end
+  return {schema=1,libraries=libraries,arguments=arguments,imports=imports}
 end
 return M

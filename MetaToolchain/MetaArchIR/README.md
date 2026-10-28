@@ -110,6 +110,46 @@ database relocation expressions belong to a linker. Relocatable encodings cannot
 be rendered as plain `.byte` text or silently flattened. Use JSON/image output.
 Object-file writing, branch relaxation and symbolic checked forms are not provided.
 
+### libc and shared-library calls
+
+Declare C ABI imports, then supply the target's normal argument registers, stack
+alignment, return handling and (for variadic calls) ABI-specific setup:
+
+```text
+extern magnitude, "c", labs
+extern custom, "./libcustom.so", custom_function
+call_extern magnitude
+call_extern custom
+```
+
+`Program::extern_function(name, library="c", symbol=name)` declares an import.
+`call_external(name, mnemonic="call")` / `call_extern name [, mnemonic]` emits a
+native call; pass `bl` on AArch64. This is not automatic ABI lowering. Any exported
+function with a compatible ABI can be called; C++ exports need their actual mangled
+symbol or an `extern "C"` wrapper. No `dlopen` occurs during compilation.
+
+For encoded images, use the existing `encode call, sym=@magnitude-4` on amd64;
+the alias resolves to `labs`, preserving the PLT relocation and addend. Other
+architectures require their explicit database encoder/bindings. Images now carry
+`imports`; JSON images include a `linkage` manifest. Flat binary/hex output refuses
+to discard import metadata. `marchir --emit linkage` extracts a standalone manifest
+(default suffix `.link.json`), including for native assembly input.
+
+The manifest's versioned `libraries`, GNU-compatible driver `arguments`, and `imports` arrays are stable
+and declaration-ordered. Library names such as `c` and `m` become `-lc` and `-lm`;
+paths containing `/` are passed as single driver arguments, relative to the link
+working directory. Use `./libfoo.so` for a local filename. Append `arguments` after
+the objects, **without a shell**. Library search paths, sysroot and runtime loader
+paths remain the link driver's responsibility; no host path is guessed.
+
+ELF assembly also embeds LLVM's `.deplibs` dependent-libraries section
+(`SHT_LLVM_DEPENDENT_LIBRARIES`, `0x6fff4c04`), so LLD can auto-link the libraries.
+GNU ld and non-ELF linkers must use the manifest arguments instead. This follows
+LLVM's `lld/ELF/InputFiles.cpp` dependent-library specifiers. Duplicate imports,
+conflicting definitions and undeclared `call_extern` references are errors.
+Imports are retained even when not called. The compiler never infers libc purity
+or removes a declared library dependency.
+
 Encoding coverage and correctness follow the selected MetaArchDB specification;
 this layer does not repair or supplement incomplete ISA encoders.
 
@@ -138,7 +178,9 @@ long -1
 ```ebnf
 line       = [ statement ], [ comment ], newline ;
 statement  = identifier, ":"
-           | ["."], ("section" | "global" | "globl"), identifier
+            | ["."], ("section" | "global" | "globl"), identifier
+            | ["."], "extern", identifier, ",", string, [",", identifier]
+            | ["."], "call_extern", identifier, [",", identifier]
            | ["."], ("align" | "balign"), integer
            | ["."], "ascii", string
            | ["."], ("byte" | "word" | "long" | "quad"), value, {",", value}
@@ -186,7 +228,7 @@ build/marchir -T amd64 --db MetaArchDB --emit json \
 
 JSON schema version 1 contains `target`, `target_index`, `sections` (name,
 alignment, hexadecimal bytes), `symbols` (name, section index, offset, global),
-and `relocations` (name, parameter, symbol, section, offset, size, value,
+`linkage` (external imports and linker driver arguments), and `relocations` (name, parameter, symbol, section, offset, size, value,
 bit_offset, bit_width, byte_order, pc_relative). `byte_order` is the emitted field's
 actual order, which can differ from the selected target. Offsets/sizes are bytes except explicit bit
 fields. It is a relocatable section image, not an ELF/COFF/Mach-O object.

@@ -37,6 +37,34 @@ and loops execute while constructing the IR; use `branch`/`jump` for IR control
 flow. The C++20 requirement applies to `MetaIL.hpp` and `KernelRegistry.hpp`; the
 C API remains C11. Existing text-based Context overloads remain supported.
 
+### External C ABI imports
+
+`metail_module` now has trailing `externals` and `external_count` fields. Recompile
+native consumers and zero-initialize descriptors; the layout is extended, not
+binary-compatible with older precompiled descriptors. `metail_external` borrows
+`name`, `symbol`, `library`, `result`, and the `params` type-name array during a
+call. Parsed/optimized modules own deep copies of all import strings and arrays,
+with the same lifetime as the module snapshot. `symbol == NULL` defaults to
+`name`; `result == NULL` defaults to `i64`. See `MetaIL.h` for ABI types and the
+void/variadic contracts. Calls remain conservatively effectful.
+
+```cpp
+metail::Module foreign("foreign");
+foreign.extern_function("magnitude", "c", {"i64"}, "i64", "labs");
+foreign.function("example", {"x"}).ret(metail::call("magnitude", {metail::var("x")}));
+auto manifest = context.linkage(foreign);
+```
+
+`metail_linkage(context, source, name, &json)` and
+`metail_module_linkage(context, &module, &json)` validate and return a version-1
+linker manifest. Release it with `metail_free`; failures set the output to NULL
+and leave the context reusable. `Context::linkage` has text and structured
+overloads returning owned strings, throwing `metail::Error` on failure. Calls on
+one context remain serialized. Neither path loads or executes external libraries.
+Imports, including unused declarations, are preserved through optimization.
+The manifest supplies GNU-compatible driver arguments, not a shell command or a
+native code emitter. See the [language contract](Language.md#external-c-abi-declarations).
+
 `Expr::visit(visitor, order)` runs a DSLtk visitor over const AST nodes.
 `Expr::substitute(bindings)` returns a simultaneous variable substitution.
 `metail::rewrite(expr, rules, limits)` returns a `RewriteResult` containing
@@ -106,7 +134,7 @@ int main(void) {
   contexts are independent and may be used concurrently.
 - Source, filename, pass lists, and paths are NUL-terminated strings. Native APIs
   accept source text in memory. File reading is a separate C++ convenience method.
-- `metail_emit`, `metail_optimize`, `metail_analyze`, and `metail_kernels_json` return
+- `metail_emit`, `metail_linkage`, `metail_optimize`, `metail_analyze`, and `metail_kernels_json` return
   allocated strings. Release them with `metail_free`, including when the library
   was built shared. Output slots must be distinct and start a fresh result; free
   previous values before reusing a slot. Failures set supplied output slots to NULL.

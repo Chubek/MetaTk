@@ -1,0 +1,9 @@
+// SysV AMD64: the caller passes a signed long in %rdi; return it in %rax.
+extern labs, "c"
+section .text
+global magnitude
+magnitude:
+subq $8, %rsp
+call_extern labs
+addq $8, %rsp
+ret

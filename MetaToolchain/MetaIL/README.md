@@ -126,6 +126,48 @@ All values are presently **signed 64-bit integers**. Addition, subtraction, nega
 
 Statements: `let`, `return`, `eval`, `assume`, `goto`, `br`, and basic-block labels. Expressions: integer literals, local variables, unary `-`, `~`, `!`, infix arithmetic/bitwise/comparisons/logical operators, `select`, and function calls. Every operator may also be written in prefix form: `add(x, 7)`, `band(x, 255)`, `select(c, a, b)`, etc. Refer to [docs/Language.md](docs/Language.md).
 
+### libc and shared-library imports
+
+```text
+module foreign;
+extern fn magnitude(i64) -> i64 from "c" symbol "labs";
+extern fn custom(i64) -> i64 from "./libcustom.so" symbol "custom_function";
+extern fn release(ptr) -> void from "c" symbol "free";
+fn main(x) { eval release(0); return custom(magnitude(x)); }
+```
+
+External declarations may appear between functions; emission places them before
+definitions. Calls use the local name; `symbol` defaults to that name. Imports use
+the target's C ABI, never the host compiler's symbol addresses. ABI parameter/result
+types are `i8/u8/i16/u16/i32/u32/i64/u64/ptr`, with `void` allowed as a result only
+(`eval release(p);`). `...` after at least one fixed parameter marks a variadic
+signature. Unknown types, wrong call arity, duplicate imports, local-definition
+conflicts and use of a void result are rejected. Legacy undeclared calls remain
+legal and impure, but contribute no inferred library dependency.
+
+`metail linkage file.mi [--out file.link.json]`, `metail_linkage`,
+`metail_module_linkage`, and `Context::linkage` produce a version-1 JSON manifest:
+`libraries`, driver `arguments`, and `imports` (local name, symbol, library,
+`calling_convention: "c"`, result, parameters, variadic). Libraries retain first
+declaration order, with duplicates removed. `"c"` maps to `-lc`, `"m"` to `-lm`;
+a path containing `/` is a single argument, resolved from the link working
+directory. Use `./libfoo.so` for a local file. Append arguments after referring
+objects using an argv API, not shell interpolation. No library is loaded while
+checking or optimizing; library existence, search paths, sysroot, symbol resolution
+and runtime loader paths belong to the linker/driver.
+
+The C descriptor adds `metail_external` and trailing `externals/external_count`
+fields to `metail_module` (recompile C consumers and zero-initialize descriptors).
+The C++ DSL adds `ExternalFunction`, `Module::externals` and
+`Module::extern_function(name, library, params, result, symbol, variadic)`.
+Declarations and calls survive parse/emit, structured APIs and optimization;
+imports never make a call pure. This is ABI **metadata**, not native ABI lowering:
+IR values remain signed-64, including pointer bit patterns; integer extension,
+pointer width checks and variadic setup belong to a target backend. Floating-point,
+aggregate or non-C signatures require explicit scalar C wrappers at this layer.
+MetaArchIR can call arbitrary exported symbols with caller-written native ABI setup;
+Juniper preserves these declarations and linker metadata through selection/scheduling.
+
 ## Optikern DSL
 
 Each `.optk` file runs in a restricted Lua environment with `lkopt`, `math`, `string`, `table`, and elementary conversion functions. A rule may capture metavariables, optionally require constant or pure expressions, and emit replacements:

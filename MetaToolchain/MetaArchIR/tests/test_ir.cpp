@@ -55,6 +55,28 @@ int main(int argc, char **argv) {
         check(rel.offset == 2 && rel.symbol == "external" && rel.value == -4 && rel.bit_width == 32, "relocation metadata");
         fails([&] { (void)call.flat(); }, "unresolved relocations");
         fails([&] { mair::render(mair::parse("encode call, sym=@external"), amd); }, "relocatable");
+        auto imported = mair::parse("extern magnitude, \"c\", labs\nextern custom, \"./libcustom.so\"\nencode call, sym=@magnitude-4");
+        auto linked = mair::assemble(imported, amd);
+        check(linked.imports.size() == 2 && linked.relocations[0].symbol == "labs", "external alias and library retained");
+        check(mair::link_arguments(linked.imports) == std::vector<std::string>({"-lc", "./libcustom.so"}), "linker driver arguments");
+        check(mair::linkage_json(linked.imports).find("\"calling_convention\":\"c\"") != std::string::npos, "C ABI metadata");
+        mair::Program native_call;
+        native_call.extern_function("magnitude", "c", "labs").extern_function("other", "c").call_external("magnitude");
+        check(mair::link_libraries(mair::external_functions(native_call)).size() == 1, "deduplicate libraries in declaration order");
+        auto assembly = mair::render(native_call, amd);
+        check(assembly.find("call labs") != std::string::npos && assembly.find(".deplibs") != std::string::npos, "native import and ELF autolinking");
+        fails([&] { mair::render(mair::parse("call_extern missing"), amd); }, "undeclared external");
+        fails([&] { mair::assemble(mair::parse("extern f, \"c\"\nextern f, \"m\""), amd); }, "duplicate external");
+        fails([&] { mair::render(mair::parse("extern f, \"c\"\nf:"), amd); }, "conflicts with local");
+        fails([&] { mair::parse("extern f, \"-Wl,evil\""); }, "library name");
+        fails([&] { mair::parse("extern f, \"@response/file\""); }, "library name");
+        fails([&] { mair::parse("extern f"); }, "expected extern");
+        fails([&] { mair::parse("call_extern f, call, unexpected"); }, "expected call_extern");
+        fails([&] { mair::parse("extern f, \"c\\nret\""); }, "invalid character");
+        fails([&] { mair::assemble(mair::parse("extern f, \"c\"\nencode ret"), amd).flat(); }, "linkage metadata");
+        mair::Program arm_call;
+        arm_call.extern_function("puts").call_external("puts", "bl");
+        check(mair::render(arm_call, arm).find("bl puts") != std::string::npos, "explicit AArch64 native call");
         fails([&] { mair::assemble(mair::parse("encode addi, rd=x10, rs1=x10, imm=@symbol"), rv); }, "not an emitted relocation");
         auto mixed_spec = metaarch::Spec::parse_dsl(R"(architecture {
             schema = 1;

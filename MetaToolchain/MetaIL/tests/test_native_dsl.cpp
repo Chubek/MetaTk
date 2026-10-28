@@ -40,6 +40,17 @@ int main(int argc, char **argv) {
         } else rejects([&] { context.parse("fn f() {}"); });
         Module effect;effect.function("effect").ret(call("tick")*0);
         CHECK(context.emit(context.optimize(effect,"MultiplyZeroRight").module).find("tick()")!=std::string::npos);
+        Module foreign;
+        foreign.extern_function("magnitude","c",{"i64"},"i64","labs");
+        foreign.function("foreign",{"x"}).ret(call("magnitude",{x})*0);
+        auto kept=context.optimize(foreign);
+        CHECK(kept.module.externals.size()==1 && kept.module.externals[0].symbol=="labs");
+        CHECK(context.emit(kept.module).find("magnitude(x)")!=std::string::npos);
+        CHECK(context.linkage(foreign).find("\"arguments\":[\"-lc\"]")!=std::string::npos);
+        if (argc==2) {
+            CHECK(context.emit(context.parse(context.emit(foreign)))==context.emit(foreign));
+            CHECK(context.linkage(context.emit(foreign))==context.linkage(foreign));
+        }
         Module trap;trap.function("trap").ret((integer(1)/0)*0);
         CHECK(context.emit(context.optimize(trap,"MultiplyZeroRight").module).find("/ 0")!=std::string::npos);
         Module wrap;wrap.function("wrap").ret(integer(INT64_MAX)+1);

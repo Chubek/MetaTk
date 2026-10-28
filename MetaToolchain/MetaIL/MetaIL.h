@@ -41,6 +41,8 @@ const char *metail_last_error(const metail_context *context);
 void metail_free(void *memory);
 metail_status metail_check(metail_context *, const char *source, const char *name);
 metail_status metail_emit(metail_context *, const char *source, const char *name, char **output);
+/* Version-1 JSON linker manifest. Same output ownership and failure contract. */
+metail_status metail_linkage(metail_context *, const char *source, const char *name, char **json);
 /* passes is NULL/"all" or a nonempty comma-separated list of exact kernel names.
  * rounds must be 1..12. stats may be NULL, otherwise receives JSON change counts.
  * The default all-pass pipeline includes final cleanup on every round. */
@@ -81,10 +83,26 @@ typedef struct metail_function {
     const metail_stmt *statements;
     size_t statement_count;
 } metail_function;
+/* C ABI import, not an instruction to dlopen a library in the compiler.
+ * library: linker name ("c", "m") or path containing '/'; relative paths use the
+ * link driver's working directory. symbol NULL defaults to name; result NULL to
+ * "i64". params contains ABI type names: i8/u8/i16/u16/i32/u32/i64/u64/ptr.
+ * result may also be "void" (call only as an eval statement). variadic is 0 or 1;
+ * variadic declarations need a fixed parameter. All calls remain effectful.
+ * These types describe the future ABI boundary; the IR values remain signed-64.
+ * Floating point, aggregates and non-C conventions require explicit wrappers. */
+typedef struct metail_external {
+    const char *name, *symbol, *library, *result;
+    const char *const *params;
+    size_t param_count;
+    int variadic;
+} metail_external;
 typedef struct metail_module {
     const char *name;                  /* Optional module name; NULL omits it. */
     const metail_function *functions;
     size_t function_count;
+    const metail_external *externals;
+    size_t external_count;
 } metail_module;
 
 int metail_operator_arity(const char *op);
@@ -101,6 +119,7 @@ void metail_module_free(metail_module *module);
  * targets, but does not prove variables initialized or calls resolvable. */
 metail_status metail_module_check(metail_context *, const metail_module *);
 metail_status metail_module_emit(metail_context *, const metail_module *, char **output);
+metail_status metail_module_linkage(metail_context *, const metail_module *, char **json);
 metail_status metail_module_analyze(metail_context *, const metail_module *, const char *passes, char **json);
 metail_status metail_module_optimize(metail_context *, const metail_module *, const char *passes,
                                     int rounds, metail_module **output, char **stats);

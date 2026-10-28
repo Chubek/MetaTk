@@ -10,7 +10,7 @@ Portable assembly through MetaArchDB. INPUT or OUTPUT '-' means stdin/stdout.
       --db DIRECTORY     Database root (otherwise METAARCHDB or ./MetaArchDB)
       --target-index N   Target record within the specification (default 0)
   -o, --output FILE      Output path (default INPUT.s, .bin, .hex or .json)
-      --emit FORMAT      asm (default), bin, hex, or json section image
+      --emit FORMAT      asm (default), bin, hex, json image, or linkage manifest
       --check            Validate selected output mode without writing
       --list-targets     List database architecture names
       --list-encoders    List encoder names and their named parameters
@@ -66,7 +66,7 @@ std::string image_json(const mair::Image &image, const mair::Target &target) {
           << ",\"byte_order\":" << json_string(r.endian == DSYM_ENDIAN_BIG ? "big" : "little")
           << ",\"pc_relative\":" << (r.pc_relative ? "true" : "false") << '}';
     }
-    return o.str() + "]}\n";
+    return o.str() + "],\"linkage\":" + mair::linkage_json(image.imports) + "}\n";
 }
 std::string read(std::istream &in, size_t limit) {
     std::string out;
@@ -105,7 +105,7 @@ int run(int argc, char **argv) {
         else if (input.empty()) input = a;
         else throw Usage("multiple input files");
     }
-    if (format != "asm" && format != "bin" && format != "hex" && format != "json") throw Usage("unknown output format: " + format);
+    if (format != "asm" && format != "bin" && format != "hex" && format != "json" && format != "linkage") throw Usage("unknown output format: " + format);
     if (!listing.empty() && (!input.empty() || !output.empty() || check)) throw Usage("listing mode does not accept input, output or --check");
     if (listing == "--list-targets") {
         for (const auto &name : mair::targets(db)) std::cout << name << '\n';
@@ -135,6 +135,9 @@ int run(int argc, char **argv) {
     auto program = mair::parse(source, input == "-" ? "<stdin>" : input, limits);
     std::string result;
     if (format == "asm") result = mair::render(program, target, limits);
+    else if (format == "linkage") {
+        result = mair::linkage_json(mair::external_functions(program)) + '\n';
+    }
     else {
         auto image = mair::assemble(program, target, limits);
         if (format == "json") result = image_json(image, target);
@@ -148,7 +151,7 @@ int run(int argc, char **argv) {
     if (check) return 0;
     if (output.empty()) {
         if (input == "-") output = "-";
-        else { auto path = std::filesystem::path(input); path.replace_extension(format == "asm" ? ".s" : "." + format); output = path.string(); }
+        else { auto path = std::filesystem::path(input); path.replace_extension(format == "asm" ? ".s" : format == "linkage" ? ".link.json" : "." + format); output = path.string(); }
     }
     if (output == "-") { std::cout.write(result.data(), std::streamsize(result.size())); std::cout.flush(); if (!std::cout) throw IO("stdout write failed"); }
     else {

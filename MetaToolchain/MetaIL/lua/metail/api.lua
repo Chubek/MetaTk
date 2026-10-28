@@ -80,10 +80,12 @@ function M.analyze_program(p,filter)
 end
 function M.check(source,name) M.parse(source,name) end
 function M.emit(source,name) return ir.emit(M.parse(source,name)) end
+function M.linkage(source,name) return json.encode(ir.linkage(M.parse(source,name)))..'\n' end
 function M.optimize(source,name,filter,rounds) return M.optimize_program(M.parse(source,name),filter,rounds) end
 function M.analyze(source,name,filter) return M.analyze_program(M.parse(source,name),filter) end
 function M.module_check(p) M.validate(p) end
 function M.module_emit(p) return ir.emit(M.validate(p)) end
+function M.module_linkage(p) return json.encode(ir.linkage(M.validate(p)))..'\n' end
 function M.module_analyze(p,filter) return M.analyze_program(M.validate(p),filter) end
 function M.module_optimize(p,filter,rounds) return M.optimize_ir(M.validate(p),filter,rounds) end
 function M.load_kernels(directory) M.ensure_kernels();lkopt.load_directory(directory) end

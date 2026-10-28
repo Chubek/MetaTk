@@ -1,0 +1,6 @@
+module foreign;
+extern fn magnitude(i64) -> i64 from "c" symbol "labs";
+extern fn custom(i64) -> i64 from "./libcustom.so" symbol "custom_function";
+fn example(x) {
+  return custom(magnitude(x));
+}

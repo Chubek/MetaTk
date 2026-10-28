@@ -112,7 +112,7 @@ static int dispatch(lua_State *L) {
             if (strcmp(r->operation,"optimize")==0) {
                 lua_pushinteger(L,r->rounds);nargs=4;nresults=2;
             } else nresults=1;
-        } else nresults=strcmp(r->operation,"emit")==0 ? 1 : 0;
+        } else nresults=strcmp(r->operation,"emit")==0 || strcmp(r->operation,"linkage")==0 ? 1 : 0;
     }
     if (lua_pcallk(L,nargs,nresults,0,0,NULL)!=LUA_OK) {
         const char *message=lua_tolstring(L,-1,NULL);
@@ -172,6 +172,9 @@ metail_status metail_check(metail_context *c, const char *source, const char *na
 }
 metail_status metail_emit(metail_context *c, const char *s, const char *n, char **out) {
     return text_operation(c,"emit",s,n,NULL,1,out,NULL);
+}
+metail_status metail_linkage(metail_context *c, const char *s, const char *n, char **out) {
+    return text_operation(c,"linkage",s,n,NULL,1,out,NULL);
 }
 metail_status metail_optimize(metail_context *c, const char *s, const char *n,
     const char *p, int rounds, char **out, char **stats) {
@@ -308,6 +311,21 @@ static void push_module(lua_State *L, ir_request *r) {
     const metail_module *m=r->input;
     lua_createtable(L,0,2);
     if (m->name) ir_string(L,r,"module",m->name);
+    ir_items(L,r,m->external_count);ir_array(L,m->externals,m->external_count);
+    for (size_t i=0;i<m->external_count;++i) {
+        const metail_external *f=&m->externals[i];
+        lua_createtable(L,0,7);ir_string(L,r,"name",f->name);
+        ir_string(L,r,"symbol",f->symbol ? f->symbol : f->name);
+        ir_string(L,r,"library",f->library);ir_string(L,r,"result",f->result ? f->result : "i64");
+        if (f->variadic!=0 && f->variadic!=1) luaL_error(L,"external variadic flag must be 0 or 1");
+        lua_pushboolean(L,f->variadic);lua_setfield(L,-2,"variadic");
+        ir_items(L,r,f->param_count);ir_array(L,f->params,f->param_count);
+        for (size_t j=0;j<f->param_count;++j) {
+            ir_string_budget(L,r,f->params[j]);lua_pushstring(L,f->params[j]);lua_rawseti(L,-2,(lua_Integer)j+1);
+        }
+        lua_setfield(L,-2,"params");lua_rawseti(L,-2,(lua_Integer)i+1);
+    }
+    lua_setfield(L,-2,"externals");
     ir_items(L,r,m->function_count);ir_array(L,m->functions,m->function_count);
     for (size_t i=0;i<m->function_count;++i) {
         const metail_function *f=&m->functions[i];
@@ -378,6 +396,25 @@ static void read_module(lua_State *L, ir_request *r, int table) {
     r->items=0;r->bytes=0;
     metail_module *m=&r->owner->module;
     m->name=read_string(L,r,table,"module",1);
+    m->external_count=read_array(L,table,"externals");ir_items(L,r,m->external_count);
+    metail_external *externals=(metail_external *)ir_allocate(L,r,m->external_count,sizeof *externals);
+    m->externals=externals;
+    for (size_t i=0;i<m->external_count;++i) {
+        lua_rawgeti(L,-1,(lua_Integer)i+1);int ft=lua_gettop(L);metail_external *f=&externals[i];
+        f->name=read_string(L,r,ft,"name",0);f->symbol=read_string(L,r,ft,"symbol",0);
+        f->library=read_string(L,r,ft,"library",0);f->result=read_string(L,r,ft,"result",0);
+        lua_getfield(L,ft,"variadic");f->variadic=lua_toboolean(L,-1);lua_settop(L,-2);
+        f->param_count=read_array(L,ft,"params");ir_items(L,r,f->param_count);
+        const char **params=(const char **)ir_allocate(L,r,f->param_count,sizeof *params);f->params=params;
+        for (size_t j=0;j<f->param_count;++j) {
+            lua_rawgeti(L,-1,(lua_Integer)j+1);
+            const char *s=lua_tolstring(L,-1,NULL);ir_string_budget(L,r,s);
+            size_t size=strlen(s)+1;char *copy=(char *)ir_allocate(L,r,size,1);memcpy(copy,s,size);
+            params[j]=copy;lua_settop(L,-2);
+        }
+        lua_settop(L,ft-1);
+    }
+    lua_settop(L,-2);
     m->function_count=read_array(L,table,"functions");ir_items(L,r,m->function_count);
     metail_function *functions=(metail_function *)ir_allocate(L,r,m->function_count,sizeof *functions);
     m->functions=functions;
@@ -471,6 +508,10 @@ metail_status metail_module_check(metail_context *c, const metail_module *module
 metail_status metail_module_emit(metail_context *c, const metail_module *module, char **output) {
     if (!output) return fail(c,METAIL_INVALID_ARGUMENT,"text output required");
     ir_request r={.operation="module_emit",.input=module,.rounds=1};return ir_run(c,&r,NULL,output);
+}
+metail_status metail_module_linkage(metail_context *c, const metail_module *module, char **output) {
+    if (!output) return fail(c,METAIL_INVALID_ARGUMENT,"JSON output required");
+    ir_request r={.operation="module_linkage",.input=module,.rounds=1};return ir_run(c,&r,NULL,output);
 }
 metail_status metail_module_analyze(metail_context *c, const metail_module *module, const char *passes, char **output) {
     if (!output) return fail(c,METAIL_INVALID_ARGUMENT,"JSON output required");

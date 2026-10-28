@@ -85,9 +85,61 @@ using Operand = std::variant<int64_t, std::string, SymbolRef>;
 struct Binding { std::string name; Operand value; };
 inline Operand reg(std::string name) { detail::name_check(name); return name; }
 inline Operand imm(int64_t value) { return value; }
+// C ABI import. Library is a linker name ("c", "m") or an explicit path.
+// No library is loaded into the compiler; the caller supplies ABI argument setup.
+struct ExternalFunction { std::string name, symbol, library; };
+namespace detail {
+inline void library_check(std::string_view s) {
+    if (s.empty() || s.front() == '-' || s.front() == '@') throw Error("expected library name or path");
+    for (unsigned char c : s)
+        if (c < 32 || c >= 127) throw Error("invalid character in library name or path");
+    if (s.find('/') == s.npos)
+        for (char c : s) if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '+' || c == '.'))
+            throw Error("invalid linker library name");
+}
+inline std::string json_quote(std::string_view s) {
+    constexpr char hex[] = "0123456789abcdef";
+    std::string out = "\"";
+    for (unsigned char c : s) {
+        if (c == '"' || c == '\\') { out += '\\'; out += char(c); }
+        else if (c < 32 || c >= 127) { out += "\\u00"; out += hex[c >> 4]; out += hex[c & 15]; }
+        else out += char(c);
+    }
+    return out + '"';
+}
+} // namespace detail
+inline std::vector<std::string> link_libraries(const std::vector<ExternalFunction> &imports) {
+    std::vector<std::string> result;
+    std::set<std::string> seen;
+    for (const auto &f : imports)
+        if (seen.insert(f.library).second) result.push_back(f.library);
+    return result;
+}
+// Driver arguments, not a shell command; append AFTER the referring objects.
+inline std::vector<std::string> link_arguments(const std::vector<ExternalFunction> &imports) {
+    auto result = link_libraries(imports);
+    for (auto &library : result) if (library.find('/') == library.npos) library = "-l" + library;
+    return result;
+}
+inline std::string linkage_json(const std::vector<ExternalFunction> &imports) {
+    using detail::json_quote;
+    std::string out = "{\"schema\":1,\"libraries\":[";
+    const auto libraries = link_libraries(imports), arguments = link_arguments(imports);
+    for (size_t i = 0; i < libraries.size(); ++i) out += (i ? "," : "") + json_quote(libraries[i]);
+    out += "],\"arguments\":[";
+    for (size_t i = 0; i < arguments.size(); ++i) out += (i ? "," : "") + json_quote(arguments[i]);
+    out += "],\"imports\":[";
+    for (size_t i = 0; i < imports.size(); ++i) {
+        const auto &f = imports[i];
+        out += (i ? "," : "") + std::string("{\"name\":") + json_quote(f.name) + ",\"symbol\":" + json_quote(f.symbol) +
+            ",\"library\":" + json_quote(f.library) + ",\"calling_convention\":\"c\"}";
+    }
+    return out + "]}";
+}
 struct Statement {
     enum class Kind { instruction, encoder, form, label, global, section, align,
-                      ascii, byte, word, long_, quad, comment } kind;
+                      ascii, byte, word, long_, quad, comment, external, external_call } kind;
     std::string name;
     std::vector<std::string> args;
     Location location;
@@ -220,6 +272,18 @@ public:
         catch (...) { labels_.erase(it); throw; }
     }
     Program &global(std::string s) { detail::name_check(s); return append(Statement::Kind::global, std::move(s)); }
+    Program &extern_function(std::string name, std::string library = "c", std::string symbol = {}) {
+        detail::name_check(name); detail::library_check(library);
+        if (symbol.empty()) symbol = name;
+        detail::name_check(symbol);
+        return append(Statement::Kind::external, std::move(name), {std::move(library), std::move(symbol)});
+    }
+    // Native assembler call; mnemonic is explicit for non-x86 targets (e.g. bl).
+    // Use encode(..., symbol(...)) for a relocatable section image instead.
+    Program &call_external(std::string name, std::string mnemonic = "call") {
+        detail::name_check(name); detail::name_check(mnemonic);
+        return append(Statement::Kind::external_call, std::move(name), {std::move(mnemonic)});
+    }
     Program &section(std::string s) {
         detail::name_check(s); if (s.front() != '.') throw Error("section name must start with '.'");
         return append(Statement::Kind::section, std::move(s));
@@ -264,6 +328,24 @@ inline std::vector<Binding> bindings(const std::vector<std::string> &args) {
     return result;
 }
 } // namespace detail
+
+inline std::vector<ExternalFunction> external_functions(const Program &p) {
+    std::vector<ExternalFunction> result;
+    std::set<std::string> names, symbols;
+    for (const auto &s : p.statements()) if (s.kind == Statement::Kind::external) {
+        if (!names.insert(s.name).second) throw Error("duplicate external function: " + s.name, s.location);
+        if (!symbols.insert(s.args[1]).second) throw Error("duplicate external symbol: " + s.args[1], s.location);
+        result.push_back({s.name, s.args[1], s.args[0]});
+    }
+    for (const auto &s : p.statements()) {
+        if ((s.kind == Statement::Kind::label || s.kind == Statement::Kind::global) &&
+            (names.contains(s.name) || symbols.contains(s.name)))
+            throw Error("external function conflicts with local definition: " + s.name, s.location);
+        if (s.kind == Statement::Kind::external_call && !names.contains(s.name))
+            throw Error("undeclared external function: " + s.name, s.location);
+    }
+    return result;
+}
 
 // Line-oriented DSLtk parser; no borrowed source survives this call.
 inline Program parse(std::string_view source, const std::string &file = "<memory>", Limits limits = {}) {
@@ -310,6 +392,16 @@ inline Program parse(std::string_view source, const std::string &file = "<memory
                 else if (k == "8byte") k = "quad";
                 if (k == "section") program.section(rest);
                 else if (k == "global" || k == "globl") program.global(rest);
+                else if (k == "extern" || k == "call_extern") {
+                    auto args = split_operands(rest, limits.nesting);
+                    if (k == "extern") {
+                        if (args.size() < 2 || args.size() > 3) throw Error("expected extern name, \"library\" [, symbol]");
+                        program.extern_function(args[0], unquote(args[1]), args.size() == 3 ? args[2] : args[0]);
+                    } else {
+                        if (args.empty() || args.size() > 2) throw Error("expected call_extern name [, mnemonic]");
+                        program.call_external(args[0], args.size() == 2 ? args[1] : "call");
+                    }
+                }
                 else if (k == "align" || k == "balign") {
                     auto n = detail::integer(rest);
                     if (n < 1 || n > 65536) throw Error("alignment out of range");
@@ -474,12 +566,19 @@ inline const char *directive(Statement::Kind k) {
 inline std::string render(const Program &p, const Target &t, Limits limits = {}) {
     (void)t.spec();
     if (p.size() > limits.statements) throw Error("statement limit exceeded");
+    const auto imports = external_functions(p);
     std::string out = "# MetaArchIR target: " + t.name() + "\n";
     for (const auto &s : p.statements()) {
         try {
             std::ostringstream o;
             o.imbue(std::locale::classic());
             switch (s.kind) {
+            case Statement::Kind::external: o << ".extern " << s.args[1] << '\n'; break;
+            case Statement::Kind::external_call: {
+                if (!t.supports(s.args[0])) throw Error("external call mnemonic is not declared for " + t.name());
+                auto f = std::find_if(imports.begin(), imports.end(), [&](const auto &v) { return v.name == s.name; });
+                o << "    " << s.args[0] << ' ' << f->symbol << '\n'; break;
+            }
             case Statement::Kind::instruction:
                 if (!t.supports(s.name)) throw Error("instruction '" + s.name + "' is not declared for " + t.name());
                 o << "    " << s.name;
@@ -511,6 +610,19 @@ inline std::string render(const Program &p, const Target &t, Limits limits = {})
             out += text;
         } catch (const Error &e) { throw Error(e.what(), s.location); }
     }
+    if (!imports.empty()) {
+        // LLVM ELF dependent-libraries extension. Numeric section type works
+        // with both GNU as and Clang; % also works on ARM (where @ is a comment).
+        // GNU ld users consume linkage_json().arguments instead; no auto-link claim.
+        const std::string_view format = t.description().obj_format ? t.description().obj_format : "";
+        if (format.starts_with("ELF")) {
+            std::string metadata = ".pushsection .deplibs,\"MS\",%0x6fff4c04,1\n";
+            for (const auto &library : link_libraries(imports)) metadata += ".asciz " + quote(library) + '\n';
+            metadata += ".popsection\n";
+            if (out.size() > limits.output_bytes || metadata.size() > limits.output_bytes - out.size()) throw Error("output byte limit exceeded");
+            out += metadata;
+        }
+    }
     if (out.size() > limits.output_bytes) throw Error("output byte limit exceeded");
     return out;
 }
@@ -529,9 +641,11 @@ struct Image {
     std::vector<Section> sections;
     std::vector<Symbol> symbols;
     std::vector<Relocation> relocations;
+    std::vector<ExternalFunction> imports;
     // No implicit linker: reject information loss in flat output.
     std::vector<uint8_t> flat() const {
         if (!relocations.empty()) throw Error("flat output cannot contain unresolved relocations");
+        if (!imports.empty()) throw Error("flat output cannot discard external linkage metadata");
         if (sections.size() > 1) throw Error("flat output requires one section");
         return sections.empty() ? std::vector<uint8_t>{} : sections.front().bytes;
     }
@@ -541,6 +655,7 @@ inline Image assemble(const Program &p, const Target &t, Limits limits = {}) {
     if (p.size() > limits.statements) throw Error("statement limit exceeded");
     const bool little = t.description().byte_order == DSYM_BO_LITTLE || t.description().byte_order == DSYM_BO_LE;
     Image out;
+    out.imports = external_functions(p);
     size_t current = 0, total = 0;
     std::set<std::string> globals;
     auto select = [&](const std::string &name) {
@@ -555,7 +670,7 @@ inline Image assemble(const Program &p, const Target &t, Limits limits = {}) {
         try {
             if (s.kind == Statement::Kind::section) { select(s.name); continue; }
             if (s.kind == Statement::Kind::global) { globals.insert(s.name); continue; }
-            if (s.kind == Statement::Kind::comment) continue;
+            if (s.kind == Statement::Kind::comment || s.kind == Statement::Kind::external) continue;
             if (out.sections.empty()) select(".text");
             auto &section = out.sections[current];
             auto &bytes = section.bytes;
@@ -571,14 +686,16 @@ inline Image assemble(const Program &p, const Target &t, Limits limits = {}) {
                 for (const auto &r : v.relocations) {
                     const auto &desc = t.spec().get()->relocs[r.index];
                     auto ref = v.symbols.find(r.parameter);
+                    std::string symbol = ref == v.symbols.end() ? std::string{} : ref->second;
+                    for (const auto &f : out.imports) if (symbol == f.name) { symbol = f.symbol; break; }
                     if (r.offset > std::numeric_limits<size_t>::max() - bytes.size())
                         throw Error("relocation offset overflow");
                     out.relocations.push_back({current, bytes.size() + r.offset, r.size, r.name, r.parameter,
-                        ref == v.symbols.end() ? std::string{} : ref->second,
+                        std::move(symbol),
                         r.value, r.bit_offset, r.bit_width, r.endian, desc.pcrel});
                 }
                 bytes.insert(bytes.end(), v.bytes.begin(), v.bytes.end());
-            } else if (s.kind == Statement::Kind::instruction) {
+            } else if (s.kind == Statement::Kind::instruction || s.kind == Statement::Kind::external_call) {
                 throw Error("native assembly text cannot be encoded; use encode or form with explicit parameter bindings");
             } else {
                 size_t width = s.kind == Statement::Kind::byte ? 1 : s.kind == Statement::Kind::word ? 2 : s.kind == Statement::Kind::long_ ? 4 : 8;
