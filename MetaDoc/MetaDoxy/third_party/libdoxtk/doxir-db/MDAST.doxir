@@ -1,0 +1,23 @@
+-- Descriptive Lua metadata for the implemented partial Markdown AST.
+-- Not an executable canonical Doxir schema or a CommonMark compliance claim.
+return {
+  name = "MDAST", version = 1, kind = "ir", status = "partial",
+  description = "Value-type Markdown subset tree with UTF-8 text, sorted attributes, children, and exclusive source ranges.",
+  nodes = {
+    "document", "paragraph", "heading", "blockquote", "list", "listItem",
+    "code", "thematicBreak", "text", "emphasis", "strong", "inlineCode",
+    "link", "image", "break", "verbatim"
+  },
+  attributes = {
+    heading = { "depth" }, list = { "ordered", "start" }, listItem = { "checked" },
+    code = { "fenced", "lang", "meta" }, link = { "url", "title" },
+    image = { "alt", "url", "title" }, verbatim = { "reason" }
+  },
+  notes = {
+    "Source positions use decoded UTF-8 byte offsets and zero-based line/scalar-column coordinates.",
+    "Unsupported HTML, reference definitions, and indented code remain verbatim; unresolved inlines are literal text.",
+    "MDAST-to-Plaintext loses structure and requires allow_lossy with a diagnostic.",
+    "IR inspection dumps preserve tree structure, source positions, and metadata.",
+    "See docs/manual/markdown.md for syntax boundaries and tests/fixtures/markdown for examples."
+  }
+}

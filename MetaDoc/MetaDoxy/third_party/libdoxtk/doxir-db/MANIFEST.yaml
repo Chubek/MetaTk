@@ -1,0 +1,50 @@
+# Doxir IR database manifest. Entries distinguish model implementation from DSL execution.
+schema_version: 1
+database: doxir-db
+dsl: doxir
+description: Intermediate-representation definitions for DoxTk.
+status: initial-implementation
+definitions:
+  - file: AsciiDocAST.doxir
+    name: AsciiDocAST
+    status: scaffold
+  - file: DOM.doxir
+    name: DOM
+    status: scaffold
+  - file: MDAST.doxir
+    name: MDAST
+    status: partial
+    schema_status: descriptive
+    version: 1
+    dependencies: []
+  - file: DoxTkJSON.doxir
+    name: DoxTkJSON
+    status: implemented
+    schema_status: descriptive
+    version: 1
+    dependencies: []
+  - file: DoxTkXML.doxir
+    name: DoxTkXML
+    status: implemented
+    schema_status: descriptive
+    version: 1
+    dependencies: []
+  - file: PandocAST.doxir
+    name: PandocAST
+    status: scaffold
+  - file: Plaintext.doxir
+    name: Plaintext
+    status: implemented
+    schema_status: descriptive
+    version: 1
+    dependencies: []
+  - file: SVGDOM.doxir
+    name: SVGDOM
+    status: scaffold
+  - file: XMLInfoset.doxir
+    name: XMLInfoset
+    status: scaffold
+notes:
+  - Definitions are descriptive Lua metadata pending confirmation of canonical Doxir syntax; no schema runtime is implemented.
+  - Add every definition to this manifest as it is introduced.
+  - Keep names and file paths case-sensitive.

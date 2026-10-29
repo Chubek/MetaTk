@@ -1,0 +1,6 @@
+-- Descriptive metadata, not a canonical executable schema.
+return {
+  name = "DoxTkXML", version = 1, kind = "serialized-envelope", status = "implemented",
+  description = "UTF-8 XML 1.0 inspection envelope containing IR identity, media type, metadata, and a source AST.",
+  notes = { "Write-only ir-xml format; not XMLInfoset or a general XML reader." }
+}

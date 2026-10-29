@@ -1,0 +1,23 @@
+-- Plaintext contract, implemented by the dependency-free C++ parser/writers.
+-- This return table is descriptive Lua metadata, NOT an executable canonical
+-- Doxir schema. Runtime schema validation remains unimplemented.
+return {
+  name = "Plaintext",
+  version = 1,
+  kind = "ir",
+  status = "descriptive",
+  implementation = "implemented",
+  description = "A single Unicode text value, transported as validated UTF-8 bytes in Document.data.",
+  nodes = {
+    { name = "Text", fields = { { name = "text", type = "utf8-string", cardinality = "one" } } }
+  },
+  formats = { readable = { "plaintext" }, writable = { "plaintext", "json-dump", "xml-dump" } },
+  notes = {
+    "Preserves empty content, NUL, BOM, whitespace, and original line endings.",
+    "ASCII and ISO-8859-1 source bytes are decoded losslessly to UTF-8.",
+    "JSON/XML dumps are write-only inspection envelopes, not separate IRs.",
+    "XML dumps reject characters forbidden by XML 1.0 instead of dropping them.",
+    "Metadata is preserved by dumps; plaintext serialization rejects nonempty metadata.",
+    "No encoding guessing, Unicode normalization, replacement characters, or implicit lossiness."
+  }
+}

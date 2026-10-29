@@ -1,0 +1,39 @@
+-- Lanai 32-bit big-endian target. C ABI normally passes arguments on stack;
+-- inreg/fastcc use r6/r7/r18/r19. See emitted CC_Lanai32 and CC_Lanai32_Fast.
+local symas = require("backend").new("lanai")
+symas.target{ arch = "lanai", subarch = "lanai", addr_size = 32, op_size = 32,
+    addr_def = 32, align = 4, byte_order = "big", obj_format = "ELF32",
+    abi = "Lanai32", calling_conv = "lanai32", features = { "base" } }
+symas.feature{ name = "base", desc = "Lanai 32-bit integer ISA" }
+for i = 0, 31 do
+    local flags = { "readable", "writable" }
+    if i < 2 then flags = { "readable" } end
+    symas.register{ name = "r" .. i, class = "gpr", width = 32, enc = i, flags = flags }
+end
+for _, a in ipairs({ { "pc", 2 }, { "sp", 4 }, { "fp", 5 }, { "rv", 8 },
+    { "rr1", 10 }, { "rr2", 11 }, { "rca", 15 } }) do
+    symas.register{ name = a[1], class = "special", width = 32, enc = a[2],
+        parent = "r" .. a[2], sub_lo = 0, sub_hi = 32 }
+end
+symas.register{ name = "sw", class = "status", width = 32, enc = 0 }
+symas.mnemonic{ name = "add" }
+-- ADD_I_LO: imm16[15:0], Rs1[22:18], Rd[27:23], unsigned low immediate.
+symas.encoder{ name = "add_i_lo", max_bytes = 4,
+    source = "require(rd >= 0); require(rd <= 31); require(rs >= 0); require(rs <= 31); require(imm >= 0); require(imm <= 65535); emit32be(rd*8388608 + rs*262144 + imm);" }
+symas.form{ mnemonic = "add", encoder = "add_i_lo", operands = {
+    { kind = "reg", class = "gpr", width = 32, access = "read" },
+    { kind = "imm", width = 16, imm_min = 0, imm_max = 65535, signed = false },
+    { kind = "reg", class = "gpr", width = 32, access = "write" } } }
+symas.mnemonic{ name = "nop" }
+symas.encoder{ name = "nop", source = "emit32be(1);", max_bytes = 4 }
+symas.form{ mnemonic = "nop", encoder = "nop" }
+symas.mnemonic{ name = "ld" }
+symas.encoder{ name = "ret", source = "emit32be(0x8116FFFC);", max_bytes = 4 }
+-- LLVM RET is spelled ld -4[%fp], %pc; not a generic load encoder.
+symas.form{ mnemonic = "ld", encoder = "ret", flags = { "return", "terminator", "reads_mem", "implicit_ops", "delayed" }, syntaxes = { "return" } }
+symas.syntax{ name = "default", reg_prefix = "%", comment = "!", separator = ", " }
+symas.syntax{ name = "return", reg_prefix = "%", comment = "!", tmpl = "ld -4[%fp], %pc" }
+symas.section{ name = ".text", flags = { "exec", "alloc", "code" }, align = 4, content = "code" }
+symas.section{ name = ".data", flags = { "write", "alloc", "data" }, align = 4, content = "data" }
+symas.section{ name = ".bss", flags = { "write", "alloc", "zerofill", "data" }, align = 4, content = "data" }
+print(symas.emit())

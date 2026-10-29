@@ -1,0 +1,6 @@
+-- Descriptive metadata, not a canonical executable schema.
+return {
+  name = "DoxTkJSON", version = 1, kind = "serialized-envelope", status = "implemented",
+  description = "UTF-8 JSON inspection envelope containing IR identity, media type, metadata, and a source AST.",
+  notes = { "Write-only ir-json format; not a generic JSON AST or persistence reader." }
+}

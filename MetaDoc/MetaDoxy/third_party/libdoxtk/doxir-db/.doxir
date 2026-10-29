@@ -1,0 +1,4 @@
+-- Doxir database root marker.
+-- TODO: replace with canonical database-level declarations once the Doxir
+-- loader/grammar contract is established.
+return { name = "DoxTk IR database", version = 1, status = "scaffold" }

@@ -1,0 +1,17 @@
+-- Doxir IR definition scaffold: XMLInfoset
+-- Doxir is a Lua-based DSL. Confirm the canonical schema grammar/runtime
+-- before replacing this metadata stub with executable schema declarations.
+-- Keep stable node names, field cardinality, source locations, and extension
+-- points explicit. Unknown constructs should be representable when feasible.
+return {
+  name = "XMLInfoset",
+  version = 1,
+  kind = "ir",
+  status = "scaffold",
+  description = "TODO: document the XMLInfoset model and its intended source/target formats.",
+  nodes = {},
+  notes = {
+    "Define node kinds and field types using the canonical Doxir DSL.",
+    "Add examples and validation fixtures before advertising support."
+  }
+}
