@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.16)
+project(MetaPPConsumer LANGUAGES C CXX)
+find_package(MetaPP CONFIG REQUIRED)
+add_executable(consumer ../c_api.c)
+target_link_libraries(consumer PRIVATE MetaPP::metapp)
+enable_testing()
+add_test(NAME installed-c-api COMMAND consumer)
