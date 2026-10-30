@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.16)
+project(MetaVM VERSION 0.1.0 LANGUAGES C)
+option(METAVM_BUILD_TESTS "Build Machinery tests" ON)
+if(METAVM_BUILD_TESTS)
+  enable_testing()
+endif()
+add_subdirectory(Machinery)
