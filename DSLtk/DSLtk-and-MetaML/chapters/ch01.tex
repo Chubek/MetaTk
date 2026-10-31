@@ -1,0 +1,169 @@
+\chapter{The two libraries and the two host languages}\label{ch:1}
+\section*{The working problem}
+Establish a reproducible embedding before designing a language. DSLtk is the construction kit; MetaML is a complete language built with that kit. Their C++ and D implementations share many names but use different host-language mechanisms.
+
+A C++ feature is a type containing a Mixin template. DSL inherits the selected mixins using CRTP. D injects declarations with a template mixin. Neither mechanism makes an empty facade into a complete evaluator; the public factories do most of the useful work.
+
+\section*{Feature composition is not execution}
+An application-facing DSL should have a small vocabulary and a clear owner for mutable state. Feature selection organizes implementation facilities; it does not define your domain semantics. For example, selecting AST adds construction convenience, but only your application knows whether an add node requires two integers or two vector values. Write those rules before introducing syntax. A wrapper can then reject invalid construction early and preserve enough source information for later diagnostics.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item A minimal DSL facade
+\item Factories without a facade
+\item A first MetaML session
+\item Persistent definitions
+\item Checking an expression type
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{1.1}{A minimal DSL facade}{C++20}
+Choose a deliberately empty domain facade first. Its job is to name a collection of facilities, rather than to invent evaluation semantics. A facade becomes useful when your application adds domain operations and constrains the exposed vocabulary.
+
+\lstinputlisting[language=C++,caption={Example ex01\_01: C++}]{examples/cpp/ex01_01.inc}
+\section*{Execution, step by step}
+The wrapper passes the integer to the callable. There is no parser, symbol table, or MetaML session in this operation. The result is an ordinary host integer.
+
+\section*{Read the implementation}
+The relevant source entry is DSL in vendor/DSLtk.hpp, around line 5966. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{1.1}{A minimal DSL facade}{D}
+The D example uses a typed callable parameter. A generic callable can instead be supplied as an alias template argument. Preserve capture ownership when moving a local stage into long-lived application storage.
+
+\lstinputlisting[language=D,caption={Example ex01\_01: D}]{examples/d/ex01_01.inc}
+\section*{Failure and design boundary}
+The introductory comments mention eval on a sample facade. The DSL base does not supply an application-specific eval method. Write that method yourself if your public interface needs it.
+
+\section*{Try it yourself}
+Add a multiply stage after the increment. Predict the difference between increment-then-multiply and multiply-then-increment.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{1.2}{Factories without a facade}{C++20}
+A feature tag is an organizational tool, not an access-control boundary. Factory functions remain available at namespace or module scope. Start with these functions when experimenting; introduce a domain facade when you know which operations deserve a stable public name.
+
+\lstinputlisting[language=C++,caption={Example ex01\_02: C++}]{examples/cpp/ex01_02.inc}
+\section*{Execution, step by step}
+The pipe object owns its callable. Passing a value invokes that callable immediately; this is functional composition expressed through operator syntax.
+
+\section*{Read the implementation}
+The relevant source entry is pipe in vendor/DSLtk.hpp, around line 6079. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{1.2}{Factories without a facade}{D}
+The D example uses a typed callable parameter. A generic callable can instead be supplied as an alias template argument. Preserve capture ownership when moving a local stage into long-lived application storage.
+
+\lstinputlisting[language=D,caption={Example ex01\_02: D}]{examples/d/ex01_02.inc}
+\section*{Failure and design boundary}
+Do not assume enabling a feature hides its implementation elsewhere. A wrapper header must deliberately choose what it exposes to downstream users.
+
+\section*{Try it yourself}
+Create a public wrapper that offers only a named doubleValue function. Keep DSLtk types out of its return type.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{1.3}{A first MetaML session}{C++20}
+A session owns persistent language state. Evaluation returns a discriminated success-or-error object, so the host must inspect it before reading the value. The constructors also install core primitives and the built-in Option and Result type declarations.
+
+\lstinputlisting[language=C++,caption={Example ex01\_03: C++}]{examples/cpp/ex01_03.inc}
+\section*{Execution, step by step}
+Parsing, checking and evaluation all happen inside eval. The host sees a Value only after those stages succeed. This example needs no external prelude.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{1.3}{A first MetaML session}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex01\_03: D}]{examples/d/ex01_03.inc}
+\section*{Failure and design boundary}
+Calling to\_string on the Result itself confuses two distinct layers. Unwrap only after testing is\_ok, or propagate the diagnostics to the caller.
+
+\section*{Try it yourself}
+Replace the expression with an undefined name and implement an error branch without invoking unwrap.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{1.4}{Persistent definitions}{C++20}
+A language session is a stateful service. Evaluating a declaration changes the environment consulted by later evaluations. This is useful for REPLs and staged configuration, but it also means that two independent clients should not accidentally share one mutable session.
+
+\lstinputlisting[language=C++,caption={Example ex01\_04: C++}]{examples/cpp/ex01_04.inc}
+\section*{Execution, step by step}
+The second call contains no declaration of base. Its successful lookup therefore demonstrates persistence rather than textual substitution performed by the host.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{1.4}{Persistent definitions}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex01\_04: D}]{examples/d/ex01_04.inc}
+\section*{Failure and design boundary}
+The C++ Session cannot be copied. Treat its address and lifetime as part of the embedding design; keep captured callback resources alive until shutdown completes.
+
+\section*{Try it yourself}
+Evaluate the final expression in a fresh session. Record the diagnostic rather than silently creating a default binding.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{1.5}{Checking an expression type}{C++20}
+Use type\_of when a user interface needs feedback before execution. It parses and checks an expression and returns the printed inferred type. This is particularly useful when the expression might call effectful primitives during normal evaluation.
+
+\lstinputlisting[language=C++,caption={Example ex01\_05: C++}]{examples/cpp/ex01_05.inc}
+\section*{Execution, step by step}
+The returned string describes the language type, not the C++ or D type of the result wrapper. Type inference does not produce the expression value.
+
+\section*{Read the implementation}
+The relevant source entry is type\_of in vendor/MetaML.hpp, around line 8317. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{1.5}{Checking an expression type}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary.
+
+\lstinputlisting[language=D,caption={Example ex01\_05: D}]{examples/d/ex01_05.inc}
+\section*{Failure and design boundary}
+Type checking is not a promise that evaluation terminates or that every host callback succeeds. A successful type is one part of validation.
+
+\section*{Try it yourself}
+Ask for the types of a Boolean, a function and a list. Keep these queries separate from the evaluation path.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\section*{Chapter review: Feature composition is not execution}
+Header-only C++ means definitions are available through inclusion. The D counterpart is a module compiled and linked with the application; it is not a C++ header translated by a preprocessor. Compile DSLtk.d and MetaML.d together with D examples. Avoid importing both modules unqualified when a name such as Session could refer to the generic REPL session or the MetaML session. The examples qualify MetaML.Session to make that distinction explicit.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Add a multiply stage after the increment. Predict the difference between increment-then-multiply and multiply-then-increment.
+\item Create a public wrapper that offers only a named doubleValue function. Keep DSLtk types out of its return type.
+\item Replace the expression with an undefined name and implement an error branch without invoking unwrap.
+\item Evaluate the final expression in a fresh session. Record the diagnostic rather than silently creating a default binding.
+\item Ask for the types of a Boolean, a function and a list. Keep these queries separate from the evaluation path.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+

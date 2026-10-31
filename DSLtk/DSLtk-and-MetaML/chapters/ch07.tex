@@ -1,0 +1,169 @@
+\chapter{S-expressions and rewrite rules}\label{ch:7}
+\section*{The working problem}
+Choose a representation that can round-trip arbitrary atoms, then make transformation policy explicit.
+
+SExpr distinguishes atoms from lists and tracks quoted atoms. RewriteRule operates on AST values. TermRewriteSystem and EGraph, covered later, attach different traversal and equivalence semantics to superficially similar rule notation.
+
+\section*{Three distinct rewrite engines}
+RewriteSet traverses AST values bottom-up and repeats passes. A matching rule marks the pass changed even if its replacement is structurally equal, so a rule that always matches can consume max\_iterations without making progress. The returned tree does not include a stop report. Compare structural equality yourself or use the explicit term reducer when the application must distinguish a normal form from a limit stop.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item Parsing one S-expression
+\item Quoted atom round trips
+\item Several top-level forms
+\item AST conversion
+\item Validated rule notation
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{7.1}{Parsing one S-expression}{C++20}
+The singular parser requires exactly one expression. This is a useful boundary for a configuration value or one rewrite declaration. Use the plural parser for a file containing several top-level forms instead of manually splitting on newlines.
+
+\lstinputlisting[language=C++,caption={Example ex07\_01: C++}]{examples/cpp/ex07_01.inc}
+\section*{Execution, step by step}
+The head add is an ordinary first atom in the list. Operator meaning is supplied by the consuming language.
+
+\section*{Read the implementation}
+The relevant source entry is parse\_sexpr in vendor/DSLtk.hpp, around line 9419. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{7.1}{Parsing one S-expression}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex07\_01: D}]{examples/d/ex07_01.inc}
+\section*{Failure and design boundary}
+S-expression parsing validates structure and escapes, not arity or the semantic validity of an operator.
+
+\section*{Try it yourself}
+Reject add with only one operand in a separate semantic validation pass.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{7.2}{Quoted atom round trips}{C++20}
+Quoted atoms preserve strings that contain whitespace or delimiters. SExpr.atom chooses quoting when necessary, and dump escapes special characters. This makes it a better interchange building block than raw concatenation of AST dump strings.
+
+\lstinputlisting[language=C++,caption={Example ex07\_02: C++}]{examples/cpp/ex07_02.inc}
+\section*{Execution, step by step}
+The serialized form includes quotes, while the parsed text contains the original payload without those delimiters.
+
+\section*{Read the implementation}
+The relevant source entry is SExpr in vendor/DSLtk.hpp, around line 9236. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{7.2}{Quoted atom round trips}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex07\_02: D}]{examples/d/ex07_02.inc}
+\section*{Failure and design boundary}
+Quoted status can affect pattern-variable interpretation. A quoted question-mark atom should remain literal data.
+
+\section*{Try it yourself}
+Round-trip a string containing a quote, a backslash and a newline.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{7.3}{Several top-level forms}{C++20}
+A rule file naturally contains multiple expressions. parse\_sexpressions performs structural reading across whitespace and comments. It avoids the common mistake of treating a newline inside a quoted string as a record boundary.
+
+\lstinputlisting[language=C++,caption={Example ex07\_03: C++}]{examples/cpp/ex07_03.inc}
+\section*{Execution, step by step}
+Two independent lists become two array entries. Their separation does not require one form per physical line.
+
+\section*{Read the implementation}
+The relevant source entry is parse\_sexpressions in vendor/DSLtk.hpp, around line 9406. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{7.3}{Several top-level forms}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex07\_03: D}]{examples/d/ex07_03.inc}
+\section*{Failure and design boundary}
+Catch structural reader exceptions at the file boundary and attach a filename. Do not report every malformed file as an empty rule set.
+
+\section*{Try it yourself}
+Place comments between forms and check that the list count remains unchanged.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{7.4}{AST conversion}{C++20}
+The conversion layer gives a conventional list representation to tagged AST nodes. A leaf becomes a tag followed by an atom; an inner node becomes a tag followed by converted children. Preserve the distinction when designing schemas.
+
+\lstinputlisting[language=C++,caption={Example ex07\_04: C++}]{examples/cpp/ex07_04.inc}
+\section*{Execution, step by step}
+The payload remains one quoted atom rather than two child nodes. This is the key reason to convert structurally before rendering.
+
+\section*{Read the implementation}
+The relevant source entry is ast\_to\_sexpr in vendor/DSLtk.hpp, around line 9427. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{7.4}{AST conversion}{D}
+D accepts string template arguments directly. ASTNode remains a value with explicit deep-copy behavior, so changing a copied tree must not mutate the original. Keep tests for that behavior when upgrading the module.
+
+\lstinputlisting[language=D,caption={Example ex07\_04: D}]{examples/d/ex07_04.inc}
+\section*{Failure and design boundary}
+Not every arbitrary S-expression has a valid tagged AST interpretation. The converter expects a literal atom head for a list.
+
+\section*{Try it yourself}
+Try a list whose first element is another list and handle the conversion error explicitly.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{7.5}{Validated rule notation}{C++20}
+A parsed rewrite declaration records its name, left side and right side. Variables on the right must be bound on the left. This catches a common error before any matching begins and gives a clear separation between reading rules and executing them.
+
+\lstinputlisting[language=C++,caption={Example ex07\_05: C++}]{examples/cpp/ex07_05.inc}
+\section*{Execution, step by step}
+The rule is a data object. No expression has been transformed merely by parsing the declaration.
+
+\section*{Read the implementation}
+The relevant source entry is sexpr\_rule in vendor/DSLtk.hpp, around line 9489. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{7.5}{Validated rule notation}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex07\_05: D}]{examples/d/ex07_05.inc}
+\section*{Failure and design boundary}
+A structurally valid rule can still be mathematically unsound for your language. Effects, overflow and exceptional values belong in the semantic argument.
+
+\section*{Try it yourself}
+Change the right side to ?y and verify that construction rejects the unbound variable.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\section*{Chapter review: Three distinct rewrite engines}
+TermRewriteSystem applies first-order rules in a chosen outermost or innermost strategy. EGraph instead inserts alternatives and merges equivalence classes. These engines share concepts but not operational semantics. Do not present a RewriteSet fixed-point loop as equality saturation. Preserve a written rule contract: required shape, semantic preconditions, allowed effects, integer model and termination measure. Quoting matters because an atom beginning with a question mark can be a variable only when the representation marks it as such.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Reject add with only one operand in a separate semantic validation pass.
+\item Round-trip a string containing a quote, a backslash and a newline.
+\item Place comments between forms and check that the list count remains unchanged.
+\item Try a list whose first element is another list and handle the conversion error explicitly.
+\item Change the right side to ?y and verify that construction rejects the unbound variable.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+

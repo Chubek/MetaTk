@@ -1,0 +1,169 @@
+\chapter{PEG-style token grammars}\label{ch:6}
+\section*{The working problem}
+Use named grammar objects for token-by-token recognition with semantic actions.
+
+PEGDefinition orders rules. The first matching visible rule wins at each input position. This is a token grammar facility with a restricted pattern compiler, not an unrestricted implementation of every PEG notation.
+
+\section*{Grammar object lifetimes}
+C++ PEGRule metadata and parent grammars contain pointers. Keep the referenced grammar objects alive, and avoid holding a rule reference across an append that can reallocate the vector storing local rules. The source comment claims append-stable references, but the inspected implementation stores local rules in std::vector. That implementation detail warrants a conservative lifetime policy. D grammar objects use reference types and have a different identity model.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item A grammar with one rule
+\item Semantic actions and views
+\item Ordered choice is a policy
+\item Reporting the first unmatched byte
+\item Preventing zero-width token loops
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{6.1}{A grammar with one rule}{C++20}
+Create a grammar and add a numeric rule before attaching actions. Whole-input parsing repeatedly selects a rule until every byte is consumed. The empty input succeeds without firing any rule, which matters when a language requires at least one token.
+
+\lstinputlisting[language=C++,caption={Example ex06\_01: C++}]{examples/cpp/ex06_01.inc}
+\section*{Execution, step by step}
+The numeric rule consumes the prefix 12. The next position contains x, so the parse fails there.
+
+\section*{Read the implementation}
+The relevant source entry is create\_peg\_definition in vendor/DSLtk.hpp, around line 8736. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{6.1}{A grammar with one rule}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex06\_01: D}]{examples/d/ex06_01.inc}
+\section*{Failure and design boundary}
+A rule set is not a document-level cardinality check. Explicitly enforce a nonempty document when that is part of the language.
+
+\section*{Try it yourself}
+Parse the empty string and add a host-side requirement for at least one observed numeric token.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{6.2}{Semantic actions and views}{C++20}
+A semantic action receives match text and location metadata. Copy text into application-owned storage if it must survive beyond the input buffer. Keeping a borrowed match view can turn a correct parser into a lifetime bug.
+
+\lstinputlisting[language=C++,caption={Example ex06\_02: C++}]{examples/cpp/ex06_02.inc}
+\section*{Execution, step by step}
+One greedy numeric match produces one callback, not a separate callback for each digit.
+
+\section*{Read the implementation}
+The relevant source entry is PEGMatch in vendor/DSLtk.hpp, around line 8229. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{6.2}{Semantic actions and views}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex06\_02: D}]{examples/d/ex06_02.inc}
+\section*{Failure and design boundary}
+Actions can have effects before a later token fails. A failed overall parse does not automatically roll those effects back.
+
+\section*{Try it yourself}
+Collect tokens in a temporary buffer and publish the buffer only when the entire input succeeds.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{6.3}{Ordered choice is a policy}{C++20}
+Rule ordering is part of the language definition. A shorter literal placed before a longer one can commit too early and leave a suffix that another rule cannot consume. Put deliberate precedence into tests rather than relying on visual resemblance to regular expressions.
+
+\lstinputlisting[language=C++,caption={Example ex06\_03: C++}]{examples/cpp/ex06_03.inc}
+\section*{Execution, step by step}
+The first rule recognizes both bytes immediately. Reversing the rules would consume only a first.
+
+\section*{Read the implementation}
+The relevant source entry is PEGDefinition in vendor/DSLtk.hpp, around line 8227. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{6.3}{Ordered choice is a policy}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex06\_03: D}]{examples/d/ex06_03.inc}
+\section*{Failure and design boundary}
+This engine does not apply a universal longest-token rule across all grammar rules. First successful rule wins.
+
+\section*{Try it yourself}
+Reverse the two rules and verify the failure offset. Then add a rule for b and explain the changed tokenization.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{6.4}{Reporting the first unmatched byte}{C++20}
+PEGParseResult includes an offset and one-based line and column. Preserve these fields when translating failure into a public diagnostic. The host should present the original input, not a reconstructed token string that may have different whitespace.
+
+\lstinputlisting[language=C++,caption={Example ex06\_04: C++}]{examples/cpp/ex06_04.inc}
+\section*{Execution, step by step}
+Offsets are zero-based byte positions. The question mark occupies position two after two accepted digits.
+
+\section*{Read the implementation}
+The relevant source entry is PEGParseResult in vendor/DSLtk.hpp, around line 8230. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{6.4}{Reporting the first unmatched byte}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex06\_04: D}]{examples/d/ex06_04.inc}
+\section*{Failure and design boundary}
+A byte offset is not a Unicode character index or terminal display column. An editor integration must translate coordinates deliberately.
+
+\section*{Try it yourself}
+Add a newline rule and reject a character on line two. Check offset, line and column together.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{6.5}{Preventing zero-width token loops}{C++20}
+A rule that can accept an empty string is unsafe in a token-scanning loop. The grammar checks for a positive match that does not move the cursor and rejects it. This protects progress but does not replace resource limits on very large inputs.
+
+\lstinputlisting[language=C++,caption={Example ex06\_05: C++}]{examples/cpp/ex06_05.inc}
+\section*{Execution, step by step}
+The star pattern recognizes zero digits at position zero. Advancing by zero would revisit the same input forever.
+
+\section*{Read the implementation}
+The relevant source entry is PEGDefinition in vendor/DSLtk.hpp, around line 8227. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{6.5}{Preventing zero-width token loops}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex06\_05: D}]{examples/d/ex06_05.inc}
+\section*{Failure and design boundary}
+Prefer one-or-more token patterns and express optionality at the production level. An empty document and an empty token are different concepts.
+
+\section*{Try it yourself}
+Replace star with plus and compare the diagnostic message for x.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\section*{Chapter review: Grammar object lifetimes}
+Derived PEG definitions visit parent rules before local rules. This ordering means adding a child rule does not necessarily override a matching parent rule. PEG channels attach metadata to matches, with ignore channels marking trivia. Actions and ignore handling should be tested together because the implementation constructs match metadata before invoking an installed action. The pattern compiler supports a bounded syntax; inspect CompiledPattern rather than assuming named recursive productions or every standard PEG operator is available.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Parse the empty string and add a host-side requirement for at least one observed numeric token.
+\item Collect tokens in a temporary buffer and publish the buffer only when the entire input succeeds.
+\item Reverse the two rules and verify the failure offset. Then add a rule for b and explain the changed tokenization.
+\item Add a newline rule and reject a character on line two. Check offset, line and column together.
+\item Replace star with plus and compare the diagnostic message for x.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+

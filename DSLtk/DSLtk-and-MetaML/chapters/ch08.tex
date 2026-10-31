@@ -1,0 +1,169 @@
+\chapter{Graphs, terms and bounded reduction}\label{ch:8}
+\section*{The working problem}
+Separate graph storage from term semantics, then choose a reduction strategy.
+
+DirectedGraph provides node and edge identity. Terms provide ordered function arguments and variables. A term rewrite system uses matching, not arbitrary evaluation. Bounded normalization reports whether it found a normal form or exhausted its budget.
+
+\section*{Graph algorithms and shared reduction}
+DirectedGraph supports breadth-first and depth-first traversal, topological sorting, strongly connected components and DOT output. A multigraph can contain parallel edges, so algorithms and tests should not silently assume one edge per source-target pair. IDs can become invalid after removal; graph storage uses optional entries rather than recycling every hole into an unrelated node. Keep validity checks at plugin and external-data boundaries.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item Graph identity and edges
+\item Dependency order
+\item Matching first-order terms
+\item Normalization with an explicit budget
+\item Shared term graphs
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{8.1}{Graph identity and edges}{C++20}
+A directed graph represents relationships with stable IDs rather than child-value copies. Use edge payloads when relationships themselves have roles, such as operand positions or dependency labels. Keep node IDs local to the graph that created them.
+
+\lstinputlisting[language=C++,caption={Example ex08\_01: C++}]{examples/cpp/ex08_01.inc}
+\section*{Execution, step by step}
+The edge stores a relationship between IDs. Neither node becomes a nested value inside the other.
+
+\section*{Read the implementation}
+The relevant source entry is DirectedGraph in vendor/DSLtk.hpp, around line 11527. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{8.1}{Graph identity and edges}{D}
+This D facility is a reference type, so construction uses new. Copying the reference aliases the same mutable object; it does not perform the AST-style deep copy demonstrated earlier.
+
+\lstinputlisting[language=D,caption={Example ex08\_01: D}]{examples/d/ex08_01.inc}
+\section*{Failure and design boundary}
+Removing a node invalidates its ID for future access. A small integer from a different graph is not a valid substitute.
+
+\section*{Try it yourself}
+Add a second outgoing edge and compare incoming, outgoing and successor lists.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{8.2}{Dependency order}{C++20}
+Topological sorting is useful for acyclic dependency graphs. It answers a scheduling question, whereas breadth-first and depth-first traversal answer reachability questions. Do not substitute one algorithm merely because all of them return a vector of IDs.
+
+\lstinputlisting[language=C++,caption={Example ex08\_02: C++}]{examples/cpp/ex08_02.inc}
+\section*{Execution, step by step}
+The producer appears before its dependent. With several independent nodes, more than one valid order may exist.
+
+\section*{Read the implementation}
+The relevant source entry is DirectedGraph in vendor/DSLtk.hpp, around line 11527. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{8.2}{Dependency order}{D}
+This D facility is a reference type, so construction uses new. Copying the reference aliases the same mutable object; it does not perform the AST-style deep copy demonstrated earlier.
+
+\lstinputlisting[language=D,caption={Example ex08\_02: D}]{examples/d/ex08_02.inc}
+\section*{Failure and design boundary}
+Test cycles explicitly and inspect the implementation contract. A dependency scheduler must not execute a partial order as though every node was scheduled.
+
+\section*{Try it yourself}
+Create a diamond dependency and verify every edge respects the resulting order.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{8.3}{Matching first-order terms}{C++20}
+Term matching binds variables in a pattern against a fixed subject. Repeated occurrences of one variable must agree. This is a structural operation and should not be confused with solving an arithmetic equation.
+
+\lstinputlisting[language=C++,caption={Example ex08\_03: C++}]{examples/cpp/ex08_03.inc}
+\section*{Execution, step by step}
+The first argument binds x. The second occurrence checks that the subject agrees with that binding.
+
+\section*{Read the implementation}
+The relevant source entry is match\_term in vendor/DSLtk.hpp, around line 9604. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{8.3}{Matching first-order terms}{D}
+The C++ optional test becomes D Nullable.isNull, with the sense reversed. Test the outer parse result before accessing an inner optional payload; absence and parse failure can occupy different layers.
+
+\lstinputlisting[language=D,caption={Example ex08\_03: D}]{examples/d/ex08_03.inc}
+\section*{Failure and design boundary}
+Matching is directional. Unification allows variables on both sides and needs an occurs check to prevent infinite substitutions.
+
+\section*{Try it yourself}
+Compare match\_term and unify\_terms on a pair of terms that both contain variables.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{8.4}{Normalization with an explicit budget}{C++20}
+A rewrite system repeatedly applies its rules according to a selected traversal strategy. The step budget makes nontermination observable. A returned term is always available, but callers must inspect the stop reason before claiming that it is normalized.
+
+\lstinputlisting[language=C++,caption={Example ex08\_04: C++}]{examples/cpp/ex08_04.inc}
+\section*{Execution, step by step}
+The only rule removes the add node. A further search finds no redex, establishing a normal form for this rule set.
+
+\section*{Read the implementation}
+The relevant source entry is TermRewriteSystem in vendor/DSLtk.hpp, around line 11920. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{8.4}{Normalization with an explicit budget}{D}
+This D facility is a reference type, so construction uses new. Copying the reference aliases the same mutable object; it does not perform the AST-style deep copy demonstrated earlier.
+
+\lstinputlisting[language=D,caption={Example ex08\_04: D}]{examples/d/ex08_04.inc}
+\section*{Failure and design boundary}
+Normal form is relative to the provided rules. It does not mean globally optimal, semantically checked or canonical across different rule orders.
+
+\section*{Try it yourself}
+Add opposing rules and use a small budget. Confirm StepLimit is reported rather than normal form.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{8.5}{Shared term graphs}{C++20}
+A TermGraph can intern repeated terms so identical subexpressions share nodes. This changes storage and rewrite behavior: replacing a shared redex may affect several incoming references. Treat sharing as part of the execution model rather than a free optimization.
+
+\lstinputlisting[language=C++,caption={Example ex08\_05: C++}]{examples/cpp/ex08_05.inc}
+\section*{Execution, step by step}
+Interning stores only the atom a, the application f(a), and the pair root. Both pair edges refer to the same f(a) node, so the count is three.
+
+\section*{Read the implementation}
+The relevant source entry is TermGraph in vendor/DSLtk.hpp, around line 11983. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{8.5}{Shared term graphs}{D}
+This D facility is a reference type, so construction uses new. Copying the reference aliases the same mutable object; it does not perform the AST-style deep copy demonstrated earlier.
+
+\lstinputlisting[language=D,caption={Example ex08\_05: D}]{examples/d/ex08_05.inc}
+\section*{Failure and design boundary}
+Sharing must preserve pure term meaning. Duplicated effectful computations cannot generally be merged without changing observable behavior.
+
+\section*{Try it yourself}
+Repeat construction with sharing disabled and compare node counts and reconstructed terms.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\section*{Chapter review: Graph algorithms and shared reduction}
+Term unification differs from matching because variables may occur on both sides. The occurs check prevents binding a variable to a term containing itself. TermGraph reduction redirects incoming edges to a replacement and therefore implements shared reduction. Garbage collection takes explicit roots and removes unreachable nodes. Reconstructing a shared graph as a tree can duplicate work or storage, so use to\_term for inspection deliberately rather than in every hot-path operation.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Add a second outgoing edge and compare incoming, outgoing and successor lists.
+\item Create a diamond dependency and verify every edge respects the resulting order.
+\item Compare match\_term and unify\_terms on a pair of terms that both contain variables.
+\item Add opposing rules and use a small budget. Confirm StepLimit is reported rather than normal form.
+\item Repeat construction with sharing disabled and compare node counts and reconstructed terms.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+

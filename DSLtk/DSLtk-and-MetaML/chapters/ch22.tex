@@ -1,0 +1,171 @@
+\chapter{Deployment and cross-dialect verification}\label{ch:22}
+\section*{The working problem}
+Make paths, dependencies and evidence explicit before distributing an embedding.
+
+The four source files are pinned in vendor. MetaML standard-library discovery checks environment, installation-relative and fallback paths. Import resolution and callback capabilities should be tested under the same deployment layout users will receive.
+
+\section*{Pinning sources and evidence}
+The vendor directory contains byte-identical copies of the four uploaded sources under canonical filenames so their internal include and import names work. SOURCE-MAP.md records hashes and the original names. This is a source-pinned guide, not a claim about future releases with the same version string. Rerun examples whenever either library changes and investigate changed results before updating a golden fixture.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item Explicit standard-library discovery
+\item Import search paths
+\item Unresolved imports are inspectable
+\item Discovering installed primitive names
+\item Portable scripts and native adapters
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{22.1}{Explicit standard-library discovery}{C++20}
+load\_stdlib searches for prelude/mod.ml and returns a Result. A missing installation is an actionable configuration failure. The book does not invent metalib contents or claim those modules were bundled with the supplied headers.
+
+\lstinputlisting[language=C++,caption={Example ex22\_01: C++}]{examples/cpp/ex22_01.inc}
+\section*{Execution, step by step}
+The explicit directory disables fallback discovery for this attempt. The deliberately absent path produces a controlled failure.
+
+\section*{Read the implementation}
+The relevant source entry is load\_stdlib in vendor/MetaML.hpp, around line 8250. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{22.1}{Explicit standard-library discovery}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary.
+
+\lstinputlisting[language=D,caption={Example ex22\_01: D}]{examples/d/ex22_01.inc}
+\section*{Failure and design boundary}
+Do not ignore load\_stdlib and then blame undefined names on the language parser. Report installation failures at startup.
+
+\section*{Try it yourself}
+Install a real metalib tree separately and repeat with an explicit absolute path.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{22.2}{Import search paths}{C++20}
+Add a controlled search directory before loading application modules. The session exposes search\_paths for inspection, allowing a diagnostic screen to show where imports will be sought without guessing from the process working directory.
+
+\lstinputlisting[language=C++,caption={Example ex22\_02: C++}]{examples/cpp/ex22_02.inc}
+\section*{Execution, step by step}
+The host path is now part of resolution configuration. Adding a path does not itself import or execute a module.
+
+\section*{Read the implementation}
+The relevant source entry is add\_search\_path in vendor/MetaML.hpp, around line 8662. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{22.2}{Import search paths}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary.
+
+\lstinputlisting[language=D,caption={Example ex22\_02: D}]{examples/d/ex22_02.inc}
+\section*{Failure and design boundary}
+Relative paths depend on the process working directory. Convert deployment roots to intentional absolute paths when reproducibility matters.
+
+\section*{Try it yourself}
+Run from two different working directories and compare resolution behavior.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{22.3}{Unresolved imports are inspectable}{C++20}
+resolve\_import answers where an import would resolve without executing it. This is useful for editor navigation and startup diagnostics. The answer is optional because resolution can legitimately fail.
+
+\lstinputlisting[language=C++,caption={Example ex22\_03: C++}]{examples/cpp/ex22_03.inc}
+\section*{Execution, step by step}
+No matching file produces absence rather than a fabricated path. A real import attempt can then provide the appropriate language diagnostic.
+
+\section*{Read the implementation}
+The relevant source entry is resolve\_import in vendor/MetaML.hpp, around line 8644. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{22.3}{Unresolved imports are inspectable}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The C++ optional test becomes D Nullable.isNull, with the sense reversed. Test the outer parse result before accessing an inner optional payload; absence and parse failure can occupy different layers.
+
+\lstinputlisting[language=D,caption={Example ex22\_03: D}]{examples/d/ex22_03.inc}
+\section*{Failure and design boundary}
+Resolution alone is not a guarantee that a later read succeeds; files can change between inspection and loading.
+
+\section*{Try it yourself}
+Resolve a real module and compare the canonical path with imported\_files after loading it.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{22.4}{Discovering installed primitive names}{C++20}
+primitive\_names exposes the host vocabulary. Use it to audit a prepared session and to compare C++ and D deployments. Discovery is distinct from authorization: an installed primitive can exist while remaining disallowed.
+
+\lstinputlisting[language=C++,caption={Example ex22\_04: C++}]{examples/cpp/ex22_04.inc}
+\section*{Execution, step by step}
+The constructor installs core primitives before any external prelude is loaded. The audit therefore sees a nonempty vocabulary.
+
+\section*{Read the implementation}
+The relevant source entry is primitive\_names in vendor/MetaML.hpp, around line 8548. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{22.4}{Discovering installed primitive names}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary.
+
+\lstinputlisting[language=D,caption={Example ex22\_04: D}]{examples/d/ex22_04.inc}
+\section*{Failure and design boundary}
+Do not use a displayed list as an authorization check. Consult the configured capability policy at the call boundary.
+
+\section*{Try it yourself}
+Sort and compare the two dialect inventories when a D compiler becomes available.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{22.5}{Portable scripts and native adapters}{C++20}
+The most useful cross-dialect fixture runs exactly the same MetaML source under both hosts. Compare rendered values, inferred types and diagnostics, while keeping native adapter tests separate so one failure points to the correct layer.
+
+\lstinputlisting[language=C++,caption={Example ex22\_05: C++}]{examples/cpp/ex22_05.inc}
+\section*{Execution, step by step}
+The program uses syntax and core arithmetic only, so it is independent of external filesystem layout.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{22.5}{Portable scripts and native adapters}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex22\_05: D}]{examples/d/ex22_05.inc}
+\section*{Failure and design boundary}
+The supplied source comments demand dialect parity, but comments are not evidence that every path behaves identically. Run differential tests rather than assuming parity.
+
+\section*{Try it yourself}
+Add an error fixture and compare diagnostic code and span before comparing presentation text.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex22\_05.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\section*{Chapter review: Pinning sources and evidence}
+C++ examples are compiled together for fast validation and remain separate standalone programs. The D examples are source-reviewed but not compiler-validated in this environment. The build tools expose a separate D test target and report a missing compiler as a limitation rather than a pass. texlua builds the book without requiring Python; Python is used only for optional example generation, validation and development reports. The pre-generated LaTeX sources are sufficient for normal builds.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Install a real metalib tree separately and repeat with an explicit absolute path.
+\item Run from two different working directories and compare resolution behavior.
+\item Resolve a real module and compare the canonical path with imported\_files after loading it.
+\item Sort and compare the two dialect inventories when a D compiler becomes available.
+\item Add an error fixture and compare diagnostic code and span before comparing presentation text.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+

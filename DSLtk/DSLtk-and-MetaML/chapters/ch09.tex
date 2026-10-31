@@ -1,0 +1,169 @@
+\chapter{Equality saturation in practice}\label{ch:9}
+\section*{The working problem}
+Keep several equivalent expressions instead of committing to a destructive rewrite sequence.
+
+An e-graph hash-conses nodes, merges equivalent classes and rebuilds congruence. Saturation is bounded by iterations, nodes and matches. Extraction chooses a finite representative with minimum node count, not a target-specific latency or register-pressure cost.
+
+\section*{Rebuild and extraction invariants}
+After e-class unions, parent expressions that previously had different child IDs can become congruent. rebuild canonicalizes child representatives, hash-conses again and merges newly equal parents until stable. This is essential bookkeeping, not an optional cleanup pass. Public queries that call rebuild may therefore do nontrivial work even when their names sound like simple lookups.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item Adding expressions to an e-graph
+\item Merging known equivalents
+\item Saturating a rule set
+\item Limits are part of the result
+\item Extraction and cost models
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{9.1}{Adding expressions to an e-graph}{C++20}
+Create concrete expressions before applying rules. Adding the same expression twice returns IDs that belong to the same equivalence class. Variables are appropriate in patterns but cannot be inserted as unbound expressions.
+
+\lstinputlisting[language=C++,caption={Example ex09\_01: C++}]{examples/cpp/ex09_01.inc}
+\section*{Execution, step by step}
+Hash-consing recognizes identical operator-and-child structure. The atom x is a concrete symbol; ?x would be a pattern variable.
+
+\section*{Read the implementation}
+The relevant source entry is EGraph in vendor/DSLtk.hpp, around line 9551. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{9.1}{Adding expressions to an e-graph}{D}
+This D facility is a reference type, so construction uses new. Copying the reference aliases the same mutable object; it does not perform the AST-style deep copy demonstrated earlier.
+
+\lstinputlisting[language=D,caption={Example ex09\_01: D}]{examples/d/ex09_01.inc}
+\section*{Failure and design boundary}
+An EClassId is meaningful only within its original graph. Persist an expression or another stable external identity instead of serializing raw class IDs.
+
+\section*{Try it yourself}
+Attempt to add an expression containing ?x and handle the validation exception.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{9.2}{Merging known equivalents}{C++20}
+unite asserts an equality already justified by the application. It does not prove that equality from arithmetic or type rules. A type-aware compiler must ensure only compatible semantic values are merged.
+
+\lstinputlisting[language=C++,caption={Example ex09\_02: C++}]{examples/cpp/ex09_02.inc}
+\section*{Execution, step by step}
+The equivalence query rebuilds congruence as needed. Both IDs now refer to one semantic alternative set.
+
+\section*{Read the implementation}
+The relevant source entry is EGraph in vendor/DSLtk.hpp, around line 9551. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{9.2}{Merging known equivalents}{D}
+This D facility is a reference type, so construction uses new. Copying the reference aliases the same mutable object; it does not perform the AST-style deep copy demonstrated earlier.
+
+\lstinputlisting[language=D,caption={Example ex09\_02: D}]{examples/d/ex09_02.inc}
+\section*{Failure and design boundary}
+The graph has no built-in domain type discipline. A mistaken union contaminates every later deduction that uses the merged class.
+
+\section*{Try it yourself}
+Add f(add(x,0)) and f(x), merge their children, then query congruence of the parent expressions.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{9.3}{Saturating a rule set}{C++20}
+Saturation inserts right-hand alternatives and merges them with matched classes. It does not delete the left-hand form. This is why several transformations can coexist without requiring a globally perfect destructive rule order.
+
+\lstinputlisting[language=C++,caption={Example ex09\_03: C++}]{examples/cpp/ex09_03.inc}
+\section*{Execution, step by step}
+The first application adds the atom alternative. A later iteration observes no new revision and reports saturation.
+
+\section*{Read the implementation}
+The relevant source entry is EGraph in vendor/DSLtk.hpp, around line 9551. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{9.3}{Saturating a rule set}{D}
+This D facility is a reference type, so construction uses new. Copying the reference aliases the same mutable object; it does not perform the AST-style deep copy demonstrated earlier.
+
+\lstinputlisting[language=D,caption={Example ex09\_03: D}]{examples/d/ex09_03.inc}
+\section*{Failure and design boundary}
+The implementation counts rule applications, including matches that may no longer add a new alternative. Budget interpretation matters when tuning large rule sets.
+
+\section*{Try it yourself}
+Add a second zero-removal rule for multiplication by one and test a nested expression.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{9.4}{Limits are part of the result}{C++20}
+Set small explicit limits while developing rule sets. A limit stop is useful information, not a crash. Production tooling should record both the extracted expression and the reason saturation ended so performance regressions can be diagnosed.
+
+\lstinputlisting[language=C++,caption={Example ex09\_04: C++}]{examples/cpp/ex09_04.inc}
+\section*{Execution, step by step}
+With zero iterations, no fixed-point search occurs. The graph may already be stable, but this execution did not establish that fact.
+
+\section*{Read the implementation}
+The relevant source entry is SaturationLimits in vendor/DSLtk.hpp, around line 9525. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{9.4}{Limits are part of the result}{D}
+This D facility is a reference type, so construction uses new. Copying the reference aliases the same mutable object; it does not perform the AST-style deep copy demonstrated earlier.
+
+\lstinputlisting[language=D,caption={Example ex09\_04: D}]{examples/d/ex09_04.inc}
+\section*{Failure and design boundary}
+Never replace a limit result with an unconditional success flag. An extracted expression may still be useful without a saturation claim.
+
+\section*{Try it yourself}
+Use a rule that grows an expression and compare iteration, node and match limits independently.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{9.5}{Extraction and cost models}{C++20}
+The built-in extractor minimizes the count of expression nodes. That is a clear baseline cost model, but real compilers may care about latency, effects, code size or target instruction legality. Keep the distinction explicit in the optimizer interface.
+
+\lstinputlisting[language=C++,caption={Example ex09\_05: C++}]{examples/cpp/ex09_05.inc}
+\section*{Execution, step by step}
+One atom is cheaper than an operator plus a child under node-count cost. The representative ID need not change for extraction to choose differently.
+
+\section*{Read the implementation}
+The relevant source entry is EGraph in vendor/DSLtk.hpp, around line 9551. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{9.5}{Extraction and cost models}{D}
+This D facility is a reference type, so construction uses new. Copying the reference aliases the same mutable object; it does not perform the AST-style deep copy demonstrated earlier.
+
+\lstinputlisting[language=D,caption={Example ex09\_05: D}]{examples/d/ex09_05.inc}
+\section*{Failure and design boundary}
+Minimum node count does not guarantee fastest machine code. If extending extraction, document cycle handling and finite-representative requirements.
+
+\section*{Try it yourself}
+Construct two equal-cost alternatives and avoid asserting a unique tie-breaking order unless the API promises one.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\section*{Chapter review: Rebuild and extraction invariants}
+Rules must not invent unbound right-hand variables, and concrete additions cannot contain unbound patterns. Saturation callbacks receive rule and match information that can support tracing. Keep tracing bounded because it may generate much more data than the extracted expression. The extractor relaxes node-count costs until stable and requires a finite representative. A target-aware extension would need a documented cost model and legality checks; the current node-count heuristic is a useful baseline rather than a universal optimality claim.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Attempt to add an expression containing ?x and handle the validation exception.
+\item Add f(add(x,0)) and f(x), merge their children, then query congruence of the parent expressions.
+\item Add a second zero-removal rule for multiplication by one and test a nested expression.
+\item Use a rule that grows an expression and compare iteration, node and match limits independently.
+\item Construct two equal-cost alternatives and avoid asserting a unique tie-breaking order unless the API promises one.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+

@@ -1,0 +1,171 @@
+\chapter{Case study II: a reloadable decision service}\label{ch:24}
+\section*{The working problem}
+Embed MetaML as a typed policy layer while retaining host control of data, capabilities and publication. A policy receives native facts through a narrow interface and returns a decision.
+
+A candidate session is prepared separately, checked with acceptance fixtures and published only after validation. Evaluation failure produces an application error rather than an implicit allow. Existing sessions remain alive until in-flight work completes. The standalone C++ and D programs demonstrate candidate validation without requiring an external standard library.
+
+\section*{Policy service publication contract}
+The complete decision example validates that allow applied to an Int has Bool type and checks both accepted and rejected fixtures. A candidate returning the wrong type or the wrong boundary decision is rejected. The active session is replaced only after all checks pass. A deliberately bad candidate demonstrates that the previous generation continues working after reload failure.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item A pure policy contract
+\item Supplying facts through typed callbacks
+\item Validating a reload candidate
+\item Denying ambient native access
+\item Failure reporting and publication discipline
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{24.1}{A pure policy contract}{C++20}
+The initial policy maps an integer fact to a Boolean decision. Pure logic is easy to test before host callbacks are added. Put the policy contract in one module so callers do not depend on its internal helper names.
+
+\lstinputlisting[language=C++,caption={Example ex24\_01: C++}]{examples/cpp/ex24_01.inc}
+\section*{Execution, step by step}
+The module exports one function. Its comparison returns a Boolean that the host can validate before using it as an authorization decision.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{24.1}{A pure policy contract}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex24\_01: D}]{examples/d/ex24_01.inc}
+\section*{Failure and design boundary}
+An evaluation error is different from a false policy result. Keep a three-way host outcome: allow, deny, or policy failure.
+
+\section*{Try it yourself}
+Test ages seventeen, eighteen and nineteen. Keep the exact boundary in the policy acceptance contract.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{24.2}{Supplying facts through typed callbacks}{C++20}
+The host supplies trusted request facts through a narrow primitive. The script decides how to combine those facts. This avoids interpolating untrusted request data into executable source and gives the capability review a small vocabulary to inspect.
+
+\lstinputlisting[language=C++,caption={Example ex24\_02: C++}]{examples/cpp/ex24_02.inc}
+\section*{Execution, step by step}
+The request fact crosses as an integer through the typed adapter. No source quoting is required.
+
+\section*{Read the implementation}
+The relevant source entry is register\_primitive in vendor/MetaML.hpp, around line 8460. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{24.2}{Supplying facts through typed callbacks}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex24\_02: D}]{examples/d/ex24_02.inc}
+\section*{Failure and design boundary}
+Do not mutate a captured request object while another thread evaluates the session. This example is deliberately confined to one evaluation thread.
+
+\section*{Try it yourself}
+Supply a Boolean verified fact as a separate callback and require both checks.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{24.3}{Validating a reload candidate}{C++20}
+A candidate session should pass both type checks and behavioral fixtures before publication. Keeping it separate prevents a failed reload from poisoning the currently active environment. The complete case program uses independent ownership for active and candidate sessions.
+
+\lstinputlisting[language=C++,caption={Example ex24\_03: C++}]{examples/cpp/ex24_03.inc}
+\section*{Execution, step by step}
+The result type is checked independently from the denial fixture. A function returning an Int is rejected before it can become the active decision policy.
+
+\section*{Read the implementation}
+The relevant source entry is type\_of in vendor/MetaML.hpp, around line 8317. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{24.3}{Validating a reload candidate}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex24\_03: D}]{examples/d/ex24_03.inc}
+\section*{Failure and design boundary}
+A few fixtures cannot establish every business rule. They are a publication gate backed by a documented contract, not a proof of policy correctness.
+
+\section*{Try it yourself}
+Prepare a candidate that always allows and verify the denial fixture rejects it.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{24.4}{Denying ambient native access}{C++20}
+After registering intended facts, replace the allowlist with the exact names the policy needs. The explicit policy should be reviewed after every native extension is added. Avoid enabling all primitives as a shortcut during production startup.
+
+\lstinputlisting[language=C++,caption={Example ex24\_04: C++}]{examples/cpp/ex24_04.inc}
+\section*{Execution, step by step}
+The requested fact is permitted and the comparison succeeds. Unrelated non-core names are outside the configured list.
+
+\section*{Read the implementation}
+The relevant source entry is set\_primitive\_allowlist in vendor/MetaML.hpp, around line 8516. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{24.4}{Denying ambient native access}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex24\_04: D}]{examples/d/ex24_04.inc}
+\section*{Failure and design boundary}
+Core primitives remain allowed and native callbacks can do whatever their host implementation permits. Use process isolation when policy code requires a stronger trust boundary.
+
+\section*{Try it yourself}
+Register an unrelated primitive, then demonstrate that this final allowlist denies it.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{24.5}{Failure reporting and publication discipline}{C++20}
+A malformed candidate should be discarded with useful diagnostics while the active policy remains available. The publication step exchanges an owned session reference only after validation. In a concurrent service, serialize each session use or allocate separate evaluators with a documented synchronization model.
+
+\lstinputlisting[language=C++,caption={Example ex24\_05: C++}]{examples/cpp/ex24_05.inc}
+\section*{Execution, step by step}
+The invalid candidate is a different session, so its failure cannot replace active bindings. The active policy still evaluates successfully.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{24.5}{Failure reporting and publication discipline}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary.
+
+\lstinputlisting[language=D,caption={Example ex24\_05: D}]{examples/d/ex24_05.inc}
+\section*{Failure and design boundary}
+Swapping a pointer is not the entire concurrency design. In-flight readers need ownership of the old session, and shutdown must wait until their resources are no longer in use.
+
+\section*{Try it yourself}
+Extend the standalone case program with a publication generation number and retain the previous generation on validation failure.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\section*{Chapter review: Policy service publication contract}
+The sample is a synchronous service core, not an HTTP daemon or a concurrent policy server. A production adapter needs request ownership, timeouts, process containment where appropriate and a strategy for retiring old sessions after in-flight work finishes. Avoid embedding request text into source. Either register typed fact callbacks with per-request ownership or call a prepared function through a documented value bridge. Preserve an explicit error outcome instead of turning every interpreter failure into an unexplained denial.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Test ages seventeen, eighteen and nineteen. Keep the exact boundary in the policy acceptance contract.
+\item Supply a Boolean verified fact as a separate callback and require both checks.
+\item Prepare a candidate that always allows and verify the denial fixture rejects it.
+\item Register an unrelated primitive, then demonstrate that this final allowlist denies it.
+\item Extend the standalone case program with a publication generation number and retain the previous generation on validation failure.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+
+The complete C++ and D programs are in case-studies/policy/. They include the ownership and validation code omitted from the small workshop bodies. Run the case acceptance tests with make test-cases before extending the program.
+

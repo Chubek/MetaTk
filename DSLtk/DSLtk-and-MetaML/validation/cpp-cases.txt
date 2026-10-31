@@ -1,0 +1,2 @@
+generation=1; age17=deny; age20=allow; rejected candidates preserved active policy
+PASS: formula valid/invalid/budget cases, 100 fixed-seed semantic checks, policy reload checks

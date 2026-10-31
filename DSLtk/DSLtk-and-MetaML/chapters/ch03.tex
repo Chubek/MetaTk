@@ -1,0 +1,169 @@
+\chapter{AST values and representation contracts}\label{ch:3}
+\section*{The working problem}
+Represent a small language with explicit tags, payloads and child order before writing transformations.
+
+ASTNode stores either a string leaf or an ordered collection of child nodes. The node is a value. Equality is structural. Dumping is convenient for debugging but does not by itself define a general interchange format.
+
+\section*{AST schemas and side tables}
+The generic AST stores tags and textual leaves, not a compiler's complete semantic model. Type information, binding identity, comments and source spans need an application strategy. One option is a separate typed AST. Another is a side table keyed by stable node identity, but copied value trees do not supply such identity automatically. Choose that representation before attaching semantic caches to node addresses.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item Tagged leaves
+\item Ordered children
+\item Copying and mutation
+\item Structural equality
+\item Debug dumps and interchange
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{3.1}{Tagged leaves}{C++20}
+A leaf stores a tag and a textual payload. The convenience factory serializes host values to text, which makes construction easy but means later numeric interpretation belongs to your application. Choose tags that describe semantic roles rather than punctuation tokens.
+
+\lstinputlisting[language=C++,caption={Example ex03\_01: C++}]{examples/cpp/ex03_01.inc}
+\section*{Execution, step by step}
+The integer becomes the string 42 inside a leaf tagged integer. The host type of the stored payload is no longer int.
+
+\section*{Read the implementation}
+The relevant source entry is ASTNode in vendor/DSLtk.hpp, around line 6561. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{3.1}{Tagged leaves}{D}
+D accepts string template arguments directly. ASTNode remains a value with explicit deep-copy behavior, so changing a copied tree must not mutate the original. Keep tests for that behavior when upgrading the module.
+
+\lstinputlisting[language=D,caption={Example ex03\_01: D}]{examples/d/ex03_01.inc}
+\section*{Failure and design boundary}
+A tag named integer does not validate the payload. A constructor accepting arbitrary strings still needs semantic checks.
+
+\section*{Try it yourself}
+Create a checked integer-leaf constructor that rejects trailing characters and reports the offending source span.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{3.2}{Ordered children}{C++20}
+An inner node establishes the arity and order expected by later passes. For subtraction or function application, exchanging children changes meaning. Put these invariants in constructors rather than scattering positional assumptions throughout every visitor.
+
+\lstinputlisting[language=C++,caption={Example ex03\_02: C++}]{examples/cpp/ex03_02.inc}
+\section*{Execution, step by step}
+The first child is the minuend. Nothing in the generic AST automatically associates the tag sub with exactly two children.
+
+\section*{Read the implementation}
+The relevant source entry is node in vendor/DSLtk.hpp, around line 6737. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{3.2}{Ordered children}{D}
+D accepts string template arguments directly. ASTNode remains a value with explicit deep-copy behavior, so changing a copied tree must not mutate the original. Keep tests for that behavior when upgrading the module.
+
+\lstinputlisting[language=D,caption={Example ex03\_02: D}]{examples/d/ex03_02.inc}
+\section*{Failure and design boundary}
+child uses bounds checking in C++. Avoid interpreting a missing child as an empty leaf; reject an invalid shape before evaluation.
+
+\section*{Try it yourself}
+Add a function that validates every sub node recursively and rejects one-child and three-child forms.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{3.3}{Copying and mutation}{C++20}
+Value semantics let a transformation preserve its input while editing a copy. This is valuable for diagnostics, before-and-after comparisons and rollback. It also has a cost: large trees may be copied repeatedly unless ownership and pass boundaries are planned.
+
+\lstinputlisting[language=C++,caption={Example ex03\_03: C++}]{examples/cpp/ex03_03.inc}
+\section*{Execution, step by step}
+Changing the copied child leaves the original child intact. The D implementation explicitly provides deep copying for ASTNode.
+
+\section*{Read the implementation}
+The relevant source entry is ASTNode in vendor/DSLtk.hpp, around line 6561. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{3.3}{Copying and mutation}{D}
+D accepts string template arguments directly. ASTNode remains a value with explicit deep-copy behavior, so changing a copied tree must not mutate the original. Keep tests for that behavior when upgrading the module.
+
+\lstinputlisting[language=D,caption={Example ex03\_03: D}]{examples/d/ex03_03.inc}
+\section*{Failure and design boundary}
+Do not generalize this property to all D arrays or classes. PEGDefinition and several graph facilities are reference types with different aliasing behavior.
+
+\section*{Try it yourself}
+Copy a three-level tree and replace its deepest leaf. Compare both complete dumps afterwards.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{3.4}{Structural equality}{C++20}
+Structural equality compares tags, leaf-versus-inner shape and the corresponding contents. This is useful for fixed-point detection and regression tests. It is narrower than semantic equality: two differently shaped arithmetic expressions can compute the same result.
+
+\lstinputlisting[language=C++,caption={Example ex03\_04: C++}]{examples/cpp/ex03_04.inc}
+\section*{Execution, step by step}
+Equal payload strings are insufficient when tags differ. The tag is part of the representation contract.
+
+\section*{Read the implementation}
+The relevant source entry is ASTNode in vendor/DSLtk.hpp, around line 6561. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{3.4}{Structural equality}{D}
+D accepts string template arguments directly. ASTNode remains a value with explicit deep-copy behavior, so changing a copied tree must not mutate the original. Keep tests for that behavior when upgrading the module.
+
+\lstinputlisting[language=D,caption={Example ex03\_04: D}]{examples/d/ex03_04.inc}
+\section*{Failure and design boundary}
+A semantic optimizer must justify a rewrite with the language rules. A structural inequality result does not establish that two programs behave differently.
+
+\section*{Try it yourself}
+Construct add(1,2) and add(2,1). Explain why structural comparison and arithmetic comparison answer different questions.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{3.5}{Debug dumps and interchange}{C++20}
+Dump produces readable parenthesized trees, which are excellent for explaining transformations. For arbitrary string payloads, prefer the S-expression conversion layer because it implements quoting and escaping. Debug text and a reversible storage format have different obligations.
+
+\lstinputlisting[language=C++,caption={Example ex03\_05: C++}]{examples/cpp/ex03_05.inc}
+\section*{Execution, step by step}
+The dump preserves child order and exposes tags. It is a compact golden-test fixture for simple numeric trees.
+
+\section*{Read the implementation}
+The relevant source entry is ASTNode in vendor/DSLtk.hpp, around line 6561. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{3.5}{Debug dumps and interchange}{D}
+D accepts string template arguments directly. ASTNode remains a value with explicit deep-copy behavior, so changing a copied tree must not mutate the original. Keep tests for that behavior when upgrading the module.
+
+\lstinputlisting[language=D,caption={Example ex03\_05: D}]{examples/d/ex03_05.inc}
+\section*{Failure and design boundary}
+Raw AST dumping does not quote every payload for reparsing. A string containing parentheses can make debug output ambiguous.
+
+\section*{Try it yourself}
+Compare dump with ast\_to\_sexpr(...).dump() for a payload containing a space, a quote and a newline.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\section*{Chapter review: AST schemas and side tables}
+ExprTemplates is a separate facility from ASTNode. ExprTerminal supplies an evaluation protocol, and BinExpr or UnaryExpr stores an expression structure whose eval combines operands. It is suitable for native expression authoring, not automatically a source-located syntax tree. A derived object provides expr\_value where required. Inspect terminal ownership carefully: a deferred native expression can outlive the objects it references. Use ASTNode when serialization, inspection and rewriting are primary goals.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Create a checked integer-leaf constructor that rejects trailing characters and reports the offending source span.
+\item Add a function that validates every sub node recursively and rejects one-child and three-child forms.
+\item Copy a three-level tree and replace its deepest leaf. Compare both complete dumps afterwards.
+\item Construct add(1,2) and add(2,1). Explain why structural comparison and arithmetic comparison answer different questions.
+\item Compare dump with ast\_to\_sexpr(...).dump() for a payload containing a space, a quote and a newline.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+

@@ -1,0 +1,169 @@
+\chapter{Pipelines, predicates and dispatch}\label{ch:2}
+\section*{The working problem}
+Build small reusable transformations with explicit inputs and outputs. Operator syntax is helpful only when the underlying function contracts remain visible.
+
+Pipes carry values forward. Predicates combine Boolean decisions. Match tables select handlers by keys or patterns. Although all three use templates, their execution and fallback policies are different.
+
+\section*{Concrete callables and ownership}
+The pipe and predicate wrappers retain callable objects. Capturing a value makes the callable independent of the local variable, while capturing a reference couples its validity to another object's lifetime. A composed object may be returned from a factory, stored in a member or used after its defining scope has exited. Review captures at that ownership boundary, not only at the line containing the lambda.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item Ordered pipe stages
+\item Predicate conjunction
+\item Negation and alternatives
+\item Keyed match tables
+\item Whole-input pattern checks
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{2.1}{Ordered pipe stages}{C++20}
+A pipeline is a left-to-right data dependency. Each stage accepts the preceding result, so changing stage order changes semantics even if every stage has the same host type. Keep stages small enough that a failing intermediate value is easy to inspect.
+
+\lstinputlisting[language=C++,caption={Example ex02\_01: C++}]{examples/cpp/ex02_01.inc}
+\section*{Execution, step by step}
+Two becomes five and then twenty. Parentheses around the complete pipeline make the assertion unambiguous to the host parser.
+
+\section*{Read the implementation}
+The relevant source entry is PipeStage in vendor/DSLtk.hpp, around line 6064. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{2.1}{Ordered pipe stages}{D}
+The D example uses a typed callable parameter. A generic callable can instead be supplied as an alias template argument. Preserve capture ownership when moving a local stage into long-lived application storage.
+
+\lstinputlisting[language=D,caption={Example ex02\_01: D}]{examples/d/ex02_01.inc}
+\section*{Failure and design boundary}
+Pipes do not automatically convert exceptions into Result values. An exception thrown by a stage follows the host language rules.
+
+\section*{Try it yourself}
+Insert a stage that renders the integer to a string, then add a stage that measures its length.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{2.2}{Predicate conjunction}{C++20}
+A predicate wrapper turns a callable into an operand for Boolean DSL composition. Conjunction is appropriate when a value must satisfy every independent requirement, such as positivity and alignment. Pure predicates are easier to reorder and test than predicates with counters or I/O.
+
+\lstinputlisting[language=C++,caption={Example ex02\_02: C++}]{examples/cpp/ex02_02.inc}
+\section*{Execution, step by step}
+Eight satisfies both tests; minus two satisfies only evenness. The resulting object remains callable with the same argument.
+
+\section*{Read the implementation}
+The relevant source entry is Predicate in vendor/DSLtk.hpp, around line 3086. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{2.2}{Predicate conjunction}{D}
+The D example uses a typed callable parameter. A generic callable can instead be supplied as an alias template argument. Preserve capture ownership when moving a local stage into long-lived application storage.
+
+\lstinputlisting[language=D,caption={Example ex02\_02: D}]{examples/d/ex02_02.inc}
+\section*{Failure and design boundary}
+Do not read the ampersand as arithmetic on the argument. It combines predicate objects; their invocations perform the comparisons.
+
+\section*{Try it yourself}
+Add an upper-bound predicate and test values on both boundaries. State whether each boundary is inclusive.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{2.3}{Negation and alternatives}{C++20}
+Negation is a deliberate portability seam. C++ overloads logical negation for the predicate object. D uses the complement operator or the named negated method because its logical-not operator produces a Boolean rather than a new predicate.
+
+\lstinputlisting[language=C++,caption={Example ex02\_03: C++}]{examples/cpp/ex02_03.inc}
+\section*{Execution, step by step}
+The outer assertion negates a Boolean result, whereas constructing nonzero negates a predicate. These operations occur at different levels.
+
+\section*{Read the implementation}
+The relevant source entry is Predicate in vendor/DSLtk.hpp, around line 3086. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{2.3}{Negation and alternatives}{D}
+The D example uses a typed callable parameter. A generic callable can instead be supplied as an alias template argument. Preserve capture ownership when moving a local stage into long-lived application storage.
+
+\lstinputlisting[language=D,caption={Example ex02\_03: D}]{examples/d/ex02_03.inc}
+\section*{Failure and design boundary}
+A mechanical replacement of every exclamation mark with a tilde would corrupt ordinary Boolean tests. Port the expression according to its operand type.
+
+\section*{Try it yourself}
+Build a predicate accepting either zero or a positive even number. Test a negative odd number as a counterexample.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{2.4}{Keyed match tables}{C++20}
+A match table packages key-specific handlers and a fallback. Make the handlers return one coherent type so callers need not recover a variant themselves. This is a good fit for small protocol codes whose meaning is known when the program is compiled.
+
+\lstinputlisting[language=C++,caption={Example ex02\_04: C++}]{examples/cpp/ex02_04.inc}
+\section*{Execution, step by step}
+The handler receives the matched key. The fallback receives an unmatched key, which allows it to construct a domain-specific error.
+
+\section*{Read the implementation}
+The relevant source entry is MatchTable in vendor/DSLtk.hpp, around line 6431. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{2.4}{Keyed match tables}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex02\_04: D}]{examples/d/ex02_04.inc}
+\section*{Failure and design boundary}
+A dispatch table is not an exhaustive proof over arbitrary integers. Include a fallback unless the call boundary independently validates the key.
+
+\section*{Try it yourself}
+Add a second explicit key and replace the numeric fallback with a shared string return type.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{2.5}{Whole-input pattern checks}{C++20}
+Use pattern for a compact recognition predicate. The string is a compile-time argument, while the candidate input is runtime data. Whole-input recognition is suitable for field validation; prefix matching belongs in a tokenizer that explicitly advances an input position.
+
+\lstinputlisting[language=C++,caption={Example ex02\_05: C++}]{examples/cpp/ex02_05.inc}
+\section*{Execution, step by step}
+The valid candidate is entirely numeric. The invalid candidate contains a legal prefix but an illegal suffix, which must not disappear during validation.
+
+\section*{Read the implementation}
+The relevant source entry is pattern in vendor/DSLtk.hpp, around line 6175. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{2.5}{Whole-input pattern checks}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex02\_05: D}]{examples/d/ex02_05.inc}
+\section*{Failure and design boundary}
+The pattern facility has its own supported syntax. Do not assume every construct from a host regular-expression library is accepted.
+
+\section*{Try it yourself}
+Write three identifier boundary cases: empty input, a leading digit, and a valid name with an underscore.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\section*{Chapter review: Concrete callables and ownership}
+D generic lambdas can be passed as alias template parameters, for example pipe!((x) => x + x)(). Typed delegates and callable structs can be passed as ordinary values. C++ generic lambdas instead participate through their templated call operators. These are different host mechanisms. Preserve invocation behavior and lifetime first; do not demand identical source spelling. Short-circuit predicate composition also means a later predicate may not run, so side effects should not carry essential work.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Insert a stage that renders the integer to a string, then add a stage that measures its length.
+\item Add an upper-bound predicate and test values on both boundaries. State whether each boundary is inclusive.
+\item Build a predicate accepting either zero or a positive even number. Test a negative odd number as a counterexample.
+\item Add a second explicit key and replace the numeric fallback with a shared string return type.
+\item Write three identifier boundary cases: empty input, a leading digit, and a valid name with an underscore.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+

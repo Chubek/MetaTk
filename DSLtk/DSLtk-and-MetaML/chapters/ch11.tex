@@ -1,0 +1,169 @@
+\chapter{Preprocessing and diagnostics}\label{ch:11}
+\section*{The working problem}
+Preserve source identity while transforming text and report failures as structured data.
+
+Preprocessor supports object and function macros, includes and conditionals with explicit depth limits. Span and SourceMap use byte positions. Diagnostic combines a code, severity, primary span, labels and optional fixes.
+
+\section*{Includes, scripts and source fidelity}
+Preprocessor exposes include and script callbacks. The host decides which filenames are readable and whether a script language bridge exists at all. The script hook does not bundle a Lua runtime. Set expansion and include-depth limits, and translate missing includes into user diagnostics. If preprocessing changes offsets, a direct span into expanded text cannot automatically identify the original source location.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item Object macros
+\item Function macros
+\item Half-open spans
+\item Mapping offsets to lines
+\item Stable diagnostic codes
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{11.1}{Object macros}{C++20}
+Define an object macro when a symbolic name should expand before parsing. Macro replacement is a textual phase, so it needs a clearly documented relationship to the later lexer and type checker. Avoid expanding arbitrary user text by raw string replacement.
+
+\lstinputlisting[language=C++,caption={Example ex11\_01: C++}]{examples/cpp/ex11_01.inc}
+\section*{Execution, step by step}
+The identifier token LIMIT is replaced while the surrounding operators and spaces remain.
+
+\section*{Read the implementation}
+The relevant source entry is Preprocessor in vendor/DSLtk.hpp, around line 10931. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{11.1}{Object macros}{D}
+This D facility is a reference type, so construction uses new. Copying the reference aliases the same mutable object; it does not perform the AST-style deep copy demonstrated earlier.
+
+\lstinputlisting[language=D,caption={Example ex11\_01: D}]{examples/d/ex11_01.inc}
+\section*{Failure and design boundary}
+A preprocessing macro has no type. If LIMIT appears where a module or string is required, later phases must diagnose that mismatch.
+
+\section*{Try it yourself}
+Test LIMIT inside a quoted string and as part of a longer identifier. Explain why token-aware expansion matters.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{11.2}{Function macros}{C++20}
+A function macro substitutes named parameters into replacement text. It is useful for small surface conveniences, but it does not provide lexical binding or hygienic names. Keep generated identifiers distinctive and test arguments containing nested delimiters.
+
+\lstinputlisting[language=C++,caption={Example ex11\_02: C++}]{examples/cpp/ex11_02.inc}
+\section*{Execution, step by step}
+The argument text appears twice in the replacement. If the later language allows effects, duplicated evaluation can be observable.
+
+\section*{Read the implementation}
+The relevant source entry is Preprocessor in vendor/DSLtk.hpp, around line 10931. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{11.2}{Function macros}{D}
+This D facility is a reference type, so construction uses new. Copying the reference aliases the same mutable object; it does not perform the AST-style deep copy demonstrated earlier.
+
+\lstinputlisting[language=D,caption={Example ex11\_02: D}]{examples/d/ex11_02.inc}
+\section*{Failure and design boundary}
+Parentheses address precedence but not repeated effects or name capture. An AST transformation can be safer for semantic abstractions.
+
+\section*{Try it yourself}
+Expand TWICE with a compound expression and compare the generated text with an equivalent AST construction.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{11.3}{Half-open spans}{C++20}
+Span describes a half-open byte interval. This convention makes length equal to end minus begin and permits adjacent tokens to meet without overlapping. Keep file identity alongside offsets so diagnostics remain meaningful after several inputs have been loaded.
+
+\lstinputlisting[language=C++,caption={Example ex11\_03: C++}]{examples/cpp/ex11_03.inc}
+\section*{Execution, step by step}
+The merged interval includes the gap between tokens. Its beginning metadata comes from the first span.
+
+\section*{Read the implementation}
+The relevant source entry is Span in vendor/DSLtk.hpp, around line 12144. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{11.3}{Half-open spans}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex11\_03: D}]{examples/d/ex11_03.inc}
+\section*{Failure and design boundary}
+merge\_spans assumes the first span starts first. It is not a general operation for unrelated files or reversed source positions.
+
+\section*{Try it yourself}
+Define and test an application helper that rejects spans from different files before merging.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{11.4}{Mapping offsets to lines}{C++20}
+SourceMap builds an index of line starts and maps offsets to one-based line and column coordinates. The C++ object borrows its input text, so ownership belongs to the surrounding source-file abstraction.
+
+\lstinputlisting[language=C++,caption={Example ex11\_04: C++}]{examples/cpp/ex11_04.inc}
+\section*{Execution, step by step}
+Offset four follows the first newline and points to the t on line two. Counting is byte-oriented.
+
+\section*{Read the implementation}
+The relevant source entry is SourceMap in vendor/DSLtk.hpp, around line 12182. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{11.4}{Mapping offsets to lines}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex11\_04: D}]{examples/d/ex11_04.inc}
+\section*{Failure and design boundary}
+Do not construct the C++ map from a temporary string. Also avoid passing arbitrary offsets beyond your stored source size.
+
+\section*{Try it yourself}
+Add a trailing newline and inspect line\_count and the final empty line.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{11.5}{Stable diagnostic codes}{C++20}
+A Diagnostic separates a stable machine-readable code from human-readable explanation. Consumers can filter codes without parsing prose. Keep messages specific to the user action and reserve implementation details for debug logs.
+
+\lstinputlisting[language=C++,caption={Example ex11\_05: C++}]{examples/cpp/ex11_05.inc}
+\section*{Execution, step by step}
+The default severity is Error. headline combines it with the code and message without requiring a source excerpt.
+
+\section*{Read the implementation}
+The relevant source entry is Diagnostic in vendor/DSLtk.hpp, around line 12262. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{11.5}{Stable diagnostic codes}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex11\_05: D}]{examples/d/ex11_05.inc}
+\section*{Failure and design boundary}
+Do not build automated tests around an entire caret-rendered message when the semantic requirement is a code and a span. Formatting can evolve independently.
+
+\section*{Try it yourself}
+Add a primary span and render against source text. Then test the structured fields separately.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\section*{Chapter review: Includes, scripts and source fidelity}
+DiagnosticBag groups diagnostics and filtering, while render\_diagnostic presents source excerpts and labels. A fix object describes an edit, but applying it safely still requires version checking against the user's current text. Preserve half-open ranges internally and translate to editor coordinates only at the UI boundary. Unicode display width and CRLF normalization should have explicit tests. Structured codes and spans are generally more stable regression fixtures than complete terminal output.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Test LIMIT inside a quoted string and as part of a longer identifier. Explain why token-aware expansion matters.
+\item Expand TWICE with a compound expression and compare the generated text with an equivalent AST construction.
+\item Define and test an application helper that rejects spans from different files before merging.
+\item Add a trailing newline and inspect line\_count and the final empty line.
+\item Add a primary span and render against source text. Then test the structured fields separately.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+

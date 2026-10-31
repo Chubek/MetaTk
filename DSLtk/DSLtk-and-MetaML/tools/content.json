@@ -1,0 +1,1432 @@
+[
+  {
+    "title": "The two libraries and the two host languages",
+    "aim": "Establish a reproducible embedding before designing a language. DSLtk is the construction kit; MetaML is a complete language built with that kit. Their C++ and D implementations share many names but use different host-language mechanisms.",
+    "architecture": "A C++ feature is a type containing a Mixin template. DSL inherits the selected mixins using CRTP. D injects declarations with a template mixin. Neither mechanism makes an empty facade into a complete evaluator; the public factories do most of the useful work.",
+    "lessons": [
+      {
+        "title": "A minimal DSL facade",
+        "concept": "Choose a deliberately empty domain facade first. Its job is to name a collection of facilities, rather than to invent evaluation semantics. A facade becomes useful when your application adds domain operations and constrains the exposed vocabulary.",
+        "cpp": "struct Domain : dsl::DSL<Domain, dsl::Pipeline> {};\nDomain domain;\nauto stage = dsl::pipe([](int x) { return x + 1; });\nassert((domain.wrap(41) | stage) == 42);",
+        "d": "struct Domain { mixin DSL!(Pipeline); }\nDomain domain;\nauto stage = pipe((int x) => x + 1);\nassert((41 | stage) == 42);",
+        "trace": "The wrapper passes the integer to the callable. There is no parser, symbol table, or MetaML session in this operation. The result is an ordinary host integer.",
+        "caution": "The introductory comments mention eval on a sample facade. The DSL base does not supply an application-specific eval method. Write that method yourself if your public interface needs it.",
+        "exercise": "Add a multiply stage after the increment. Predict the difference between increment-then-multiply and multiply-then-increment.",
+        "anchor": "DSL"
+      },
+      {
+        "title": "Factories without a facade",
+        "concept": "A feature tag is an organizational tool, not an access-control boundary. Factory functions remain available at namespace or module scope. Start with these functions when experimenting; introduce a domain facade when you know which operations deserve a stable public name.",
+        "cpp": "auto twice = dsl::pipe([](int x) { return x * 2; });\nauto answer = 21 | twice;\nassert(answer == 42);",
+        "d": "auto twice = pipe((int x) => x * 2);\nauto answer = 21 | twice;\nassert(answer == 42);",
+        "trace": "The pipe object owns its callable. Passing a value invokes that callable immediately; this is functional composition expressed through operator syntax.",
+        "caution": "Do not assume enabling a feature hides its implementation elsewhere. A wrapper header must deliberately choose what it exposes to downstream users.",
+        "exercise": "Create a public wrapper that offers only a named doubleValue function. Keep DSLtk types out of its return type.",
+        "anchor": "pipe"
+      },
+      {
+        "title": "A first MetaML session",
+        "concept": "A session owns persistent language state. Evaluation returns a discriminated success-or-error object, so the host must inspect it before reading the value. The constructors also install core primitives and the built-in Option and Result type declarations.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"40 + 2\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"40 + 2\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "Parsing, checking and evaluation all happen inside eval. The host sees a Value only after those stages succeed. This example needs no external prelude.",
+        "caution": "Calling to_string on the Result itself confuses two distinct layers. Unwrap only after testing is_ok, or propagate the diagnostics to the caller.",
+        "exercise": "Replace the expression with an undefined name and implement an error branch without invoking unwrap.",
+        "anchor": "Session"
+      },
+      {
+        "title": "Persistent definitions",
+        "concept": "A language session is a stateful service. Evaluating a declaration changes the environment consulted by later evaluations. This is useful for REPLs and staged configuration, but it also means that two independent clients should not accidentally share one mutable session.",
+        "cpp": "metaml::Session s;\nassert(s.eval(\"val base := 40\").is_ok());\nauto r = s.eval(\"base + 2\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nassert(s.eval(\"val base := 40\").is_ok());\nauto r = s.eval(\"base + 2\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The second call contains no declaration of base. Its successful lookup therefore demonstrates persistence rather than textual substitution performed by the host.",
+        "caution": "The C++ Session cannot be copied. Treat its address and lifetime as part of the embedding design; keep captured callback resources alive until shutdown completes.",
+        "exercise": "Evaluate the final expression in a fresh session. Record the diagnostic rather than silently creating a default binding.",
+        "anchor": "Session"
+      },
+      {
+        "title": "Checking an expression type",
+        "concept": "Use type_of when a user interface needs feedback before execution. It parses and checks an expression and returns the printed inferred type. This is particularly useful when the expression might call effectful primitives during normal evaluation.",
+        "cpp": "metaml::Session s;\nauto r = s.type_of(\"42\");\nassert(r.is_ok());\nassert(r.unwrap() == \"Int\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.type_of(\"42\");\nassert(r.is_ok());\nassert(r.unwrap() == \"Int\");",
+        "trace": "The returned string describes the language type, not the C++ or D type of the result wrapper. Type inference does not produce the expression value.",
+        "caution": "Type checking is not a promise that evaluation terminates or that every host callback succeeds. A successful type is one part of validation.",
+        "exercise": "Ask for the types of a Boolean, a function and a list. Keep these queries separate from the evaluation path.",
+        "anchor": "type_of"
+      }
+    ]
+  },
+  {
+    "title": "Pipelines, predicates and dispatch",
+    "aim": "Build small reusable transformations with explicit inputs and outputs. Operator syntax is helpful only when the underlying function contracts remain visible.",
+    "architecture": "Pipes carry values forward. Predicates combine Boolean decisions. Match tables select handlers by keys or patterns. Although all three use templates, their execution and fallback policies are different.",
+    "lessons": [
+      {
+        "title": "Ordered pipe stages",
+        "concept": "A pipeline is a left-to-right data dependency. Each stage accepts the preceding result, so changing stage order changes semantics even if every stage has the same host type. Keep stages small enough that a failing intermediate value is easy to inspect.",
+        "cpp": "auto add = dsl::pipe([](int x) { return x + 3; });\nauto mul = dsl::pipe([](int x) { return x * 4; });\nassert((2 | add | mul) == 20);",
+        "d": "auto add = pipe((int x) => x + 3);\nauto mul = pipe((int x) => x * 4);\nassert((2 | add | mul) == 20);",
+        "trace": "Two becomes five and then twenty. Parentheses around the complete pipeline make the assertion unambiguous to the host parser.",
+        "caution": "Pipes do not automatically convert exceptions into Result values. An exception thrown by a stage follows the host language rules.",
+        "exercise": "Insert a stage that renders the integer to a string, then add a stage that measures its length.",
+        "anchor": "PipeStage"
+      },
+      {
+        "title": "Predicate conjunction",
+        "concept": "A predicate wrapper turns a callable into an operand for Boolean DSL composition. Conjunction is appropriate when a value must satisfy every independent requirement, such as positivity and alignment. Pure predicates are easier to reorder and test than predicates with counters or I/O.",
+        "cpp": "auto positive = dsl::predicate([](int x) { return x > 0; });\nauto even = dsl::predicate([](int x) { return x % 2 == 0; });\nauto valid = positive & even;\nassert(valid(8));\nassert(!valid(-2));",
+        "d": "auto positive = predicate((int x) => x > 0);\nauto even = predicate((int x) => x % 2 == 0);\nauto valid = positive & even;\nassert(valid(8));\nassert(!valid(-2));",
+        "trace": "Eight satisfies both tests; minus two satisfies only evenness. The resulting object remains callable with the same argument.",
+        "caution": "Do not read the ampersand as arithmetic on the argument. It combines predicate objects; their invocations perform the comparisons.",
+        "exercise": "Add an upper-bound predicate and test values on both boundaries. State whether each boundary is inclusive.",
+        "anchor": "Predicate"
+      },
+      {
+        "title": "Negation and alternatives",
+        "concept": "Negation is a deliberate portability seam. C++ overloads logical negation for the predicate object. D uses the complement operator or the named negated method because its logical-not operator produces a Boolean rather than a new predicate.",
+        "cpp": "auto zero = dsl::predicate([](int x) { return x == 0; });\nauto nonzero = !zero;\nassert(nonzero(7));\nassert(!nonzero(0));",
+        "d": "auto zero = predicate((int x) => x == 0);\nauto nonzero = ~zero;\nassert(nonzero(7));\nassert(!nonzero(0));",
+        "trace": "The outer assertion negates a Boolean result, whereas constructing nonzero negates a predicate. These operations occur at different levels.",
+        "caution": "A mechanical replacement of every exclamation mark with a tilde would corrupt ordinary Boolean tests. Port the expression according to its operand type.",
+        "exercise": "Build a predicate accepting either zero or a positive even number. Test a negative odd number as a counterexample.",
+        "anchor": "Predicate"
+      },
+      {
+        "title": "Keyed match tables",
+        "concept": "A match table packages key-specific handlers and a fallback. Make the handlers return one coherent type so callers need not recover a variant themselves. This is a good fit for small protocol codes whose meaning is known when the program is compiled.",
+        "cpp": "auto table = dsl::match(\n  dsl::when<1>([](int) { return 10; }),\n  dsl::otherwise([](int) { return -1; }));\nassert(table(1) == 10);\nassert(table(2) == -1);",
+        "d": "auto table = match(\n  when!1((int key) => 10),\n  otherwise((int key) => -1));\nassert(table(1) == 10);\nassert(table(2) == -1);",
+        "trace": "The handler receives the matched key. The fallback receives an unmatched key, which allows it to construct a domain-specific error.",
+        "caution": "A dispatch table is not an exhaustive proof over arbitrary integers. Include a fallback unless the call boundary independently validates the key.",
+        "exercise": "Add a second explicit key and replace the numeric fallback with a shared string return type.",
+        "anchor": "MatchTable"
+      },
+      {
+        "title": "Whole-input pattern checks",
+        "concept": "Use pattern for a compact recognition predicate. The string is a compile-time argument, while the candidate input is runtime data. Whole-input recognition is suitable for field validation; prefix matching belongs in a tokenizer that explicitly advances an input position.",
+        "cpp": "assert(dsl::pattern<\"[0-9]+\">::matches(\"2048\"));\nassert(!dsl::pattern<\"[0-9]+\">::matches(\"20x\"));",
+        "d": "assert(pattern!\"[0-9]+\".matches(\"2048\"));\nassert(!pattern!\"[0-9]+\".matches(\"20x\"));",
+        "trace": "The valid candidate is entirely numeric. The invalid candidate contains a legal prefix but an illegal suffix, which must not disappear during validation.",
+        "caution": "The pattern facility has its own supported syntax. Do not assume every construct from a host regular-expression library is accepted.",
+        "exercise": "Write three identifier boundary cases: empty input, a leading digit, and a valid name with an underscore.",
+        "anchor": "pattern"
+      }
+    ]
+  },
+  {
+    "title": "AST values and representation contracts",
+    "aim": "Represent a small language with explicit tags, payloads and child order before writing transformations.",
+    "architecture": "ASTNode stores either a string leaf or an ordered collection of child nodes. The node is a value. Equality is structural. Dumping is convenient for debugging but does not by itself define a general interchange format.",
+    "lessons": [
+      {
+        "title": "Tagged leaves",
+        "concept": "A leaf stores a tag and a textual payload. The convenience factory serializes host values to text, which makes construction easy but means later numeric interpretation belongs to your application. Choose tags that describe semantic roles rather than punctuation tokens.",
+        "cpp": "auto n = dsl::leaf<\"integer\">(42);\nassert(n.is_leaf());\nassert(n.tag() == \"integer\");\nassert(n.value() == \"42\");",
+        "d": "auto n = leaf!\"integer\"(42);\nassert(n.is_leaf());\nassert(n.tag() == \"integer\");\nassert(n.value() == \"42\");",
+        "trace": "The integer becomes the string 42 inside a leaf tagged integer. The host type of the stored payload is no longer int.",
+        "caution": "A tag named integer does not validate the payload. A constructor accepting arbitrary strings still needs semantic checks.",
+        "exercise": "Create a checked integer-leaf constructor that rejects trailing characters and reports the offending source span.",
+        "anchor": "ASTNode"
+      },
+      {
+        "title": "Ordered children",
+        "concept": "An inner node establishes the arity and order expected by later passes. For subtraction or function application, exchanging children changes meaning. Put these invariants in constructors rather than scattering positional assumptions throughout every visitor.",
+        "cpp": "auto n = dsl::node<\"sub\">(\n  dsl::leaf<\"integer\">(9), dsl::leaf<\"integer\">(4));\nassert(!n.is_leaf());\nassert(n.size() == 2);\nassert(n.child(0).value() == \"9\");",
+        "d": "auto n = node!\"sub\"(\n  leaf!\"integer\"(9), leaf!\"integer\"(4));\nassert(!n.is_leaf());\nassert(n.size() == 2);\nassert(n.child(0).value() == \"9\");",
+        "trace": "The first child is the minuend. Nothing in the generic AST automatically associates the tag sub with exactly two children.",
+        "caution": "child uses bounds checking in C++. Avoid interpreting a missing child as an empty leaf; reject an invalid shape before evaluation.",
+        "exercise": "Add a function that validates every sub node recursively and rejects one-child and three-child forms.",
+        "anchor": "node"
+      },
+      {
+        "title": "Copying and mutation",
+        "concept": "Value semantics let a transformation preserve its input while editing a copy. This is valuable for diagnostics, before-and-after comparisons and rollback. It also has a cost: large trees may be copied repeatedly unless ownership and pass boundaries are planned.",
+        "cpp": "auto before = dsl::node<\"box\">(dsl::leaf<\"n\">(1));\nauto after = before;\nafter.child(0) = dsl::leaf<\"n\">(2);\nassert(before.child(0).value() == \"1\");\nassert(after.child(0).value() == \"2\");",
+        "d": "auto before = node!\"box\"(leaf!\"n\"(1));\nauto after = before;\nafter.child(0) = leaf!\"n\"(2);\nassert(before.child(0).value() == \"1\");\nassert(after.child(0).value() == \"2\");",
+        "trace": "Changing the copied child leaves the original child intact. The D implementation explicitly provides deep copying for ASTNode.",
+        "caution": "Do not generalize this property to all D arrays or classes. PEGDefinition and several graph facilities are reference types with different aliasing behavior.",
+        "exercise": "Copy a three-level tree and replace its deepest leaf. Compare both complete dumps afterwards.",
+        "anchor": "ASTNode"
+      },
+      {
+        "title": "Structural equality",
+        "concept": "Structural equality compares tags, leaf-versus-inner shape and the corresponding contents. This is useful for fixed-point detection and regression tests. It is narrower than semantic equality: two differently shaped arithmetic expressions can compute the same result.",
+        "cpp": "auto a = dsl::leaf<\"n\">(1);\nauto b = dsl::leaf<\"n\">(1);\nauto c = dsl::leaf<\"other\">(1);\nassert(a == b);\nassert(!(a == c));",
+        "d": "auto a = leaf!\"n\"(1);\nauto b = leaf!\"n\"(1);\nauto c = leaf!\"other\"(1);\nassert(a == b);\nassert(!(a == c));",
+        "trace": "Equal payload strings are insufficient when tags differ. The tag is part of the representation contract.",
+        "caution": "A semantic optimizer must justify a rewrite with the language rules. A structural inequality result does not establish that two programs behave differently.",
+        "exercise": "Construct add(1,2) and add(2,1). Explain why structural comparison and arithmetic comparison answer different questions.",
+        "anchor": "ASTNode"
+      },
+      {
+        "title": "Debug dumps and interchange",
+        "concept": "Dump produces readable parenthesized trees, which are excellent for explaining transformations. For arbitrary string payloads, prefer the S-expression conversion layer because it implements quoting and escaping. Debug text and a reversible storage format have different obligations.",
+        "cpp": "auto n = dsl::node<\"add\">(dsl::leaf<\"n\">(1),\n                           dsl::leaf<\"n\">(2));\nassert(n.dump() == \"(add (n 1) (n 2))\");",
+        "d": "auto n = node!\"add\"(leaf!\"n\"(1), leaf!\"n\"(2));\nassert(n.dump() == \"(add (n 1) (n 2))\");",
+        "trace": "The dump preserves child order and exposes tags. It is a compact golden-test fixture for simple numeric trees.",
+        "caution": "Raw AST dumping does not quote every payload for reparsing. A string containing parentheses can make debug output ambiguous.",
+        "exercise": "Compare dump with ast_to_sexpr(...).dump() for a payload containing a space, a quote and a newline.",
+        "anchor": "ASTNode"
+      }
+    ]
+  },
+  {
+    "title": "Absence, errors and deferred work",
+    "aim": "Choose different types for absence, failure, deferred computation and cached computation.",
+    "architecture": "Maybe models a missing value without a diagnostic. Result carries an explicit error. Lazy caches one deferred result. Memoization caches a function by key. Their superficially similar wrappers encode different control-flow contracts.",
+    "lessons": [
+      {
+        "title": "Optional mapping",
+        "concept": "Use Maybe when the absence itself is expected and no explanation is required. Mapping transforms only a present value. Filtering can remove a value without introducing an error channel, which is useful for optional configuration fields.",
+        "cpp": "dsl::Maybe<int> x(4);\nauto y = x.map([](int n) { return n * 3; });\nassert(y.or_else(0) == 12);\nassert(dsl::Maybe<int>{}.or_else(9) == 9);",
+        "d": "auto x = Maybe!int(4);\nauto y = x.map((int n) => n * 3);\nassert(y.or_else(0) == 12);\nassert(Maybe!int.init.or_else(9) == 9);",
+        "trace": "The empty value bypasses the transformation and selects its fallback. A present zero would remain a present value rather than becoming absent.",
+        "caution": "A fallback can hide a malformed field if parsing failure is encoded as absence. Use Result when a caller needs to distinguish missing input from invalid input.",
+        "exercise": "Filter out negative values and test both an empty Maybe and a present zero.",
+        "anchor": "Maybe"
+      },
+      {
+        "title": "Explicit success and failure",
+        "concept": "Use the named Result factories even when the payload and error types differ. They make the branch visible at the call site and avoid ambiguity when both types are strings. This style scales well to parser and configuration APIs.",
+        "cpp": "using R = dsl::Result<int, std::string>;\nauto good = R::from_ok(42);\nauto bad = R::from_err(\"invalid number\");\nassert(good.unwrap() == 42);\nassert(bad.unwrap_err() == \"invalid number\");",
+        "d": "alias R = Result!(int, string);\nauto good = R.from_ok(42);\nauto bad = R.from_err(\"invalid number\");\nassert(good.unwrap() == 42);\nassert(bad.unwrap_err() == \"invalid number\");",
+        "trace": "The active branch determines which unwrap operation is valid. A caller must not infer success from a default payload.",
+        "caution": "Both unwrap operations reject the wrong branch. They are convenience accessors after validation, not replacements for branch handling.",
+        "exercise": "Change the success payload to string so both branches have the same type. Keep every construction explicit.",
+        "anchor": "Result"
+      },
+      {
+        "title": "Mapping the success channel",
+        "concept": "Result.map changes the success payload while preserving the error. This is useful when a parser has already validated a value and a later stage merely changes representation. The function passed to map should not fail through an undocumented second channel.",
+        "cpp": "using R = dsl::Result<int, std::string>;\nauto r = R::from_ok(6).map([](int n) { return n * 7; });\nassert(r.is_ok());\nassert(r.unwrap() == 42);",
+        "d": "alias R = Result!(int, string);\nauto r = R.from_ok(6).map((int n) => n * 7);\nassert(r.is_ok());\nassert(r.unwrap() == 42);",
+        "trace": "The multiplication runs only for success. If the input were an error, its text would pass through unchanged.",
+        "caution": "Use and_then for a transformation that itself returns Result. Mapping such a function produces a nested Result instead of flattening failure propagation.",
+        "exercise": "Start with from_err and add a counter to the mapping function. Verify that the counter remains zero.",
+        "anchor": "Result"
+      },
+      {
+        "title": "Deferring one computation",
+        "concept": "Lazy stores a producer and evaluates it on first demand. A later get or force reuses the computed value. This is suitable for expensive metadata that some code paths never need, provided access is confined or externally synchronized.",
+        "cpp": "int calls = 0;\ndsl::Lazy<int> x([&] { ++calls; return 42; });\nassert(!x.is_computed());\nassert(x.get() == 42);\nassert(x.force() == 42 && calls == 1);",
+        "d": "int calls;\nauto x = Lazy!int(() { ++calls; return 42; });\nassert(!x.is_computed());\nassert(x.get() == 42);\nassert(x.force() == 42 && calls == 1);",
+        "trace": "Construction leaves the counter unchanged. The first read increments it; the second read uses the stored result.",
+        "caution": "Lazy is not a synchronization primitive. Capturing a local by reference also requires that local to outlive every possible first access.",
+        "exercise": "Make the producer fail once and investigate the implementation behavior on a second access. Document whether failure is cached.",
+        "anchor": "Lazy"
+      },
+      {
+        "title": "Caching by key",
+        "concept": "Memoization maps each key to a computed value. It is appropriate for deterministic computations whose result depends entirely on the key. Cache lifetime and invalidation are part of the application design, especially when keys refer to changing files or external resources.",
+        "cpp": "int calls = 0;\nauto square = dsl::memoize<int, int>([&](int n) {\n  ++calls; return n * n;\n});\nassert(square(6) == 36 && square(6) == 36);\nassert(calls == 1);\nsquare.clear_cache();",
+        "d": "int calls;\nauto square = memoize!(int, int)((int n) {\n  ++calls; return n * n;\n});\nassert(square(6) == 36 && square(6) == 36);\nassert(calls == 1);\nsquare.clear_cache();",
+        "trace": "The first key lookup computes; the second finds the stored value. Clearing the cache makes a subsequent lookup recompute.",
+        "caution": "Wrapping a recursive function does not automatically route its internal recursive calls through the wrapper. Also, no eviction policy or thread safety is implied.",
+        "exercise": "Include a version number in a file-analysis cache key and explain when an explicit clear is still necessary.",
+        "anchor": "memoize"
+      }
+    ]
+  },
+  {
+    "title": "Parser combinators and committed failure",
+    "aim": "Learn the small combinator layer before selecting a full grammar facility.",
+    "architecture": "Parser<T> consumes a ParsecInput and returns ExpectedResult<T>. Sequencing, alternatives and repetition cooperate through a distinction between soft and committed failure. run_parser additionally requires complete consumption.",
+    "lessons": [
+      {
+        "title": "One character and end of input",
+        "concept": "A recognizer for one character is also a useful test of the top-level consumption contract. The same parser can succeed as a prefix inside a larger parser but fail through run_parser when trailing bytes remain.",
+        "cpp": "auto p = dsl::ch('a');\nassert(dsl::run_parser(p, \"a\").value.has_value());\nassert(!dsl::run_parser(p, \"ab\").value.has_value());",
+        "d": "auto p = ch('a');\nassert(!run_parser(p, \"a\").value.isNull);\nassert(run_parser(p, \"ab\").value.isNull);",
+        "trace": "The second candidate matches a but leaves b. The top-level runner rejects that suffix rather than silently accepting a partial document.",
+        "caution": "Always decide whether an API accepts a prefix or a whole input. Confusing the two policies can let invalid configuration escape validation.",
+        "exercise": "Pass an empty string and inspect the expected labels and error offset.",
+        "anchor": "run_parser"
+      },
+      {
+        "title": "Sequencing two recognizers",
+        "concept": "The ampersand sequences parsers and returns both results. It is a parsing product, not a Boolean conjunction. If the right parser fails after consumption, the sequence marks the failure committed so a surrounding alternative does not casually reinterpret the input.",
+        "cpp": "auto p = dsl::ch('a') & dsl::ch('b');\nauto r = dsl::run_parser(p, \"ab\");\nassert(r.value.has_value());\nassert(r.value->first == 'a');",
+        "d": "auto p = ch('a') & ch('b');\nauto r = run_parser(p, \"ab\");\nassert(!r.value.isNull);",
+        "trace": "Both characters are consumed and packaged into one composite value. The C++ sequence payload is a pair.",
+        "caution": "Do not promise automatic backtracking after every sequence failure. Committed failure is an intentional part of this implementation.",
+        "exercise": "Test ac and compare its error with a failure before any character has been consumed.",
+        "anchor": "Parser"
+      },
+      {
+        "title": "Explicit backtracking",
+        "concept": "try_parse restores the input position and softens a failing parser. Use it around the smallest genuinely ambiguous prefix. Broad backtracking can hide useful committed errors and multiply work when many alternatives share long prefixes.",
+        "cpp": "auto ab = dsl::ch('a') & dsl::ch('b');\nauto ac = dsl::ch('a') & dsl::ch('c');\nauto p = dsl::try_parse(ab) | ac;\nassert(dsl::run_parser(p, \"ac\").value.has_value());",
+        "d": "auto ab = ch('a') & ch('b');\nauto ac = ch('a') & ch('c');\nauto p = try_parse(ab) | ac;\nassert(!run_parser(p, \"ac\").value.isNull);",
+        "trace": "The first alternative consumes a then fails on b. try_parse restores the cursor, allowing ac to run from the original position.",
+        "caution": "Both alternatives must produce compatible result types. Backtracking controls consumption, not arbitrary type conversion.",
+        "exercise": "Remove try_parse and record why the second alternative is no longer selected.",
+        "anchor": "try_parse"
+      },
+      {
+        "title": "Repetition and progress",
+        "concept": "Repetition collects zero or more successful results. D spells it many because unary star is unavailable as a struct operator. A successful repeated parser must consume input; otherwise the repetition would loop forever.",
+        "cpp": "auto p = *dsl::ch('x');\nauto r = dsl::run_parser(p, \"xxx\");\nassert(r.value.has_value());\nassert(r.value->size() == 3);",
+        "d": "auto p = ch('x').many();\nauto r = run_parser(p, \"xxx\");\nassert(!r.value.isNull);\nassert(r.value.get.length == 3);",
+        "trace": "Each iteration advances one byte. The final soft failure ends the loop without consuming another byte.",
+        "caution": "Repeating an optional parser is dangerous because the optional parser may succeed without consuming anything. The implementation detects no-progress repetition.",
+        "exercise": "Test the empty input, then attempt repetition of optional(ch(x)) and inspect the failure.",
+        "anchor": "run_parser"
+      },
+      {
+        "title": "Optional syntax",
+        "concept": "optional represents absence as a successful parse containing no value. This is different from suppressing every error: committed failure still propagates. Use it for truly optional syntax whose absence is recognizable before a production has committed.",
+        "cpp": "auto p = dsl::optional(dsl::ch('x'));\nauto r = dsl::run_parser(p, \"\");\nassert(r.value.has_value());\nassert(!r.value->has_value());",
+        "d": "auto p = optional(ch('x'));\nauto r = run_parser(p, \"\");\nassert(!r.value.isNull);\nassert(r.value.get.isNull);",
+        "trace": "The outer presence means parsing succeeded. The inner absence means the optional character did not occur.",
+        "caution": "Two layers of optional state are not interchangeable. A top-level parse failure and a successfully absent construct require different UI messages.",
+        "exercise": "Wrap a two-character sequence in optional and test a partially present sequence.",
+        "anchor": "optional"
+      }
+    ]
+  },
+  {
+    "title": "PEG-style token grammars",
+    "aim": "Use named grammar objects for token-by-token recognition with semantic actions.",
+    "architecture": "PEGDefinition orders rules. The first matching visible rule wins at each input position. This is a token grammar facility with a restricted pattern compiler, not an unrestricted implementation of every PEG notation.",
+    "lessons": [
+      {
+        "title": "A grammar with one rule",
+        "concept": "Create a grammar and add a numeric rule before attaching actions. Whole-input parsing repeatedly selects a rule until every byte is consumed. The empty input succeeds without firing any rule, which matters when a language requires at least one token.",
+        "cpp": "auto g = dsl::create_peg_definition();\ng.add_rule<\"[0-9]+\">();\nassert(g.parse(\"123\").ok());\nassert(!g.parse(\"12x\").ok());",
+        "d": "auto g = create_peg_definition();\ng.add_rule!\"[0-9]+\"();\nassert(g.parse(\"123\").ok());\nassert(!g.parse(\"12x\").ok());",
+        "trace": "The numeric rule consumes the prefix 12. The next position contains x, so the parse fails there.",
+        "caution": "A rule set is not a document-level cardinality check. Explicitly enforce a nonempty document when that is part of the language.",
+        "exercise": "Parse the empty string and add a host-side requirement for at least one observed numeric token.",
+        "anchor": "create_peg_definition"
+      },
+      {
+        "title": "Semantic actions and views",
+        "concept": "A semantic action receives match text and location metadata. Copy text into application-owned storage if it must survive beyond the input buffer. Keeping a borrowed match view can turn a correct parser into a lifetime bug.",
+        "cpp": "int count = 0;\nauto g = dsl::create_peg_definition();\ng.add_rule<\"[0-9]+\">([&](const dsl::PEGMatch& m) {\n  assert(m.value == \"42\"); ++count;\n});\nassert(g.parse(\"42\").ok() && count == 1);",
+        "d": "int count;\nauto g = create_peg_definition();\ng.add_rule!\"[0-9]+\"((PEGMatch m) {\n  assert(m.value == \"42\"); ++count;\n});\nassert(g.parse(\"42\").ok() && count == 1);",
+        "trace": "One greedy numeric match produces one callback, not a separate callback for each digit.",
+        "caution": "Actions can have effects before a later token fails. A failed overall parse does not automatically roll those effects back.",
+        "exercise": "Collect tokens in a temporary buffer and publish the buffer only when the entire input succeeds.",
+        "anchor": "PEGMatch"
+      },
+      {
+        "title": "Ordered choice is a policy",
+        "concept": "Rule ordering is part of the language definition. A shorter literal placed before a longer one can commit too early and leave a suffix that another rule cannot consume. Put deliberate precedence into tests rather than relying on visual resemblance to regular expressions.",
+        "cpp": "auto g = dsl::create_peg_definition();\ng.add_rule<\"ab\">();\ng.add_rule<\"a\">();\nassert(g.parse(\"ab\").ok());",
+        "d": "auto g = create_peg_definition();\ng.add_rule!\"ab\"();\ng.add_rule!\"a\"();\nassert(g.parse(\"ab\").ok());",
+        "trace": "The first rule recognizes both bytes immediately. Reversing the rules would consume only a first.",
+        "caution": "This engine does not apply a universal longest-token rule across all grammar rules. First successful rule wins.",
+        "exercise": "Reverse the two rules and verify the failure offset. Then add a rule for b and explain the changed tokenization.",
+        "anchor": "PEGDefinition"
+      },
+      {
+        "title": "Reporting the first unmatched byte",
+        "concept": "PEGParseResult includes an offset and one-based line and column. Preserve these fields when translating failure into a public diagnostic. The host should present the original input, not a reconstructed token string that may have different whitespace.",
+        "cpp": "auto g = dsl::create_peg_definition();\ng.add_rule<\"[0-9]+\">();\nauto r = g.parse(\"12?\");\nassert(r.failed());\nassert(r.error_offset() == 2);",
+        "d": "auto g = create_peg_definition();\ng.add_rule!\"[0-9]+\"();\nauto r = g.parse(\"12?\");\nassert(r.failed());\nassert(r.error_offset() == 2);",
+        "trace": "Offsets are zero-based byte positions. The question mark occupies position two after two accepted digits.",
+        "caution": "A byte offset is not a Unicode character index or terminal display column. An editor integration must translate coordinates deliberately.",
+        "exercise": "Add a newline rule and reject a character on line two. Check offset, line and column together.",
+        "anchor": "PEGParseResult"
+      },
+      {
+        "title": "Preventing zero-width token loops",
+        "concept": "A rule that can accept an empty string is unsafe in a token-scanning loop. The grammar checks for a positive match that does not move the cursor and rejects it. This protects progress but does not replace resource limits on very large inputs.",
+        "cpp": "auto g = dsl::create_peg_definition();\ng.add_rule<\"[0-9]*\">();\nauto r = g.parse(\"x\");\nassert(r.failed());\nassert(r.error_offset() == 0);",
+        "d": "auto g = create_peg_definition();\ng.add_rule!\"[0-9]*\"();\nauto r = g.parse(\"x\");\nassert(r.failed());\nassert(r.error_offset() == 0);",
+        "trace": "The star pattern recognizes zero digits at position zero. Advancing by zero would revisit the same input forever.",
+        "caution": "Prefer one-or-more token patterns and express optionality at the production level. An empty document and an empty token are different concepts.",
+        "exercise": "Replace star with plus and compare the diagnostic message for x.",
+        "anchor": "PEGDefinition"
+      }
+    ]
+  },
+  {
+    "title": "S-expressions and rewrite rules",
+    "aim": "Choose a representation that can round-trip arbitrary atoms, then make transformation policy explicit.",
+    "architecture": "SExpr distinguishes atoms from lists and tracks quoted atoms. RewriteRule operates on AST values. TermRewriteSystem and EGraph, covered later, attach different traversal and equivalence semantics to superficially similar rule notation.",
+    "lessons": [
+      {
+        "title": "Parsing one S-expression",
+        "concept": "The singular parser requires exactly one expression. This is a useful boundary for a configuration value or one rewrite declaration. Use the plural parser for a file containing several top-level forms instead of manually splitting on newlines.",
+        "cpp": "auto s = dsl::parse_sexpr(\"(add 1 2)\");\nassert(!s.is_atom);\nassert(s.items.size() == 3);\nassert(s.dump() == \"(add 1 2)\");",
+        "d": "auto s = parse_sexpr(\"(add 1 2)\");\nassert(!s.is_atom);\nassert(s.items.length == 3);\nassert(s.dump() == \"(add 1 2)\");",
+        "trace": "The head add is an ordinary first atom in the list. Operator meaning is supplied by the consuming language.",
+        "caution": "S-expression parsing validates structure and escapes, not arity or the semantic validity of an operator.",
+        "exercise": "Reject add with only one operand in a separate semantic validation pass.",
+        "anchor": "parse_sexpr"
+      },
+      {
+        "title": "Quoted atom round trips",
+        "concept": "Quoted atoms preserve strings that contain whitespace or delimiters. SExpr.atom chooses quoting when necessary, and dump escapes special characters. This makes it a better interchange building block than raw concatenation of AST dump strings.",
+        "cpp": "auto s = dsl::SExpr::atom(\"two words\");\nauto text = s.dump();\nauto back = dsl::parse_sexpr(text);\nassert(back.text == \"two words\");\nassert(back.quoted);",
+        "d": "auto s = SExpr.atom(\"two words\");\nauto text = s.dump();\nauto back = parse_sexpr(text);\nassert(back.text == \"two words\");\nassert(back.quoted);",
+        "trace": "The serialized form includes quotes, while the parsed text contains the original payload without those delimiters.",
+        "caution": "Quoted status can affect pattern-variable interpretation. A quoted question-mark atom should remain literal data.",
+        "exercise": "Round-trip a string containing a quote, a backslash and a newline.",
+        "anchor": "SExpr"
+      },
+      {
+        "title": "Several top-level forms",
+        "concept": "A rule file naturally contains multiple expressions. parse_sexpressions performs structural reading across whitespace and comments. It avoids the common mistake of treating a newline inside a quoted string as a record boundary.",
+        "cpp": "auto xs = dsl::parse_sexpressions(\"(a 1) (b 2)\");\nassert(xs.size() == 2);\nassert(xs[1].items[0].text == \"b\");",
+        "d": "auto xs = parse_sexpressions(\"(a 1) (b 2)\");\nassert(xs.length == 2);\nassert(xs[1].items[0].text == \"b\");",
+        "trace": "Two independent lists become two array entries. Their separation does not require one form per physical line.",
+        "caution": "Catch structural reader exceptions at the file boundary and attach a filename. Do not report every malformed file as an empty rule set.",
+        "exercise": "Place comments between forms and check that the list count remains unchanged.",
+        "anchor": "parse_sexpressions"
+      },
+      {
+        "title": "AST conversion",
+        "concept": "The conversion layer gives a conventional list representation to tagged AST nodes. A leaf becomes a tag followed by an atom; an inner node becomes a tag followed by converted children. Preserve the distinction when designing schemas.",
+        "cpp": "auto n = dsl::leaf<\"name\">(\"two words\");\nauto sexpr = dsl::ast_to_sexpr(n);\nauto back = dsl::sexpr_to_ast(sexpr);\nassert(back == n);",
+        "d": "auto n = leaf!\"name\"(\"two words\");\nauto sexpr = ast_to_sexpr(n);\nauto back = sexpr_to_ast(sexpr);\nassert(back == n);",
+        "trace": "The payload remains one quoted atom rather than two child nodes. This is the key reason to convert structurally before rendering.",
+        "caution": "Not every arbitrary S-expression has a valid tagged AST interpretation. The converter expects a literal atom head for a list.",
+        "exercise": "Try a list whose first element is another list and handle the conversion error explicitly.",
+        "anchor": "ast_to_sexpr"
+      },
+      {
+        "title": "Validated rule notation",
+        "concept": "A parsed rewrite declaration records its name, left side and right side. Variables on the right must be bound on the left. This catches a common error before any matching begins and gives a clear separation between reading rules and executing them.",
+        "cpp": "auto r = dsl::sexpr_rule(\n  \"(rewrite add-zero (add ?x 0) ?x)\");\nassert(r.name == \"add-zero\");\nassert(r.rhs.text == \"?x\");",
+        "d": "auto r = sexpr_rule(\n  \"(rewrite add-zero (add ?x 0) ?x)\");\nassert(r.name == \"add-zero\");\nassert(r.rhs.text == \"?x\");",
+        "trace": "The rule is a data object. No expression has been transformed merely by parsing the declaration.",
+        "caution": "A structurally valid rule can still be mathematically unsound for your language. Effects, overflow and exceptional values belong in the semantic argument.",
+        "exercise": "Change the right side to ?y and verify that construction rejects the unbound variable.",
+        "anchor": "sexpr_rule"
+      }
+    ]
+  },
+  {
+    "title": "Graphs, terms and bounded reduction",
+    "aim": "Separate graph storage from term semantics, then choose a reduction strategy.",
+    "architecture": "DirectedGraph provides node and edge identity. Terms provide ordered function arguments and variables. A term rewrite system uses matching, not arbitrary evaluation. Bounded normalization reports whether it found a normal form or exhausted its budget.",
+    "lessons": [
+      {
+        "title": "Graph identity and edges",
+        "concept": "A directed graph represents relationships with stable IDs rather than child-value copies. Use edge payloads when relationships themselves have roles, such as operand positions or dependency labels. Keep node IDs local to the graph that created them.",
+        "cpp": "dsl::DirectedGraph<> g;\nauto a = g.add_node(\"parse\");\nauto b = g.add_node(\"check\");\ng.add_edge(a, b, \"next\");\nassert(g.successors(a).front() == b);",
+        "d": "auto g = new DirectedGraph!();\nauto a = g.add_node(\"parse\");\nauto b = g.add_node(\"check\");\ng.add_edge(a, b, \"next\");\nassert(g.successors(a)[0] == b);",
+        "trace": "The edge stores a relationship between IDs. Neither node becomes a nested value inside the other.",
+        "caution": "Removing a node invalidates its ID for future access. A small integer from a different graph is not a valid substitute.",
+        "exercise": "Add a second outgoing edge and compare incoming, outgoing and successor lists.",
+        "anchor": "DirectedGraph"
+      },
+      {
+        "title": "Dependency order",
+        "concept": "Topological sorting is useful for acyclic dependency graphs. It answers a scheduling question, whereas breadth-first and depth-first traversal answer reachability questions. Do not substitute one algorithm merely because all of them return a vector of IDs.",
+        "cpp": "dsl::DirectedGraph<> g;\nauto a = g.add_node(\"input\");\nauto b = g.add_node(\"output\");\ng.add_edge(a, b);\nauto order = g.topological_sort();\nassert(order.front() == a && order.back() == b);",
+        "d": "auto g = new DirectedGraph!();\nauto a = g.add_node(\"input\");\nauto b = g.add_node(\"output\");\ng.add_edge(a, b);\nauto order = g.topological_sort();\nassert(order[0] == a && order[$-1] == b);",
+        "trace": "The producer appears before its dependent. With several independent nodes, more than one valid order may exist.",
+        "caution": "Test cycles explicitly and inspect the implementation contract. A dependency scheduler must not execute a partial order as though every node was scheduled.",
+        "exercise": "Create a diamond dependency and verify every edge respects the resulting order.",
+        "anchor": "DirectedGraph"
+      },
+      {
+        "title": "Matching first-order terms",
+        "concept": "Term matching binds variables in a pattern against a fixed subject. Repeated occurrences of one variable must agree. This is a structural operation and should not be confused with solving an arithmetic equation.",
+        "cpp": "auto p = dsl::parse_term(\"(pair ?x ?x)\");\nauto good = dsl::parse_term(\"(pair a a)\");\nauto bad = dsl::parse_term(\"(pair a b)\");\nassert(dsl::match_term(p, good).has_value());\nassert(!dsl::match_term(p, bad).has_value());",
+        "d": "auto p = parse_term(\"(pair ?x ?x)\");\nauto good = parse_term(\"(pair a a)\");\nauto bad = parse_term(\"(pair a b)\");\nassert(!match_term(p, good).isNull);\nassert(match_term(p, bad).isNull);",
+        "trace": "The first argument binds x. The second occurrence checks that the subject agrees with that binding.",
+        "caution": "Matching is directional. Unification allows variables on both sides and needs an occurs check to prevent infinite substitutions.",
+        "exercise": "Compare match_term and unify_terms on a pair of terms that both contain variables.",
+        "anchor": "match_term"
+      },
+      {
+        "title": "Normalization with an explicit budget",
+        "concept": "A rewrite system repeatedly applies its rules according to a selected traversal strategy. The step budget makes nontermination observable. A returned term is always available, but callers must inspect the stop reason before claiming that it is normalized.",
+        "cpp": "dsl::TermRewriteSystem rs;\nrs.add_rule(\"(rewrite z (add ?x 0) ?x)\");\nauto r = rs.normalize(dsl::parse_term(\"(add a 0)\"), 20);\nassert(r.normal_form());\nassert(r.term.dump() == \"a\");",
+        "d": "auto rs = new TermRewriteSystem();\nrs.add_rule(\"(rewrite z (add ?x 0) ?x)\");\nauto r = rs.normalize(parse_term(\"(add a 0)\"), 20);\nassert(r.normal_form());\nassert(r.term.dump() == \"a\");",
+        "trace": "The only rule removes the add node. A further search finds no redex, establishing a normal form for this rule set.",
+        "caution": "Normal form is relative to the provided rules. It does not mean globally optimal, semantically checked or canonical across different rule orders.",
+        "exercise": "Add opposing rules and use a small budget. Confirm StepLimit is reported rather than normal form.",
+        "anchor": "TermRewriteSystem"
+      },
+      {
+        "title": "Shared term graphs",
+        "concept": "A TermGraph can intern repeated terms so identical subexpressions share nodes. This changes storage and rewrite behavior: replacing a shared redex may affect several incoming references. Treat sharing as part of the execution model rather than a free optimization.",
+        "cpp": "dsl::TermGraph g;\nauto root = g.add(\"(pair (f a) (f a))\");\nassert(g.to_term(root).dump() == \"(pair (f a) (f a))\");\nassert(g.graph().node_count() == 3);",
+        "d": "auto g = new TermGraph();\nauto root = g.add(\"(pair (f a) (f a))\");\nassert(g.to_term(root).dump() == \"(pair (f a) (f a))\");\nassert(g.graph().node_count() == 3);",
+        "trace": "Interning stores only the atom a, the application f(a), and the pair root. Both pair edges refer to the same f(a) node, so the count is three.",
+        "caution": "Sharing must preserve pure term meaning. Duplicated effectful computations cannot generally be merged without changing observable behavior.",
+        "exercise": "Repeat construction with sharing disabled and compare node counts and reconstructed terms.",
+        "anchor": "TermGraph"
+      }
+    ]
+  },
+  {
+    "title": "Equality saturation in practice",
+    "aim": "Keep several equivalent expressions instead of committing to a destructive rewrite sequence.",
+    "architecture": "An e-graph hash-conses nodes, merges equivalent classes and rebuilds congruence. Saturation is bounded by iterations, nodes and matches. Extraction chooses a finite representative with minimum node count, not a target-specific latency or register-pressure cost.",
+    "lessons": [
+      {
+        "title": "Adding expressions to an e-graph",
+        "concept": "Create concrete expressions before applying rules. Adding the same expression twice returns IDs that belong to the same equivalence class. Variables are appropriate in patterns but cannot be inserted as unbound expressions.",
+        "cpp": "dsl::EGraph g;\nauto a = g.add(\"(add x 0)\");\nauto b = g.add(\"(add x 0)\");\nassert(g.equivalent(a, b));",
+        "d": "auto g = new EGraph();\nauto a = g.add(\"(add x 0)\");\nauto b = g.add(\"(add x 0)\");\nassert(g.equivalent(a, b));",
+        "trace": "Hash-consing recognizes identical operator-and-child structure. The atom x is a concrete symbol; ?x would be a pattern variable.",
+        "caution": "An EClassId is meaningful only within its original graph. Persist an expression or another stable external identity instead of serializing raw class IDs.",
+        "exercise": "Attempt to add an expression containing ?x and handle the validation exception.",
+        "anchor": "EGraph"
+      },
+      {
+        "title": "Merging known equivalents",
+        "concept": "unite asserts an equality already justified by the application. It does not prove that equality from arithmetic or type rules. A type-aware compiler must ensure only compatible semantic values are merged.",
+        "cpp": "dsl::EGraph g;\nauto a = g.add(\"(add x 0)\");\nauto b = g.add(\"x\");\ng.unite(a, b);\nassert(g.equivalent(a, b));",
+        "d": "auto g = new EGraph();\nauto a = g.add(\"(add x 0)\");\nauto b = g.add(\"x\");\ng.unite(a, b);\nassert(g.equivalent(a, b));",
+        "trace": "The equivalence query rebuilds congruence as needed. Both IDs now refer to one semantic alternative set.",
+        "caution": "The graph has no built-in domain type discipline. A mistaken union contaminates every later deduction that uses the merged class.",
+        "exercise": "Add f(add(x,0)) and f(x), merge their children, then query congruence of the parent expressions.",
+        "anchor": "EGraph"
+      },
+      {
+        "title": "Saturating a rule set",
+        "concept": "Saturation inserts right-hand alternatives and merges them with matched classes. It does not delete the left-hand form. This is why several transformations can coexist without requiring a globally perfect destructive rule order.",
+        "cpp": "dsl::EGraph g;\nauto root = g.add(\"(add x 0)\");\nauto rules = dsl::sexpr_rules(\"(rewrite z (add ?x 0) ?x)\");\nauto report = g.saturate(rules);\nassert(report.saturated());\nassert(g.extract(root).dump() == \"x\");",
+        "d": "auto g = new EGraph();\nauto root = g.add(\"(add x 0)\");\nauto rules = sexpr_rules(\"(rewrite z (add ?x 0) ?x)\");\nauto report = g.saturate(rules);\nassert(report.saturated());\nassert(g.extract(root).dump() == \"x\");",
+        "trace": "The first application adds the atom alternative. A later iteration observes no new revision and reports saturation.",
+        "caution": "The implementation counts rule applications, including matches that may no longer add a new alternative. Budget interpretation matters when tuning large rule sets.",
+        "exercise": "Add a second zero-removal rule for multiplication by one and test a nested expression.",
+        "anchor": "EGraph"
+      },
+      {
+        "title": "Limits are part of the result",
+        "concept": "Set small explicit limits while developing rule sets. A limit stop is useful information, not a crash. Production tooling should record both the extracted expression and the reason saturation ended so performance regressions can be diagnosed.",
+        "cpp": "dsl::EGraph g;\ng.add(\"x\");\ndsl::SaturationLimits limits;\nlimits.iterations = 0;\nauto r = g.saturate({}, limits);\nassert(r.stop == dsl::SaturationStop::IterationLimit);",
+        "d": "auto g = new EGraph();\ng.add(\"x\");\nSaturationLimits limits;\nlimits.iterations = 0;\nauto r = g.saturate([], limits);\nassert(r.stop == SaturationStop.IterationLimit);",
+        "trace": "With zero iterations, no fixed-point search occurs. The graph may already be stable, but this execution did not establish that fact.",
+        "caution": "Never replace a limit result with an unconditional success flag. An extracted expression may still be useful without a saturation claim.",
+        "exercise": "Use a rule that grows an expression and compare iteration, node and match limits independently.",
+        "anchor": "SaturationLimits"
+      },
+      {
+        "title": "Extraction and cost models",
+        "concept": "The built-in extractor minimizes the count of expression nodes. That is a clear baseline cost model, but real compilers may care about latency, effects, code size or target instruction legality. Keep the distinction explicit in the optimizer interface.",
+        "cpp": "dsl::EGraph g;\nauto large = g.add(\"(id x)\");\nauto small = g.add(\"x\");\ng.unite(large, small);\nassert(g.extract(large).dump() == \"x\");",
+        "d": "auto g = new EGraph();\nauto large = g.add(\"(id x)\");\nauto small = g.add(\"x\");\ng.unite(large, small);\nassert(g.extract(large).dump() == \"x\");",
+        "trace": "One atom is cheaper than an operator plus a child under node-count cost. The representative ID need not change for extraction to choose differently.",
+        "caution": "Minimum node count does not guarantee fastest machine code. If extending extraction, document cycle handling and finite-representative requirements.",
+        "exercise": "Construct two equal-cost alternatives and avoid asserting a unique tie-breaking order unless the API promises one.",
+        "anchor": "EGraph"
+      }
+    ]
+  },
+  {
+    "title": "Byte recognition, binary streams and CFGs",
+    "aim": "Select a recognizer according to the shape of the input, not merely the familiarity of its name.",
+    "architecture": "StaticRegex recognizes bytes with a compiled finite-state program. BinaryStream handles explicit byte order. CFG consumes a token vector using Earley-style chart parsing, including left recursion and epsilon productions.",
+    "lessons": [
+      {
+        "title": "Static byte regexes",
+        "concept": "A static regex compiles its pattern at host compile time and recognizes runtime bytes. The matches operation requires complete consumption. Byte semantics make it suitable for protocols and ASCII-oriented token classes, but do not supply Unicode character properties.",
+        "cpp": "using Number = dsl::StaticRegex<\"[0-9]+\">;\nassert(Number::matches(\"123\"));\nassert(!Number::matches(\"123x\"));",
+        "d": "alias Number = StaticRegex!\"[0-9]+\";\nassert(Number.matches(\"123\"));\nassert(!Number.matches(\"123x\"));",
+        "trace": "A compiled pattern is reused for both candidates. The suffix x causes whole-input recognition to fail.",
+        "caution": "Search, prefix and matches have different consumption policies. Use matches for validation and prefix only when maintaining a cursor yourself.",
+        "exercise": "Test an empty candidate and compare plus with star. Explain how zero-length matches affect token loops.",
+        "anchor": "StaticRegex"
+      },
+      {
+        "title": "Explicit endianness",
+        "concept": "BinaryStream reads unsigned integers with a selected byte order. This avoids depending on the host CPU layout or pointer alignment. A file format should state field widths and byte order independently of the implementation language.",
+        "cpp": "dsl::BinaryStream s;\ns.write_integer<std::uint16_t>(0x1234, dsl::ByteOrder::Big);\nassert(s.bytes.size() == 2);\nassert(s.read_integer<std::uint16_t>(dsl::ByteOrder::Big) == 0x1234);",
+        "d": "BinaryStream s;\ns.write_integer!ushort(0x1234, ByteOrder.Big);\nassert(s.bytes.length == 2);\nassert(s.read_integer!ushort(ByteOrder.Big) == 0x1234);",
+        "trace": "The two emitted bytes are 12 and 34 in hexadecimal. Reading with the same order reconstructs the original value.",
+        "caution": "Unsigned width is a format decision. Reading a platform-sized integer can silently change a protocol across architectures.",
+        "exercise": "Read the same bytes as little endian and verify the deliberately different result.",
+        "anchor": "BinaryStream"
+      },
+      {
+        "title": "Bounded binary reads",
+        "concept": "A read advances the cursor only when enough bytes are available. Treat truncation as malformed input and retain the offset for a useful error. Borrowed views into stream storage must not outlive mutations that can move that storage.",
+        "cpp": "dsl::BinaryStream s;\ns.write_integer<std::uint32_t>(7);\nauto bytes = s.read(4);\nassert(bytes.size() == 4);\nassert(s.eof());",
+        "d": "BinaryStream s;\ns.write_integer!uint(7);\nauto bytes = s.read(4);\nassert(bytes.length == 4);\nassert(s.eof());",
+        "trace": "Four bytes are consumed and the cursor reaches the buffer end. No integer interpretation is needed for this raw read.",
+        "caution": "Do not retain a C++ span across a write that can reallocate the vector. Copy the bytes if independent ownership is required.",
+        "exercise": "Attempt a five-byte read from a four-byte stream and translate the exception to a format diagnostic.",
+        "anchor": "BinaryStream"
+      },
+      {
+        "title": "Token-level context-free parsing",
+        "concept": "CFG terminals are complete token strings. The lexer decides how source characters become tokens. This separation lets a grammar express recursive structure without embedding numeric scanning and whitespace handling into every production.",
+        "cpp": "dsl::CFG g;\ng.start = \"S\";\ng.add(\"S\", {dsl::CFGSymbol::token(\"name\")});\nassert(g.parse({\"name\"}).ok());\nassert(!g.parse({\"other\"}).ok());",
+        "d": "CFG g;\ng.start = \"S\";\ng.add(\"S\", [CFGSymbol.token(\"name\")]);\nassert(g.parse([\"name\"]).ok());\nassert(!g.parse([\"other\"]).ok());",
+        "trace": "The terminal name matches one token, not four character tokens. A different token string fails at the initial chart position.",
+        "caution": "An ambiguous CFG returns a first discovered derivation here, not a complete parse forest. Do not claim ambiguity analysis from one returned tree.",
+        "exercise": "Add a production for parenthesized S and parse nested token lists.",
+        "anchor": "CFG"
+      },
+      {
+        "title": "Epsilon productions",
+        "concept": "An empty right-hand side denotes epsilon. This allows recursive lists and optional grammar structure, but epsilon should be intentional because it changes which documents the grammar accepts. CFG validation checks names; it does not decide whether optionality matches product requirements.",
+        "cpp": "dsl::CFG g;\ng.start = \"S\";\ng.add(\"S\", {});\nassert(g.parse({}).ok());\nassert(!g.parse({\"x\"}).ok());",
+        "d": "CFG g;\ng.start = \"S\";\ng.add(\"S\", []);\nassert(g.parse([]).ok());\nassert(!g.parse([\"x\"]).ok());",
+        "trace": "The start production completes without consuming a token. A nonempty token stream remains unconsumed and is rejected.",
+        "caution": "Do not transfer the zero-width-token prohibition from PEG scanning to CFG epsilon productions. The algorithms have different progress mechanisms.",
+        "exercise": "Add a left-recursive list production and compare empty, one-token and three-token cases.",
+        "anchor": "CFG"
+      }
+    ]
+  },
+  {
+    "title": "Preprocessing and diagnostics",
+    "aim": "Preserve source identity while transforming text and report failures as structured data.",
+    "architecture": "Preprocessor supports object and function macros, includes and conditionals with explicit depth limits. Span and SourceMap use byte positions. Diagnostic combines a code, severity, primary span, labels and optional fixes.",
+    "lessons": [
+      {
+        "title": "Object macros",
+        "concept": "Define an object macro when a symbolic name should expand before parsing. Macro replacement is a textual phase, so it needs a clearly documented relationship to the later lexer and type checker. Avoid expanding arbitrary user text by raw string replacement.",
+        "cpp": "dsl::Preprocessor p;\np.define(\"LIMIT\", \"42\");\nassert(p.expand(\"LIMIT + 1\") == \"42 + 1\");",
+        "d": "auto p = new Preprocessor();\np.define(\"LIMIT\", \"42\");\nassert(p.expand(\"LIMIT + 1\") == \"42 + 1\");",
+        "trace": "The identifier token LIMIT is replaced while the surrounding operators and spaces remain.",
+        "caution": "A preprocessing macro has no type. If LIMIT appears where a module or string is required, later phases must diagnose that mismatch.",
+        "exercise": "Test LIMIT inside a quoted string and as part of a longer identifier. Explain why token-aware expansion matters.",
+        "anchor": "Preprocessor"
+      },
+      {
+        "title": "Function macros",
+        "concept": "A function macro substitutes named parameters into replacement text. It is useful for small surface conveniences, but it does not provide lexical binding or hygienic names. Keep generated identifiers distinctive and test arguments containing nested delimiters.",
+        "cpp": "dsl::Preprocessor p;\np.define_function(\"TWICE\", {\"x\"}, \"(x + x)\");\nassert(p.expand(\"TWICE(3)\") == \"(3 + 3)\");",
+        "d": "auto p = new Preprocessor();\np.define_function(\"TWICE\", [\"x\"], \"(x + x)\");\nassert(p.expand(\"TWICE(3)\") == \"(3 + 3)\");",
+        "trace": "The argument text appears twice in the replacement. If the later language allows effects, duplicated evaluation can be observable.",
+        "caution": "Parentheses address precedence but not repeated effects or name capture. An AST transformation can be safer for semantic abstractions.",
+        "exercise": "Expand TWICE with a compound expression and compare the generated text with an equivalent AST construction.",
+        "anchor": "Preprocessor"
+      },
+      {
+        "title": "Half-open spans",
+        "concept": "Span describes a half-open byte interval. This convention makes length equal to end minus begin and permits adjacent tokens to meet without overlapping. Keep file identity alongside offsets so diagnostics remain meaningful after several inputs have been loaded.",
+        "cpp": "dsl::Span a{0, 2, 1, 1, \"sample.dsl\"};\ndsl::Span b{3, 5, 1, 4, \"sample.dsl\"};\nauto all = dsl::merge_spans(a, b);\nassert(all.begin == 0 && all.end == 5);",
+        "d": "auto a = Span(0, 2, 1, 1, \"sample.dsl\");\nauto b = Span(3, 5, 1, 4, \"sample.dsl\");\nauto all = merge_spans(a, b);\nassert(all.begin == 0 && all.end == 5);",
+        "trace": "The merged interval includes the gap between tokens. Its beginning metadata comes from the first span.",
+        "caution": "merge_spans assumes the first span starts first. It is not a general operation for unrelated files or reversed source positions.",
+        "exercise": "Define and test an application helper that rejects spans from different files before merging.",
+        "anchor": "Span"
+      },
+      {
+        "title": "Mapping offsets to lines",
+        "concept": "SourceMap builds an index of line starts and maps offsets to one-based line and column coordinates. The C++ object borrows its input text, so ownership belongs to the surrounding source-file abstraction.",
+        "cpp": "std::string source = \"one\\ntwo\";\ndsl::SourceMap map(source);\nauto pos = map.line_column(4);\nassert(pos.first == 2 && pos.second == 1);\nassert(map.line_text(2) == \"two\");",
+        "d": "string source = \"one\\ntwo\";\nauto map = SourceMap(source);\nauto pos = map.line_column(4);\nassert(pos[0] == 2 && pos[1] == 1);\nassert(map.line_text(2) == \"two\");",
+        "trace": "Offset four follows the first newline and points to the t on line two. Counting is byte-oriented.",
+        "caution": "Do not construct the C++ map from a temporary string. Also avoid passing arbitrary offsets beyond your stored source size.",
+        "exercise": "Add a trailing newline and inspect line_count and the final empty line.",
+        "anchor": "SourceMap"
+      },
+      {
+        "title": "Stable diagnostic codes",
+        "concept": "A Diagnostic separates a stable machine-readable code from human-readable explanation. Consumers can filter codes without parsing prose. Keep messages specific to the user action and reserve implementation details for debug logs.",
+        "cpp": "dsl::Diagnostic d;\nd.code = \"APP001\";\nd.message = \"expected a positive size\";\nassert(d.headline() == \"error[APP001]: expected a positive size\");",
+        "d": "Diagnostic d;\nd.code = \"APP001\";\nd.message = \"expected a positive size\";\nassert(d.headline() == \"error[APP001]: expected a positive size\");",
+        "trace": "The default severity is Error. headline combines it with the code and message without requiring a source excerpt.",
+        "caution": "Do not build automated tests around an entire caret-rendered message when the semantic requirement is a code and a span. Formatting can evolve independently.",
+        "exercise": "Add a primary span and render against source text. Then test the structured fields separately.",
+        "anchor": "Diagnostic"
+      }
+    ]
+  },
+  {
+    "title": "Visitors, literals and reflection",
+    "aim": "Use host-language facilities to expose a compact, typed authoring vocabulary.",
+    "architecture": "Visitors dispatch on AST tags with schema checks. LiteralSet parses suffix-bearing numbers. Enum reflection supports symbolic names and containers, with different discovery mechanisms in C++ and D. These are conveniences whose limits should remain visible.",
+    "lessons": [
+      {
+        "title": "A schema-derived visitor",
+        "concept": "A visitor derived from an example AST collects its possible tags and requires corresponding handlers. This is a useful local exhaustiveness check. The schema must represent all tags your application can produce, not just those encountered in one lucky test input.",
+        "cpp": "auto n = dsl::leaf<\"n\">(42);\nint seen = 0;\nauto v = dsl::derive_visitor(n,\n  dsl::on<\"n\">([&](const dsl::ASTNode&) { ++seen; }));\nv.walk(n);\nassert(seen == 1);",
+        "d": "auto n = leaf!\"n\"(42);\nint seen;\nauto v = derive_visitor(n,\n  on!\"n\"((ref ASTNode x) { ++seen; }));\nv.walk(n);\nassert(seen == 1);",
+        "trace": "The handler fires once for the one-node tree. A walk recursively visits children; a single visit dispatches only one node.",
+        "caution": "Runtime schema coverage is not a proof that every possible language construct was included. Prefer an explicitly maintained schema for a public language.",
+        "exercise": "Add an inner box node and count pre-order versus post-order events.",
+        "anchor": "derive_visitor"
+      },
+      {
+        "title": "Suffix-bearing literals",
+        "concept": "LiteralSet recognizes a suffix, parses the preceding numeric text and invokes its handler. It can make a domain vocabulary pleasant without defining a parser for an entire language. Keep the returned unit convention explicit.",
+        "cpp": "auto units = dsl::literal_set(\n  dsl::lit<\"_km\">([](long double x) { return x * 1000; }));\nassert(units.parse(\"2_km\") == 2000);",
+        "d": "auto units = literal_set(\n  lit!\"_km\"((real x) => x * 1000));\nassert(units.parse(\"2_km\") == 2000);",
+        "trace": "Two kilometers become two thousand base units. The return is numeric; it does not carry a type-level dimension.",
+        "caution": "The C++ implementation uses stold without an explicit consumed-length check. Validate the numeric prefix if your application must reject every trailing numeric-field character.",
+        "exercise": "Add centimeters and test suffix ordering when one suffix can overlap another.",
+        "anchor": "LiteralSet"
+      },
+      {
+        "title": "Symbolic enum names",
+        "concept": "Enum reflection bridges host enums and text. C++ relies on compiler-assisted numeric-range discovery; D can inspect declared members. This makes wide sparse enums a portability test rather than a reason to assume identical discovery cost.",
+        "cpp": "enum class Mode { Read, Write };\nassert(dsl::enum_name(Mode::Read) == \"Read\");\nassert(dsl::enum_cast<Mode>(\"Write\").value() == Mode::Write);",
+        "d": "enum Mode { Read, Write }\nassert(enum_name(Mode.Read) == \"Read\");\nassert(enum_cast!Mode(\"Write\").get == Mode.Write);",
+        "trace": "The name lookup returns a symbolic spelling and the reverse lookup returns an optional enum value.",
+        "caution": "Unknown names and values must remain explicit failure cases. Never substitute the first enum member without a documented default policy.",
+        "exercise": "Use widely separated numeric enum values and inspect the C++ enum_range customization before relying on discovery.",
+        "anchor": "EnumReflection"
+      },
+      {
+        "title": "Checked visitor boundaries",
+        "concept": "A visitor should reject a node tag outside its declared schema. That failure catches drift between construction and traversal. In an extensible application, decide whether unknown tags are errors or plugin extension points before exposing traversal as a public API.",
+        "cpp": "auto schema = dsl::leaf<\"n\">(0);\nauto v = dsl::derive_visitor(schema,\n  dsl::on<\"n\">([](const dsl::ASTNode&) {}));\nauto n = dsl::leaf<\"n\">(8);\nv.visit(n);\nassert(n.value() == \"8\");",
+        "d": "auto schema = leaf!\"n\"(0);\nauto v = derive_visitor(schema,\n  on!\"n\"((ref ASTNode x) {}));\nauto n = leaf!\"n\"(8);\nv.visit(n);\nassert(n.value() == \"8\");",
+        "trace": "The empty handler leaves the value unchanged. Successful dispatch establishes only that the tag belongs to the declared schema.",
+        "caution": "Mutating a node into a different tag while walking can invalidate assumptions about traversal order and child references. Prefer a separate rebuilding pass for structural changes.",
+        "exercise": "Visit an unexpected tag and convert the exception into a controlled plugin compatibility error.",
+        "anchor": "ASTVisitor"
+      },
+      {
+        "title": "Keeping a domain wrapper small",
+        "concept": "A wrapper can expose a semantic operation while hiding generic construction machinery. This preserves freedom to change representation later. The public function should document what its numbers mean rather than forcing every caller to understand literal registration.",
+        "cpp": "auto metres = [](std::string_view text) {\n  auto ls = dsl::literal_set(dsl::lit<\"_m\">(\n    [](long double n) { return n; }));\n  return ls.parse(text);\n};\nassert(metres(\"12_m\") == 12);",
+        "d": "auto metres = (string text) {\n  auto ls = literal_set(lit!\"_m\"(\n    (real n) => n));\n  return ls.parse(text);\n};\nassert(metres(\"12_m\") == 12);",
+        "trace": "Callers use metres and a string. The LiteralSet type does not leak into the application interface.",
+        "caution": "A narrow wrapper still needs a failure policy. Decide whether malformed literals throw, return Result or accumulate diagnostics before using it in a service.",
+        "exercise": "Return a domain quantity struct instead of a bare number and add a checked nonnegative constraint.",
+        "anchor": "literal_set"
+      }
+    ]
+  },
+  {
+    "title": "MetaML evaluation and session boundaries",
+    "aim": "Understand what an embedding call commits and what it reports.",
+    "architecture": "Each evaluation parses a source, checks compilation units and executes them. The session retains definitions and source text. A Result exposes diagnostics, while RunReport additionally carries warnings and presentation text.",
+    "lessons": [
+      {
+        "title": "Literals without a prelude",
+        "concept": "Start with an expression that uses only built-in syntax. This isolates include-path, compiler and session issues from external library discovery. Once the baseline works, add dependencies one at a time and keep the minimal smoke test in the repository.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"42\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"42\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "A fresh session already understands integer literals. It does not need to find prelude/mod.ml to evaluate this expression.",
+        "caution": "The uploaded files do not include metalib. A book example must not silently depend on a separately installed prelude.",
+        "exercise": "Change the input to a Boolean literal and update the expected rendering.",
+        "anchor": "Session",
+        "ml": "42",
+        "expected": "42"
+      },
+      {
+        "title": "Evaluation failures are values",
+        "concept": "A missing variable is an ordinary language error. The host receives a diagnostic vector, which can be displayed, logged or translated into an application response. It should not crash by assuming every evaluation returns a Value.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"unbound_name + 1\");\nassert(r.is_err());\nassert(!r.unwrap_err().empty());",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"unbound_name + 1\");\nassert(r.is_err());\nassert(r.unwrap_err().length > 0);",
+        "trace": "Name resolution fails before the addition executes. The error vector is the observable result of the call.",
+        "caution": "Do not use unwrap_or to silently substitute a successful business result for a failed policy evaluation.",
+        "exercise": "Print each diagnostic headline and preserve its source span.",
+        "anchor": "Session",
+        "ml": "unbound_name + 1",
+        "expected": ""
+      },
+      {
+        "title": "Multi-item source",
+        "concept": "A source string may contain declarations followed by a final expression. Newlines and top-level boundaries matter to the parser. The final expression supplies the value returned by eval, while earlier declarations populate the environment.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"val x := 6\\nval y := 7\\nx * y\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"val x := 6\\nval y := 7\\nx * y\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The first two items bind values. The last item computes with both names and becomes the returned result.",
+        "caution": "A batch can commit earlier units before a later unit fails. Do not assume eval supplies whole-script transaction isolation.",
+        "exercise": "Make the final item fail and inspect whether a previous definition remains available.",
+        "anchor": "Session",
+        "ml": "val x := 6\nval y := 7\nx * y",
+        "expected": "42"
+      },
+      {
+        "title": "Quiet application declarations",
+        "concept": "Use a source file name even for generated declarations so diagnostics identify their origin. Session state is useful for configuration bootstrapping, but generated code should use stable names and a clear replacement policy.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"val default_limit := 42\\ndefault_limit\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"val default_limit := 42\\ndefault_limit\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The result is the bound value. A host that splits initialization and evaluation can query it later in the same session.",
+        "caution": "Generated source is still source code. Quote injected strings correctly and prefer typed primitives for data crossing the host boundary.",
+        "exercise": "Pass a custom filename as the second eval argument and deliberately introduce a type error.",
+        "anchor": "Session",
+        "ml": "val default_limit := 42\ndefault_limit",
+        "expected": "42"
+      },
+      {
+        "title": "A fresh session for isolation",
+        "concept": "A session-per-job policy gives independent environments. It is often simpler than attempting to undo a sequence of declarations and effects after a failure. Measure construction cost before pooling stateful sessions in a long-running service.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"val local_only := 42\\nlocal_only\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"val local_only := 42\\nlocal_only\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The declaration belongs to one session. Another newly constructed session has its own initial environment.",
+        "caution": "Independent sessions can still call host callbacks that share global state. Isolation of language bindings does not isolate external resources.",
+        "exercise": "Create two sessions, define a name in one, and verify that lookup fails in the other.",
+        "anchor": "Session",
+        "ml": "val local_only := 42\nlocal_only",
+        "expected": "42"
+      }
+    ]
+  },
+  {
+    "title": "Numbers, strings and collections",
+    "aim": "Learn the actual value model before building conversion APIs.",
+    "architecture": "MetaML Value is a tagged runtime object. Arithmetic, string primitives, tuples and lists have language-level rules. Rendering is for inspection; host conversion should use the supported typed adapters where possible.",
+    "lessons": [
+      {
+        "title": "Integer arithmetic",
+        "concept": "Small integer calculations establish precedence and the numeric representation used by policy code. Keep overflow behavior visible when designing a domain language. MetaML integer arithmetic uses explicit wrapping helpers in the supplied implementation.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"2 + 5 * 8\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"2 + 5 * 8\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "Multiplication binds before addition. The result is an Int value rather than a host double.",
+        "caution": "A mathematically correct identity may be invalid when a domain requires checked rather than wrapping arithmetic.",
+        "exercise": "Compare ordinary addition with Int.checked_add at the maximum integer boundary.",
+        "anchor": "Session",
+        "ml": "2 + 5 * 8",
+        "expected": "42"
+      },
+      {
+        "title": "Floating-point rendering",
+        "concept": "Floating values use a deterministic rendering helper shared by the two dialects. Test boundary values explicitly when output is persisted or compared across hosts. Decimal appearance does not imply decimal arithmetic.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"1.5 + 2.25\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"3.75\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"1.5 + 2.25\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"3.75\");",
+        "trace": "Both operands are floating literals. The result prints as a shortest round-trip decimal for this finite binary value.",
+        "caution": "Do not use rendered floating strings as a replacement for an application-level tolerance or a specified numeric serialization format.",
+        "exercise": "Compare Float.nan and Float.infinity handling before allowing them in a configuration format.",
+        "anchor": "Session",
+        "ml": "1.5 + 2.25",
+        "expected": "3.75"
+      },
+      {
+        "title": "String primitives operate on bytes",
+        "concept": "Core string primitives provide byte-based operations. ASCII examples make the baseline obvious, while multilingual input requires an explicit UTF-8 policy. Character count and encoded-byte count answer different questions.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"String.length \\\"hello\\\"\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"5\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"String.length \\\"hello\\\"\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"5\");",
+        "trace": "The primitive returns the byte length as an Int. The host adapter sees an ordinary language value.",
+        "caution": "The separately supplied metalib may offer higher-level Unicode helpers, but those files are not present in this source set.",
+        "exercise": "Measure a non-ASCII UTF-8 string and explain the result in bytes.",
+        "anchor": "Session",
+        "ml": "String.length \"hello\"",
+        "expected": "5"
+      },
+      {
+        "title": "Tuples are heterogeneous products",
+        "concept": "A tuple combines values positionally and can contain different types. It is useful for small internal return values, but a record usually documents a public configuration object more clearly than positional fields.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"(1, true, \\\"ok\\\")\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"(1, true, \\\"ok\\\")\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"(1, true, \\\"ok\\\")\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"(1, true, \\\"ok\\\")\");",
+        "trace": "The three positions retain their different types. Rendering exposes the product shape without flattening it to a string list.",
+        "caution": "Host pair conversion covers a specific two-element mapping; do not assume every tuple shape has an automatic C++ struct adapter.",
+        "exercise": "Write a pattern that extracts the second component and verify its inferred type.",
+        "anchor": "Session",
+        "ml": "(1, true, \"ok\")",
+        "expected": "(1, true, \"ok\")"
+      },
+      {
+        "title": "Homogeneous lists",
+        "concept": "A list contains values of one compatible element type. The checker rejects heterogeneous lists rather than inserting implicit dynamic wrappers. Empty lists are polymorphic until context constrains their element type.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"[1, 2, 3]\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"[1, 2, 3]\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"[1, 2, 3]\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"[1, 2, 3]\");",
+        "trace": "The three integers form a linked runtime list. The pretty printer uses bracket notation.",
+        "caution": "A list value is not a random-access host vector. Convert at the boundary when your native algorithm needs contiguous storage.",
+        "exercise": "Ask type_of for an empty list and then for a list containing both Int and Bool.",
+        "anchor": "Session",
+        "ml": "[1, 2, 3]",
+        "expected": "[1, 2, 3]"
+      }
+    ]
+  },
+  {
+    "title": "Functions, application and lexical scope",
+    "aim": "Write reusable language functions and distinguish them from host callbacks.",
+    "architecture": "Function values capture an environment. Application is curried, and function syntax lowers to the expression AST. Lexical scope determines the meaning of captured names even when the host evaluates later source strings.",
+    "lessons": [
+      {
+        "title": "Anonymous functions",
+        "concept": "The fn syntax creates a function value with one or more parameters followed by an arrow and a body. Parentheses are important when immediately applying a function because they delimit the body from the application argument.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"(fn x -> x + 1) 41\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"(fn x -> x + 1) 41\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The lambda receives 41 and returns 42. Its parameter is a language binding, unrelated to a native lambda capture.",
+        "caution": "Do not guess C-style braces or an OCaml fun-only grammar. Both fn and fun are recognized, but the implemented syntax is its own contract.",
+        "exercise": "Ask type_of for the lambda before applying it.",
+        "anchor": "Session",
+        "ml": "(fn x -> x + 1) 41",
+        "expected": "42"
+      },
+      {
+        "title": "Curried application",
+        "concept": "Multiple parameters become nested functions. Applying fewer arguments returns another function. This is useful for specializing a policy with fixed configuration before supplying per-request input.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"val add := fn x y -> x + y\\nval add40 := add 40\\nadd40 2\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"val add := fn x y -> x + y\\nval add40 := add 40\\nadd40 2\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The first application captures the fixed first argument. The second supplies the remaining argument.",
+        "caution": "Native primitives have an explicit arity and conversion policy; partial application is a language behavior around those primitives, not a C++ calling convention.",
+        "exercise": "Construct a three-argument function and apply it in three separate stages.",
+        "anchor": "Session",
+        "ml": "val add := fn x y -> x + y\nval add40 := add 40\nadd40 2",
+        "expected": "42"
+      },
+      {
+        "title": "Local let bindings",
+        "concept": "A let expression introduces local bindings for its body. Keep temporary computation names local so repeated evaluation does not pollute the session environment. This is particularly helpful in long-lived interactive tools.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"let x = 6 in x * 7\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"let x = 6 in x * 7\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The local x is available in the body. It is not intended as a later top-level session definition.",
+        "caution": "A lexical scope is not a transaction boundary for host effects. Local bindings can still call effectful primitives.",
+        "exercise": "Evaluate x in a later call and confirm that it was not exported as a top-level name.",
+        "anchor": "Session",
+        "ml": "let x = 6 in x * 7",
+        "expected": "42"
+      },
+      {
+        "title": "Lexical closures",
+        "concept": "A closure captures the environment where it was created. Capturing a fixed multiplier is a useful way to build small reusable transformations. The host must keep the owning session and any primitive resources alive while such values may be invoked.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"val make := fn n -> fn x -> n * x\\nval six := make 6\\nsix 7\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"val make := fn n -> fn x -> n * x\\nval six := make 6\\nsix 7\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The returned function remembers n equal to six after the outer call has finished.",
+        "caution": "Do not confuse language closure lifetime with native reference-capture lifetime. The two layers can coexist in one embedding.",
+        "exercise": "Create two closures with different multipliers and verify that their environments remain independent.",
+        "anchor": "Session",
+        "ml": "val make := fn n -> fn x -> n * x\nval six := make 6\nsix 7",
+        "expected": "42"
+      },
+      {
+        "title": "Conditional expressions",
+        "concept": "An if expression returns one of two branch values. The condition must be Boolean and branch types must agree. This lets the type checker prevent malformed policy decisions before the host uses their result.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"if 6 < 7 then 42 else 0\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"if 6 < 7 then 42 else 0\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The condition selects the first branch. The unused branch supplies a compatible Int result type.",
+        "caution": "If the unused branch contains a type error, static checking can still reject the expression. Runtime branch selection is not a type-checking escape hatch.",
+        "exercise": "Make the branches Int and String, then explain the diagnostic.",
+        "anchor": "Session",
+        "ml": "if 6 < 7 then 42 else 0",
+        "expected": "42"
+      }
+    ]
+  },
+  {
+    "title": "Type inference and records",
+    "aim": "Use inferred types as a design aid while keeping public contracts explicit.",
+    "architecture": "The checker implements Hindley-Milner-style inference with numeric constraints and row-polymorphic records. Public embeddings still need application checks for ranges, units and data-dependent invariants.",
+    "lessons": [
+      {
+        "title": "Polymorphic identity",
+        "concept": "An identity function has no reason to constrain its argument type. Generalization lets separate uses choose different concrete types. This differs from a single dynamic Value that accepts anything without static checking.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"val id := fn x -> x\\n(id 42, id true)\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"(42, true)\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"val id := fn x -> x\\n(id 42, id true)\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"(42, true)\");",
+        "trace": "Each use instantiates the generalized type independently. The tuple therefore contains an Int and a Bool.",
+        "caution": "Polymorphism is checked at binding boundaries. Do not expect arbitrary mutable host state to inherit the same safety guarantees.",
+        "exercise": "Ask type_of for id and compare it with a function that adds one.",
+        "anchor": "Session",
+        "ml": "val id := fn x -> x\n(id 42, id true)",
+        "expected": "(42, true)"
+      },
+      {
+        "title": "Type errors before evaluation",
+        "concept": "A type error should be surfaced as a normal diagnostic, not a native conversion failure. A front end can ask type_of first for feedback, but eval repeats the necessary checks before executing a newly supplied expression.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"1 + true\");\nassert(r.is_err());\nassert(!r.unwrap_err().empty());",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"1 + true\");\nassert(r.is_err());\nassert(r.unwrap_err().length > 0);",
+        "trace": "Numeric addition cannot accept a Boolean operand under the checker rules.",
+        "caution": "Avoid catching this error and converting true to one in the host. That would create a second, inconsistent language semantics.",
+        "exercise": "Record the error code and compare it with an undefined-name diagnostic.",
+        "anchor": "Session",
+        "ml": "1 + true",
+        "expected": ""
+      },
+      {
+        "title": "Record construction and selection",
+        "concept": "Records associate values with named fields. Selection expresses a semantic role more clearly than tuple position. Field names are part of the checked interface and should be chosen as stable domain vocabulary.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"val r := {width = 6, height = 7}\\nr.width * r.height\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"val r := {width = 6, height = 7}\\nr.width * r.height\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The two selectors recover integer fields. Multiplication then computes the area.",
+        "caution": "A record with width and height has no built-in unit discipline. Use a domain convention or explicit wrapper type for measurements.",
+        "exercise": "Rename height in one place only and inspect the missing-field diagnostic.",
+        "anchor": "Session",
+        "ml": "val r := {width = 6, height = 7}\nr.width * r.height",
+        "expected": "42"
+      },
+      {
+        "title": "Row-polymorphic access",
+        "concept": "A function selecting one field can accept records with extra fields. Row polymorphism expresses the required portion of a record without forcing every caller into one closed layout. This is valuable for evolving configuration schemas.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"val width := fn r -> r.width\\nwidth {width = 42, label = \\\"panel\\\"}\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"val width := fn r -> r.width\\nwidth {width = 42, label = \\\"panel\\\"}\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The function requires width. The additional label field does not invalidate the call.",
+        "caution": "Open record acceptance does not validate unrelated fields. A public configuration loader may still need to reject misspelled or unexpected options.",
+        "exercise": "Apply the same function to a record whose width is Bool and compare the inferred function instances.",
+        "anchor": "Session",
+        "ml": "val width := fn r -> r.width\nwidth {width = 42, label = \"panel\"}",
+        "expected": "42"
+      },
+      {
+        "title": "Functional record updates",
+        "concept": "A record update produces a record with selected fields replaced. This supports immutable configuration evolution: retain a validated baseline, then construct a per-request version without mutating shared state.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"val r := {width = 1, height = 7}\\nval q := {r with width = 6}\\nq.width * q.height\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"val r := {width = 1, height = 7}\\nval q := {r with width = 6}\\nq.width * q.height\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The updated width is six and height remains seven. The expression uses q rather than modifying r in place.",
+        "caution": "An update must obey the checker rules for field presence and type. Do not treat it as insertion into an untyped dictionary.",
+        "exercise": "Return both r.width and q.width to demonstrate that the baseline remains unchanged.",
+        "anchor": "Session",
+        "ml": "val r := {width = 1, height = 7}\nval q := {r with width = 6}\nq.width * q.height",
+        "expected": "42"
+      }
+    ]
+  },
+  {
+    "title": "Algebraic data types and pattern matching",
+    "aim": "Represent alternatives explicitly and consume them with checked patterns.",
+    "architecture": "The built-in source declares Option and Result. User-defined variants introduce constructors with typed payloads. Match expressions bind constructor fields and can attach guards, while all branch values must have compatible types.",
+    "lessons": [
+      {
+        "title": "Option without external libraries",
+        "concept": "Option is installed by the session constructor. It is useful for expected absence such as a failed numeric parse. The presence of Option does not imply that every convenience function from an external standard library is loaded.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"match Some 42 with | Some x -> x | None -> 0\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"match Some 42 with | Some x -> x | None -> 0\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The Some constructor carries one value, and its matching branch binds that value to x.",
+        "caution": "A wildcard fallback can hide a newly added variant in application-defined types. Make exhaustive cases explicit when future evolution matters.",
+        "exercise": "Run the same match with None and verify the alternative result.",
+        "anchor": "Session",
+        "ml": "match Some 42 with | Some x -> x | None -> 0",
+        "expected": "42"
+      },
+      {
+        "title": "Typed success and error variants",
+        "concept": "The language Result variant is separate from the host dsl::Result returned by eval. A successful host evaluation may produce a language-level Err value. Applications should handle both layers deliberately.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"match Ok 42 with | Ok x -> x | Err e -> 0\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"match Ok 42 with | Ok x -> x | Err e -> 0\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The outer embedding succeeds. Inside the language, the match selects the Ok branch.",
+        "caution": "Do not mistake a successfully returned Err constructor for a failed parser or checker. Decide how language-level errors map to your application response.",
+        "exercise": "Return Err with a string payload and inspect the successful host result wrapper.",
+        "anchor": "Session",
+        "ml": "match Ok 42 with | Ok x -> x | Err e -> 0",
+        "expected": "42"
+      },
+      {
+        "title": "Declaring a variant",
+        "concept": "A custom variant names a closed set of domain alternatives. Constructors carry the data needed by later computation. This avoids magic integer codes and gives pattern matching enough information to bind meaningful local names.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"type Answer := | Missing | Found Int\\nmatch Found 42 with | Found n -> n | Missing -> 0\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"type Answer := | Missing | Found Int\\nmatch Found 42 with | Found n -> n | Missing -> 0\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The type declaration installs two constructors. Found accepts an Int payload that the pattern extracts.",
+        "caution": "Constructor names participate in the language namespace. Choose names that will remain clear when several modules are used together.",
+        "exercise": "Add a Rejected String constructor and update every matching function.",
+        "anchor": "Session",
+        "ml": "type Answer := | Missing | Found Int\nmatch Found 42 with | Found n -> n | Missing -> 0",
+        "expected": "42"
+      },
+      {
+        "title": "Pattern guards",
+        "concept": "A guard adds a Boolean condition after a structural pattern succeeds. This is useful for a range-sensitive case followed by a more general fallback. Keep guard expressions pure when predictable matching behavior matters.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"match Some 42 with | Some n when n > 0 -> n | _ -> 0\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"match Some 42 with | Some n when n > 0 -> n | _ -> 0\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The constructor pattern succeeds and the positive-value guard accepts. The wildcard fallback is not evaluated.",
+        "caution": "A guarded constructor case does not cover every instance of that constructor. Include a fallback for the values rejected by the guard.",
+        "exercise": "Use Some (-1) and verify the fallback. Explain why the guard is not a type constraint.",
+        "anchor": "Session",
+        "ml": "match Some 42 with | Some n when n > 0 -> n | _ -> 0",
+        "expected": "42"
+      },
+      {
+        "title": "List decomposition",
+        "concept": "List patterns distinguish empty and nonempty structure. Decomposing with a head and tail is more natural for linked lists than repeatedly converting them to native vectors. Recursive consumers must still account for depth and termination.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"match [42, 7] with | h :: t -> h | [] -> 0\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"match [42, 7] with | h :: t -> h | [] -> 0\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The cons pattern binds the first element and the remaining list. The empty-list branch handles the other structural case.",
+        "caution": "The tail is another list, not a host pointer into a vector. Keep algorithm complexity in mind when crossing the language boundary repeatedly.",
+        "exercise": "Write a recursive length function and compare it with a host callback implementation.",
+        "anchor": "Session",
+        "ml": "match [42, 7] with | h :: t -> h | [] -> 0",
+        "expected": "42"
+      }
+    ]
+  },
+  {
+    "title": "Modules and explicit interfaces",
+    "aim": "Organize reusable language code behind named module boundaries.",
+    "architecture": "Modules collect values and types. Signatures describe interfaces and ascription controls visibility. Imports involve filesystem resolution, so module design and deployment layout must be considered together.",
+    "lessons": [
+      {
+        "title": "A module value",
+        "concept": "A struct module groups related declarations. Qualified lookup makes ownership visible in application code and reduces accidental name collisions. Start with a small module before introducing signatures or functors.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"module Numbers := struct\\nval answer := 42\\nend\\nNumbers.answer\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"module Numbers := struct\\nval answer := 42\\nend\\nNumbers.answer\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The qualified expression finds answer in the Numbers module rather than the top-level value namespace.",
+        "caution": "A module is a language construct, not a C++ namespace alias or D import. Its members are checked and evaluated by MetaML.",
+        "exercise": "Add a function member and call it through the module path.",
+        "anchor": "Session",
+        "ml": "module Numbers := struct\nval answer := 42\nend\nNumbers.answer",
+        "expected": "42"
+      },
+      {
+        "title": "Module functions",
+        "concept": "A module can publish a function whose implementation uses ordinary lexical bindings. Keep the interface in terms of language types so the same module source can run under C++ and D hosts.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"module Scale := struct\\nval apply := fn n -> n * 6\\nend\\nScale.apply 7\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"module Scale := struct\\nval apply := fn n -> n * 6\\nend\\nScale.apply 7\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "Qualified lookup produces a function value. Application supplies seven as its argument.",
+        "caution": "Do not rely on native integer width or native library names in portable MetaML source. Host-specific work belongs in a documented primitive interface.",
+        "exercise": "Move the multiplier into a private module value and compare the public behavior.",
+        "anchor": "Session",
+        "ml": "module Scale := struct\nval apply := fn n -> n * 6\nend\nScale.apply 7",
+        "expected": "42"
+      },
+      {
+        "title": "Opening a module",
+        "concept": "open makes module members available to subsequent unqualified lookup. It improves brevity in local code but can make public examples harder to read when several modules export similar names. Prefer qualification at integration boundaries.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"module N := struct\\nval answer := 42\\nend\\nopen N\\nanswer\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"module N := struct\\nval answer := 42\\nend\\nopen N\\nanswer\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The final name resolves through the opened module. The module declaration itself remains available for qualified use.",
+        "caution": "Opening many modules makes collisions and shadowing harder to diagnose. A stable embedding API should document which modules are opened automatically.",
+        "exercise": "Create two modules exporting answer and investigate the lookup policy when both are opened.",
+        "anchor": "Session",
+        "ml": "module N := struct\nval answer := 42\nend\nopen N\nanswer",
+        "expected": "42"
+      },
+      {
+        "title": "Nested modules",
+        "concept": "Nested modules let a package expose a structured vocabulary. They are helpful when primitives, domain types and configuration share a package but should remain visibly distinct. Keep nesting shallow enough that scripts remain readable.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"module Outer := struct\\nmodule Inner := struct\\nval answer := 42\\nend\\nend\\nOuter.Inner.answer\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"module Outer := struct\\nmodule Inner := struct\\nval answer := 42\\nend\\nend\\nOuter.Inner.answer\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "Path resolution follows Outer, then Inner, then the final value binding.",
+        "caution": "Deep module nesting does not replace versioning or import-path policy. A renamed package can still break stored scripts.",
+        "exercise": "Export a forwarding value from Outer and decide whether that alias belongs in the public interface.",
+        "anchor": "Session",
+        "ml": "module Outer := struct\nmodule Inner := struct\nval answer := 42\nend\nend\nOuter.Inner.answer",
+        "expected": "42"
+      },
+      {
+        "title": "Signature-constrained exports",
+        "concept": "A signature states the values a module must provide. It is a useful executable interface document. Ascription should be tested with both a conforming implementation and a deliberately missing or mistyped member.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"module N : sig\\nval answer : Int\\nend := struct\\nval answer := 42\\nend\\nN.answer\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"module N : sig\\nval answer : Int\\nend := struct\\nval answer := 42\\nend\\nN.answer\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The checker compares the implementation against the signature before the final qualified lookup is evaluated.",
+        "caution": "Transparent and opaque ascription have different type-identity implications. Read the Asc and module-checking implementation before designing abstract public types.",
+        "exercise": "Change the implementation answer to Bool and preserve the interface unchanged.",
+        "anchor": "Session",
+        "ml": "module N : sig\nval answer : Int\nend := struct\nval answer := 42\nend\nN.answer",
+        "expected": "42"
+      }
+    ]
+  },
+  {
+    "title": "Typed native primitives",
+    "aim": "Make the host boundary explicit, narrow and testable.",
+    "architecture": "register_primitive derives a MetaML type from a supported native function signature. The explicit overload accepts a trusted type string, arity and PrimFn. Prefer typed registration unless the low-level value protocol is actually needed.",
+    "lessons": [
+      {
+        "title": "Registering an integer function",
+        "concept": "Typed registration removes duplicated native-to-language type declarations. A small arithmetic callback is a useful first integration test because its behavior is deterministic and requires no resource lifetime beyond the session.",
+        "cpp": "metaml::Session s;\ns.register_primitive(\"Host.twice\", [](std::int64_t n) { return n * 2; });\nauto r = s.eval(\"Host.twice 21\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\ns.register_primitive(\"Host.twice\", (long n) => n * 2);\nauto r = s.eval(\"Host.twice 21\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The adapter maps a native signed integer signature to Int -> Int and converts the argument before invoking the callback.",
+        "caution": "Native signed overflow remains a host concern inside the callback. MetaML wrapping helpers do not automatically change arithmetic in your C++ lambda.",
+        "exercise": "Add a checked range and decide how a rejected input should be returned.",
+        "anchor": "register_primitive"
+      },
+      {
+        "title": "Several native parameters",
+        "concept": "A native function with two parameters becomes a curried language function type. This preserves ordinary MetaML application syntax while letting the host implement an efficient operation in one callback.",
+        "cpp": "metaml::Session s;\ns.register_primitive(\"Host.add\",\n  [](std::int64_t a, std::int64_t b) { return a + b; });\nauto r = s.eval(\"Host.add 19 23\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\ns.register_primitive(\"Host.add\",\n  (long a, long b) => a + b);\nauto r = s.eval(\"Host.add 19 23\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The language supplies two arguments and the typed bridge invokes the native function with both converted values.",
+        "caution": "Do not register a misleading explicit arity. The typed overload is preferable precisely because it derives this information from the native signature.",
+        "exercise": "Partially apply Host.add in MetaML and invoke the resulting function later.",
+        "anchor": "register_primitive"
+      },
+      {
+        "title": "Boolean decisions",
+        "concept": "A native Boolean return is a natural policy boundary. Keep the callback focused on a single trusted fact, then let the language combine facts through typed expressions. This allows policy edits without exposing arbitrary host operations.",
+        "cpp": "metaml::Session s;\ns.register_primitive(\"Host.allowed\",\n  [](std::int64_t n) { return n >= 18; });\nauto r = s.eval(\"Host.allowed 20\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"true\");",
+        "d": "auto s = new MetaML.Session();\ns.register_primitive(\"Host.allowed\",\n  (long n) => n >= 18);\nauto r = s.eval(\"Host.allowed 20\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"true\");",
+        "trace": "The native comparison becomes a language Bool. It can be used directly as an if condition.",
+        "caution": "A Boolean can hide the reason for rejection. Use a richer language variant when users need to distinguish several denial reasons.",
+        "exercise": "Return a language-level Result through the explicit primitive bridge and document its constructors.",
+        "anchor": "register_primitive"
+      },
+      {
+        "title": "String conversion",
+        "concept": "The typed bridge supports native strings as language String values. Prefer this route to constructing source-code string literals manually. It prevents quote and escape handling from becoming an injection-prone second parser.",
+        "cpp": "metaml::Session s;\ns.register_primitive(\"Host.label\",\n  [](std::string text) { return text + \"!\"; });\nauto r = s.eval(\"Host.label \\\"ok\\\"\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"\\\"ok!\\\"\");",
+        "d": "auto s = new MetaML.Session();\ns.register_primitive(\"Host.label\",\n  (string text) => text ~ \"!\");\nauto r = s.eval(\"Host.label \\\"ok\\\"\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"\\\"ok!\\\"\");",
+        "trace": "The callback receives the unquoted string payload. Rendering the resulting language String adds presentation quotes.",
+        "caution": "Rendered output is not the same as raw string data. Use the supported value conversion or str_of when the host needs the actual payload.",
+        "exercise": "Round-trip a string containing a newline and a quotation mark.",
+        "anchor": "register_primitive"
+      },
+      {
+        "title": "Zero-argument native functions",
+        "concept": "A native function without parameters is exposed with a Unit argument. This keeps the language application model uniform and makes invocation explicit. It is a useful shape for read-only status queries or a clock provided under a capability policy.",
+        "cpp": "metaml::Session s;\ns.register_primitive(\"Host.answer\", []() -> std::int64_t { return 42; });\nauto r = s.eval(\"Host.answer ()\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\ns.register_primitive(\"Host.answer\", () => cast(long) 42);\nauto r = s.eval(\"Host.answer ()\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The bridge derives Unit -> Int. The explicit unit expression invokes the callback.",
+        "caution": "A zero-argument function can still be effectful or nondeterministic. Its type alone does not make repeated calls interchangeable.",
+        "exercise": "Replace the constant with a counter and demonstrate why memoization changes observable behavior.",
+        "anchor": "register_primitive"
+      }
+    ]
+  },
+  {
+    "title": "Diagnostics and inspection tools",
+    "aim": "Build useful feedback around the parser and checker rather than displaying opaque failures.",
+    "architecture": "parse and parse_expression expose syntax-stage results. Session.render can use retained source text for carets. type_of provides inferred types. Tooling should preserve codes, spans and filenames independently of human-readable rendering.",
+    "lessons": [
+      {
+        "title": "Rendering a language diagnostic",
+        "concept": "When evaluation fails, the session can render each diagnostic with the source it retained. This gives filenames and carets without requiring the host to rebuild the lexer coordinate map. Store the structured diagnostic as well as any formatted text.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"missing\", \"policy.ml\");\nassert(r.is_err());\nauto text = s.render(r.unwrap_err().front());\nassert(!text.empty());",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"missing\", \"policy.ml\");\nassert(r.is_err());\nauto text = s.render(r.unwrap_err()[0]);\nassert(text.length > 0);",
+        "trace": "The source filename is attached to the parse and checker context. Rendering consults that context to explain the failure.",
+        "caution": "A UI should escape diagnostic text for its display medium. A terminal rendering is not automatically safe HTML.",
+        "exercise": "Keep an error list with code, message and offsets alongside the displayed caret text.",
+        "anchor": "render"
+      },
+      {
+        "title": "Syntax errors versus type errors",
+        "concept": "Parsing and checking fail at different stages. A missing delimiter is a syntax error; adding an integer to a Boolean is a type error. Separate those categories in tests so a parser regression cannot masquerade as a successful checker test.",
+        "cpp": "auto r = metaml::parse_expression(\"(1 + 2\", \"bad.ml\");\nassert(r.is_err());\nassert(!r.unwrap_err().empty());",
+        "d": "auto r = MetaML.parse_expression(\"(1 + 2\", \"bad.ml\");\nassert(r.is_err());\nassert(r.unwrap_err().length > 0);",
+        "trace": "The parser cannot close the parenthesized expression, so no expression AST is returned to the checker.",
+        "caution": "A successful parse does not establish that names resolve or types agree. Syntax-only tools must label their validation scope accurately.",
+        "exercise": "Parse an undefined variable successfully, then evaluate it and compare the two results.",
+        "anchor": "parse_expression"
+      },
+      {
+        "title": "Parsing a whole program",
+        "concept": "The whole-program parser retains source and file identity with its items. This is the right boundary for tools that want to inspect declarations before deciding whether to evaluate them. Treat returned AST ownership according to the actual smart-pointer or class representation.",
+        "cpp": "auto r = metaml::parse(\"val x := 42\", \"unit.ml\");\nassert(r.ok());\nassert(r.program.items.size() == 1);",
+        "d": "auto r = MetaML.parse(\"val x := 42\", \"unit.ml\");\nassert(r.ok());\nassert(r.program.items.length == 1);",
+        "trace": "The program has one declaration item. No language value is computed by this parse-only operation.",
+        "caution": "Editing a parsed AST bypasses the source parser invariants. Revalidate shape, spans and types before executing transformed programs.",
+        "exercise": "Add a final expression and compare item count with the eval result.",
+        "anchor": "parse"
+      },
+      {
+        "title": "Inspecting a function type",
+        "concept": "Type queries help users understand curried application and inferred constraints. Print the result supplied by the checker rather than maintaining a separate type inference implementation in your editor integration.",
+        "cpp": "metaml::Session s;\nauto r = s.type_of(\"fn x -> x\");\nassert(r.is_ok());\nassert(r.unwrap().find(\"->\") != std::string::npos);",
+        "d": "auto s = new MetaML.Session();\nauto r = s.type_of(\"fn x -> x\");\nassert(r.is_ok());\nimport std.string : indexOf;\nassert(r.unwrap().indexOf(\"->\") >= 0);",
+        "trace": "The printed type includes an arrow because the expression is a function. Its variable spelling is a presentation detail.",
+        "caution": "Avoid overfitting tests to one generated type-variable name. Test required structure or a documented stable format.",
+        "exercise": "Compare the identity type with fn x -> x + 1 and explain the numeric constraint.",
+        "anchor": "type_of"
+      },
+      {
+        "title": "Type queries in a prepared environment",
+        "concept": "A type query can use earlier declarations in the same session. This makes live feedback consistent with evaluation, provided the UI associates each editor state with the correct session generation.",
+        "cpp": "metaml::Session s;\nassert(s.eval(\"val size := 42\").is_ok());\nauto r = s.type_of(\"size\");\nassert(r.is_ok() && r.unwrap() == \"Int\");",
+        "d": "auto s = new MetaML.Session();\nassert(s.eval(\"val size := 42\").is_ok());\nauto r = s.type_of(\"size\");\nassert(r.is_ok() && r.unwrap() == \"Int\");",
+        "trace": "The checker resolves size through the persistent global scope and prints its inferred type.",
+        "caution": "A stale session can provide misleading editor feedback after a file changes. Use generation IDs or reconstruct the environment at clear boundaries.",
+        "exercise": "Change an exported declaration in a fresh session and compare the resulting type query.",
+        "anchor": "type_of"
+      }
+    ]
+  },
+  {
+    "title": "Capabilities, callbacks and shutdown",
+    "aim": "Treat embedding as resource management as well as evaluation.",
+    "architecture": "Primitive allowlists govern non-core primitive access. Output callbacks run under a session mutex. Resource shutdown stops all registered resources before waiting for them. These mechanisms require application policy; they do not constitute process isolation.",
+    "lessons": [
+      {
+        "title": "Replacing the primitive allowlist",
+        "concept": "set_primitive_allowlist replaces the list of permitted non-core names. Exact names and namespace wildcard patterns are supported. Core primitives remain callable, so a policy that requires stronger restrictions needs an additional boundary.",
+        "cpp": "metaml::Session s;\ns.set_primitive_allowlist({});\nauto r = s.eval(\"1 + 2\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"3\");",
+        "d": "auto s = new MetaML.Session();\ns.set_primitive_allowlist([]);\nauto r = s.eval(\"1 + 2\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"3\");",
+        "trace": "Removing non-core capabilities does not disable ordinary arithmetic or the built-in core category.",
+        "caution": "register_primitive also adds the name to the allowlist. Configure the final policy after registration when building a restricted host.",
+        "exercise": "Register one callback, clear the allowlist, and verify that the callback is denied.",
+        "anchor": "set_primitive_allowlist"
+      },
+      {
+        "title": "Capturing output",
+        "concept": "set_output replaces the session output sink. It is useful for REPL transcripts and application logs. The callback should be short and should not re-enter session output while the output mutex is held.",
+        "cpp": "metaml::Session s;\nstd::string captured;\ns.set_output([&](std::string_view x) { captured += x; });\ns.write(\"hello\");\nassert(captured == \"hello\");",
+        "d": "auto s = new MetaML.Session();\nstring captured;\ns.set_output((string x) { captured ~= x; });\ns.write(\"hello\");\nassert(captured == \"hello\");",
+        "trace": "write invokes the configured sink with the supplied text. The host owns the destination buffer.",
+        "caution": "The callback captures native state. Ensure that state outlives all writes, including writes from background workers during shutdown.",
+        "exercise": "Replace the buffer with a queue and define which thread drains it.",
+        "anchor": "set_output"
+      },
+      {
+        "title": "Two-phase resource shutdown",
+        "concept": "on_close registers stop and wait callbacks. close first asks all resources to stop, then waits for them. This ordering avoids waiting on one worker while another still needs a cancellation signal.",
+        "cpp": "metaml::Session s;\nint state = 0;\ns.on_close([&] { state = 1; }, [&] { assert(state == 1); state = 2; });\ns.close();\nassert(state == 2);",
+        "d": "auto s = new MetaML.Session();\nint state;\ns.on_close(() { state = 1; }, () { assert(state == 1); state = 2; });\ns.close();\nassert(state == 2);",
+        "trace": "The stop callback runs before the wait callback. Real callbacks would signal a worker and then join or await it.",
+        "caution": "Callbacks must not throw or re-enter evaluation. In C++, explicitly close before captured locals are destroyed if destruction order would otherwise leave dangling captures.",
+        "exercise": "Register two resources and record that both stop events precede either wait event.",
+        "anchor": "on_close"
+      },
+      {
+        "title": "Idempotent close",
+        "concept": "close is guarded against repeated shutdown. This lets an application call it at an explicit lifecycle boundary even though the C++ destructor also invokes it. Keep teardown logic in the callbacks idempotent where practical.",
+        "cpp": "metaml::Session s;\nint stops = 0;\ns.on_close([&] { ++stops; });\ns.close();\ns.close();\nassert(stops == 1);",
+        "d": "auto s = new MetaML.Session();\nint stops;\ns.on_close(() { ++stops; });\ns.close();\ns.close();\nassert(stops == 1);",
+        "trace": "The first call drains the registered resource list. The second observes the closing state and returns.",
+        "caution": "Idempotent resource shutdown does not imply the session can be reopened. Construct a new session for a new lifecycle.",
+        "exercise": "Attempt resource registration after close and handle the resulting rejection.",
+        "anchor": "close"
+      },
+      {
+        "title": "Limiting evaluation depth",
+        "concept": "set_max_depth bounds interpreter recursion and evaluation depth according to the implementation checks. It is a useful guard while developing recursive scripts, but cannot stop an arbitrary blocking native callback.",
+        "cpp": "metaml::Session s;\ns.set_max_depth(1000);\nauto r = s.eval(\"40 + 2\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\ns.set_max_depth(1000);\nauto r = s.eval(\"40 + 2\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "A shallow expression remains valid under the configured depth. More deeply nested evaluation can fail with a language diagnostic.",
+        "caution": "Depth is not wall-clock time, total allocation or instruction count. Use a separate process and explicit resource budgets when stronger containment is required.",
+        "exercise": "Create a terminating recursive function and measure the depth at which it starts failing.",
+        "anchor": "set_max_depth"
+      }
+    ]
+  },
+  {
+    "title": "Deployment and cross-dialect verification",
+    "aim": "Make paths, dependencies and evidence explicit before distributing an embedding.",
+    "architecture": "The four source files are pinned in vendor. MetaML standard-library discovery checks environment, installation-relative and fallback paths. Import resolution and callback capabilities should be tested under the same deployment layout users will receive.",
+    "lessons": [
+      {
+        "title": "Explicit standard-library discovery",
+        "concept": "load_stdlib searches for prelude/mod.ml and returns a Result. A missing installation is an actionable configuration failure. The book does not invent metalib contents or claim those modules were bundled with the supplied headers.",
+        "cpp": "metaml::Session s;\nauto r = s.load_stdlib(\"__book_missing_metalib__\");\nassert(r.is_err());\nassert(!s.stdlib_loaded());",
+        "d": "auto s = new MetaML.Session();\nauto r = s.load_stdlib(\"__book_missing_metalib__\");\nassert(r.is_err());\nassert(!s.stdlib_loaded());",
+        "trace": "The explicit directory disables fallback discovery for this attempt. The deliberately absent path produces a controlled failure.",
+        "caution": "Do not ignore load_stdlib and then blame undefined names on the language parser. Report installation failures at startup.",
+        "exercise": "Install a real metalib tree separately and repeat with an explicit absolute path.",
+        "anchor": "load_stdlib"
+      },
+      {
+        "title": "Import search paths",
+        "concept": "Add a controlled search directory before loading application modules. The session exposes search_paths for inspection, allowing a diagnostic screen to show where imports will be sought without guessing from the process working directory.",
+        "cpp": "metaml::Session s;\ns.add_search_path(\"modules\");\nauto paths = s.search_paths();\nassert(!paths.empty());\nassert(paths.front() == \"modules\");",
+        "d": "auto s = new MetaML.Session();\ns.add_search_path(\"modules\");\nauto paths = s.search_paths();\nassert(paths.length > 0);\nassert(paths[0] == \"modules\");",
+        "trace": "The host path is now part of resolution configuration. Adding a path does not itself import or execute a module.",
+        "caution": "Relative paths depend on the process working directory. Convert deployment roots to intentional absolute paths when reproducibility matters.",
+        "exercise": "Run from two different working directories and compare resolution behavior.",
+        "anchor": "add_search_path"
+      },
+      {
+        "title": "Unresolved imports are inspectable",
+        "concept": "resolve_import answers where an import would resolve without executing it. This is useful for editor navigation and startup diagnostics. The answer is optional because resolution can legitimately fail.",
+        "cpp": "metaml::Session s;\nauto path = s.resolve_import(\"__book_missing_module__\");\nassert(!path.has_value());",
+        "d": "auto s = new MetaML.Session();\nauto path = s.resolve_import(\"__book_missing_module__\");\nassert(path.isNull);",
+        "trace": "No matching file produces absence rather than a fabricated path. A real import attempt can then provide the appropriate language diagnostic.",
+        "caution": "Resolution alone is not a guarantee that a later read succeeds; files can change between inspection and loading.",
+        "exercise": "Resolve a real module and compare the canonical path with imported_files after loading it.",
+        "anchor": "resolve_import"
+      },
+      {
+        "title": "Discovering installed primitive names",
+        "concept": "primitive_names exposes the host vocabulary. Use it to audit a prepared session and to compare C++ and D deployments. Discovery is distinct from authorization: an installed primitive can exist while remaining disallowed.",
+        "cpp": "metaml::Session s;\nauto names = s.primitive_names();\nassert(!names.empty());\nassert(s.find_primitive(\"Int.parse\") != nullptr);",
+        "d": "auto s = new MetaML.Session();\nauto names = s.primitive_names();\nassert(names.length > 0);\nassert(s.find_primitive(\"Int.parse\") !is null);",
+        "trace": "The constructor installs core primitives before any external prelude is loaded. The audit therefore sees a nonempty vocabulary.",
+        "caution": "Do not use a displayed list as an authorization check. Consult the configured capability policy at the call boundary.",
+        "exercise": "Sort and compare the two dialect inventories when a D compiler becomes available.",
+        "anchor": "primitive_names"
+      },
+      {
+        "title": "Portable scripts and native adapters",
+        "concept": "The most useful cross-dialect fixture runs exactly the same MetaML source under both hosts. Compare rendered values, inferred types and diagnostics, while keeping native adapter tests separate so one failure points to the correct layer.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"val square := fn x -> x * x\\nsquare 6 + 6\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"val square := fn x -> x * x\\nsquare 6 + 6\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
+        "trace": "The program uses syntax and core arithmetic only, so it is independent of external filesystem layout.",
+        "caution": "The supplied source comments demand dialect parity, but comments are not evidence that every path behaves identically. Run differential tests rather than assuming parity.",
+        "exercise": "Add an error fixture and compare diagnostic code and span before comparing presentation text.",
+        "anchor": "Session",
+        "ml": "val square := fn x -> x * x\nsquare 6 + 6",
+        "expected": "42"
+      }
+    ]
+  },
+  {
+    "title": "Case study I: a formula optimization tool",
+    "aim": "Build a command-oriented optimizer for a deliberately small, pure expression language. The input is a first-order S-expression with integer atoms and add or mul nodes. The output is a reduced expression plus an explicit stop status.",
+    "architecture": "The front end parses structure, validates arity and atom syntax, then applies a sound rule set for the chosen integer model. A destructive reducer gives a reproducible baseline; an e-graph retains alternatives. A host wrapper owns diagnostics and rejects unsupported operators before optimization.",
+    "lessons": [
+      {
+        "title": "Specify and validate the formula input",
+        "concept": "The language contract permits nonnegative integer atoms and binary add or mul forms. The case study begins with structural recognition rather than evaluating arbitrary S-expressions. An optimizer must reject a malformed tree before a rewrite has a chance to hide the malformed part.",
+        "cpp": "auto x = dsl::parse_sexpr(\"(add 42 0)\");\nassert(!x.is_atom && x.items.size() == 3);\nassert(x.items[0].text == \"add\");\nassert(x.items[1].text == \"42\");",
+        "d": "auto x = parse_sexpr(\"(add 42 0)\");\nassert(!x.is_atom && x.items.length == 3);\nassert(x.items[0].text == \"add\");\nassert(x.items[1].text == \"42\");",
+        "trace": "The first checks establish the expected binary root shape. The complete tool supplied with the book validates recursively and rejects unknown operators and invalid atoms.",
+        "caution": "These local assertions demonstrate one fixture; they are not the whole validator. The standalone case-study program includes the recursive boundary validation.",
+        "exercise": "Reject (add 42), (unknown 1 2), a quoted numeric atom, and an atom with trailing letters.",
+        "anchor": "parse_sexpr"
+      },
+      {
+        "title": "Normalize with a small sound rule set",
+        "concept": "Start with identity rules whose correctness is easy to explain under the chosen pure arithmetic model: adding zero and multiplying by one. Avoid distributivity until the cost model and growth budget are ready. Do not simplify effects because the input language intentionally contains none.",
+        "cpp": "dsl::TermRewriteSystem rs;\nrs.add_rule(\"(rewrite az (add ?x 0) ?x)\");\nrs.add_rule(\"(rewrite mo (mul ?x 1) ?x)\");\nauto r = rs.normalize(dsl::parse_term(\"(mul (add 42 0) 1)\"), 100);\nassert(r.normal_form());\nassert(r.term.dump() == \"42\");",
+        "d": "auto rs = new TermRewriteSystem();\nrs.add_rule(\"(rewrite az (add ?x 0) ?x)\");\nrs.add_rule(\"(rewrite mo (mul ?x 1) ?x)\");\nauto r = rs.normalize(parse_term(\"(mul (add 42 0) 1)\"), 100);\nassert(r.normal_form());\nassert(r.term.dump() == \"42\");",
+        "trace": "Two local identities remove the add and mul nodes. The returned step count gives a compact regression signal.",
+        "caution": "If the domain later adds checked operations or effectful operands, revisit every rule proof. A familiar algebraic identity is not automatically valid in every semantics.",
+        "exercise": "Add the symmetric identities and test both child positions.",
+        "anchor": "TermRewriteSystem"
+      },
+      {
+        "title": "Compare with equality saturation",
+        "concept": "Use the same identities in an e-graph so alternative forms remain available. This separates the legality argument from extraction preference. Record the report even when the extracted expression looks correct, because budget exhaustion is a performance and completeness signal.",
+        "cpp": "dsl::EGraph g;\nauto root = g.add(\"(mul (add 42 0) 1)\");\nauto rules = dsl::sexpr_rules(\n \"(rewrite az (add ?x 0) ?x) (rewrite mo (mul ?x 1) ?x)\");\nauto r = g.saturate(rules);\nassert(r.saturated());\nassert(g.extract(root).dump() == \"42\");",
+        "d": "auto g = new EGraph();\nauto root = g.add(\"(mul (add 42 0) 1)\");\nauto rules = sexpr_rules(\n \"(rewrite az (add ?x 0) ?x) (rewrite mo (mul ?x 1) ?x)\");\nauto r = g.saturate(rules);\nassert(r.saturated());\nassert(g.extract(root).dump() == \"42\");",
+        "trace": "Saturation merges the nested identities into equivalence classes. Extraction finds the one-atom expression at minimum node cost.",
+        "caution": "Equality saturation retains alternatives and can use more memory than a directional reducer. Choose it for a reason, not because it sounds universally more advanced.",
+        "exercise": "Compare nodes, iterations and output size on a deeply nested identity expression.",
+        "anchor": "EGraph"
+      },
+      {
+        "title": "Make budget stops observable",
+        "concept": "A command-line tool must distinguish successful normalization from a partial result. A zero-step budget is a useful acceptance fixture because it exposes a pending redex without allowing any change. Return a distinct exit status for this condition.",
+        "cpp": "dsl::TermRewriteSystem rs;\nrs.add_rule(\"(rewrite az (add ?x 0) ?x)\");\nauto r = rs.normalize(dsl::parse_term(\"(add 42 0)\"), 0);\nassert(!r.normal_form());\nassert(r.steps == 0);\nassert(r.term.dump() == \"(add 42 0)\");",
+        "d": "auto rs = new TermRewriteSystem();\nrs.add_rule(\"(rewrite az (add ?x 0) ?x)\");\nauto r = rs.normalize(parse_term(\"(add 42 0)\"), 0);\nassert(!r.normal_form());\nassert(r.steps == 0);\nassert(r.term.dump() == \"(add 42 0)\");",
+        "trace": "The system detects that another rewrite exists but refuses to perform it. The original term is preserved and StepLimit is returned.",
+        "caution": "Do not print only the term and exit zero. That would make an incomplete optimization indistinguishable from a proven normal form.",
+        "exercise": "Add a command-line budget argument and an acceptance test for exit status two.",
+        "anchor": "TermRewriteSystem"
+      },
+      {
+        "title": "Structural regression and semantic regression",
+        "concept": "Compare an optimized tree with the expected shape, then separately compare arithmetic meaning under the language model. Shape tests catch rule-order regressions; semantic tests catch invalid rules. Neither category replaces the other.",
+        "cpp": "auto before = dsl::parse_sexpr(\"(add 42 0)\");\ndsl::TermRewriteSystem rs;\nrs.add_rule(\"(rewrite az (add ?x 0) ?x)\");\nauto r = rs.normalize(dsl::term_from_sexpr(before));\nassert(r.term.dump() == \"42\");\nassert(before.dump() == \"(add 42 0)\");",
+        "d": "auto before = parse_sexpr(\"(add 42 0)\");\nauto rs = new TermRewriteSystem();\nrs.add_rule(\"(rewrite az (add ?x 0) ?x)\");\nauto r = rs.normalize(term_from_sexpr(before));\nassert(r.term.dump() == \"42\");\nassert(before.dump() == \"(add 42 0)\");",
+        "trace": "The reduced term is smaller while the original parsed representation remains available for reporting. The complete case tool evaluates both sides modulo an explicit unsigned width.",
+        "caution": "Random testing increases confidence but does not prove all rules sound. Keep a short written argument for every rewrite and include overflow-edge fixtures.",
+        "exercise": "Generate depth-bounded formulas and compare before/after evaluation for hundreds of fixed-seed inputs.",
+        "anchor": "TermRewriteSystem"
+      }
+    ]
+  },
+  {
+    "title": "Case study II: a reloadable decision service",
+    "aim": "Embed MetaML as a typed policy layer while retaining host control of data, capabilities and publication. A policy receives native facts through a narrow interface and returns a decision.",
+    "architecture": "A candidate session is prepared separately, checked with acceptance fixtures and published only after validation. Evaluation failure produces an application error rather than an implicit allow. Existing sessions remain alive until in-flight work completes. The standalone C++ and D programs demonstrate candidate validation without requiring an external standard library.",
+    "lessons": [
+      {
+        "title": "A pure policy contract",
+        "concept": "The initial policy maps an integer fact to a Boolean decision. Pure logic is easy to test before host callbacks are added. Put the policy contract in one module so callers do not depend on its internal helper names.",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"module Policy := struct\\nval allow := fn age -> age >= 18\\nend\\nPolicy.allow 20\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"true\");",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"module Policy := struct\\nval allow := fn age -> age >= 18\\nend\\nPolicy.allow 20\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"true\");",
+        "trace": "The module exports one function. Its comparison returns a Boolean that the host can validate before using it as an authorization decision.",
+        "caution": "An evaluation error is different from a false policy result. Keep a three-way host outcome: allow, deny, or policy failure.",
+        "exercise": "Test ages seventeen, eighteen and nineteen. Keep the exact boundary in the policy acceptance contract.",
+        "anchor": "Session"
+      },
+      {
+        "title": "Supplying facts through typed callbacks",
+        "concept": "The host supplies trusted request facts through a narrow primitive. The script decides how to combine those facts. This avoids interpolating untrusted request data into executable source and gives the capability review a small vocabulary to inspect.",
+        "cpp": "metaml::Session s;\ns.register_primitive(\"Request.age\", []() -> std::int64_t { return 20; });\nauto r = s.eval(\"Request.age () >= 18\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"true\");",
+        "d": "auto s = new MetaML.Session();\ns.register_primitive(\"Request.age\", () => cast(long) 20);\nauto r = s.eval(\"Request.age () >= 18\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"true\");",
+        "trace": "The request fact crosses as an integer through the typed adapter. No source quoting is required.",
+        "caution": "Do not mutate a captured request object while another thread evaluates the session. This example is deliberately confined to one evaluation thread.",
+        "exercise": "Supply a Boolean verified fact as a separate callback and require both checks.",
+        "anchor": "register_primitive"
+      },
+      {
+        "title": "Validating a reload candidate",
+        "concept": "A candidate session should pass both type checks and behavioral fixtures before publication. Keeping it separate prevents a failed reload from poisoning the currently active environment. The complete case program uses independent ownership for active and candidate sessions.",
+        "cpp": "metaml::Session candidate;\nassert(candidate.eval(\"val allow := fn age -> age >= 18\").is_ok());\nauto type = candidate.type_of(\"allow 20\");\nassert(type.is_ok() && type.unwrap() == \"Bool\");\nauto r = candidate.eval(\"allow 17\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"false\");",
+        "d": "auto candidate = new MetaML.Session();\nassert(candidate.eval(\"val allow := fn age -> age >= 18\").is_ok());\nauto type = candidate.type_of(\"allow 20\");\nassert(type.is_ok() && type.unwrap() == \"Bool\");\nauto r = candidate.eval(\"allow 17\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"false\");",
+        "trace": "The result type is checked independently from the denial fixture. A function returning an Int is rejected before it can become the active decision policy.",
+        "caution": "A few fixtures cannot establish every business rule. They are a publication gate backed by a documented contract, not a proof of policy correctness.",
+        "exercise": "Prepare a candidate that always allows and verify the denial fixture rejects it.",
+        "anchor": "type_of"
+      },
+      {
+        "title": "Denying ambient native access",
+        "concept": "After registering intended facts, replace the allowlist with the exact names the policy needs. The explicit policy should be reviewed after every native extension is added. Avoid enabling all primitives as a shortcut during production startup.",
+        "cpp": "metaml::Session s;\ns.register_primitive(\"Request.age\", []() -> std::int64_t { return 20; });\ns.set_primitive_allowlist({\"Request.age\"});\nauto r = s.eval(\"Request.age () >= 18\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"true\");",
+        "d": "auto s = new MetaML.Session();\ns.register_primitive(\"Request.age\", () => cast(long) 20);\ns.set_primitive_allowlist([\"Request.age\"]);\nauto r = s.eval(\"Request.age () >= 18\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"true\");",
+        "trace": "The requested fact is permitted and the comparison succeeds. Unrelated non-core names are outside the configured list.",
+        "caution": "Core primitives remain allowed and native callbacks can do whatever their host implementation permits. Use process isolation when policy code requires a stronger trust boundary.",
+        "exercise": "Register an unrelated primitive, then demonstrate that this final allowlist denies it.",
+        "anchor": "set_primitive_allowlist"
+      },
+      {
+        "title": "Failure reporting and publication discipline",
+        "concept": "A malformed candidate should be discarded with useful diagnostics while the active policy remains available. The publication step exchanges an owned session reference only after validation. In a concurrent service, serialize each session use or allocate separate evaluators with a documented synchronization model.",
+        "cpp": "metaml::Session active;\nassert(active.eval(\"val allow := fn age -> age >= 18\").is_ok());\nmetaml::Session candidate;\nassert(candidate.eval(\"val allow := fn age -> age + true\").is_err());\nauto r = active.eval(\"allow 20\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"true\");",
+        "d": "auto active = new MetaML.Session();\nassert(active.eval(\"val allow := fn age -> age >= 18\").is_ok());\nauto candidate = new MetaML.Session();\nassert(candidate.eval(\"val allow := fn age -> age + true\").is_err());\nauto r = active.eval(\"allow 20\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"true\");",
+        "trace": "The invalid candidate is a different session, so its failure cannot replace active bindings. The active policy still evaluates successfully.",
+        "caution": "Swapping a pointer is not the entire concurrency design. In-flight readers need ownership of the old session, and shutdown must wait until their resources are no longer in use.",
+        "exercise": "Extend the standalone case program with a publication generation number and retain the previous generation on validation failure.",
+        "anchor": "Session"
+      }
+    ]
+  }
+]

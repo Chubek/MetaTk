@@ -1,0 +1,169 @@
+\chapter{Typed native primitives}\label{ch:19}
+\section*{The working problem}
+Make the host boundary explicit, narrow and testable.
+
+register\_primitive derives a MetaML type from a supported native function signature. The explicit overload accepts a trusted type string, arity and PrimFn. Prefer typed registration unless the low-level value protocol is actually needed.
+
+\section*{Trust in explicit primitive signatures}
+The typed bridge derives arity and type from FnTraits and Conv specializations. The explicit overload trusts a supplied MetaML type string and callback, so the host is responsible for consistency between declared type and Value handling. A callback must check low-level kinds before extracting payloads unless the trusted bridge already establishes them. Never let a plugin register a polymorphic type it cannot implement safely.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item Registering an integer function
+\item Several native parameters
+\item Boolean decisions
+\item String conversion
+\item Zero-argument native functions
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{19.1}{Registering an integer function}{C++20}
+Typed registration removes duplicated native-to-language type declarations. A small arithmetic callback is a useful first integration test because its behavior is deterministic and requires no resource lifetime beyond the session.
+
+\lstinputlisting[language=C++,caption={Example ex19\_01: C++}]{examples/cpp/ex19_01.inc}
+\section*{Execution, step by step}
+The adapter maps a native signed integer signature to Int -> Int and converts the argument before invoking the callback.
+
+\section*{Read the implementation}
+The relevant source entry is register\_primitive in vendor/MetaML.hpp, around line 8460. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{19.1}{Registering an integer function}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex19\_01: D}]{examples/d/ex19_01.inc}
+\section*{Failure and design boundary}
+Native signed overflow remains a host concern inside the callback. MetaML wrapping helpers do not automatically change arithmetic in your C++ lambda.
+
+\section*{Try it yourself}
+Add a checked range and decide how a rejected input should be returned.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{19.2}{Several native parameters}{C++20}
+A native function with two parameters becomes a curried language function type. This preserves ordinary MetaML application syntax while letting the host implement an efficient operation in one callback.
+
+\lstinputlisting[language=C++,caption={Example ex19\_02: C++}]{examples/cpp/ex19_02.inc}
+\section*{Execution, step by step}
+The language supplies two arguments and the typed bridge invokes the native function with both converted values.
+
+\section*{Read the implementation}
+The relevant source entry is register\_primitive in vendor/MetaML.hpp, around line 8460. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{19.2}{Several native parameters}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex19\_02: D}]{examples/d/ex19_02.inc}
+\section*{Failure and design boundary}
+Do not register a misleading explicit arity. The typed overload is preferable precisely because it derives this information from the native signature.
+
+\section*{Try it yourself}
+Partially apply Host.add in MetaML and invoke the resulting function later.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{19.3}{Boolean decisions}{C++20}
+A native Boolean return is a natural policy boundary. Keep the callback focused on a single trusted fact, then let the language combine facts through typed expressions. This allows policy edits without exposing arbitrary host operations.
+
+\lstinputlisting[language=C++,caption={Example ex19\_03: C++}]{examples/cpp/ex19_03.inc}
+\section*{Execution, step by step}
+The native comparison becomes a language Bool. It can be used directly as an if condition.
+
+\section*{Read the implementation}
+The relevant source entry is register\_primitive in vendor/MetaML.hpp, around line 8460. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{19.3}{Boolean decisions}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex19\_03: D}]{examples/d/ex19_03.inc}
+\section*{Failure and design boundary}
+A Boolean can hide the reason for rejection. Use a richer language variant when users need to distinguish several denial reasons.
+
+\section*{Try it yourself}
+Return a language-level Result through the explicit primitive bridge and document its constructors.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{19.4}{String conversion}{C++20}
+The typed bridge supports native strings as language String values. Prefer this route to constructing source-code string literals manually. It prevents quote and escape handling from becoming an injection-prone second parser.
+
+\lstinputlisting[language=C++,caption={Example ex19\_04: C++}]{examples/cpp/ex19_04.inc}
+\section*{Execution, step by step}
+The callback receives the unquoted string payload. Rendering the resulting language String adds presentation quotes.
+
+\section*{Read the implementation}
+The relevant source entry is register\_primitive in vendor/MetaML.hpp, around line 8460. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{19.4}{String conversion}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex19\_04: D}]{examples/d/ex19_04.inc}
+\section*{Failure and design boundary}
+Rendered output is not the same as raw string data. Use the supported value conversion or str\_of when the host needs the actual payload.
+
+\section*{Try it yourself}
+Round-trip a string containing a newline and a quotation mark.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{19.5}{Zero-argument native functions}{C++20}
+A native function without parameters is exposed with a Unit argument. This keeps the language application model uniform and makes invocation explicit. It is a useful shape for read-only status queries or a clock provided under a capability policy.
+
+\lstinputlisting[language=C++,caption={Example ex19\_05: C++}]{examples/cpp/ex19_05.inc}
+\section*{Execution, step by step}
+The bridge derives Unit -> Int. The explicit unit expression invokes the callback.
+
+\section*{Read the implementation}
+The relevant source entry is register\_primitive in vendor/MetaML.hpp, around line 8460. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{19.5}{Zero-argument native functions}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex19\_05: D}]{examples/d/ex19_05.inc}
+\section*{Failure and design boundary}
+A zero-argument function can still be effectful or nondeterministic. Its type alone does not make repeated calls interchangeable.
+
+\section*{Try it yourself}
+Replace the constant with a counter and demonstrate why memoization changes observable behavior.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\section*{Chapter review: Trust in explicit primitive signatures}
+host::Conv covers integers, floats, Boolean, strings, optional values, lists, pairs and Value. A void native result maps to Unit. Capturing state in a registered function couples session lifetime to that state. Prefer owned shared resources or an enclosing owner that closes the session before destroying captures. A callback returning a language closure or foreign object requires an additional lifetime review beyond the scalar examples in this chapter.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Add a checked range and decide how a rejected input should be returned.
+\item Partially apply Host.add in MetaML and invoke the resulting function later.
+\item Return a language-level Result through the explicit primitive bridge and document its constructors.
+\item Round-trip a string containing a newline and a quotation mark.
+\item Replace the constant with a counter and demonstrate why memoization changes observable behavior.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+

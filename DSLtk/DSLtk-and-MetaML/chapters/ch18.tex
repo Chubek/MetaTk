@@ -1,0 +1,179 @@
+\chapter{Modules and explicit interfaces}\label{ch:18}
+\section*{The working problem}
+Organize reusable language code behind named module boundaries.
+
+Modules collect values and types. Signatures describe interfaces and ascription controls visibility. Imports involve filesystem resolution, so module design and deployment layout must be considered together.
+
+\section*{Signatures, functors and imports}
+A module signature can include types and values. Transparent ascription preserves type relationships differently from opaque ascription, represented by Asc in the source. Functor syntax accepts a named module parameter with a signature and requires a struct body. It is a module-level abstraction rather than an ordinary function on Value arguments. Test generative type identity with deliberately incompatible clients before promising an abstract module interface.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item A module value
+\item Module functions
+\item Opening a module
+\item Nested modules
+\item Signature-constrained exports
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{18.1}{A module value}{C++20}
+A struct module groups related declarations. Qualified lookup makes ownership visible in application code and reduces accidental name collisions. Start with a small module before introducing signatures or functors.
+
+\lstinputlisting[language=C++,caption={Example ex18\_01: C++}]{examples/cpp/ex18_01.inc}
+\section*{Execution, step by step}
+The qualified expression finds answer in the Numbers module rather than the top-level value namespace.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{18.1}{A module value}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex18\_01: D}]{examples/d/ex18_01.inc}
+\section*{Failure and design boundary}
+A module is a language construct, not a C++ namespace alias or D import. Its members are checked and evaluated by MetaML.
+
+\section*{Try it yourself}
+Add a function member and call it through the module path.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex18\_01.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\workshop{18.2}{Module functions}{C++20}
+A module can publish a function whose implementation uses ordinary lexical bindings. Keep the interface in terms of language types so the same module source can run under C++ and D hosts.
+
+\lstinputlisting[language=C++,caption={Example ex18\_02: C++}]{examples/cpp/ex18_02.inc}
+\section*{Execution, step by step}
+Qualified lookup produces a function value. Application supplies seven as its argument.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{18.2}{Module functions}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex18\_02: D}]{examples/d/ex18_02.inc}
+\section*{Failure and design boundary}
+Do not rely on native integer width or native library names in portable MetaML source. Host-specific work belongs in a documented primitive interface.
+
+\section*{Try it yourself}
+Move the multiplier into a private module value and compare the public behavior.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex18\_02.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\workshop{18.3}{Opening a module}{C++20}
+open makes module members available to subsequent unqualified lookup. It improves brevity in local code but can make public examples harder to read when several modules export similar names. Prefer qualification at integration boundaries.
+
+\lstinputlisting[language=C++,caption={Example ex18\_03: C++}]{examples/cpp/ex18_03.inc}
+\section*{Execution, step by step}
+The final name resolves through the opened module. The module declaration itself remains available for qualified use.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{18.3}{Opening a module}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex18\_03: D}]{examples/d/ex18_03.inc}
+\section*{Failure and design boundary}
+Opening many modules makes collisions and shadowing harder to diagnose. A stable embedding API should document which modules are opened automatically.
+
+\section*{Try it yourself}
+Create two modules exporting answer and investigate the lookup policy when both are opened.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex18\_03.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\workshop{18.4}{Nested modules}{C++20}
+Nested modules let a package expose a structured vocabulary. They are helpful when primitives, domain types and configuration share a package but should remain visibly distinct. Keep nesting shallow enough that scripts remain readable.
+
+\lstinputlisting[language=C++,caption={Example ex18\_04: C++}]{examples/cpp/ex18_04.inc}
+\section*{Execution, step by step}
+Path resolution follows Outer, then Inner, then the final value binding.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{18.4}{Nested modules}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex18\_04: D}]{examples/d/ex18_04.inc}
+\section*{Failure and design boundary}
+Deep module nesting does not replace versioning or import-path policy. A renamed package can still break stored scripts.
+
+\section*{Try it yourself}
+Export a forwarding value from Outer and decide whether that alias belongs in the public interface.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex18\_04.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\workshop{18.5}{Signature-constrained exports}{C++20}
+A signature states the values a module must provide. It is a useful executable interface document. Ascription should be tested with both a conforming implementation and a deliberately missing or mistyped member.
+
+\lstinputlisting[language=C++,caption={Example ex18\_05: C++}]{examples/cpp/ex18_05.inc}
+\section*{Execution, step by step}
+The checker compares the implementation against the signature before the final qualified lookup is evaluated.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{18.5}{Signature-constrained exports}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex18\_05: D}]{examples/d/ex18_05.inc}
+\section*{Failure and design boundary}
+Transparent and opaque ascription have different type-identity implications. Read the Asc and module-checking implementation before designing abstract public types.
+
+\section*{Try it yourself}
+Change the implementation answer to Bool and preserve the interface unchanged.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex18\_05.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\section*{Chapter review: Signatures, functors and imports}
+Imports resolve relative to source location and configured search roots, and the session tracks imported canonical paths. Cyclic or repeated imports need dedicated fixtures. A module path in an expression is different from a filesystem import string. Separate packaging decisions from language namespace decisions: an installation may move on disk without changing the exported module vocabulary if resolution is configured intentionally.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Add a function member and call it through the module path.
+\item Move the multiplier into a private module value and compare the public behavior.
+\item Create two modules exporting answer and investigate the lookup policy when both are opened.
+\item Export a forwarding value from Outer and decide whether that alias belongs in the public interface.
+\item Change the implementation answer to Bool and preserve the interface unchanged.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+

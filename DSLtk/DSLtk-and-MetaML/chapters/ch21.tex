@@ -1,0 +1,169 @@
+\chapter{Capabilities, callbacks and shutdown}\label{ch:21}
+\section*{The working problem}
+Treat embedding as resource management as well as evaluation.
+
+Primitive allowlists govern non-core primitive access. Output callbacks run under a session mutex. Resource shutdown stops all registered resources before waiting for them. These mechanisms require application policy; they do not constitute process isolation.
+
+\section*{Threading and containment boundaries}
+spawn\_interp creates a fresh interpreter sharing session resources and snapshots selected lookup and capability state. It restricts loader and module operations and applies additional background restrictions. That does not make arbitrary concurrent access to the foreground session safe. The checker, loader and source maps have their own mutable state. Document which thread owns each API.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item Replacing the primitive allowlist
+\item Capturing output
+\item Two-phase resource shutdown
+\item Idempotent close
+\item Limiting evaluation depth
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{21.1}{Replacing the primitive allowlist}{C++20}
+set\_primitive\_allowlist replaces the list of permitted non-core names. Exact names and namespace wildcard patterns are supported. Core primitives remain callable, so a policy that requires stronger restrictions needs an additional boundary.
+
+\lstinputlisting[language=C++,caption={Example ex21\_01: C++}]{examples/cpp/ex21_01.inc}
+\section*{Execution, step by step}
+Removing non-core capabilities does not disable ordinary arithmetic or the built-in core category.
+
+\section*{Read the implementation}
+The relevant source entry is set\_primitive\_allowlist in vendor/MetaML.hpp, around line 8516. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{21.1}{Replacing the primitive allowlist}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex21\_01: D}]{examples/d/ex21_01.inc}
+\section*{Failure and design boundary}
+register\_primitive also adds the name to the allowlist. Configure the final policy after registration when building a restricted host.
+
+\section*{Try it yourself}
+Register one callback, clear the allowlist, and verify that the callback is denied.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{21.2}{Capturing output}{C++20}
+set\_output replaces the session output sink. It is useful for REPL transcripts and application logs. The callback should be short and should not re-enter session output while the output mutex is held.
+
+\lstinputlisting[language=C++,caption={Example ex21\_02: C++}]{examples/cpp/ex21_02.inc}
+\section*{Execution, step by step}
+write invokes the configured sink with the supplied text. The host owns the destination buffer.
+
+\section*{Read the implementation}
+The relevant source entry is set\_output in vendor/MetaML.hpp, around line 8558. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{21.2}{Capturing output}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary.
+
+\lstinputlisting[language=D,caption={Example ex21\_02: D}]{examples/d/ex21_02.inc}
+\section*{Failure and design boundary}
+The callback captures native state. Ensure that state outlives all writes, including writes from background workers during shutdown.
+
+\section*{Try it yourself}
+Replace the buffer with a queue and define which thread drains it.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{21.3}{Two-phase resource shutdown}{C++20}
+on\_close registers stop and wait callbacks. close first asks all resources to stop, then waits for them. This ordering avoids waiting on one worker while another still needs a cancellation signal.
+
+\lstinputlisting[language=C++,caption={Example ex21\_03: C++}]{examples/cpp/ex21_03.inc}
+\section*{Execution, step by step}
+The stop callback runs before the wait callback. Real callbacks would signal a worker and then join or await it.
+
+\section*{Read the implementation}
+The relevant source entry is on\_close in vendor/MetaML.hpp, around line 8199. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{21.3}{Two-phase resource shutdown}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary.
+
+\lstinputlisting[language=D,caption={Example ex21\_03: D}]{examples/d/ex21_03.inc}
+\section*{Failure and design boundary}
+Callbacks must not throw or re-enter evaluation. In C++, explicitly close before captured locals are destroyed if destruction order would otherwise leave dangling captures.
+
+\section*{Try it yourself}
+Register two resources and record that both stop events precede either wait event.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{21.4}{Idempotent close}{C++20}
+close is guarded against repeated shutdown. This lets an application call it at an explicit lifecycle boundary even though the C++ destructor also invokes it. Keep teardown logic in the callbacks idempotent where practical.
+
+\lstinputlisting[language=C++,caption={Example ex21\_04: C++}]{examples/cpp/ex21_04.inc}
+\section*{Execution, step by step}
+The first call drains the registered resource list. The second observes the closing state and returns.
+
+\section*{Read the implementation}
+The relevant source entry is close in vendor/MetaML.hpp, around line 8195. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{21.4}{Idempotent close}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary.
+
+\lstinputlisting[language=D,caption={Example ex21\_04: D}]{examples/d/ex21_04.inc}
+\section*{Failure and design boundary}
+Idempotent resource shutdown does not imply the session can be reopened. Construct a new session for a new lifecycle.
+
+\section*{Try it yourself}
+Attempt resource registration after close and handle the resulting rejection.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{21.5}{Limiting evaluation depth}{C++20}
+set\_max\_depth bounds interpreter recursion and evaluation depth according to the implementation checks. It is a useful guard while developing recursive scripts, but cannot stop an arbitrary blocking native callback.
+
+\lstinputlisting[language=C++,caption={Example ex21\_05: C++}]{examples/cpp/ex21_05.inc}
+\section*{Execution, step by step}
+A shallow expression remains valid under the configured depth. More deeply nested evaluation can fail with a language diagnostic.
+
+\section*{Read the implementation}
+The relevant source entry is set\_max\_depth in vendor/MetaML.hpp, around line 8657. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{21.5}{Limiting evaluation depth}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex21\_05: D}]{examples/d/ex21_05.inc}
+\section*{Failure and design boundary}
+Depth is not wall-clock time, total allocation or instruction count. Use a separate process and explicit resource budgets when stronger containment is required.
+
+\section*{Try it yourself}
+Create a terminating recursive function and measure the depth at which it starts failing.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\section*{Chapter review: Threading and containment boundaries}
+Shutdown callbacks must signal every worker before waiting. A wait callback that joins a worker dependent on an unsignaled sibling can deadlock under a naive one-resource-at-a-time teardown. Output sinks run under a mutex and should not recursively call session output. Native capabilities are not a security sandbox: blocking I/O, memory use and native crashes need operating-system isolation if the trust model requires containment of untrusted policies.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Register one callback, clear the allowlist, and verify that the callback is denied.
+\item Replace the buffer with a queue and define which thread drains it.
+\item Register two resources and record that both stop events precede either wait event.
+\item Attempt resource registration after close and handle the resulting rejection.
+\item Create a terminating recursive function and measure the depth at which it starts failing.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+

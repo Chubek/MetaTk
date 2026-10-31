@@ -1,0 +1,169 @@
+\chapter{Parser combinators and committed failure}\label{ch:5}
+\section*{The working problem}
+Learn the small combinator layer before selecting a full grammar facility.
+
+Parser<T> consumes a ParsecInput and returns ExpectedResult<T>. Sequencing, alternatives and repetition cooperate through a distinction between soft and committed failure. run\_parser additionally requires complete consumption.
+
+\section*{Labeling and recovery boundaries}
+labeled replaces expected-token labels so errors can name language concepts rather than individual characters. Place labels at meaningful boundaries such as an identifier or an assignment, not around the entire parser where every failure becomes the same vague message. The error merge keeps the furthest position and combines expected labels at equal positions. This is useful evidence when explaining why one alternative was selected.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item One character and end of input
+\item Sequencing two recognizers
+\item Explicit backtracking
+\item Repetition and progress
+\item Optional syntax
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{5.1}{One character and end of input}{C++20}
+A recognizer for one character is also a useful test of the top-level consumption contract. The same parser can succeed as a prefix inside a larger parser but fail through run\_parser when trailing bytes remain.
+
+\lstinputlisting[language=C++,caption={Example ex05\_01: C++}]{examples/cpp/ex05_01.inc}
+\section*{Execution, step by step}
+The second candidate matches a but leaves b. The top-level runner rejects that suffix rather than silently accepting a partial document.
+
+\section*{Read the implementation}
+The relevant source entry is run\_parser in vendor/DSLtk.hpp, around line 8036. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{5.1}{One character and end of input}{D}
+The C++ optional test becomes D Nullable.isNull, with the sense reversed. Test the outer parse result before accessing an inner optional payload; absence and parse failure can occupy different layers.
+
+\lstinputlisting[language=D,caption={Example ex05\_01: D}]{examples/d/ex05_01.inc}
+\section*{Failure and design boundary}
+Always decide whether an API accepts a prefix or a whole input. Confusing the two policies can let invalid configuration escape validation.
+
+\section*{Try it yourself}
+Pass an empty string and inspect the expected labels and error offset.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{5.2}{Sequencing two recognizers}{C++20}
+The ampersand sequences parsers and returns both results. It is a parsing product, not a Boolean conjunction. If the right parser fails after consumption, the sequence marks the failure committed so a surrounding alternative does not casually reinterpret the input.
+
+\lstinputlisting[language=C++,caption={Example ex05\_02: C++}]{examples/cpp/ex05_02.inc}
+\section*{Execution, step by step}
+Both characters are consumed and packaged into one composite value. The C++ sequence payload is a pair.
+
+\section*{Read the implementation}
+The relevant source entry is Parser in vendor/DSLtk.hpp, around line 7850. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{5.2}{Sequencing two recognizers}{D}
+The C++ optional test becomes D Nullable.isNull, with the sense reversed. Test the outer parse result before accessing an inner optional payload; absence and parse failure can occupy different layers.
+
+\lstinputlisting[language=D,caption={Example ex05\_02: D}]{examples/d/ex05_02.inc}
+\section*{Failure and design boundary}
+Do not promise automatic backtracking after every sequence failure. Committed failure is an intentional part of this implementation.
+
+\section*{Try it yourself}
+Test ac and compare its error with a failure before any character has been consumed.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{5.3}{Explicit backtracking}{C++20}
+try\_parse restores the input position and softens a failing parser. Use it around the smallest genuinely ambiguous prefix. Broad backtracking can hide useful committed errors and multiply work when many alternatives share long prefixes.
+
+\lstinputlisting[language=C++,caption={Example ex05\_03: C++}]{examples/cpp/ex05_03.inc}
+\section*{Execution, step by step}
+The first alternative consumes a then fails on b. try\_parse restores the cursor, allowing ac to run from the original position.
+
+\section*{Read the implementation}
+The relevant source entry is try\_parse in vendor/DSLtk.hpp, around line 7997. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{5.3}{Explicit backtracking}{D}
+The C++ optional test becomes D Nullable.isNull, with the sense reversed. Test the outer parse result before accessing an inner optional payload; absence and parse failure can occupy different layers.
+
+\lstinputlisting[language=D,caption={Example ex05\_03: D}]{examples/d/ex05_03.inc}
+\section*{Failure and design boundary}
+Both alternatives must produce compatible result types. Backtracking controls consumption, not arbitrary type conversion.
+
+\section*{Try it yourself}
+Remove try\_parse and record why the second alternative is no longer selected.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{5.4}{Repetition and progress}{C++20}
+Repetition collects zero or more successful results. D spells it many because unary star is unavailable as a struct operator. A successful repeated parser must consume input; otherwise the repetition would loop forever.
+
+\lstinputlisting[language=C++,caption={Example ex05\_04: C++}]{examples/cpp/ex05_04.inc}
+\section*{Execution, step by step}
+Each iteration advances one byte. The final soft failure ends the loop without consuming another byte.
+
+\section*{Read the implementation}
+The relevant source entry is run\_parser in vendor/DSLtk.hpp, around line 8036. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{5.4}{Repetition and progress}{D}
+The C++ optional test becomes D Nullable.isNull, with the sense reversed. Test the outer parse result before accessing an inner optional payload; absence and parse failure can occupy different layers.
+
+\lstinputlisting[language=D,caption={Example ex05\_04: D}]{examples/d/ex05_04.inc}
+\section*{Failure and design boundary}
+Repeating an optional parser is dangerous because the optional parser may succeed without consuming anything. The implementation detects no-progress repetition.
+
+\section*{Try it yourself}
+Test the empty input, then attempt repetition of optional(ch(x)) and inspect the failure.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{5.5}{Optional syntax}{C++20}
+optional represents absence as a successful parse containing no value. This is different from suppressing every error: committed failure still propagates. Use it for truly optional syntax whose absence is recognizable before a production has committed.
+
+\lstinputlisting[language=C++,caption={Example ex05\_05: C++}]{examples/cpp/ex05_05.inc}
+\section*{Execution, step by step}
+The outer presence means parsing succeeded. The inner absence means the optional character did not occur.
+
+\section*{Read the implementation}
+The relevant source entry is optional in vendor/DSLtk.hpp, around line 385. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{5.5}{Optional syntax}{D}
+The C++ optional test becomes D Nullable.isNull, with the sense reversed. Test the outer parse result before accessing an inner optional payload; absence and parse failure can occupy different layers.
+
+\lstinputlisting[language=D,caption={Example ex05\_05: D}]{examples/d/ex05_05.inc}
+\section*{Failure and design boundary}
+Two layers of optional state are not interchangeable. A top-level parse failure and a successfully absent construct require different UI messages.
+
+\section*{Try it yourself}
+Wrap a two-character sequence in optional and test a partially present sequence.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\section*{Chapter review: Labeling and recovery boundaries}
+The parser layer is byte-oriented and does not skip whitespace automatically. Compose whitespace recognition explicitly or introduce a lexer that presents normalized tokens to a higher layer. ParserStage and production handlers can connect parsed values to actions, but actions should not publish irreversible state before the enclosing parse succeeds. Separate recognition, construction and publication when you need predictable recovery. Backtracking is a control-flow tool with a cost, not a substitute for factoring common prefixes.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Pass an empty string and inspect the expected labels and error offset.
+\item Test ac and compare its error with a failure before any character has been consumed.
+\item Remove try\_parse and record why the second alternative is no longer selected.
+\item Test the empty input, then attempt repetition of optional(ch(x)) and inspect the failure.
+\item Wrap a two-character sequence in optional and test a partially present sequence.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+

@@ -1,0 +1,179 @@
+\chapter{MetaML evaluation and session boundaries}\label{ch:13}
+\section*{The working problem}
+Understand what an embedding call commits and what it reports.
+
+Each evaluation parses a source, checks compilation units and executes them. The session retains definitions and source text. A Result exposes diagnostics, while RunReport additionally carries warnings and presentation text.
+
+\section*{Evaluation units and commit points}
+run\_program iterates Checker::units, checks a unit in a child scope, commits that scope and then executes. This ordering explains why a script is not an all-or-nothing database transaction. Earlier units and host effects can survive later failure. For reloadable configuration, prepare a separate candidate session and publish it only after validation rather than attempting to reverse arbitrary execution.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item Literals without a prelude
+\item Evaluation failures are values
+\item Multi-item source
+\item Quiet application declarations
+\item A fresh session for isolation
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{13.1}{Literals without a prelude}{C++20}
+Start with an expression that uses only built-in syntax. This isolates include-path, compiler and session issues from external library discovery. Once the baseline works, add dependencies one at a time and keep the minimal smoke test in the repository.
+
+\lstinputlisting[language=C++,caption={Example ex13\_01: C++}]{examples/cpp/ex13_01.inc}
+\section*{Execution, step by step}
+A fresh session already understands integer literals. It does not need to find prelude/mod.ml to evaluate this expression.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{13.1}{Literals without a prelude}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex13\_01: D}]{examples/d/ex13_01.inc}
+\section*{Failure and design boundary}
+The uploaded files do not include metalib. A book example must not silently depend on a separately installed prelude.
+
+\section*{Try it yourself}
+Change the input to a Boolean literal and update the expected rendering.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex13\_01.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\workshop{13.2}{Evaluation failures are values}{C++20}
+A missing variable is an ordinary language error. The host receives a diagnostic vector, which can be displayed, logged or translated into an application response. It should not crash by assuming every evaluation returns a Value.
+
+\lstinputlisting[language=C++,caption={Example ex13\_02: C++}]{examples/cpp/ex13_02.inc}
+\section*{Execution, step by step}
+Name resolution fails before the addition executes. The error vector is the observable result of the call.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{13.2}{Evaluation failures are values}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex13\_02: D}]{examples/d/ex13_02.inc}
+\section*{Failure and design boundary}
+Do not use unwrap\_or to silently substitute a successful business result for a failed policy evaluation.
+
+\section*{Try it yourself}
+Print each diagnostic headline and preserve its source span.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex13\_02.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\workshop{13.3}{Multi-item source}{C++20}
+A source string may contain declarations followed by a final expression. Newlines and top-level boundaries matter to the parser. The final expression supplies the value returned by eval, while earlier declarations populate the environment.
+
+\lstinputlisting[language=C++,caption={Example ex13\_03: C++}]{examples/cpp/ex13_03.inc}
+\section*{Execution, step by step}
+The first two items bind values. The last item computes with both names and becomes the returned result.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{13.3}{Multi-item source}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex13\_03: D}]{examples/d/ex13_03.inc}
+\section*{Failure and design boundary}
+A batch can commit earlier units before a later unit fails. Do not assume eval supplies whole-script transaction isolation.
+
+\section*{Try it yourself}
+Make the final item fail and inspect whether a previous definition remains available.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex13\_03.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\workshop{13.4}{Quiet application declarations}{C++20}
+Use a source file name even for generated declarations so diagnostics identify their origin. Session state is useful for configuration bootstrapping, but generated code should use stable names and a clear replacement policy.
+
+\lstinputlisting[language=C++,caption={Example ex13\_04: C++}]{examples/cpp/ex13_04.inc}
+\section*{Execution, step by step}
+The result is the bound value. A host that splits initialization and evaluation can query it later in the same session.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{13.4}{Quiet application declarations}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex13\_04: D}]{examples/d/ex13_04.inc}
+\section*{Failure and design boundary}
+Generated source is still source code. Quote injected strings correctly and prefer typed primitives for data crossing the host boundary.
+
+\section*{Try it yourself}
+Pass a custom filename as the second eval argument and deliberately introduce a type error.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex13\_04.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\workshop{13.5}{A fresh session for isolation}{C++20}
+A session-per-job policy gives independent environments. It is often simpler than attempting to undo a sequence of declarations and effects after a failure. Measure construction cost before pooling stateful sessions in a long-running service.
+
+\lstinputlisting[language=C++,caption={Example ex13\_05: C++}]{examples/cpp/ex13_05.inc}
+\section*{Execution, step by step}
+The declaration belongs to one session. Another newly constructed session has its own initial environment.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{13.5}{A fresh session for isolation}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex13\_05: D}]{examples/d/ex13_05.inc}
+\section*{Failure and design boundary}
+Independent sessions can still call host callbacks that share global state. Isolation of language bindings does not isolate external resources.
+
+\section*{Try it yourself}
+Create two sessions, define a name in one, and verify that lookup fails in the other.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex13\_05.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\section*{Chapter review: Evaluation units and commit points}
+RunMode distinguishes evaluation and presentation behavior. eval returns the last value or Unit, while run\_source and run\_file return RunReport with errors, warnings and output text. declare is intended for host-supplied source and suppresses checker chatter through a temporary quiet setting. A host should choose the API matching its reporting needs instead of calling eval and then trying to reconstruct discarded warning information from a formatted transcript.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Change the input to a Boolean literal and update the expected rendering.
+\item Print each diagnostic headline and preserve its source span.
+\item Make the final item fail and inspect whether a previous definition remains available.
+\item Pass a custom filename as the second eval argument and deliberately introduce a type error.
+\item Create two sessions, define a name in one, and verify that lookup fails in the other.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+

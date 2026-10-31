@@ -1,0 +1,169 @@
+\chapter{Byte recognition, binary streams and CFGs}\label{ch:10}
+\section*{The working problem}
+Select a recognizer according to the shape of the input, not merely the familiarity of its name.
+
+StaticRegex recognizes bytes with a compiled finite-state program. BinaryStream handles explicit byte order. CFG consumes a token vector using Earley-style chart parsing, including left recursion and epsilon productions.
+
+\section*{Protocol selection and chart parsing}
+BinaryStream.next recognizes a regex token at the current cursor. It rejects an empty token because a token consumer must advance. Raw reads return views, whereas write may change backing storage. Document those lifetimes in a binary-format wrapper. Serializer and Deserializer are protocols around a user backend's encode and decode operations; they do not choose JSON, CBOR or an on-disk schema for the application.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item Static byte regexes
+\item Explicit endianness
+\item Bounded binary reads
+\item Token-level context-free parsing
+\item Epsilon productions
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{10.1}{Static byte regexes}{C++20}
+A static regex compiles its pattern at host compile time and recognizes runtime bytes. The matches operation requires complete consumption. Byte semantics make it suitable for protocols and ASCII-oriented token classes, but do not supply Unicode character properties.
+
+\lstinputlisting[language=C++,caption={Example ex10\_01: C++}]{examples/cpp/ex10_01.inc}
+\section*{Execution, step by step}
+A compiled pattern is reused for both candidates. The suffix x causes whole-input recognition to fail.
+
+\section*{Read the implementation}
+The relevant source entry is StaticRegex in vendor/DSLtk.hpp, around line 10457. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{10.1}{Static byte regexes}{D}
+Byte recognition and fixed-width fields must remain independent of native word size. D uint and ushort map to the explicit widths used here; choose byte order at each format boundary rather than inheriting machine endianness.
+
+\lstinputlisting[language=D,caption={Example ex10\_01: D}]{examples/d/ex10_01.inc}
+\section*{Failure and design boundary}
+Search, prefix and matches have different consumption policies. Use matches for validation and prefix only when maintaining a cursor yourself.
+
+\section*{Try it yourself}
+Test an empty candidate and compare plus with star. Explain how zero-length matches affect token loops.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{10.2}{Explicit endianness}{C++20}
+BinaryStream reads unsigned integers with a selected byte order. This avoids depending on the host CPU layout or pointer alignment. A file format should state field widths and byte order independently of the implementation language.
+
+\lstinputlisting[language=C++,caption={Example ex10\_02: C++}]{examples/cpp/ex10_02.inc}
+\section*{Execution, step by step}
+The two emitted bytes are 12 and 34 in hexadecimal. Reading with the same order reconstructs the original value.
+
+\section*{Read the implementation}
+The relevant source entry is BinaryStream in vendor/DSLtk.hpp, around line 10543. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{10.2}{Explicit endianness}{D}
+Byte recognition and fixed-width fields must remain independent of native word size. D uint and ushort map to the explicit widths used here; choose byte order at each format boundary rather than inheriting machine endianness.
+
+\lstinputlisting[language=D,caption={Example ex10\_02: D}]{examples/d/ex10_02.inc}
+\section*{Failure and design boundary}
+Unsigned width is a format decision. Reading a platform-sized integer can silently change a protocol across architectures.
+
+\section*{Try it yourself}
+Read the same bytes as little endian and verify the deliberately different result.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{10.3}{Bounded binary reads}{C++20}
+A read advances the cursor only when enough bytes are available. Treat truncation as malformed input and retain the offset for a useful error. Borrowed views into stream storage must not outlive mutations that can move that storage.
+
+\lstinputlisting[language=C++,caption={Example ex10\_03: C++}]{examples/cpp/ex10_03.inc}
+\section*{Execution, step by step}
+Four bytes are consumed and the cursor reaches the buffer end. No integer interpretation is needed for this raw read.
+
+\section*{Read the implementation}
+The relevant source entry is BinaryStream in vendor/DSLtk.hpp, around line 10543. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{10.3}{Bounded binary reads}{D}
+Byte recognition and fixed-width fields must remain independent of native word size. D uint and ushort map to the explicit widths used here; choose byte order at each format boundary rather than inheriting machine endianness.
+
+\lstinputlisting[language=D,caption={Example ex10\_03: D}]{examples/d/ex10_03.inc}
+\section*{Failure and design boundary}
+Do not retain a C++ span across a write that can reallocate the vector. Copy the bytes if independent ownership is required.
+
+\section*{Try it yourself}
+Attempt a five-byte read from a four-byte stream and translate the exception to a format diagnostic.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{10.4}{Token-level context-free parsing}{C++20}
+CFG terminals are complete token strings. The lexer decides how source characters become tokens. This separation lets a grammar express recursive structure without embedding numeric scanning and whitespace handling into every production.
+
+\lstinputlisting[language=C++,caption={Example ex10\_04: C++}]{examples/cpp/ex10_04.inc}
+\section*{Execution, step by step}
+The terminal name matches one token, not four character tokens. A different token string fails at the initial chart position.
+
+\section*{Read the implementation}
+The relevant source entry is CFG in vendor/DSLtk.hpp, around line 10671. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{10.4}{Token-level context-free parsing}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex10\_04: D}]{examples/d/ex10_04.inc}
+\section*{Failure and design boundary}
+An ambiguous CFG returns a first discovered derivation here, not a complete parse forest. Do not claim ambiguity analysis from one returned tree.
+
+\section*{Try it yourself}
+Add a production for parenthesized S and parse nested token lists.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{10.5}{Epsilon productions}{C++20}
+An empty right-hand side denotes epsilon. This allows recursive lists and optional grammar structure, but epsilon should be intentional because it changes which documents the grammar accepts. CFG validation checks names; it does not decide whether optionality matches product requirements.
+
+\lstinputlisting[language=C++,caption={Example ex10\_05: C++}]{examples/cpp/ex10_05.inc}
+\section*{Execution, step by step}
+The start production completes without consuming a token. A nonempty token stream remains unconsumed and is rejected.
+
+\section*{Read the implementation}
+The relevant source entry is CFG in vendor/DSLtk.hpp, around line 10671. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{10.5}{Epsilon productions}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex10\_05: D}]{examples/d/ex10_05.inc}
+\section*{Failure and design boundary}
+Do not transfer the zero-width-token prohibition from PEG scanning to CFG epsilon productions. The algorithms have different progress mechanisms.
+
+\section*{Try it yourself}
+Add a left-recursive list production and compare empty, one-token and three-token cases.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\section*{Chapter review: Protocol selection and chart parsing}
+CFG terminals are lexer-produced token strings. Earley chart items track production, dot and origin, with an attached first-discovered tree. The implementation deduplicates these item coordinates, so it does not retain every ambiguous derivation. Use grammar validation before accepting plugin rules. For a deterministic programming language, specify operator precedence and associativity through productions rather than relying on whichever derivation happens to be discovered first.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Test an empty candidate and compare plus with star. Explain how zero-length matches affect token loops.
+\item Read the same bytes as little endian and verify the deliberately different result.
+\item Attempt a five-byte read from a four-byte stream and translate the exception to a format diagnostic.
+\item Add a production for parenthesized S and parse nested token lists.
+\item Add a left-recursive list production and compare empty, one-token and three-token cases.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+

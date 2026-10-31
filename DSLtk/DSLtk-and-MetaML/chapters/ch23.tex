@@ -1,0 +1,171 @@
+\chapter{Case study I: a formula optimization tool}\label{ch:23}
+\section*{The working problem}
+Build a command-oriented optimizer for a deliberately small, pure expression language. The input is a first-order S-expression with integer atoms and add or mul nodes. The output is a reduced expression plus an explicit stop status.
+
+The front end parses structure, validates arity and atom syntax, then applies a sound rule set for the chosen integer model. A destructive reducer gives a reproducible baseline; an e-graph retains alternatives. A host wrapper owns diagnostics and rejects unsupported operators before optimization.
+
+\section*{Formula tool acceptance contract}
+The complete formula program reads one expression, rejects quoted numeric atoms and unknown operators, validates binary arity recursively and evaluates the pure expression using an explicitly defined unsigned arithmetic model. It normalizes with four identity rules and verifies that before and after values agree. Exit zero means normal form, exit two means a rewrite budget stop, and exit one means invalid input or another failure.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item Specify and validate the formula input
+\item Normalize with a small sound rule set
+\item Compare with equality saturation
+\item Make budget stops observable
+\item Structural regression and semantic regression
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{23.1}{Specify and validate the formula input}{C++20}
+The language contract permits nonnegative integer atoms and binary add or mul forms. The case study begins with structural recognition rather than evaluating arbitrary S-expressions. An optimizer must reject a malformed tree before a rewrite has a chance to hide the malformed part.
+
+\lstinputlisting[language=C++,caption={Example ex23\_01: C++}]{examples/cpp/ex23_01.inc}
+\section*{Execution, step by step}
+The first checks establish the expected binary root shape. The complete tool supplied with the book validates recursively and rejects unknown operators and invalid atoms.
+
+\section*{Read the implementation}
+The relevant source entry is parse\_sexpr in vendor/DSLtk.hpp, around line 9419. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{23.1}{Specify and validate the formula input}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex23\_01: D}]{examples/d/ex23_01.inc}
+\section*{Failure and design boundary}
+These local assertions demonstrate one fixture; they are not the whole validator. The standalone case-study program includes the recursive boundary validation.
+
+\section*{Try it yourself}
+Reject (add 42), (unknown 1 2), a quoted numeric atom, and an atom with trailing letters.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{23.2}{Normalize with a small sound rule set}{C++20}
+Start with identity rules whose correctness is easy to explain under the chosen pure arithmetic model: adding zero and multiplying by one. Avoid distributivity until the cost model and growth budget are ready. Do not simplify effects because the input language intentionally contains none.
+
+\lstinputlisting[language=C++,caption={Example ex23\_02: C++}]{examples/cpp/ex23_02.inc}
+\section*{Execution, step by step}
+Two local identities remove the add and mul nodes. The returned step count gives a compact regression signal.
+
+\section*{Read the implementation}
+The relevant source entry is TermRewriteSystem in vendor/DSLtk.hpp, around line 11920. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{23.2}{Normalize with a small sound rule set}{D}
+This D facility is a reference type, so construction uses new. Copying the reference aliases the same mutable object; it does not perform the AST-style deep copy demonstrated earlier.
+
+\lstinputlisting[language=D,caption={Example ex23\_02: D}]{examples/d/ex23_02.inc}
+\section*{Failure and design boundary}
+If the domain later adds checked operations or effectful operands, revisit every rule proof. A familiar algebraic identity is not automatically valid in every semantics.
+
+\section*{Try it yourself}
+Add the symmetric identities and test both child positions.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{23.3}{Compare with equality saturation}{C++20}
+Use the same identities in an e-graph so alternative forms remain available. This separates the legality argument from extraction preference. Record the report even when the extracted expression looks correct, because budget exhaustion is a performance and completeness signal.
+
+\lstinputlisting[language=C++,caption={Example ex23\_03: C++}]{examples/cpp/ex23_03.inc}
+\section*{Execution, step by step}
+Saturation merges the nested identities into equivalence classes. Extraction finds the one-atom expression at minimum node cost.
+
+\section*{Read the implementation}
+The relevant source entry is EGraph in vendor/DSLtk.hpp, around line 9551. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{23.3}{Compare with equality saturation}{D}
+This D facility is a reference type, so construction uses new. Copying the reference aliases the same mutable object; it does not perform the AST-style deep copy demonstrated earlier.
+
+\lstinputlisting[language=D,caption={Example ex23\_03: D}]{examples/d/ex23_03.inc}
+\section*{Failure and design boundary}
+Equality saturation retains alternatives and can use more memory than a directional reducer. Choose it for a reason, not because it sounds universally more advanced.
+
+\section*{Try it yourself}
+Compare nodes, iterations and output size on a deeply nested identity expression.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{23.4}{Make budget stops observable}{C++20}
+A command-line tool must distinguish successful normalization from a partial result. A zero-step budget is a useful acceptance fixture because it exposes a pending redex without allowing any change. Return a distinct exit status for this condition.
+
+\lstinputlisting[language=C++,caption={Example ex23\_04: C++}]{examples/cpp/ex23_04.inc}
+\section*{Execution, step by step}
+The system detects that another rewrite exists but refuses to perform it. The original term is preserved and StepLimit is returned.
+
+\section*{Read the implementation}
+The relevant source entry is TermRewriteSystem in vendor/DSLtk.hpp, around line 11920. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{23.4}{Make budget stops observable}{D}
+This D facility is a reference type, so construction uses new. Copying the reference aliases the same mutable object; it does not perform the AST-style deep copy demonstrated earlier.
+
+\lstinputlisting[language=D,caption={Example ex23\_04: D}]{examples/d/ex23_04.inc}
+\section*{Failure and design boundary}
+Do not print only the term and exit zero. That would make an incomplete optimization indistinguishable from a proven normal form.
+
+\section*{Try it yourself}
+Add a command-line budget argument and an acceptance test for exit status two.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{23.5}{Structural regression and semantic regression}{C++20}
+Compare an optimized tree with the expected shape, then separately compare arithmetic meaning under the language model. Shape tests catch rule-order regressions; semantic tests catch invalid rules. Neither category replaces the other.
+
+\lstinputlisting[language=C++,caption={Example ex23\_05: C++}]{examples/cpp/ex23_05.inc}
+\section*{Execution, step by step}
+The reduced term is smaller while the original parsed representation remains available for reporting. The complete case tool evaluates both sides modulo an explicit unsigned width.
+
+\section*{Read the implementation}
+The relevant source entry is TermRewriteSystem in vendor/DSLtk.hpp, around line 11920. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{23.5}{Structural regression and semantic regression}{D}
+This D facility is a reference type, so construction uses new. Copying the reference aliases the same mutable object; it does not perform the AST-style deep copy demonstrated earlier.
+
+\lstinputlisting[language=D,caption={Example ex23\_05: D}]{examples/d/ex23_05.inc}
+\section*{Failure and design boundary}
+Random testing increases confidence but does not prove all rules sound. Keep a short written argument for every rewrite and include overflow-edge fixtures.
+
+\section*{Try it yourself}
+Generate depth-bounded formulas and compare before/after evaluation for hundreds of fixed-seed inputs.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\section*{Chapter review: Formula tool acceptance contract}
+This tool deliberately does not advertise a general algebra system. It has no variables, effects, division, arbitrary precision, distributivity or code generation. Those extensions require new semantics and validation. The e-graph lesson shows an alternative optimization architecture with the same identity laws. Compare performance only after giving both engines the same accepted inputs, rules and budget accounting. Source fixtures and negative cases are included with the standalone program.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Reject (add 42), (unknown 1 2), a quoted numeric atom, and an atom with trailing letters.
+\item Add the symmetric identities and test both child positions.
+\item Compare nodes, iterations and output size on a deeply nested identity expression.
+\item Add a command-line budget argument and an acceptance test for exit status two.
+\item Generate depth-bounded formulas and compare before/after evaluation for hundreds of fixed-seed inputs.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+
+The complete C++ and D programs are in case-studies/formula/. They include the ownership and validation code omitted from the small workshop bodies. Run the case acceptance tests with make test-cases before extending the program.
+

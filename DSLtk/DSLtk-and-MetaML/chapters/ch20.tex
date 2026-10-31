@@ -1,0 +1,169 @@
+\chapter{Diagnostics and inspection tools}\label{ch:20}
+\section*{The working problem}
+Build useful feedback around the parser and checker rather than displaying opaque failures.
+
+parse and parse\_expression expose syntax-stage results. Session.render can use retained source text for carets. type\_of provides inferred types. Tooling should preserve codes, spans and filenames independently of human-readable rendering.
+
+\section*{REPL integration and editor state}
+ReplLanguage adapts MetaML to the generic DSLtk REPL Session policy. It supplies parse, evaluation, type and error formatting operations, while install\_directives adds language-specific commands. The generic REPL tracks complete, incomplete and failed parse states. A trailing delimiter can therefore request more input instead of being treated as a final error immediately.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item Rendering a language diagnostic
+\item Syntax errors versus type errors
+\item Parsing a whole program
+\item Inspecting a function type
+\item Type queries in a prepared environment
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{20.1}{Rendering a language diagnostic}{C++20}
+When evaluation fails, the session can render each diagnostic with the source it retained. This gives filenames and carets without requiring the host to rebuild the lexer coordinate map. Store the structured diagnostic as well as any formatted text.
+
+\lstinputlisting[language=C++,caption={Example ex20\_01: C++}]{examples/cpp/ex20_01.inc}
+\section*{Execution, step by step}
+The source filename is attached to the parse and checker context. Rendering consults that context to explain the failure.
+
+\section*{Read the implementation}
+The relevant source entry is render in vendor/MetaML.hpp, around line 8437. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{20.1}{Rendering a language diagnostic}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex20\_01: D}]{examples/d/ex20_01.inc}
+\section*{Failure and design boundary}
+A UI should escape diagnostic text for its display medium. A terminal rendering is not automatically safe HTML.
+
+\section*{Try it yourself}
+Keep an error list with code, message and offsets alongside the displayed caret text.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{20.2}{Syntax errors versus type errors}{C++20}
+Parsing and checking fail at different stages. A missing delimiter is a syntax error; adding an integer to a Boolean is a type error. Separate those categories in tests so a parser regression cannot masquerade as a successful checker test.
+
+\lstinputlisting[language=C++,caption={Example ex20\_02: C++}]{examples/cpp/ex20_02.inc}
+\section*{Execution, step by step}
+The parser cannot close the parenthesized expression, so no expression AST is returned to the checker.
+
+\section*{Read the implementation}
+The relevant source entry is parse\_expression in vendor/MetaML.hpp, around line 3794. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{20.2}{Syntax errors versus type errors}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex20\_02: D}]{examples/d/ex20_02.inc}
+\section*{Failure and design boundary}
+A successful parse does not establish that names resolve or types agree. Syntax-only tools must label their validation scope accurately.
+
+\section*{Try it yourself}
+Parse an undefined variable successfully, then evaluate it and compare the two results.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{20.3}{Parsing a whole program}{C++20}
+The whole-program parser retains source and file identity with its items. This is the right boundary for tools that want to inspect declarations before deciding whether to evaluate them. Treat returned AST ownership according to the actual smart-pointer or class representation.
+
+\lstinputlisting[language=C++,caption={Example ex20\_03: C++}]{examples/cpp/ex20_03.inc}
+\section*{Execution, step by step}
+The program has one declaration item. No language value is computed by this parse-only operation.
+
+\section*{Read the implementation}
+The relevant source entry is parse in vendor/MetaML.hpp, around line 3763. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{20.3}{Parsing a whole program}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex20\_03: D}]{examples/d/ex20_03.inc}
+\section*{Failure and design boundary}
+Editing a parsed AST bypasses the source parser invariants. Revalidate shape, spans and types before executing transformed programs.
+
+\section*{Try it yourself}
+Add a final expression and compare item count with the eval result.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{20.4}{Inspecting a function type}{C++20}
+Type queries help users understand curried application and inferred constraints. Print the result supplied by the checker rather than maintaining a separate type inference implementation in your editor integration.
+
+\lstinputlisting[language=C++,caption={Example ex20\_04: C++}]{examples/cpp/ex20_04.inc}
+\section*{Execution, step by step}
+The printed type includes an arrow because the expression is a function. Its variable spelling is a presentation detail.
+
+\section*{Read the implementation}
+The relevant source entry is type\_of in vendor/MetaML.hpp, around line 8317. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{20.4}{Inspecting a function type}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary.
+
+\lstinputlisting[language=D,caption={Example ex20\_04: D}]{examples/d/ex20_04.inc}
+\section*{Failure and design boundary}
+Avoid overfitting tests to one generated type-variable name. Test required structure or a documented stable format.
+
+\section*{Try it yourself}
+Compare the identity type with fn x -> x + 1 and explain the numeric constraint.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{20.5}{Type queries in a prepared environment}{C++20}
+A type query can use earlier declarations in the same session. This makes live feedback consistent with evaluation, provided the UI associates each editor state with the correct session generation.
+
+\lstinputlisting[language=C++,caption={Example ex20\_05: C++}]{examples/cpp/ex20_05.inc}
+\section*{Execution, step by step}
+The checker resolves size through the persistent global scope and prints its inferred type.
+
+\section*{Read the implementation}
+The relevant source entry is type\_of in vendor/MetaML.hpp, around line 8317. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{20.5}{Type queries in a prepared environment}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary.
+
+\lstinputlisting[language=D,caption={Example ex20\_05: D}]{examples/d/ex20_05.inc}
+\section*{Failure and design boundary}
+A stale session can provide misleading editor feedback after a file changes. Use generation IDs or reconstruct the environment at clear boundaries.
+
+\section*{Try it yourself}
+Change an exported declaration in a fresh session and compare the resulting type query.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\section*{Chapter review: REPL integration and editor state}
+An editor or REPL needs a source-generation policy. Retained programs and source maps grow with successful interactions, and callbacks may keep values alive. For long-running tools, periodically rebuild a clean environment from the approved source set rather than accumulating every exploratory evaluation forever. Keep asynchronous UI diagnostics associated with the source version that produced them. Rendered carets from a previous buffer version should never be applied as fixes to current text.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Keep an error list with code, message and offsets alongside the displayed caret text.
+\item Parse an undefined variable successfully, then evaluate it and compare the two results.
+\item Add a final expression and compare item count with the eval result.
+\item Compare the identity type with fn x -> x + 1 and explain the numeric constraint.
+\item Change an exported declaration in a fresh session and compare the resulting type query.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+

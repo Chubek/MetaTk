@@ -1,0 +1,179 @@
+\chapter{Type inference and records}\label{ch:16}
+\section*{The working problem}
+Use inferred types as a design aid while keeping public contracts explicit.
+
+The checker implements Hindley-Milner-style inference with numeric constraints and row-polymorphic records. Public embeddings still need application checks for ranges, units and data-dependent invariants.
+
+\section*{Inference mechanics and API types}
+TypeNode represents variables, constructors, functions, rows and other inferred structure. The unifier records links, performs occurs checks and supports rollback or commit bookkeeping. Generic variables are instantiated at use sites. Numeric constraints prevent an arithmetic function from being mistaken for a completely unconstrained polymorphic identity. TypePrinter is a presentation layer over this graph.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item Polymorphic identity
+\item Type errors before evaluation
+\item Record construction and selection
+\item Row-polymorphic access
+\item Functional record updates
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{16.1}{Polymorphic identity}{C++20}
+An identity function has no reason to constrain its argument type. Generalization lets separate uses choose different concrete types. This differs from a single dynamic Value that accepts anything without static checking.
+
+\lstinputlisting[language=C++,caption={Example ex16\_01: C++}]{examples/cpp/ex16_01.inc}
+\section*{Execution, step by step}
+Each use instantiates the generalized type independently. The tuple therefore contains an Int and a Bool.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{16.1}{Polymorphic identity}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex16\_01: D}]{examples/d/ex16_01.inc}
+\section*{Failure and design boundary}
+Polymorphism is checked at binding boundaries. Do not expect arbitrary mutable host state to inherit the same safety guarantees.
+
+\section*{Try it yourself}
+Ask type\_of for id and compare it with a function that adds one.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex16\_01.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\workshop{16.2}{Type errors before evaluation}{C++20}
+A type error should be surfaced as a normal diagnostic, not a native conversion failure. A front end can ask type\_of first for feedback, but eval repeats the necessary checks before executing a newly supplied expression.
+
+\lstinputlisting[language=C++,caption={Example ex16\_02: C++}]{examples/cpp/ex16_02.inc}
+\section*{Execution, step by step}
+Numeric addition cannot accept a Boolean operand under the checker rules.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{16.2}{Type errors before evaluation}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex16\_02: D}]{examples/d/ex16_02.inc}
+\section*{Failure and design boundary}
+Avoid catching this error and converting true to one in the host. That would create a second, inconsistent language semantics.
+
+\section*{Try it yourself}
+Record the error code and compare it with an undefined-name diagnostic.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex16\_02.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\workshop{16.3}{Record construction and selection}{C++20}
+Records associate values with named fields. Selection expresses a semantic role more clearly than tuple position. Field names are part of the checked interface and should be chosen as stable domain vocabulary.
+
+\lstinputlisting[language=C++,caption={Example ex16\_03: C++}]{examples/cpp/ex16_03.inc}
+\section*{Execution, step by step}
+The two selectors recover integer fields. Multiplication then computes the area.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{16.3}{Record construction and selection}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex16\_03: D}]{examples/d/ex16_03.inc}
+\section*{Failure and design boundary}
+A record with width and height has no built-in unit discipline. Use a domain convention or explicit wrapper type for measurements.
+
+\section*{Try it yourself}
+Rename height in one place only and inspect the missing-field diagnostic.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex16\_03.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\workshop{16.4}{Row-polymorphic access}{C++20}
+A function selecting one field can accept records with extra fields. Row polymorphism expresses the required portion of a record without forcing every caller into one closed layout. This is valuable for evolving configuration schemas.
+
+\lstinputlisting[language=C++,caption={Example ex16\_04: C++}]{examples/cpp/ex16_04.inc}
+\section*{Execution, step by step}
+The function requires width. The additional label field does not invalidate the call.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{16.4}{Row-polymorphic access}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex16\_04: D}]{examples/d/ex16_04.inc}
+\section*{Failure and design boundary}
+Open record acceptance does not validate unrelated fields. A public configuration loader may still need to reject misspelled or unexpected options.
+
+\section*{Try it yourself}
+Apply the same function to a record whose width is Bool and compare the inferred function instances.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex16\_04.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\workshop{16.5}{Functional record updates}{C++20}
+A record update produces a record with selected fields replaced. This supports immutable configuration evolution: retain a validated baseline, then construct a per-request version without mutating shared state.
+
+\lstinputlisting[language=C++,caption={Example ex16\_05: C++}]{examples/cpp/ex16_05.inc}
+\section*{Execution, step by step}
+The updated width is six and height remains seven. The expression uses q rather than modifying r in place.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{16.5}{Functional record updates}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex16\_05: D}]{examples/d/ex16_05.inc}
+\section*{Failure and design boundary}
+An update must obey the checker rules for field presence and type. Do not treat it as insertion into an untyped dictionary.
+
+\section*{Try it yourself}
+Return both r.width and q.width to demonstrate that the baseline remains unchanged.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex16\_05.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\section*{Chapter review: Inference mechanics and API types}
+Rows let a selector require one field while retaining an unknown remainder. A closed record construction and an open record parameter are different type situations. Public embedding functions should still enforce units, ranges and resource identities that are not expressed by the inferred type. Type aliases improve readability but do not automatically create distinct runtime representations. When a domain needs an abstract type, use module signatures and the implemented ascription semantics deliberately.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Ask type\_of for id and compare it with a function that adds one.
+\item Record the error code and compare it with an undefined-name diagnostic.
+\item Rename height in one place only and inspect the missing-field diagnostic.
+\item Apply the same function to a record whose width is Bool and compare the inferred function instances.
+\item Return both r.width and q.width to demonstrate that the baseline remains unchanged.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+

@@ -1,0 +1,179 @@
+\chapter{Functions, application and lexical scope}\label{ch:15}
+\section*{The working problem}
+Write reusable language functions and distinguish them from host callbacks.
+
+Function values capture an environment. Application is curried, and function syntax lowers to the expression AST. Lexical scope determines the meaning of captured names even when the host evaluates later source strings.
+
+\section*{Recursion, sections and tacit authoring}
+Named recursive definitions use the parser's rec-aware binding forms. Keep recursion tests small enough to distinguish a type problem from depth exhaustion. The interpreter tracks both call and evaluation depth. Tail-position structure can influence behavior, but users should not assume every source-level tail recursion becomes a constant-stack native loop without inspecting the evaluator path.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item Anonymous functions
+\item Curried application
+\item Local let bindings
+\item Lexical closures
+\item Conditional expressions
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{15.1}{Anonymous functions}{C++20}
+The fn syntax creates a function value with one or more parameters followed by an arrow and a body. Parentheses are important when immediately applying a function because they delimit the body from the application argument.
+
+\lstinputlisting[language=C++,caption={Example ex15\_01: C++}]{examples/cpp/ex15_01.inc}
+\section*{Execution, step by step}
+The lambda receives 41 and returns 42. Its parameter is a language binding, unrelated to a native lambda capture.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{15.1}{Anonymous functions}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex15\_01: D}]{examples/d/ex15_01.inc}
+\section*{Failure and design boundary}
+Do not guess C-style braces or an OCaml fun-only grammar. Both fn and fun are recognized, but the implemented syntax is its own contract.
+
+\section*{Try it yourself}
+Ask type\_of for the lambda before applying it.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex15\_01.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\workshop{15.2}{Curried application}{C++20}
+Multiple parameters become nested functions. Applying fewer arguments returns another function. This is useful for specializing a policy with fixed configuration before supplying per-request input.
+
+\lstinputlisting[language=C++,caption={Example ex15\_02: C++}]{examples/cpp/ex15_02.inc}
+\section*{Execution, step by step}
+The first application captures the fixed first argument. The second supplies the remaining argument.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{15.2}{Curried application}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex15\_02: D}]{examples/d/ex15_02.inc}
+\section*{Failure and design boundary}
+Native primitives have an explicit arity and conversion policy; partial application is a language behavior around those primitives, not a C++ calling convention.
+
+\section*{Try it yourself}
+Construct a three-argument function and apply it in three separate stages.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex15\_02.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\workshop{15.3}{Local let bindings}{C++20}
+A let expression introduces local bindings for its body. Keep temporary computation names local so repeated evaluation does not pollute the session environment. This is particularly helpful in long-lived interactive tools.
+
+\lstinputlisting[language=C++,caption={Example ex15\_03: C++}]{examples/cpp/ex15_03.inc}
+\section*{Execution, step by step}
+The local x is available in the body. It is not intended as a later top-level session definition.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{15.3}{Local let bindings}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex15\_03: D}]{examples/d/ex15_03.inc}
+\section*{Failure and design boundary}
+A lexical scope is not a transaction boundary for host effects. Local bindings can still call effectful primitives.
+
+\section*{Try it yourself}
+Evaluate x in a later call and confirm that it was not exported as a top-level name.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex15\_03.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\workshop{15.4}{Lexical closures}{C++20}
+A closure captures the environment where it was created. Capturing a fixed multiplier is a useful way to build small reusable transformations. The host must keep the owning session and any primitive resources alive while such values may be invoked.
+
+\lstinputlisting[language=C++,caption={Example ex15\_04: C++}]{examples/cpp/ex15_04.inc}
+\section*{Execution, step by step}
+The returned function remembers n equal to six after the outer call has finished.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{15.4}{Lexical closures}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex15\_04: D}]{examples/d/ex15_04.inc}
+\section*{Failure and design boundary}
+Do not confuse language closure lifetime with native reference-capture lifetime. The two layers can coexist in one embedding.
+
+\section*{Try it yourself}
+Create two closures with different multipliers and verify that their environments remain independent.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex15\_04.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\workshop{15.5}{Conditional expressions}{C++20}
+An if expression returns one of two branch values. The condition must be Boolean and branch types must agree. This lets the type checker prevent malformed policy decisions before the host uses their result.
+
+\lstinputlisting[language=C++,caption={Example ex15\_05: C++}]{examples/cpp/ex15_05.inc}
+\section*{Execution, step by step}
+The condition selects the first branch. The unused branch supplies a compatible Int result type.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{15.5}{Conditional expressions}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex15\_05: D}]{examples/d/ex15_05.inc}
+\section*{Failure and design boundary}
+If the unused branch contains a type error, static checking can still reject the expression. Runtime branch selection is not a type-checking escape hatch.
+
+\section*{Try it yourself}
+Make the branches Int and String, then explain the diagnostic.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex15\_05.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\section*{Chapter review: Recursion, sections and tacit authoring}
+MetaML also recognizes tacit parameters such as \$1 and section holes such as \#1 inside parentheses. Holes are numbered from one and are rejected outside a section context. Composition and concatenative forms have their own parser precedence and runtime stack behavior. These facilities can make a domain vocabulary compact, but an API guide should first demonstrate an equivalent explicit lambda so readers understand the argument flow before adopting terse authoring syntax.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Ask type\_of for the lambda before applying it.
+\item Construct a three-argument function and apply it in three separate stages.
+\item Evaluate x in a later call and confirm that it was not exported as a top-level name.
+\item Create two closures with different multipliers and verify that their environments remain independent.
+\item Make the branches Int and String, then explain the diagnostic.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+

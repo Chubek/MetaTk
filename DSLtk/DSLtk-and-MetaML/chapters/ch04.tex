@@ -1,0 +1,169 @@
+\chapter{Absence, errors and deferred work}\label{ch:4}
+\section*{The working problem}
+Choose different types for absence, failure, deferred computation and cached computation.
+
+Maybe models a missing value without a diagnostic. Result carries an explicit error. Lazy caches one deferred result. Memoization caches a function by key. Their superficially similar wrappers encode different control-flow contracts.
+
+\section*{Choosing a failure algebra}
+Maybe expresses expected absence. Result expresses an operation that may fail with a payload. Do not erase a useful error by converting Result to Maybe at a boundary merely because the caller wants a default. First decide whether a missing configuration entry and an invalid entry mean the same thing. Usually the first can use a default while the second must prevent startup.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item Optional mapping
+\item Explicit success and failure
+\item Mapping the success channel
+\item Deferring one computation
+\item Caching by key
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{4.1}{Optional mapping}{C++20}
+Use Maybe when the absence itself is expected and no explanation is required. Mapping transforms only a present value. Filtering can remove a value without introducing an error channel, which is useful for optional configuration fields.
+
+\lstinputlisting[language=C++,caption={Example ex04\_01: C++}]{examples/cpp/ex04_01.inc}
+\section*{Execution, step by step}
+The empty value bypasses the transformation and selects its fallback. A present zero would remain a present value rather than becoming absent.
+
+\section*{Read the implementation}
+The relevant source entry is Maybe in vendor/DSLtk.hpp, around line 7529. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{4.1}{Optional mapping}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex04\_01: D}]{examples/d/ex04_01.inc}
+\section*{Failure and design boundary}
+A fallback can hide a malformed field if parsing failure is encoded as absence. Use Result when a caller needs to distinguish missing input from invalid input.
+
+\section*{Try it yourself}
+Filter out negative values and test both an empty Maybe and a present zero.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{4.2}{Explicit success and failure}{C++20}
+Use the named Result factories even when the payload and error types differ. They make the branch visible at the call site and avoid ambiguity when both types are strings. This style scales well to parser and configuration APIs.
+
+\lstinputlisting[language=C++,caption={Example ex04\_02: C++}]{examples/cpp/ex04_02.inc}
+\section*{Execution, step by step}
+The active branch determines which unwrap operation is valid. A caller must not infer success from a default payload.
+
+\section*{Read the implementation}
+The relevant source entry is Result in vendor/DSLtk.hpp, around line 5425. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{4.2}{Explicit success and failure}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex04\_02: D}]{examples/d/ex04_02.inc}
+\section*{Failure and design boundary}
+Both unwrap operations reject the wrong branch. They are convenience accessors after validation, not replacements for branch handling.
+
+\section*{Try it yourself}
+Change the success payload to string so both branches have the same type. Keep every construction explicit.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{4.3}{Mapping the success channel}{C++20}
+Result.map changes the success payload while preserving the error. This is useful when a parser has already validated a value and a later stage merely changes representation. The function passed to map should not fail through an undocumented second channel.
+
+\lstinputlisting[language=C++,caption={Example ex04\_03: C++}]{examples/cpp/ex04_03.inc}
+\section*{Execution, step by step}
+The multiplication runs only for success. If the input were an error, its text would pass through unchanged.
+
+\section*{Read the implementation}
+The relevant source entry is Result in vendor/DSLtk.hpp, around line 5425. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{4.3}{Mapping the success channel}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex04\_03: D}]{examples/d/ex04_03.inc}
+\section*{Failure and design boundary}
+Use and\_then for a transformation that itself returns Result. Mapping such a function produces a nested Result instead of flattening failure propagation.
+
+\section*{Try it yourself}
+Start with from\_err and add a counter to the mapping function. Verify that the counter remains zero.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{4.4}{Deferring one computation}{C++20}
+Lazy stores a producer and evaluates it on first demand. A later get or force reuses the computed value. This is suitable for expensive metadata that some code paths never need, provided access is confined or externally synchronized.
+
+\lstinputlisting[language=C++,caption={Example ex04\_04: C++}]{examples/cpp/ex04_04.inc}
+\section*{Execution, step by step}
+Construction leaves the counter unchanged. The first read increments it; the second read uses the stored result.
+
+\section*{Read the implementation}
+The relevant source entry is Lazy in vendor/DSLtk.hpp, around line 7482. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{4.4}{Deferring one computation}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex04\_04: D}]{examples/d/ex04_04.inc}
+\section*{Failure and design boundary}
+Lazy is not a synchronization primitive. Capturing a local by reference also requires that local to outlive every possible first access.
+
+\section*{Try it yourself}
+Make the producer fail once and investigate the implementation behavior on a second access. Document whether failure is cached.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{4.5}{Caching by key}{C++20}
+Memoization maps each key to a computed value. It is appropriate for deterministic computations whose result depends entirely on the key. Cache lifetime and invalidation are part of the application design, especially when keys refer to changing files or external resources.
+
+\lstinputlisting[language=C++,caption={Example ex04\_05: C++}]{examples/cpp/ex04_05.inc}
+\section*{Execution, step by step}
+The first key lookup computes; the second finds the stored value. Clearing the cache makes a subsequent lookup recompute.
+
+\section*{Read the implementation}
+The relevant source entry is memoize in vendor/DSLtk.hpp, around line 7462. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{4.5}{Caching by key}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex04\_05: D}]{examples/d/ex04_05.inc}
+\section*{Failure and design boundary}
+Wrapping a recursive function does not automatically route its internal recursive calls through the wrapper. Also, no eviction policy or thread safety is implied.
+
+\section*{Try it yourself}
+Include a version number in a file-analysis cache key and explain when an explicit clear is still necessary.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\section*{Chapter review: Choosing a failure algebra}
+Result.and\_then chains a callback that itself returns Result, whereas map transforms only a successful payload. map\_err changes diagnostic representation without touching successful values. Free optional helpers map, flat\_map, filter and or\_else provide similar convenience around host optional types. Their presence does not make all combinations lawful in the presence of exceptions or side effects. Test that error branches bypass success callbacks, and ensure a cached computation's key includes every semantic input.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Filter out negative values and test both an empty Maybe and a present zero.
+\item Change the success payload to string so both branches have the same type. Keep every construction explicit.
+\item Start with from\_err and add a counter to the mapping function. Verify that the counter remains zero.
+\item Make the producer fail once and investigate the implementation behavior on a second access. Document whether failure is cached.
+\item Include a version number in a file-analysis cache key and explain when an explicit clear is still necessary.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+

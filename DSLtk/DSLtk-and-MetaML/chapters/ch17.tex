@@ -1,0 +1,179 @@
+\chapter{Algebraic data types and pattern matching}\label{ch:17}
+\section*{The working problem}
+Represent alternatives explicitly and consume them with checked patterns.
+
+The built-in source declares Option and Result. User-defined variants introduce constructors with typed payloads. Match expressions bind constructor fields and can attach guards, while all branch values must have compatible types.
+
+\section*{Pattern coverage and guarded alternatives}
+Patterns include literals, variables, wildcards, constructors, tuples, records and lists. A match first establishes structural compatibility, then evaluates any guard in the extended environment. Guard failure proceeds to a later alternative. Branch types must unify, which prevents a decision function from returning a Boolean in one case and an unrelated string in another.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item Option without external libraries
+\item Typed success and error variants
+\item Declaring a variant
+\item Pattern guards
+\item List decomposition
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{17.1}{Option without external libraries}{C++20}
+Option is installed by the session constructor. It is useful for expected absence such as a failed numeric parse. The presence of Option does not imply that every convenience function from an external standard library is loaded.
+
+\lstinputlisting[language=C++,caption={Example ex17\_01: C++}]{examples/cpp/ex17_01.inc}
+\section*{Execution, step by step}
+The Some constructor carries one value, and its matching branch binds that value to x.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{17.1}{Option without external libraries}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex17\_01: D}]{examples/d/ex17_01.inc}
+\section*{Failure and design boundary}
+A wildcard fallback can hide a newly added variant in application-defined types. Make exhaustive cases explicit when future evolution matters.
+
+\section*{Try it yourself}
+Run the same match with None and verify the alternative result.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex17\_01.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\workshop{17.2}{Typed success and error variants}{C++20}
+The language Result variant is separate from the host dsl::Result returned by eval. A successful host evaluation may produce a language-level Err value. Applications should handle both layers deliberately.
+
+\lstinputlisting[language=C++,caption={Example ex17\_02: C++}]{examples/cpp/ex17_02.inc}
+\section*{Execution, step by step}
+The outer embedding succeeds. Inside the language, the match selects the Ok branch.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{17.2}{Typed success and error variants}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex17\_02: D}]{examples/d/ex17_02.inc}
+\section*{Failure and design boundary}
+Do not mistake a successfully returned Err constructor for a failed parser or checker. Decide how language-level errors map to your application response.
+
+\section*{Try it yourself}
+Return Err with a string payload and inspect the successful host result wrapper.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex17\_02.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\workshop{17.3}{Declaring a variant}{C++20}
+A custom variant names a closed set of domain alternatives. Constructors carry the data needed by later computation. This avoids magic integer codes and gives pattern matching enough information to bind meaningful local names.
+
+\lstinputlisting[language=C++,caption={Example ex17\_03: C++}]{examples/cpp/ex17_03.inc}
+\section*{Execution, step by step}
+The type declaration installs two constructors. Found accepts an Int payload that the pattern extracts.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{17.3}{Declaring a variant}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex17\_03: D}]{examples/d/ex17_03.inc}
+\section*{Failure and design boundary}
+Constructor names participate in the language namespace. Choose names that will remain clear when several modules are used together.
+
+\section*{Try it yourself}
+Add a Rejected String constructor and update every matching function.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex17\_03.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\workshop{17.4}{Pattern guards}{C++20}
+A guard adds a Boolean condition after a structural pattern succeeds. This is useful for a range-sensitive case followed by a more general fallback. Keep guard expressions pure when predictable matching behavior matters.
+
+\lstinputlisting[language=C++,caption={Example ex17\_04: C++}]{examples/cpp/ex17_04.inc}
+\section*{Execution, step by step}
+The constructor pattern succeeds and the positive-value guard accepts. The wildcard fallback is not evaluated.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{17.4}{Pattern guards}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex17\_04: D}]{examples/d/ex17_04.inc}
+\section*{Failure and design boundary}
+A guarded constructor case does not cover every instance of that constructor. Include a fallback for the values rejected by the guard.
+
+\section*{Try it yourself}
+Use Some (-1) and verify the fallback. Explain why the guard is not a type constraint.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex17\_04.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\workshop{17.5}{List decomposition}{C++20}
+List patterns distinguish empty and nonempty structure. Decomposing with a head and tail is more natural for linked lists than repeatedly converting them to native vectors. Recursive consumers must still account for depth and termination.
+
+\lstinputlisting[language=C++,caption={Example ex17\_05: C++}]{examples/cpp/ex17_05.inc}
+\section*{Execution, step by step}
+The cons pattern binds the first element and the remaining list. The empty-list branch handles the other structural case.
+
+\section*{Read the implementation}
+The relevant source entry is Session in vendor/MetaML.hpp, around line 8171. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{17.5}{List decomposition}{D}
+C++ creates a noncopyable Session value; D allocates MetaML.Session as a class reference. Keep native callback captures alive for the whole session lifecycle and close resources explicitly at their owner boundary. The MetaML program text follows the same language rules in either host. Check the native Result before inspecting the language Value. A successful language value can itself encode a domain failure such as Err or false.
+
+\lstinputlisting[language=D,caption={Example ex17\_05: D}]{examples/d/ex17_05.inc}
+\section*{Failure and design boundary}
+The tail is another list, not a host pointer into a vector. Keep algorithm complexity in mind when crossing the language boundary repeatedly.
+
+\section*{Try it yourself}
+Write a recursive length function and compare it with a host callback implementation.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+The shared language fixture is also available as examples/ex17\_05.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+
+\clearpage
+\section*{Chapter review: Pattern coverage and guarded alternatives}
+A warning about non-exhaustive or redundant patterns is not the same as a fatal type error. Inspect RunReport.warnings when building a publication gate and choose which warning codes your application treats as blockers. Do not globally disable warning categories merely to keep a sample quiet. A language Result constructor and a host Result wrapper remain separate even when they use similar names; document both failure layers in every external API.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Run the same match with None and verify the alternative result.
+\item Return Err with a string payload and inspect the successful host result wrapper.
+\item Add a Rejected String constructor and update every matching function.
+\item Use Some (-1) and verify the fallback. Explain why the guard is not a type constraint.
+\item Write a recursive length function and compare it with a host callback implementation.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+

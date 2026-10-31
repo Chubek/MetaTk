@@ -1,0 +1,169 @@
+\chapter{Visitors, literals and reflection}\label{ch:12}
+\section*{The working problem}
+Use host-language facilities to expose a compact, typed authoring vocabulary.
+
+Visitors dispatch on AST tags with schema checks. LiteralSet parses suffix-bearing numbers. Enum reflection supports symbolic names and containers, with different discovery mechanisms in C++ and D. These are conveniences whose limits should remain visible.
+
+\section*{Protocols, reflection and task policy}
+Enum reflection has a large compatibility surface: names, values, casts, flags, iteration and enum-indexed containers. C++ aliases expose the bundled magic\_enum implementation, including compiler-dependent range discovery. D uses declared members and offers EnumArray, EnumBitset and EnumSet. Duplicate numeric values have naming consequences. A public text format should define whether aliases are accepted and what canonical name is emitted.
+
+\section*{In this chapter}
+\begin{enumerate}
+\item A schema-derived visitor
+\item Suffix-bearing literals
+\item Symbolic enum names
+\item Checked visitor boundaries
+\item Keeping a domain wrapper small
+\end{enumerate}
+Read the workshops in order, then use the chapter review to connect the small examples to an application boundary. Each example is independently runnable; it does not depend on variables introduced in an earlier listing.
+
+\clearpage
+\workshop{12.1}{A schema-derived visitor}{C++20}
+A visitor derived from an example AST collects its possible tags and requires corresponding handlers. This is a useful local exhaustiveness check. The schema must represent all tags your application can produce, not just those encountered in one lucky test input.
+
+\lstinputlisting[language=C++,caption={Example ex12\_01: C++}]{examples/cpp/ex12_01.inc}
+\section*{Execution, step by step}
+The handler fires once for the one-node tree. A walk recursively visits children; a single visit dispatches only one node.
+
+\section*{Read the implementation}
+The relevant source entry is derive\_visitor in vendor/DSLtk.hpp, around line 10149. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{12.1}{A schema-derived visitor}{D}
+D accepts string template arguments directly. ASTNode remains a value with explicit deep-copy behavior, so changing a copied tree must not mutate the original. Keep tests for that behavior when upgrading the module.
+
+\lstinputlisting[language=D,caption={Example ex12\_01: D}]{examples/d/ex12_01.inc}
+\section*{Failure and design boundary}
+Runtime schema coverage is not a proof that every possible language construct was included. Prefer an explicitly maintained schema for a public language.
+
+\section*{Try it yourself}
+Add an inner box node and count pre-order versus post-order events.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{12.2}{Suffix-bearing literals}{C++20}
+LiteralSet recognizes a suffix, parses the preceding numeric text and invokes its handler. It can make a domain vocabulary pleasant without defining a parser for an entire language. Keep the returned unit convention explicit.
+
+\lstinputlisting[language=C++,caption={Example ex12\_02: C++}]{examples/cpp/ex12_02.inc}
+\section*{Execution, step by step}
+Two kilometers become two thousand base units. The return is numeric; it does not carry a type-level dimension.
+
+\section*{Read the implementation}
+The relevant source entry is LiteralSet in vendor/DSLtk.hpp, around line 7255. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{12.2}{Suffix-bearing literals}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex12\_02: D}]{examples/d/ex12_02.inc}
+\section*{Failure and design boundary}
+The C++ implementation uses stold without an explicit consumed-length check. Validate the numeric prefix if your application must reject every trailing numeric-field character.
+
+\section*{Try it yourself}
+Add centimeters and test suffix ordering when one suffix can overlap another.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{12.3}{Symbolic enum names}{C++20}
+Enum reflection bridges host enums and text. C++ relies on compiler-assisted numeric-range discovery; D can inspect declared members. This makes wide sparse enums a portability test rather than a reason to assume identical discovery cost.
+
+\lstinputlisting[language=C++,caption={Example ex12\_03: C++}]{examples/cpp/ex12_03.inc}
+\section*{Execution, step by step}
+The name lookup returns a symbolic spelling and the reverse lookup returns an optional enum value.
+
+\section*{Read the implementation}
+The relevant source entry is EnumReflection in vendor/DSLtk.hpp, around line 5897. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{12.3}{Symbolic enum names}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex12\_03: D}]{examples/d/ex12_03.inc}
+\section*{Failure and design boundary}
+Unknown names and values must remain explicit failure cases. Never substitute the first enum member without a documented default policy.
+
+\section*{Try it yourself}
+Use widely separated numeric enum values and inspect the C++ enum\_range customization before relying on discovery.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{12.4}{Checked visitor boundaries}{C++20}
+A visitor should reject a node tag outside its declared schema. That failure catches drift between construction and traversal. In an extensible application, decide whether unknown tags are errors or plugin extension points before exposing traversal as a public API.
+
+\lstinputlisting[language=C++,caption={Example ex12\_04: C++}]{examples/cpp/ex12_04.inc}
+\section*{Execution, step by step}
+The empty handler leaves the value unchanged. Successful dispatch establishes only that the tag belongs to the declared schema.
+
+\section*{Read the implementation}
+The relevant source entry is ASTVisitor in vendor/DSLtk.hpp, around line 10086. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{12.4}{Checked visitor boundaries}{D}
+D accepts string template arguments directly. ASTNode remains a value with explicit deep-copy behavior, so changing a copied tree must not mutate the original. Keep tests for that behavior when upgrading the module.
+
+\lstinputlisting[language=D,caption={Example ex12\_04: D}]{examples/d/ex12_04.inc}
+\section*{Failure and design boundary}
+Mutating a node into a different tag while walking can invalidate assumptions about traversal order and child references. Prefer a separate rebuilding pass for structural changes.
+
+\section*{Try it yourself}
+Visit an unexpected tag and convert the exception into a controlled plugin compatibility error.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\workshop{12.5}{Keeping a domain wrapper small}{C++20}
+A wrapper can expose a semantic operation while hiding generic construction machinery. This preserves freedom to change representation later. The public function should document what its numbers mean rather than forcing every caller to understand literal registration.
+
+\lstinputlisting[language=C++,caption={Example ex12\_05: C++}]{examples/cpp/ex12_05.inc}
+\section*{Execution, step by step}
+Callers use metres and a string. The LiteralSet type does not leak into the application interface.
+
+\section*{Read the implementation}
+The relevant source entry is literal\_set in vendor/DSLtk.hpp, around line 7320. Follow the public call into its result construction or dispatch branch. Identify the input ownership, the success condition and the exact failure path before changing this example.
+
+The assertions are the acceptance contract for this workshop. Run the complete program, then change one input at a time. When a change fails, first identify whether the failure belongs to the native build, structural recognition, language checking, execution or the domain result.
+
+\clearpage
+\workshop{12.5}{Keeping a domain wrapper small}{D}
+D uses module imports and exclamation-mark template instantiation where C++ uses includes, namespaces and angle brackets. The runnable file includes the required imports; the listing shows only its main body.
+
+\lstinputlisting[language=D,caption={Example ex12\_05: D}]{examples/d/ex12_05.inc}
+\section*{Failure and design boundary}
+A narrow wrapper still needs a failure policy. Decide whether malformed literals throw, return Result or accumulate diagnostics before using it in a service.
+
+\section*{Try it yourself}
+Return a domain quantity struct instead of a bare number and add a checked nonnegative constraint.
+
+\section*{Review the result}
+Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
+
+\clearpage
+\section*{Chapter review: Protocols, reflection and task policy}
+TaskPipeline composes named Task operations and records state. TaskPolicy describes sequencing behavior in the supplied task runner; do not infer a general thread pool or asynchronous scheduler from the word pipeline. AbstractIO defines read, write and eof protocol expectations, and write\_all must handle partial progress. A backend returning zero without a clear end condition can violate the caller's assumptions. Protocol adapters need failure and short-write fixtures, not just a successful in-memory demonstration.
+
+\section*{Questions to answer in your implementation}
+\begin{enumerate}
+\item Add an inner box node and count pre-order versus post-order events.
+\item Add centimeters and test suffix ordering when one suffix can overlap another.
+\item Use widely separated numeric enum values and inspect the C++ enum\_range customization before relying on discovery.
+\item Visit an unexpected tag and convert the exception into a controlled plugin compatibility error.
+\item Return a domain quantity struct instead of a bare number and add a checked nonnegative constraint.
+\end{enumerate}
+\section*{A practical completion test}
+Choose one workshop and replace its fixed input with an application boundary: a command-line argument, a file, a configuration field or a typed callback. Write down the accepted input shape and the error outcome. Keep parsing and validation separate from publishing state. Preserve the smallest failing input when a regression is found.
+
