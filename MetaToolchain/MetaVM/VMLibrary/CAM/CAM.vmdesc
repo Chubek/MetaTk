@@ -1,0 +1,4 @@
+\VMName{CAM}
+\VMArchitecture{Categorical abstract machine}
+\VMStatus{catalog-only}
+\VMInvariant{Portable example bytecode is Machinery bytecode; it does not establish native compatibility.}

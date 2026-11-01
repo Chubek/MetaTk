@@ -1,0 +1,4 @@
+\VMName{WASM}
+\VMArchitecture{WebAssembly typed instructions and linear memory}
+\VMStatus{catalog-only}
+\VMInvariant{Portable example bytecode is Machinery bytecode; it does not establish native compatibility.}

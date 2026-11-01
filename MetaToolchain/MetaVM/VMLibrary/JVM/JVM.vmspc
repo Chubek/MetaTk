@@ -1,0 +1,16 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "JVM",
+  "symbol": "JVM",
+  "architecture": "stack",
+  "description": "JVM integer Code arrays with local variables and bounded operand stack",
+  "native_coverage": "integer-method-subset",
+  "native_format_loader": false,
+  "portable_example": "JVM.mvm",
+  "vmweave": "JVM.vmweave",
+  "vmspc": "JVM.vmspc",
+  "vmdesc": "JVM.vmdesc",
+  "limitations": [
+    "See native API header for exact implemented subset. No full platform runtime or file loader."
+  ]
+}

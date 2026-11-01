@@ -1,0 +1,585 @@
+# m68k.dsymspec.yaml
+# Migrated from the Lua DSL (m68k.dsymspec). Encoder bodies are imperative
+# pseudo-code; the grammar is documented in README.md.
+#
+# m68k.dsymspec — Motorola 68000/ColdFire (m68k), big-endian, System V.
+# Data: M68k LLVM target (D0-D7/A0-A7/SP/PC/SR, FP0-FP7 68881), osdev_oracle
+# (68k exception/trap model), toolchain_orace (R_68K_* ELF relocations),
+# ccbe_oracle ABI topics (stack frames: LINK/UNLK, MOVEM).
+# Strata: base(68000) | 68010 | 68020 | 68040/60 | fpu | mmu | bitfield |
+#   cas | priv.
+
+schema: 1
+targets:
+  - {arch: m68k, subarch: "68020", addr_size: 32, op_size: 32, addr_def: 32, align: 2, byte_order: big, obj_format: ELF32, abi: SystemV, calling_conv: m68k-cdecl, features: ["68000", "68020", fpu]}
+features:
+  - {name: "68000", desc: "MC68000 base"}
+  - {name: "68010", desc: "MC68010 (loop/move16?/full MMU)"}
+  - {name: "68020", desc: "MC68020 (bitfield/cas/bfins)"}
+  - {name: "68040", desc: "MC68040 (FPU integrated)"}
+  - {name: "68060", desc: MC68060}
+  - {name: coldfire, desc: "ColdFire subset"}
+  - {name: fpu, desc: "68881/68882 FPU"}
+  - {name: mmu, desc: "paged MMU (PFLUSH/PMOVE)"}
+  - {name: bitfield, desc: "bitfield instructions"}
+  - {name: cas, desc: "compare-and-swap (CAS/CAS2)"}
+  - {name: priv, desc: "privileged (MOVEC/MOVES/RTE)"}
+registers:
+  - {name: d0, class: gpr, width: 32, enc: 0, flags: [readable, writable]}
+  - {name: d1, class: gpr, width: 32, enc: 1, flags: [readable, writable]}
+  - {name: d2, class: gpr, width: 32, enc: 2, flags: [readable, writable]}
+  - {name: d3, class: gpr, width: 32, enc: 3, flags: [readable, writable]}
+  - {name: d4, class: gpr, width: 32, enc: 4, flags: [readable, writable]}
+  - {name: d5, class: gpr, width: 32, enc: 5, flags: [readable, writable]}
+  - {name: d6, class: gpr, width: 32, enc: 6, flags: [readable, writable]}
+  - {name: d7, class: gpr, width: 32, enc: 7, flags: [readable, writable]}
+  - {name: a0, class: gpr, width: 32, enc: 8, flags: [readable, writable]}
+  - {name: a1, class: gpr, width: 32, enc: 9, flags: [readable, writable]}
+  - {name: a2, class: gpr, width: 32, enc: 10, flags: [readable, writable]}
+  - {name: a3, class: gpr, width: 32, enc: 11, flags: [readable, writable]}
+  - {name: a4, class: gpr, width: 32, enc: 12, flags: [readable, writable]}
+  - {name: a5, class: gpr, width: 32, enc: 13, flags: [readable, writable]}
+  - {name: a6, class: gpr, width: 32, enc: 14, flags: [readable, writable]}
+  - {name: a7, class: gpr, width: 32, enc: 15, flags: [readable, writable]}
+  - {name: fp0, class: fp, width: 80, enc: 0, flags: [readable, writable]}
+  - {name: fp1, class: fp, width: 80, enc: 1, flags: [readable, writable]}
+  - {name: fp2, class: fp, width: 80, enc: 2, flags: [readable, writable]}
+  - {name: fp3, class: fp, width: 80, enc: 3, flags: [readable, writable]}
+  - {name: fp4, class: fp, width: 80, enc: 4, flags: [readable, writable]}
+  - {name: fp5, class: fp, width: 80, enc: 5, flags: [readable, writable]}
+  - {name: fp6, class: fp, width: 80, enc: 6, flags: [readable, writable]}
+  - {name: fp7, class: fp, width: 80, enc: 7, flags: [readable, writable]}
+  - {name: sp, class: gpr, width: 32, enc: 15, flags: [readable, writable]}
+  - {name: usp, class: gpr, width: 32, enc: 15, flags: [readable, writable, modedep]}
+  - {name: ssp, class: gpr, width: 32, enc: 15, flags: [readable, writable, modedep]}
+  - {name: pc, class: special, width: 32, enc: 0}
+  - {name: sr, class: status, width: 16, enc: 0}
+  - {name: ccr, class: status, width: 8, enc: 0, parent: sr, sub_lo: 0, sub_hi: 8}
+  - {name: fpiar, class: ctrl, width: 32, enc: 0}
+  - {name: fpcr, class: ctrl, width: 32, enc: 0}
+  - {name: fpsr, class: status, width: 32, enc: 0}
+  - {name: sfc, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: dfc, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: vbr, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+mnemonics:
+  - {name: nop}
+  - {name: move}
+  - {name: add}
+  - {name: sub}
+  - {name: and}
+  - {name: or}
+  - {name: eor}
+  - {name: cmp}
+  - {name: tst}
+  - {name: neg}
+  - {name: not}
+  - {name: clr}
+  - {name: ext}
+  - {name: swap}
+  - {name: lea}
+  - {name: pea}
+  - {name: link}
+  - {name: unlk}
+  - {name: movem}
+  - {name: addq}
+  - {name: subq}
+  - {name: lsl}
+  - {name: lsr}
+  - {name: asl}
+  - {name: asr}
+  - {name: rol}
+  - {name: muls}
+  - {name: mulu}
+  - {name: divs}
+  - {name: divu}
+  - {name: bra}
+  - {name: bcc}
+  - {name: bsr}
+  - {name: jmp}
+  - {name: jsr}
+  - {name: rts}
+  - {name: rte}
+  - {name: trap}
+  - {name: chk}
+  - {name: tas}
+  - {name: cas}
+  - {name: bfset}
+  - {name: fadd}
+  - {name: fmove}
+  - {name: movec}
+  - {name: stop}
+  - {name: reset}
+encoders:
+  # Representative big-endian opcode words (size varies 2-10 bytes).
+  - name: nop
+    max_bytes: 2
+    body: |
+      EMIT16BE 0x4E71
+  - name: move
+    max_bytes: 10
+    body: |
+      EMIT16BE 0x3000 + dst*512 + src
+  - name: add
+    max_bytes: 10
+    body: |
+      EMIT16BE 0xD000 + dst*512 + src
+  - name: sub
+    max_bytes: 10
+    body: |
+      EMIT16BE 0x9000 + dst*512 + src
+  - name: and
+    max_bytes: 10
+    body: |
+      EMIT16BE 0xC000 + dst*512 + src
+  - name: or
+    max_bytes: 10
+    body: |
+      EMIT16BE 0x8000 + dst*512 + src
+  - name: eor
+    max_bytes: 10
+    body: |
+      EMIT16BE 0xB100 + dst*512 + src
+  - name: cmp
+    max_bytes: 10
+    body: |
+      EMIT16BE 0xB000 + dst*512 + src
+  - name: tst
+    max_bytes: 6
+    body: |
+      EMIT16BE 0x4A00 + dst
+  - name: neg
+    max_bytes: 6
+    body: |
+      EMIT16BE 0x4400 + dst
+  - name: not
+    max_bytes: 6
+    body: |
+      EMIT16BE 0x4600 + dst
+  - name: clr
+    max_bytes: 6
+    body: |
+      EMIT16BE 0x4200 + dst
+  - name: ext
+    max_bytes: 2
+    body: |
+      EMIT16BE 0x4800 + dst
+  - name: swap
+    max_bytes: 2
+    body: |
+      EMIT16BE 0x4840 + dst
+  - name: lea
+    max_bytes: 6
+    body: |
+      EMIT16BE 0x41C0 + dst*512 + src
+      EMIT16BE imm
+  - name: pea
+    max_bytes: 6
+    body: |
+      EMIT16BE 0x4840 + src
+  - name: link
+    max_bytes: 4
+    body: |
+      EMIT16BE 0x4E50 + dst
+      EMIT16BE imm
+  - name: unlk
+    max_bytes: 2
+    body: |
+      EMIT16BE 0x4E58 + dst
+  - name: movem
+    max_bytes: 6
+    body: |
+      EMIT16BE 0x48C0 + rlist + ea
+  - name: addq
+    max_bytes: 6
+    body: |
+      EMIT16BE 0x5000 + ((imm + 8) % 8)*512 + dst
+  - name: subq
+    max_bytes: 6
+    body: |
+      EMIT16BE 0x5100 + ((imm + 8) % 8)*512 + dst
+  - name: lsl
+    max_bytes: 4
+    body: |
+      EMIT16BE 0xE100 + dst*512 + src
+  - name: lsr
+    max_bytes: 4
+    body: |
+      EMIT16BE 0xE080 + dst*512 + src
+  - name: asl
+    max_bytes: 4
+    body: |
+      EMIT16BE 0xE120 + dst*512 + src
+  - name: asr
+    max_bytes: 4
+    body: |
+      EMIT16BE 0xE0A0 + dst*512 + src
+  - name: rol
+    max_bytes: 4
+    body: |
+      EMIT16BE 0xE190 + dst*512 + src
+  - name: muls
+    max_bytes: 6
+    body: |
+      EMIT16BE 0xC1C0 + dst*512 + src
+  - name: mulu
+    max_bytes: 6
+    body: |
+      EMIT16BE 0xC0C0 + dst*512 + src
+  - name: divs
+    max_bytes: 6
+    body: |
+      EMIT16BE 0x81C0 + dst*512 + src
+  - name: divu
+    max_bytes: 6
+    body: |
+      EMIT16BE 0x80C0 + dst*512 + src
+  - name: bra
+    max_bytes: 4
+    max_relocs: 1
+    body: |
+      EMIT16BE 0x6000
+      EMIT_RELOCATION sym, R_68K_PC16
+  - name: bcc
+    max_bytes: 4
+    max_relocs: 1
+    body: |
+      EMIT16BE 0x6100 + cond*256
+      EMIT_RELOCATION sym, R_68K_PC16
+  - name: bsr
+    max_bytes: 4
+    max_relocs: 1
+    body: |
+      EMIT16BE 0x6100
+      EMIT_RELOCATION sym, R_68K_PC16
+  - name: jmp
+    max_bytes: 6
+    body: |
+      EMIT16BE 0x4EC0 + src
+  - name: jsr
+    max_bytes: 6
+    max_relocs: 1
+    body: |
+      EMIT16BE 0x4E80
+      EMIT_RELOCATION sym, R_68K_PC32
+  - name: rts
+    max_bytes: 2
+    body: |
+      EMIT16BE 0x4E75
+  - name: rte
+    max_bytes: 2
+    body: |
+      EMIT16BE 0x4E73
+  - name: trap
+    max_bytes: 2
+    body: |
+      EMIT16BE 0x4E40 + (imm % 16)
+  - name: chk
+    max_bytes: 6
+    body: |
+      EMIT16BE 0x4180 + dst*512 + src
+  - name: tas
+    max_bytes: 6
+    body: |
+      EMIT16BE 0x4AC0 + dst
+  - name: cas
+    max_bytes: 10
+    body: |
+      EMIT16BE 0x0E00 + dst*512 + src + ea
+  - name: bfset
+    max_bytes: 8
+    body: |
+      EMIT16BE 0xEAC0 + dst*512 + src
+  - name: fadd
+    max_bytes: 6
+    body: |
+      EMIT16BE 0xF200
+      EMIT16BE 0x0022 + dst*64 + src
+  - name: fmove
+    max_bytes: 6
+    body: |
+      EMIT16BE 0xF200
+      EMIT16BE 0x0000 + dst*64 + src
+  - name: movec
+    max_bytes: 4
+    body: |
+      EMIT32BE 0x4E7A0800 + dst*4096 + src
+  - name: stop
+    max_bytes: 4
+    body: |
+      EMIT16BE 0x4E72
+      EMIT16BE imm
+  - name: reset
+    max_bytes: 2
+    body: |
+      EMIT16BE 0x4E70
+forms:
+  - mnemonic: nop
+    encoder: nop
+  - mnemonic: move
+    encoder: move
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: add
+    encoder: add
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: sub
+    encoder: sub
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: and
+    encoder: and
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: or
+    encoder: or
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: eor
+    encoder: eor
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: cmp
+    encoder: cmp
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: tst
+    encoder: tst
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: neg
+    encoder: neg
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+  - mnemonic: not
+    encoder: not
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+  - mnemonic: clr
+    encoder: clr
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+  - mnemonic: ext
+    encoder: ext
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+  - mnemonic: swap
+    encoder: swap
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+  - mnemonic: lea
+    encoder: lea
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: mem, width: 32}
+  - mnemonic: pea
+    encoder: pea
+    operands:
+      - {kind: mem, width: 32}
+  - mnemonic: link
+    encoder: link
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: imm, width: 16, imm_min: -32768, imm_max: 32767, signed: true}
+  - mnemonic: unlk
+    encoder: unlk
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+  - mnemonic: movem
+    encoder: movem
+    operands:
+      - {kind: reglist, width: 32}
+      - {kind: mem, width: 32}
+  - mnemonic: addq
+    encoder: addq
+    operands:
+      - {kind: imm, width: 8, imm_min: 1, imm_max: 8, signed: false}
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+  - mnemonic: subq
+    encoder: subq
+    operands:
+      - {kind: imm, width: 8, imm_min: 1, imm_max: 8, signed: false}
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+  - mnemonic: lsl
+    encoder: lsl
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: lsr
+    encoder: lsr
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: asl
+    encoder: asl
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: asr
+    encoder: asr
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: rol
+    encoder: rol
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: muls
+    encoder: muls
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: mulu
+    encoder: mulu
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: divs
+    encoder: divs
+    flags: [may_trap]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: divu
+    encoder: divu
+    flags: [may_trap]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: bra
+    encoder: bra
+    flags: [branch, terminator, reloc]
+    operands:
+      - {kind: sym, width: 32}
+  - mnemonic: bcc
+    encoder: bcc
+    flags: [cond_branch, reloc]
+    operands:
+      - {kind: cond, width: 8}
+      - {kind: sym, width: 32}
+  - mnemonic: bsr
+    encoder: bsr
+    flags: [branch, reloc]
+    operands:
+      - {kind: sym, width: 32}
+  - mnemonic: jmp
+    encoder: jmp
+    flags: [branch, terminator]
+    operands:
+      - {kind: mem, width: 32}
+  - mnemonic: jsr
+    encoder: jsr
+    flags: [branch, reloc]
+    operands:
+      - {kind: sym, width: 32}
+  - mnemonic: rts
+    encoder: rts
+    flags: [return, terminator]
+  - mnemonic: rte
+    encoder: rte
+    flags: [privileged, return, terminator]
+    required: [priv]
+  - mnemonic: trap
+    encoder: trap
+    flags: [may_trap]
+    operands:
+      - {kind: imm, width: 8, imm_min: 0, imm_max: 15, signed: false}
+  - mnemonic: chk
+    encoder: chk
+    flags: [may_trap]
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: tas
+    encoder: tas
+    flags: [reads_mem, writes_mem]
+    operands:
+      - {kind: mem, width: 8}
+  - mnemonic: cas
+    encoder: cas
+    flags: [reads_mem, writes_mem]
+    required: [cas]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: mem, width: 32}
+  - mnemonic: bfset
+    encoder: bfset
+    required: [bitfield]
+    operands:
+      - {kind: mem, width: 32}
+  - mnemonic: fadd
+    encoder: fadd
+    required: [fpu]
+    operands:
+      - {kind: reg, class: fp, width: 80, access: readwrite}
+      - {kind: reg, class: fp, width: 80}
+  - mnemonic: fmove
+    encoder: fmove
+    required: [fpu]
+    operands:
+      - {kind: reg, class: fp, width: 80, access: write}
+      - {kind: reg, class: fp, width: 80}
+  - mnemonic: movec
+    encoder: movec
+    flags: [privileged]
+    required: [priv]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: ctrl, width: 32}
+  - mnemonic: stop
+    encoder: stop
+    flags: [privileged]
+    required: [priv]
+    operands:
+      - {kind: imm, width: 16, imm_min: 0, imm_max: 65535, signed: false}
+  - mnemonic: reset
+    encoder: reset
+    flags: [privileged]
+    required: [priv]
+syntaxes:
+  - {name: default, comment: ";", separator: ", "}
+  - {name: mit, comment: "|", separator: ", "}
+sections:
+  - {name: ".text", flags: [exec, alloc, code], align: 2, content: code}
+  - {name: ".rodata", flags: [alloc, readonly, data], align: 2, content: data}
+  - {name: ".data", flags: [write, alloc, data], align: 2, content: data}
+  - {name: ".bss", flags: [write, alloc, zerofill, data], align: 2, content: data}
+  - {name: ".got", flags: [write, alloc, data], align: 4, content: data}
+linkages:
+  - {name: func_global, binding: global, visibility: default, symtype: func}
+  - {name: func_weak, binding: weak, visibility: default, symtype: func}
+  - {name: object_global, binding: global, visibility: default, symtype: object}
+  - {name: local_sym, binding: local, visibility: default, symtype: none}
+relocs:
+  - {name: R_68K_NONE, width: 32, expr: "S + A"}
+  - {name: R_68K_32, width: 32, expr: "S + A"}
+  - {name: R_68K_16, width: 16, expr: "S + A"}
+  - {name: R_68K_8, width: 8, expr: "S + A"}
+  - {name: R_68K_PC8, width: 8, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_68K_PC16, width: 16, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_68K_PC32, width: 32, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_68K_GOT8, width: 8, expr: "GOT(S) + A"}
+  - {name: R_68K_GOT16, width: 16, expr: "GOT(S) + A"}
+  - {name: R_68K_GOT32, width: 32, expr: "GOT(S) + A"}
+  - {name: R_68K_PLT16, width: 16, signed: true, pcrel: true, expr: "PLT(S) + A - P"}
+  - {name: R_68K_PLT32, width: 32, signed: true, pcrel: true, expr: "PLT(S) + A - P"}
+  - {name: R_68K_TLS_GD16, width: 16, expr: "TLS(S) + A"}
+  - {name: R_68K_TLS_GD32, width: 32, expr: "TLS(S) + A"}
+  - {name: R_68K_GLOB_DAT, width: 32, expr: S}
+  - {name: R_68K_JMP_SLOT, width: 32, expr: S}
+  - {name: R_68K_RELATIVE, width: 32, expr: "B + A"}
+debug:
+  - {kind: target, ref: "", msg: "m68k 68000..68060+fpu+mmu+bitfield+cas stratification"}
+  - {kind: form, ref: bfset, msg: "bitfield forms require bitfield"}
+  - {kind: form, ref: rte, msg: "privileged forms require priv"}
+backend:
+  file: backend/m68k.json

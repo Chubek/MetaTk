@@ -1,0 +1,17 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "SSAVM",
+  "symbol": "SSAVM",
+  "architecture": "ssa",
+  "description": "Bounded i64 ISSA subset; opt-in definite-assignment/type analysis; CEN selection; simultaneous PHI/PFE; persistent arrays",
+  "native_coverage": "issa-subset",
+  "native_format_loader": false,
+  "portable_example": "SSAVM.mvm",
+  "vmweave": "SSAVM.vmweave",
+  "vmspc": "SSAVM.vmspc",
+  "vmdesc": "SSAVM.vmdesc",
+  "limitations": [
+    "Textual i64/scalar-array subset with configurable runtime and static-analysis limits; see docs/SSAVM.md.",
+    "Opt-in analysis checks defined operands, types and PHI selections; no conventional SSA dominance certificate, value-range/termination proof, calls, floats or SafeTSA loader."
+  ]
+}

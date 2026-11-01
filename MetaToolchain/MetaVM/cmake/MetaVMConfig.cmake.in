@@ -1,0 +1,13 @@
+@PACKAGE_INIT@
+include(CMakeFindDependencyMacro)
+find_dependency(MetaVMMachinery CONFIG
+ PATHS "${CMAKE_CURRENT_LIST_DIR}/../MetaVMMachinery" NO_DEFAULT_PATH)
+if(@METAVM_ENABLE_LIBDRM@)
+ find_dependency(PkgConfig)
+ pkg_check_modules(DRM REQUIRED IMPORTED_TARGET libdrm)
+endif()
+include("${CMAKE_CURRENT_LIST_DIR}/MetaVMTargets.cmake")
+foreach(component Machinery VMWeave Catalog Authoring Framework)
+ set(MetaVM_${component}_FOUND TRUE)
+endforeach()
+check_required_components(MetaVM)

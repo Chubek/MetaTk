@@ -1,0 +1,773 @@
+# loongarch32.dsymspec.yaml
+# Migrated from the Lua DSL (loongarch32.dsymspec). Encoder bodies are imperative
+# pseudo-code; the grammar is documented in README.md.
+#
+# loongarch32.dsymspec — LoongArch32 (LA32), ILP32D psABI, little-endian.
+# Data: TableGen LoongArch target (R0-R31 + ABI aliases, F0-F31, VR/XR
+# vectors, FCC0-7, CSR), arch_oracle loongarch64 summary, toolchain_orace
+# (R_LARCH_* ELF relocations: SOP_PUSH/POP/PC/HI/LO/GOT/TLS), ccbe_oracle
+# ABI topics (LP64D calling convention, GOT/PLT/TLS).
+# Strata: base | f32/f64 | lsx | lasx | lbt | atomics | priv.
+
+schema: 1
+targets:
+  - {arch: loongarch32, subarch: la32, addr_size: 32, op_size: 32, addr_def: 32, align: 4, byte_order: little, obj_format: ELF32, abi: ILP32D, calling_conv: ilp32d, features: [base, f32, f64]}
+features:
+  - {name: base, desc: "LoongArch base integer"}
+  - {name: f32, desc: "single-precision float"}
+  - {name: f64, desc: "double-precision float"}
+  - {name: lsx, desc: "Loongson SIMD eXtension (128-bit)"}
+  - {name: lasx, desc: "Loongson Advanced SIMD eXtension (256-bit)"}
+  - {name: lbt, desc: "Loongson Binary Translation"}
+  - {name: lvz, desc: virtualization}
+  - {name: atomics, desc: "AMO/LL-SC (A ext analogue)"}
+  - {name: priv, desc: "privileged (CSR/ERTN/TLB)"}
+registers:
+  - {name: "$r0", class: gpr, width: 32, enc: 0, flags: [readable, writable]}
+  - {name: "$r1", class: gpr, width: 32, enc: 1, flags: [readable, writable]}
+  - {name: "$r2", class: gpr, width: 32, enc: 2, flags: [readable, writable]}
+  - {name: "$r3", class: gpr, width: 32, enc: 3, flags: [readable, writable]}
+  - {name: "$r4", class: gpr, width: 32, enc: 4, flags: [readable, writable]}
+  - {name: "$r5", class: gpr, width: 32, enc: 5, flags: [readable, writable]}
+  - {name: "$r6", class: gpr, width: 32, enc: 6, flags: [readable, writable]}
+  - {name: "$r7", class: gpr, width: 32, enc: 7, flags: [readable, writable]}
+  - {name: "$r8", class: gpr, width: 32, enc: 8, flags: [readable, writable]}
+  - {name: "$r9", class: gpr, width: 32, enc: 9, flags: [readable, writable]}
+  - {name: "$r10", class: gpr, width: 32, enc: 10, flags: [readable, writable]}
+  - {name: "$r11", class: gpr, width: 32, enc: 11, flags: [readable, writable]}
+  - {name: "$r12", class: gpr, width: 32, enc: 12, flags: [readable, writable]}
+  - {name: "$r13", class: gpr, width: 32, enc: 13, flags: [readable, writable]}
+  - {name: "$r14", class: gpr, width: 32, enc: 14, flags: [readable, writable]}
+  - {name: "$r15", class: gpr, width: 32, enc: 15, flags: [readable, writable]}
+  - {name: "$r16", class: gpr, width: 32, enc: 16, flags: [readable, writable]}
+  - {name: "$r17", class: gpr, width: 32, enc: 17, flags: [readable, writable]}
+  - {name: "$r18", class: gpr, width: 32, enc: 18, flags: [readable, writable]}
+  - {name: "$r19", class: gpr, width: 32, enc: 19, flags: [readable, writable]}
+  - {name: "$r20", class: gpr, width: 32, enc: 20, flags: [readable, writable]}
+  - {name: "$r21", class: gpr, width: 32, enc: 21, flags: [readable, writable]}
+  - {name: "$r22", class: gpr, width: 32, enc: 22, flags: [readable, writable]}
+  - {name: "$r23", class: gpr, width: 32, enc: 23, flags: [readable, writable]}
+  - {name: "$r24", class: gpr, width: 32, enc: 24, flags: [readable, writable]}
+  - {name: "$r25", class: gpr, width: 32, enc: 25, flags: [readable, writable]}
+  - {name: "$r26", class: gpr, width: 32, enc: 26, flags: [readable, writable]}
+  - {name: "$r27", class: gpr, width: 32, enc: 27, flags: [readable, writable]}
+  - {name: "$r28", class: gpr, width: 32, enc: 28, flags: [readable, writable]}
+  - {name: "$r29", class: gpr, width: 32, enc: 29, flags: [readable, writable]}
+  - {name: "$r30", class: gpr, width: 32, enc: 30, flags: [readable, writable]}
+  - {name: "$r31", class: gpr, width: 32, enc: 31, flags: [readable, writable]}
+  - {name: "$f0", class: fp, width: 64, enc: 0, flags: [readable, writable]}
+  - {name: "$f1", class: fp, width: 64, enc: 1, flags: [readable, writable]}
+  - {name: "$f2", class: fp, width: 64, enc: 2, flags: [readable, writable]}
+  - {name: "$f3", class: fp, width: 64, enc: 3, flags: [readable, writable]}
+  - {name: "$f4", class: fp, width: 64, enc: 4, flags: [readable, writable]}
+  - {name: "$f5", class: fp, width: 64, enc: 5, flags: [readable, writable]}
+  - {name: "$f6", class: fp, width: 64, enc: 6, flags: [readable, writable]}
+  - {name: "$f7", class: fp, width: 64, enc: 7, flags: [readable, writable]}
+  - {name: "$f8", class: fp, width: 64, enc: 8, flags: [readable, writable]}
+  - {name: "$f9", class: fp, width: 64, enc: 9, flags: [readable, writable]}
+  - {name: "$f10", class: fp, width: 64, enc: 10, flags: [readable, writable]}
+  - {name: "$f11", class: fp, width: 64, enc: 11, flags: [readable, writable]}
+  - {name: "$f12", class: fp, width: 64, enc: 12, flags: [readable, writable]}
+  - {name: "$f13", class: fp, width: 64, enc: 13, flags: [readable, writable]}
+  - {name: "$f14", class: fp, width: 64, enc: 14, flags: [readable, writable]}
+  - {name: "$f15", class: fp, width: 64, enc: 15, flags: [readable, writable]}
+  - {name: "$f16", class: fp, width: 64, enc: 16, flags: [readable, writable]}
+  - {name: "$f17", class: fp, width: 64, enc: 17, flags: [readable, writable]}
+  - {name: "$f18", class: fp, width: 64, enc: 18, flags: [readable, writable]}
+  - {name: "$f19", class: fp, width: 64, enc: 19, flags: [readable, writable]}
+  - {name: "$f20", class: fp, width: 64, enc: 20, flags: [readable, writable]}
+  - {name: "$f21", class: fp, width: 64, enc: 21, flags: [readable, writable]}
+  - {name: "$f22", class: fp, width: 64, enc: 22, flags: [readable, writable]}
+  - {name: "$f23", class: fp, width: 64, enc: 23, flags: [readable, writable]}
+  - {name: "$f24", class: fp, width: 64, enc: 24, flags: [readable, writable]}
+  - {name: "$f25", class: fp, width: 64, enc: 25, flags: [readable, writable]}
+  - {name: "$f26", class: fp, width: 64, enc: 26, flags: [readable, writable]}
+  - {name: "$f27", class: fp, width: 64, enc: 27, flags: [readable, writable]}
+  - {name: "$f28", class: fp, width: 64, enc: 28, flags: [readable, writable]}
+  - {name: "$f29", class: fp, width: 64, enc: 29, flags: [readable, writable]}
+  - {name: "$f30", class: fp, width: 64, enc: 30, flags: [readable, writable]}
+  - {name: "$f31", class: fp, width: 64, enc: 31, flags: [readable, writable]}
+  - {name: "$vr0", class: vec, width: 128, enc: 0, flags: [readable, writable]}
+  - {name: "$vr1", class: vec, width: 128, enc: 1, flags: [readable, writable]}
+  - {name: "$vr2", class: vec, width: 128, enc: 2, flags: [readable, writable]}
+  - {name: "$vr3", class: vec, width: 128, enc: 3, flags: [readable, writable]}
+  - {name: "$vr4", class: vec, width: 128, enc: 4, flags: [readable, writable]}
+  - {name: "$vr5", class: vec, width: 128, enc: 5, flags: [readable, writable]}
+  - {name: "$vr6", class: vec, width: 128, enc: 6, flags: [readable, writable]}
+  - {name: "$vr7", class: vec, width: 128, enc: 7, flags: [readable, writable]}
+  - {name: "$vr8", class: vec, width: 128, enc: 8, flags: [readable, writable]}
+  - {name: "$vr9", class: vec, width: 128, enc: 9, flags: [readable, writable]}
+  - {name: "$vr10", class: vec, width: 128, enc: 10, flags: [readable, writable]}
+  - {name: "$vr11", class: vec, width: 128, enc: 11, flags: [readable, writable]}
+  - {name: "$vr12", class: vec, width: 128, enc: 12, flags: [readable, writable]}
+  - {name: "$vr13", class: vec, width: 128, enc: 13, flags: [readable, writable]}
+  - {name: "$vr14", class: vec, width: 128, enc: 14, flags: [readable, writable]}
+  - {name: "$vr15", class: vec, width: 128, enc: 15, flags: [readable, writable]}
+  - {name: "$vr16", class: vec, width: 128, enc: 16, flags: [readable, writable]}
+  - {name: "$vr17", class: vec, width: 128, enc: 17, flags: [readable, writable]}
+  - {name: "$vr18", class: vec, width: 128, enc: 18, flags: [readable, writable]}
+  - {name: "$vr19", class: vec, width: 128, enc: 19, flags: [readable, writable]}
+  - {name: "$vr20", class: vec, width: 128, enc: 20, flags: [readable, writable]}
+  - {name: "$vr21", class: vec, width: 128, enc: 21, flags: [readable, writable]}
+  - {name: "$vr22", class: vec, width: 128, enc: 22, flags: [readable, writable]}
+  - {name: "$vr23", class: vec, width: 128, enc: 23, flags: [readable, writable]}
+  - {name: "$vr24", class: vec, width: 128, enc: 24, flags: [readable, writable]}
+  - {name: "$vr25", class: vec, width: 128, enc: 25, flags: [readable, writable]}
+  - {name: "$vr26", class: vec, width: 128, enc: 26, flags: [readable, writable]}
+  - {name: "$vr27", class: vec, width: 128, enc: 27, flags: [readable, writable]}
+  - {name: "$vr28", class: vec, width: 128, enc: 28, flags: [readable, writable]}
+  - {name: "$vr29", class: vec, width: 128, enc: 29, flags: [readable, writable]}
+  - {name: "$vr30", class: vec, width: 128, enc: 30, flags: [readable, writable]}
+  - {name: "$vr31", class: vec, width: 128, enc: 31, flags: [readable, writable]}
+  - {name: "$xr0", class: vec, width: 256, enc: 0, flags: [readable, writable]}
+  - {name: "$xr1", class: vec, width: 256, enc: 1, flags: [readable, writable]}
+  - {name: "$xr2", class: vec, width: 256, enc: 2, flags: [readable, writable]}
+  - {name: "$xr3", class: vec, width: 256, enc: 3, flags: [readable, writable]}
+  - {name: "$xr4", class: vec, width: 256, enc: 4, flags: [readable, writable]}
+  - {name: "$xr5", class: vec, width: 256, enc: 5, flags: [readable, writable]}
+  - {name: "$xr6", class: vec, width: 256, enc: 6, flags: [readable, writable]}
+  - {name: "$xr7", class: vec, width: 256, enc: 7, flags: [readable, writable]}
+  - {name: "$xr8", class: vec, width: 256, enc: 8, flags: [readable, writable]}
+  - {name: "$xr9", class: vec, width: 256, enc: 9, flags: [readable, writable]}
+  - {name: "$xr10", class: vec, width: 256, enc: 10, flags: [readable, writable]}
+  - {name: "$xr11", class: vec, width: 256, enc: 11, flags: [readable, writable]}
+  - {name: "$xr12", class: vec, width: 256, enc: 12, flags: [readable, writable]}
+  - {name: "$xr13", class: vec, width: 256, enc: 13, flags: [readable, writable]}
+  - {name: "$xr14", class: vec, width: 256, enc: 14, flags: [readable, writable]}
+  - {name: "$xr15", class: vec, width: 256, enc: 15, flags: [readable, writable]}
+  - {name: "$xr16", class: vec, width: 256, enc: 16, flags: [readable, writable]}
+  - {name: "$xr17", class: vec, width: 256, enc: 17, flags: [readable, writable]}
+  - {name: "$xr18", class: vec, width: 256, enc: 18, flags: [readable, writable]}
+  - {name: "$xr19", class: vec, width: 256, enc: 19, flags: [readable, writable]}
+  - {name: "$xr20", class: vec, width: 256, enc: 20, flags: [readable, writable]}
+  - {name: "$xr21", class: vec, width: 256, enc: 21, flags: [readable, writable]}
+  - {name: "$xr22", class: vec, width: 256, enc: 22, flags: [readable, writable]}
+  - {name: "$xr23", class: vec, width: 256, enc: 23, flags: [readable, writable]}
+  - {name: "$xr24", class: vec, width: 256, enc: 24, flags: [readable, writable]}
+  - {name: "$xr25", class: vec, width: 256, enc: 25, flags: [readable, writable]}
+  - {name: "$xr26", class: vec, width: 256, enc: 26, flags: [readable, writable]}
+  - {name: "$xr27", class: vec, width: 256, enc: 27, flags: [readable, writable]}
+  - {name: "$xr28", class: vec, width: 256, enc: 28, flags: [readable, writable]}
+  - {name: "$xr29", class: vec, width: 256, enc: 29, flags: [readable, writable]}
+  - {name: "$xr30", class: vec, width: 256, enc: 30, flags: [readable, writable]}
+  - {name: "$xr31", class: vec, width: 256, enc: 31, flags: [readable, writable]}
+  - {name: "$zero", class: gpr, width: 32, enc: 0, flags: [readable, writable]}
+  - {name: "$ra", class: gpr, width: 32, enc: 1, flags: [readable, writable]}
+  - {name: "$tp", class: gpr, width: 32, enc: 2, flags: [readable, writable]}
+  - {name: "$sp", class: gpr, width: 32, enc: 3, flags: [readable, writable]}
+  - {name: "$a0", class: gpr, width: 32, enc: 4, flags: [readable, writable]}
+  - {name: "$a1", class: gpr, width: 32, enc: 5, flags: [readable, writable]}
+  - {name: "$a2", class: gpr, width: 32, enc: 6, flags: [readable, writable]}
+  - {name: "$a3", class: gpr, width: 32, enc: 7, flags: [readable, writable]}
+  - {name: "$a4", class: gpr, width: 32, enc: 8, flags: [readable, writable]}
+  - {name: "$a5", class: gpr, width: 32, enc: 9, flags: [readable, writable]}
+  - {name: "$a6", class: gpr, width: 32, enc: 10, flags: [readable, writable]}
+  - {name: "$a7", class: gpr, width: 32, enc: 11, flags: [readable, writable]}
+  - {name: "$t0", class: gpr, width: 32, enc: 12, flags: [readable, writable]}
+  - {name: "$t1", class: gpr, width: 32, enc: 13, flags: [readable, writable]}
+  - {name: "$t2", class: gpr, width: 32, enc: 14, flags: [readable, writable]}
+  - {name: "$t3", class: gpr, width: 32, enc: 15, flags: [readable, writable]}
+  - {name: "$t4", class: gpr, width: 32, enc: 16, flags: [readable, writable]}
+  - {name: "$t5", class: gpr, width: 32, enc: 17, flags: [readable, writable]}
+  - {name: "$t6", class: gpr, width: 32, enc: 18, flags: [readable, writable]}
+  - {name: "$t7", class: gpr, width: 32, enc: 19, flags: [readable, writable]}
+  - {name: "$t8", class: gpr, width: 32, enc: 20, flags: [readable, writable]}
+  - {name: "$fp", class: gpr, width: 32, enc: 21, flags: [readable, writable]}
+  - {name: "$s0", class: gpr, width: 32, enc: 22, flags: [readable, writable]}
+  - {name: "$s1", class: gpr, width: 32, enc: 23, flags: [readable, writable]}
+  - {name: "$s2", class: gpr, width: 32, enc: 24, flags: [readable, writable]}
+  - {name: "$s3", class: gpr, width: 32, enc: 25, flags: [readable, writable]}
+  - {name: "$s4", class: gpr, width: 32, enc: 26, flags: [readable, writable]}
+  - {name: "$s5", class: gpr, width: 32, enc: 27, flags: [readable, writable]}
+  - {name: "$s6", class: gpr, width: 32, enc: 28, flags: [readable, writable]}
+  - {name: "$s7", class: gpr, width: 32, enc: 29, flags: [readable, writable]}
+  - {name: "$s8", class: gpr, width: 32, enc: 30, flags: [readable, writable]}
+  - {name: "$fcc0", class: status, width: 8, enc: 0, flags: [readable, writable]}
+  - {name: "$fcc1", class: status, width: 8, enc: 1, flags: [readable, writable]}
+  - {name: "$fcc2", class: status, width: 8, enc: 2, flags: [readable, writable]}
+  - {name: "$fcc3", class: status, width: 8, enc: 3, flags: [readable, writable]}
+  - {name: "$fcc4", class: status, width: 8, enc: 4, flags: [readable, writable]}
+  - {name: "$fcc5", class: status, width: 8, enc: 5, flags: [readable, writable]}
+  - {name: "$fcc6", class: status, width: 8, enc: 6, flags: [readable, writable]}
+  - {name: "$fcc7", class: status, width: 8, enc: 7, flags: [readable, writable]}
+  - {name: pc, class: special, width: 32, enc: 0}
+  - {name: cpucfg, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: tlbidx, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: tlbehi, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: tlbelo0, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: tlbelo1, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: asid, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: pgdl, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: pgdh, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: crmd, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: prmd, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: era, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: badv, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: eentry, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+mnemonics:
+  - {name: nop}
+  - {name: add.w}
+  - {name: sub.w}
+  - {name: and}
+  - {name: or}
+  - {name: xor}
+  - {name: nor}
+  - {name: slt}
+  - {name: addi.w}
+  - {name: lu12i.w}
+  - {name: slli.w}
+  - {name: srli.w}
+  - {name: srai.w}
+  - {name: mul.w}
+  - {name: div.w}
+  - {name: ld.w}
+  - {name: st.w}
+  - {name: ld.d}
+  - {name: st.d}
+  - {name: ld.b}
+  - {name: st.b}
+  - {name: preld}
+  - {name: b}
+  - {name: bl}
+  - {name: beq}
+  - {name: bne}
+  - {name: jirl}
+  - {name: ret}
+  - {name: syscall}
+  - {name: break}
+  - {name: dbar}
+  - {name: ibar}
+  - {name: ll.w}
+  - {name: sc.w}
+  - {name: amswap.w}
+  - {name: csrrd}
+  - {name: csrwr}
+  - {name: ertn}
+  - {name: fadd.s}
+  - {name: fmul.s}
+  - {name: fadd.d}
+  - {name: fld.s}
+  - {name: fst.s}
+  - {name: vadd}
+  - {name: vld}
+  - {name: xvadd}
+encoders:
+  # Fixed 32-bit little-endian skeletons (opcode + rd/rj/rk + immediates).
+  - name: nop
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x03400000
+  - name: add
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x00100000 + rd*32 + rj*1024 + rk*32768
+  - name: sub
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x00110000 + rd*32 + rj*1024 + rk*32768
+  - name: and
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x00148000 + rd*32 + rj*1024 + rk*32768
+  - name: or
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x00140000 + rd*32 + rj*1024 + rk*32768
+  - name: xor
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x0014C000 + rd*32 + rj*1024 + rk*32768
+  - name: nor
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x00150000 + rd*32 + rj*1024 + rk*32768
+  - name: slt
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x00120000 + rd*32 + rj*1024 + rk*32768
+  - name: addi
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x02800000 + rd*32 + rj*1024 + ((imm + 4096) % 4096)*65536
+  - name: lu12iw
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x14000000 + rd*32 + ((imm + 524288) % 1048576)
+  - name: slli
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x00408000 + rd*32 + rj*1024 + ((imm + 64) % 64)*65536
+  - name: srli
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x00448000 + rd*32 + rj*1024 + ((imm + 64) % 64)*65536
+  - name: srai
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x00448000 + rd*32 + rj*1024 + ((imm + 64) % 64)*65536 + 65536*64
+  - name: mul
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x001C0000 + rd*32 + rj*1024 + rk*32768
+  - name: div
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x00200000 + rd*32 + rj*1024 + rk*32768
+  - name: ldw
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x28800000 + rd*32 + rj*1024 + ((imm + 4096) % 4096)*65536
+  - name: stw
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x29800000 + rd*32 + rj*1024 + ((imm + 4096) % 4096)*65536
+  - name: ldd
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x28C00000 + rd*32 + rj*1024 + ((imm + 4096) % 4096)*65536
+  - name: std
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x29C00000 + rd*32 + rj*1024 + ((imm + 4096) % 4096)*65536
+  - name: ldb
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x28000000 + rd*32 + rj*1024 + ((imm + 4096) % 4096)*65536
+  - name: stb
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x29000000 + rd*32 + rj*1024 + ((imm + 4096) % 4096)*65536
+  - name: preld
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x2A800000 + rj*1024 + ((imm + 4096) % 4096)*65536
+  - name: b
+    max_bytes: 4
+    max_relocs: 1
+    body: |
+      EMIT32LE 0x50000000
+      EMIT_RELOCATION sym, R_LARCH_B26
+  - name: bl
+    max_bytes: 4
+    max_relocs: 1
+    body: |
+      EMIT32LE 0x54000000
+      EMIT_RELOCATION sym, R_LARCH_B26
+  - name: beq
+    max_bytes: 4
+    max_relocs: 1
+    body: |
+      EMIT32LE 0x58000000 + rj*1024 + rd*32
+      EMIT_RELOCATION sym, R_LARCH_B16
+  - name: bne
+    max_bytes: 4
+    max_relocs: 1
+    body: |
+      EMIT32LE 0x5C000000 + rj*1024 + rd*32
+      EMIT_RELOCATION sym, R_LARCH_B16
+  - name: jirl
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x4C000000 + rd*32 + rj*1024 + ((imm + 65536) % 65536)*65536
+  - name: ret
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x4C000020
+  - name: syscall
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x002B0000
+  - name: break
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x002A0000 + (imm % 32768)
+  - name: dbar
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x38744000 + (imm % 32768)
+  - name: ibar
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x38748000 + (imm % 32768)
+  - name: llw
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x20000000 + rd*32 + rj*1024
+  - name: scw
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x21000000 + rd*32 + rj*1024
+  - name: amswapw
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x38540000 + rd*32 + rj*1024 + rk*32768
+  - name: csrrd
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x04000000 + rd*32 + ((imm + 16384) % 16384)*1024
+  - name: csrwr
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x04001000 + rd*32 + ((imm + 16384) % 16384)*1024
+  - name: ertn
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x064DFC00
+  - name: fadds
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x06000000 + rd*32 + rj*1024 + rk*32768
+  - name: fmuls
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x06020000 + rd*32 + rj*1024 + rk*32768
+  - name: faddd
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x06100000 + rd*32 + rj*1024 + rk*32768
+  - name: flds
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x2C000000 + rd*32 + rj*1024 + ((imm + 4096) % 4096)*65536
+  - name: fsts
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x2D000000 + rd*32 + rj*1024 + ((imm + 4096) % 4096)*65536
+  - name: vadd
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x70000000 + rd*32 + rj*1024 + rk*32768
+  - name: vld
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x74000000 + rd*32 + rj*1024
+  - name: xvadd
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x75800000 + rd*32 + rj*1024 + rk*32768
+forms:
+  - mnemonic: nop
+    encoder: nop
+  - mnemonic: add.w
+    encoder: add
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: sub.w
+    encoder: sub
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: and
+    encoder: and
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: or
+    encoder: or
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: xor
+    encoder: xor
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: nor
+    encoder: nor
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: slt
+    encoder: slt
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: addi.w
+    encoder: addi
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: imm, width: 12, imm_min: -2048, imm_max: 2047, signed: true}
+  - mnemonic: lu12i.w
+    encoder: lu12iw
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: imm, width: 20, imm_min: -524288, imm_max: 524287, signed: true}
+  - mnemonic: slli.w
+    encoder: slli
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: imm, width: 8, imm_min: 0, imm_max: 31, signed: false}
+  - mnemonic: srli.w
+    encoder: srli
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: imm, width: 8, imm_min: 0, imm_max: 31, signed: false}
+  - mnemonic: srai.w
+    encoder: srai
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: imm, width: 8, imm_min: 0, imm_max: 31, signed: false}
+  - mnemonic: mul.w
+    encoder: mul
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: div.w
+    encoder: div
+    flags: [may_trap]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: ld.w
+    encoder: ldw
+    flags: [reads_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: mem, width: 12, imm_min: -2048, imm_max: 2047, signed: true}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: st.w
+    encoder: stw
+    flags: [writes_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: mem, width: 12, imm_min: -2048, imm_max: 2047, signed: true}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: ld.d
+    encoder: ldd
+    flags: [reads_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: mem, width: 12, imm_min: -2048, imm_max: 2047, signed: true}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: st.d
+    encoder: std
+    flags: [writes_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: mem, width: 12, imm_min: -2048, imm_max: 2047, signed: true}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: ld.b
+    encoder: ldb
+    flags: [reads_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: mem, width: 12, imm_min: -2048, imm_max: 2047, signed: true}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: st.b
+    encoder: stb
+    flags: [writes_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: mem, width: 12, imm_min: -2048, imm_max: 2047, signed: true}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: preld
+    encoder: preld
+    operands:
+      - {kind: imm, width: 8, imm_min: 0, imm_max: 31, signed: false}
+      - {kind: mem, width: 12, imm_min: -2048, imm_max: 2047, signed: true}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: b
+    encoder: b
+    flags: [branch, terminator, reloc]
+    operands:
+      - {kind: sym, width: 32}
+  - mnemonic: bl
+    encoder: bl
+    flags: [branch, reloc]
+    operands:
+      - {kind: sym, width: 32}
+  - mnemonic: beq
+    encoder: beq
+    flags: [cond_branch, reloc]
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: sym, width: 32}
+  - mnemonic: bne
+    encoder: bne
+    flags: [cond_branch, reloc]
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: sym, width: 32}
+  - mnemonic: jirl
+    encoder: jirl
+    flags: [branch]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: imm, width: 16, imm_min: -32768, imm_max: 32767, signed: true}
+  - mnemonic: ret
+    encoder: ret
+    flags: [return, terminator]
+  - mnemonic: syscall
+    encoder: syscall
+    flags: [may_trap]
+  - mnemonic: break
+    encoder: break
+    flags: [may_trap]
+    operands:
+      - {kind: imm, width: 16, imm_min: 0, imm_max: 32767, signed: false}
+  - mnemonic: dbar
+    encoder: dbar
+    operands:
+      - {kind: imm, width: 16, imm_min: 0, imm_max: 32767, signed: false}
+  - mnemonic: ibar
+    encoder: ibar
+    operands:
+      - {kind: imm, width: 16, imm_min: 0, imm_max: 32767, signed: false}
+  - mnemonic: ll.w
+    encoder: llw
+    flags: [reads_mem]
+    required: [atomics]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: mem, width: 32}
+  - mnemonic: sc.w
+    encoder: scw
+    flags: [writes_mem]
+    required: [atomics]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: mem, width: 32}
+  - mnemonic: amswap.w
+    encoder: amswapw
+    flags: [reads_mem, writes_mem]
+    required: [atomics]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: mem, width: 32}
+  - mnemonic: csrrd
+    encoder: csrrd
+    flags: [privileged]
+    required: [priv]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: imm, width: 16, imm_min: 0, imm_max: 16383, signed: false}
+  - mnemonic: csrwr
+    encoder: csrwr
+    flags: [privileged]
+    required: [priv]
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: imm, width: 16, imm_min: 0, imm_max: 16383, signed: false}
+  - mnemonic: ertn
+    encoder: ertn
+    flags: [privileged, return, terminator]
+    required: [priv]
+  - mnemonic: fadd.s
+    encoder: fadds
+    required: [f32]
+    operands:
+      - {kind: reg, class: fp, width: 32, access: write}
+      - {kind: reg, class: fp, width: 32}
+      - {kind: reg, class: fp, width: 32}
+  - mnemonic: fmul.s
+    encoder: fmuls
+    required: [f32]
+    operands:
+      - {kind: reg, class: fp, width: 32, access: write}
+      - {kind: reg, class: fp, width: 32}
+      - {kind: reg, class: fp, width: 32}
+  - mnemonic: fadd.d
+    encoder: faddd
+    required: [f64]
+    operands:
+      - {kind: reg, class: fp, width: 64, access: write}
+      - {kind: reg, class: fp, width: 64}
+      - {kind: reg, class: fp, width: 64}
+  - mnemonic: fld.s
+    encoder: flds
+    flags: [reads_mem]
+    required: [f32]
+    operands:
+      - {kind: reg, class: fp, width: 32, access: write}
+      - {kind: mem, width: 12, imm_min: -2048, imm_max: 2047, signed: true}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: fst.s
+    encoder: fsts
+    flags: [writes_mem]
+    required: [f32]
+    operands:
+      - {kind: reg, class: fp, width: 32}
+      - {kind: mem, width: 12, imm_min: -2048, imm_max: 2047, signed: true}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: vadd
+    encoder: vadd
+    required: [lsx]
+    operands:
+      - {kind: reg, class: vec, width: 128, access: write}
+      - {kind: reg, class: vec, width: 128}
+      - {kind: reg, class: vec, width: 128}
+  - mnemonic: vld
+    encoder: vld
+    flags: [reads_mem]
+    required: [lsx]
+    operands:
+      - {kind: reg, class: vec, width: 128, access: write}
+      - {kind: mem, width: 128}
+  - mnemonic: xvadd
+    encoder: xvadd
+    required: [lasx]
+    operands:
+      - {kind: reg, class: vec, width: 256, access: write}
+      - {kind: reg, class: vec, width: 256}
+      - {kind: reg, class: vec, width: 256}
+syntaxes:
+  - {name: default, comment: "#", separator: ", "}
+sections:
+  - {name: ".text", flags: [exec, alloc, code], align: 4, content: code}
+  - {name: ".rodata", flags: [alloc, readonly, data], align: 4, content: data}
+  - {name: ".data", flags: [write, alloc, data], align: 8, content: data}
+  - {name: ".bss", flags: [write, alloc, zerofill, data], align: 8, content: data}
+  - {name: ".tdata", flags: [write, alloc, tls, data], align: 8, content: data}
+  - {name: ".got", flags: [write, alloc, data], align: 8, content: data}
+  - {name: ".eh_frame", flags: [alloc, readonly, data], align: 8, content: data}
+linkages:
+  - {name: func_global, binding: global, visibility: default, symtype: func}
+  - {name: func_weak, binding: weak, visibility: default, symtype: func}
+  - {name: object_global, binding: global, visibility: default, symtype: object}
+  - {name: tls_var, binding: tls, visibility: default, symtype: object}
+  - {name: local_sym, binding: local, visibility: default, symtype: none}
+relocs:
+  - {name: R_LARCH_NONE, width: 32, expr: "S + A"}
+  - {name: R_LARCH_32, width: 32, expr: "S + A"}
+  - {name: R_LARCH_64, width: 32, expr: "S + A"}
+  - {name: R_LARCH_B16, width: 32, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_LARCH_B21, width: 32, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_LARCH_B26, width: 32, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_LARCH_ABS_HI20, width: 32, expr: "S + A"}
+  - {name: R_LARCH_ABS_LO12, width: 32, expr: "S + A"}
+  - {name: R_LARCH_PCREL_HI20, width: 32, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_LARCH_PCREL_LO12, width: 32, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_LARCH_GOT_PC_HI20, width: 32, signed: true, pcrel: true, expr: "GOT(S) + A - P"}
+  - {name: R_LARCH_GOT_PC_LO12, width: 32, signed: true, pcrel: true, expr: "GOT(S) + A - P"}
+  - {name: R_LARCH_TLS_LE_HI20, width: 32, expr: "TLS(S) + A"}
+  - {name: R_LARCH_TLS_LE_LO12, width: 32, expr: "TLS(S) + A"}
+  - {name: R_LARCH_TLS_IE_PC_HI20, width: 32, signed: true, pcrel: true, expr: "TLS(S) + A - P"}
+  - {name: R_LARCH_TLS_GD_PC_HI20, width: 32, signed: true, pcrel: true, expr: "TLS(S) + A - P"}
+  - {name: R_LARCH_RELATIVE, width: 32, expr: "B + A"}
+  - {name: R_LARCH_GLOB_DAT, width: 32, expr: "S + A"}
+  - {name: R_LARCH_JUMP_SLOT, width: 32, expr: "S + A"}
+  - {name: R_LARCH_IRELATIVE, width: 32, expr: "B + A"}
+debug:
+  - {kind: target, ref: "", msg: "la32 base+fpu+lsx+atomics+priv stratification"}
+  - {kind: form, ref: vadd, msg: "vector forms require lsx/lasx"}
+  - {kind: form, ref: csrrd, msg: "privileged CSR forms need priv"}
+backend:
+  file: backend/loongarch32.json

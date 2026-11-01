@@ -1,0 +1,16 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "YARV",
+  "symbol": "YARV",
+  "architecture": "stack",
+  "description": "Ruby instruction sequences; version must be pinned",
+  "native_coverage": "catalog-only",
+  "native_format_loader": false,
+  "portable_example": "YARV.mvm",
+  "vmweave": "YARV.vmweave",
+  "vmspc": "YARV.vmspc",
+  "vmdesc": "YARV.vmdesc",
+  "limitations": [
+    "No native execution implemented. Descriptor and portable Machinery example only."
+  ]
+}

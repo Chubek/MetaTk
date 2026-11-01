@@ -1,5 +1,6 @@
 #include "Internal.h"
 #include <stdio.h>
+#include <errno.h>
 
 mvm_status mvm_read_file(const char *path, size_t limit, mvm_buffer *out, mvm_error *e) {
     FILE *f;
@@ -74,4 +75,40 @@ mvm_status mvm_save_file(const char *path, const mvm_module *m, mvm_error *e) {
     if (s == MVM_OK) s = mvm_write_file(path, b.data, b.size, e);
     mvm_buffer_dispose(&b);
     return s;
+}
+
+mvm_status mvm_write_file_atomic(const char *path, const void *data, size_t n, mvm_error *e) {
+    char *temporary;
+    size_t length;
+    unsigned attempt;
+    FILE *stream = NULL;
+    mvm_status status = MVM_OK;
+    mvm_error_clear(e);
+    if (!path || !*path || (!data && n)) return mvm_fail(e, MVM_INVALID, "invalid atomic write arguments");
+    length = strlen(path);
+    if (length > SIZE_MAX - 40) return mvm_fail(e, MVM_LIMIT, "output path too long");
+    temporary = malloc(length + 40);
+    if (!temporary) return mvm_fail(e, MVM_OOM, "temporary path allocation failed");
+    for (attempt = 0; attempt < 1024; ++attempt) {
+        snprintf(temporary, length + 40, "%s.metavm-tmp-%u", path, attempt);
+        stream = fopen(temporary, "wbx");
+        if (stream) break;
+#ifdef EEXIST
+        if (errno != EEXIST) break;
+#endif
+    }
+    if (!stream) { free(temporary); return mvm_fail(e, MVM_IO, "cannot stage output: %s", path); }
+    if (n && fwrite(data, 1, n, stream) != n) status = MVM_IO;
+    if (fclose(stream) != 0) status = MVM_IO;
+    if (status == MVM_OK && rename(temporary, path) != 0) status = MVM_IO;
+    if (status != MVM_OK) (void)remove(temporary);
+    free(temporary);
+    return status == MVM_OK ? status : mvm_fail(e, status, "atomic output failed: %s", path);
+}
+mvm_status mvm_save_file_atomic(const char *path, const mvm_module *m, mvm_error *e) {
+    mvm_buffer buffer = {0};
+    mvm_status status = mvm_serialize(m, &buffer, e);
+    if (status == MVM_OK) status = mvm_write_file_atomic(path, buffer.data, buffer.size, e);
+    mvm_buffer_dispose(&buffer);
+    return status;
 }

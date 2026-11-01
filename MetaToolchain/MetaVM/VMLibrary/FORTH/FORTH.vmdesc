@@ -1,0 +1,4 @@
+\VMName{FORTH}
+\VMArchitecture{Data and return stacks, dictionary, colon definitions}
+\VMStatus{integer-word-subset}
+\VMInvariant{Portable example bytecode is Machinery bytecode; it does not establish native compatibility.}

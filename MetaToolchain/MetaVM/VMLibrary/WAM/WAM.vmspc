@@ -1,0 +1,16 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "WAM",
+  "symbol": "WAM",
+  "architecture": "logic",
+  "description": "Warren abstract machine for logic programs",
+  "native_coverage": "catalog-only",
+  "native_format_loader": false,
+  "portable_example": "WAM.mvm",
+  "vmweave": "WAM.vmweave",
+  "vmspc": "WAM.vmspc",
+  "vmdesc": "WAM.vmdesc",
+  "limitations": [
+    "No native execution implemented. Descriptor and portable Machinery example only."
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "CPython",
+  "symbol": "CPython",
+  "architecture": "stack",
+  "description": "Python bytecode; version must be pinned",
+  "native_coverage": "catalog-only",
+  "native_format_loader": false,
+  "portable_example": "CPython.mvm",
+  "vmweave": "CPython.vmweave",
+  "vmspc": "CPython.vmspc",
+  "vmdesc": "CPython.vmdesc",
+  "limitations": [
+    "No native execution implemented. Descriptor and portable Machinery example only."
+  ]
+}

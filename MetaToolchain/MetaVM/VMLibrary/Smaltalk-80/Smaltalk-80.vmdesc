@@ -1,0 +1,4 @@
+\VMName{Smaltalk-80}
+\VMArchitecture{Original directory spelling retained; Smalltalk-80 object machine}
+\VMStatus{catalog-only}
+\VMInvariant{Portable example bytecode is Machinery bytecode; it does not establish native compatibility.}

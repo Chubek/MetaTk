@@ -1,0 +1,4 @@
+\VMName{ART}
+\VMArchitecture{Android runtime consuming DEX; not a separate guest instruction set}
+\VMStatus{catalog-only}
+\VMInvariant{Portable example bytecode is Machinery bytecode; it does not establish native compatibility.}

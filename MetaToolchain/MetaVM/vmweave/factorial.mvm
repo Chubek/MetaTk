@@ -1,0 +1,13 @@
+.function main 0 5
+const r0 1
+const r1 10
+const r2 1
+const r3 0
+loop:
+mul r0 r0 r1
+sub r1 r1 r2
+eq r4 r1 r3
+jz r4 loop
+done:
+ret r0
+.end

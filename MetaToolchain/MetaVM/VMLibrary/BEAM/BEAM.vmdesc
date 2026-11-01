@@ -1,0 +1,4 @@
+\VMName{BEAM}
+\VMArchitecture{Erlang instruction runtime with process scheduling}
+\VMStatus{catalog-only}
+\VMInvariant{Portable example bytecode is Machinery bytecode; it does not establish native compatibility.}

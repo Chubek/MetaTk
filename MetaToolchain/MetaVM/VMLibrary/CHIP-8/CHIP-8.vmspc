@@ -1,0 +1,17 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "CHIP-8",
+  "symbol": "CHIP_8",
+  "architecture": "register",
+  "description": "Classic CHIP-8; legacy, COSMAC VIP and CHIP-48 opcode presets; 4 KiB memory and 64x32 display",
+  "native_coverage": "classic-opcode-interpreter",
+  "native_format_loader": false,
+  "portable_example": "CHIP-8.mvm",
+  "vmweave": "CHIP-8.vmweave",
+  "vmspc": "CHIP-8.vmspc",
+  "vmdesc": "CHIP-8.vmdesc",
+  "limitations": [
+    "Selected classic-opcode presets, sampled key waits and host-driven vblank; see docs/CHIP8.md.",
+    "Pinned Corax+ and flags ROM tests, not full hardware compatibility; no SCHIP/XO-CHIP, audio synthesis or cycle-accurate scheduling."
+  ]
+}

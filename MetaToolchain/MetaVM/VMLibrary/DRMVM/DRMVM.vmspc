@@ -1,0 +1,16 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "DRMVM",
+  "symbol": "DRMVM",
+  "architecture": "graphics",
+  "description": "Machinery host imports into XRGB8888 surfaces; optional libdrm dumb buffers",
+  "native_coverage": "graphics-subset",
+  "native_format_loader": false,
+  "portable_example": "DRMVM.mvm",
+  "vmweave": "DRMVM.vmweave",
+  "vmspc": "DRMVM.vmspc",
+  "vmdesc": "DRMVM.vmdesc",
+  "limitations": [
+    "See native API header for exact implemented subset. No full platform runtime or file loader."
+  ]
+}

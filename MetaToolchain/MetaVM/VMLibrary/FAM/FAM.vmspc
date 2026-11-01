@@ -1,0 +1,16 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "FAM",
+  "symbol": "FAM",
+  "architecture": "unspecified",
+  "description": "No authoritative ISA or version supplied; preserve this identity pending specification",
+  "native_coverage": "catalog-only",
+  "native_format_loader": false,
+  "portable_example": "FAM.mvm",
+  "vmweave": "FAM.vmweave",
+  "vmspc": "FAM.vmspc",
+  "vmdesc": "FAM.vmdesc",
+  "limitations": [
+    "No native execution implemented. Descriptor and portable Machinery example only."
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "Zand",
+  "symbol": "Zand",
+  "architecture": "unspecified",
+  "description": "No authoritative ISA or version supplied; preserve this identity pending specification",
+  "native_coverage": "catalog-only",
+  "native_format_loader": false,
+  "portable_example": "Zand.mvm",
+  "vmweave": "Zand.vmweave",
+  "vmspc": "Zand.vmspc",
+  "vmdesc": "Zand.vmdesc",
+  "limitations": [
+    "No native execution implemented. Descriptor and portable Machinery example only."
+  ]
+}

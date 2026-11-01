@@ -1,0 +1,4 @@
+\VMName{P-Code}
+\VMArchitecture{Pascal p-code; dialect must be selected}
+\VMStatus{catalog-only}
+\VMInvariant{Portable example bytecode is Machinery bytecode; it does not establish native compatibility.}

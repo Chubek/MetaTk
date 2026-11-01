@@ -52,6 +52,10 @@ public:
         mvm_error e{};
         check(mvm_save_file(path.c_str(), get(), &e), e);
     }
+    void save_atomic(const std::string &path) const {
+        mvm_error e{};
+        check(mvm_save_file_atomic(path.c_str(), get(), &e), e);
+    }
 };
 
 class Root {

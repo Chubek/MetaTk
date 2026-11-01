@@ -1,0 +1,16 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "LuaVM",
+  "symbol": "LuaVM",
+  "architecture": "register",
+  "description": "Lua VM; bytecode version must be pinned",
+  "native_coverage": "catalog-only",
+  "native_format_loader": false,
+  "portable_example": "LuaVM.mvm",
+  "vmweave": "LuaVM.vmweave",
+  "vmspc": "LuaVM.vmspc",
+  "vmdesc": "LuaVM.vmdesc",
+  "limitations": [
+    "No native execution implemented. Descriptor and portable Machinery example only."
+  ]
+}

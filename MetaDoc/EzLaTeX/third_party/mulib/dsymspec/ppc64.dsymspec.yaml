@@ -1,0 +1,790 @@
+# ppc64.dsymspec.yaml
+# Migrated from the Lua DSL (ppc64.dsymspec). Encoder bodies are imperative
+# pseudo-code; the grammar is documented in README.md.
+#
+# ppc64.dsymspec — Power ISA 64 (ppc64le, ELFv2 ABI).
+# Data: TableGen PowerPC/PPCRegisterInfo.td (GPR/FPR/VR classes, CR0-CR7,
+# LR/CTR/XER) + PPC.td features (Altivec, VSX, HTM, MMA, SPE, E500),
+# arch_oracle ppc64 quick facts (GPR0-31/FPR0-31/CR/LR/CTR, 32-bit fixed),
+# ccbe_oracle ABI topics (ELFv2 calling convention, TOC/GOT/PLT).
+# Strata: base | fpu | altivec | vsx | power8/9/10 | dfp | htm | mma | priv.
+
+schema: 1
+targets:
+  - {arch: ppc64, subarch: power9, addr_size: 64, op_size: 32, addr_def: 64, align: 4, byte_order: little, obj_format: ELF64, abi: ELFv2, calling_conv: elfv2, features: [base, fpu, altivec, vsx]}
+features:
+  - {name: base, desc: "Power ISA base integer + branches"}
+  - {name: fpu, desc: "floating point unit"}
+  - {name: altivec, desc: "AltiVec/VMX"}
+  - {name: vsx, desc: "VSX (incl. Altivec)"}
+  - {name: power8, desc: "POWER8 ISA"}
+  - {name: power9, desc: "POWER9 ISA"}
+  - {name: power10, desc: "POWER10 ISA"}
+  - {name: power11, desc: "POWER11 ISA"}
+  - {name: dfp, desc: "decimal floating point"}
+  - {name: htm, desc: "hardware transactional memory"}
+  - {name: mma, desc: "matrix-multiply assist"}
+  - {name: crypto, desc: "in-core crypto (vcipher)"}
+  - {name: spe, desc: "signal processing engine (embedded)"}
+  - {name: e500, desc: "e500 embedded category"}
+  - {name: vle, desc: "variable length encoding (embedded)"}
+  - {name: book3s, desc: "server MMU (PTE/slb)"}
+  - {name: priv, desc: "privileged (MSR/SPR access, rfid)"}
+registers:
+  - {name: r0, class: gpr, width: 64, enc: 0, flags: [readable, writable]}
+  - {name: r1, class: gpr, width: 64, enc: 1, flags: [readable, writable]}
+  - {name: r2, class: gpr, width: 64, enc: 2, flags: [readable, writable]}
+  - {name: r3, class: gpr, width: 64, enc: 3, flags: [readable, writable]}
+  - {name: r4, class: gpr, width: 64, enc: 4, flags: [readable, writable]}
+  - {name: r5, class: gpr, width: 64, enc: 5, flags: [readable, writable]}
+  - {name: r6, class: gpr, width: 64, enc: 6, flags: [readable, writable]}
+  - {name: r7, class: gpr, width: 64, enc: 7, flags: [readable, writable]}
+  - {name: r8, class: gpr, width: 64, enc: 8, flags: [readable, writable]}
+  - {name: r9, class: gpr, width: 64, enc: 9, flags: [readable, writable]}
+  - {name: r10, class: gpr, width: 64, enc: 10, flags: [readable, writable]}
+  - {name: r11, class: gpr, width: 64, enc: 11, flags: [readable, writable]}
+  - {name: r12, class: gpr, width: 64, enc: 12, flags: [readable, writable]}
+  - {name: r13, class: gpr, width: 64, enc: 13, flags: [readable, writable]}
+  - {name: r14, class: gpr, width: 64, enc: 14, flags: [readable, writable]}
+  - {name: r15, class: gpr, width: 64, enc: 15, flags: [readable, writable]}
+  - {name: r16, class: gpr, width: 64, enc: 16, flags: [readable, writable]}
+  - {name: r17, class: gpr, width: 64, enc: 17, flags: [readable, writable]}
+  - {name: r18, class: gpr, width: 64, enc: 18, flags: [readable, writable]}
+  - {name: r19, class: gpr, width: 64, enc: 19, flags: [readable, writable]}
+  - {name: r20, class: gpr, width: 64, enc: 20, flags: [readable, writable]}
+  - {name: r21, class: gpr, width: 64, enc: 21, flags: [readable, writable]}
+  - {name: r22, class: gpr, width: 64, enc: 22, flags: [readable, writable]}
+  - {name: r23, class: gpr, width: 64, enc: 23, flags: [readable, writable]}
+  - {name: r24, class: gpr, width: 64, enc: 24, flags: [readable, writable]}
+  - {name: r25, class: gpr, width: 64, enc: 25, flags: [readable, writable]}
+  - {name: r26, class: gpr, width: 64, enc: 26, flags: [readable, writable]}
+  - {name: r27, class: gpr, width: 64, enc: 27, flags: [readable, writable]}
+  - {name: r28, class: gpr, width: 64, enc: 28, flags: [readable, writable]}
+  - {name: r29, class: gpr, width: 64, enc: 29, flags: [readable, writable]}
+  - {name: r30, class: gpr, width: 64, enc: 30, flags: [readable, writable]}
+  - {name: r31, class: gpr, width: 64, enc: 31, flags: [readable, writable]}
+  - {name: f0, class: fp, width: 64, enc: 0, flags: [readable, writable]}
+  - {name: f1, class: fp, width: 64, enc: 1, flags: [readable, writable]}
+  - {name: f2, class: fp, width: 64, enc: 2, flags: [readable, writable]}
+  - {name: f3, class: fp, width: 64, enc: 3, flags: [readable, writable]}
+  - {name: f4, class: fp, width: 64, enc: 4, flags: [readable, writable]}
+  - {name: f5, class: fp, width: 64, enc: 5, flags: [readable, writable]}
+  - {name: f6, class: fp, width: 64, enc: 6, flags: [readable, writable]}
+  - {name: f7, class: fp, width: 64, enc: 7, flags: [readable, writable]}
+  - {name: f8, class: fp, width: 64, enc: 8, flags: [readable, writable]}
+  - {name: f9, class: fp, width: 64, enc: 9, flags: [readable, writable]}
+  - {name: f10, class: fp, width: 64, enc: 10, flags: [readable, writable]}
+  - {name: f11, class: fp, width: 64, enc: 11, flags: [readable, writable]}
+  - {name: f12, class: fp, width: 64, enc: 12, flags: [readable, writable]}
+  - {name: f13, class: fp, width: 64, enc: 13, flags: [readable, writable]}
+  - {name: f14, class: fp, width: 64, enc: 14, flags: [readable, writable]}
+  - {name: f15, class: fp, width: 64, enc: 15, flags: [readable, writable]}
+  - {name: f16, class: fp, width: 64, enc: 16, flags: [readable, writable]}
+  - {name: f17, class: fp, width: 64, enc: 17, flags: [readable, writable]}
+  - {name: f18, class: fp, width: 64, enc: 18, flags: [readable, writable]}
+  - {name: f19, class: fp, width: 64, enc: 19, flags: [readable, writable]}
+  - {name: f20, class: fp, width: 64, enc: 20, flags: [readable, writable]}
+  - {name: f21, class: fp, width: 64, enc: 21, flags: [readable, writable]}
+  - {name: f22, class: fp, width: 64, enc: 22, flags: [readable, writable]}
+  - {name: f23, class: fp, width: 64, enc: 23, flags: [readable, writable]}
+  - {name: f24, class: fp, width: 64, enc: 24, flags: [readable, writable]}
+  - {name: f25, class: fp, width: 64, enc: 25, flags: [readable, writable]}
+  - {name: f26, class: fp, width: 64, enc: 26, flags: [readable, writable]}
+  - {name: f27, class: fp, width: 64, enc: 27, flags: [readable, writable]}
+  - {name: f28, class: fp, width: 64, enc: 28, flags: [readable, writable]}
+  - {name: f29, class: fp, width: 64, enc: 29, flags: [readable, writable]}
+  - {name: f30, class: fp, width: 64, enc: 30, flags: [readable, writable]}
+  - {name: f31, class: fp, width: 64, enc: 31, flags: [readable, writable]}
+  - {name: v0, class: vec, width: 128, enc: 0, flags: [readable, writable]}
+  - {name: v1, class: vec, width: 128, enc: 1, flags: [readable, writable]}
+  - {name: v2, class: vec, width: 128, enc: 2, flags: [readable, writable]}
+  - {name: v3, class: vec, width: 128, enc: 3, flags: [readable, writable]}
+  - {name: v4, class: vec, width: 128, enc: 4, flags: [readable, writable]}
+  - {name: v5, class: vec, width: 128, enc: 5, flags: [readable, writable]}
+  - {name: v6, class: vec, width: 128, enc: 6, flags: [readable, writable]}
+  - {name: v7, class: vec, width: 128, enc: 7, flags: [readable, writable]}
+  - {name: v8, class: vec, width: 128, enc: 8, flags: [readable, writable]}
+  - {name: v9, class: vec, width: 128, enc: 9, flags: [readable, writable]}
+  - {name: v10, class: vec, width: 128, enc: 10, flags: [readable, writable]}
+  - {name: v11, class: vec, width: 128, enc: 11, flags: [readable, writable]}
+  - {name: v12, class: vec, width: 128, enc: 12, flags: [readable, writable]}
+  - {name: v13, class: vec, width: 128, enc: 13, flags: [readable, writable]}
+  - {name: v14, class: vec, width: 128, enc: 14, flags: [readable, writable]}
+  - {name: v15, class: vec, width: 128, enc: 15, flags: [readable, writable]}
+  - {name: v16, class: vec, width: 128, enc: 16, flags: [readable, writable]}
+  - {name: v17, class: vec, width: 128, enc: 17, flags: [readable, writable]}
+  - {name: v18, class: vec, width: 128, enc: 18, flags: [readable, writable]}
+  - {name: v19, class: vec, width: 128, enc: 19, flags: [readable, writable]}
+  - {name: v20, class: vec, width: 128, enc: 20, flags: [readable, writable]}
+  - {name: v21, class: vec, width: 128, enc: 21, flags: [readable, writable]}
+  - {name: v22, class: vec, width: 128, enc: 22, flags: [readable, writable]}
+  - {name: v23, class: vec, width: 128, enc: 23, flags: [readable, writable]}
+  - {name: v24, class: vec, width: 128, enc: 24, flags: [readable, writable]}
+  - {name: v25, class: vec, width: 128, enc: 25, flags: [readable, writable]}
+  - {name: v26, class: vec, width: 128, enc: 26, flags: [readable, writable]}
+  - {name: v27, class: vec, width: 128, enc: 27, flags: [readable, writable]}
+  - {name: v28, class: vec, width: 128, enc: 28, flags: [readable, writable]}
+  - {name: v29, class: vec, width: 128, enc: 29, flags: [readable, writable]}
+  - {name: v30, class: vec, width: 128, enc: 30, flags: [readable, writable]}
+  - {name: v31, class: vec, width: 128, enc: 31, flags: [readable, writable]}
+  # VSX registers vs0..vs63 overlap f+v (model as 128-bit vec aliases).
+  - {name: vs0, class: vec, width: 128, enc: 0, flags: [readable, writable]}
+  - {name: vs1, class: vec, width: 128, enc: 1, flags: [readable, writable]}
+  - {name: vs2, class: vec, width: 128, enc: 2, flags: [readable, writable]}
+  - {name: vs3, class: vec, width: 128, enc: 3, flags: [readable, writable]}
+  - {name: vs4, class: vec, width: 128, enc: 4, flags: [readable, writable]}
+  - {name: vs5, class: vec, width: 128, enc: 5, flags: [readable, writable]}
+  - {name: vs6, class: vec, width: 128, enc: 6, flags: [readable, writable]}
+  - {name: vs7, class: vec, width: 128, enc: 7, flags: [readable, writable]}
+  - {name: vs8, class: vec, width: 128, enc: 8, flags: [readable, writable]}
+  - {name: vs9, class: vec, width: 128, enc: 9, flags: [readable, writable]}
+  - {name: vs10, class: vec, width: 128, enc: 10, flags: [readable, writable]}
+  - {name: vs11, class: vec, width: 128, enc: 11, flags: [readable, writable]}
+  - {name: vs12, class: vec, width: 128, enc: 12, flags: [readable, writable]}
+  - {name: vs13, class: vec, width: 128, enc: 13, flags: [readable, writable]}
+  - {name: vs14, class: vec, width: 128, enc: 14, flags: [readable, writable]}
+  - {name: vs15, class: vec, width: 128, enc: 15, flags: [readable, writable]}
+  - {name: vs16, class: vec, width: 128, enc: 16, flags: [readable, writable]}
+  - {name: vs17, class: vec, width: 128, enc: 17, flags: [readable, writable]}
+  - {name: vs18, class: vec, width: 128, enc: 18, flags: [readable, writable]}
+  - {name: vs19, class: vec, width: 128, enc: 19, flags: [readable, writable]}
+  - {name: vs20, class: vec, width: 128, enc: 20, flags: [readable, writable]}
+  - {name: vs21, class: vec, width: 128, enc: 21, flags: [readable, writable]}
+  - {name: vs22, class: vec, width: 128, enc: 22, flags: [readable, writable]}
+  - {name: vs23, class: vec, width: 128, enc: 23, flags: [readable, writable]}
+  - {name: vs24, class: vec, width: 128, enc: 24, flags: [readable, writable]}
+  - {name: vs25, class: vec, width: 128, enc: 25, flags: [readable, writable]}
+  - {name: vs26, class: vec, width: 128, enc: 26, flags: [readable, writable]}
+  - {name: vs27, class: vec, width: 128, enc: 27, flags: [readable, writable]}
+  - {name: vs28, class: vec, width: 128, enc: 28, flags: [readable, writable]}
+  - {name: vs29, class: vec, width: 128, enc: 29, flags: [readable, writable]}
+  - {name: vs30, class: vec, width: 128, enc: 30, flags: [readable, writable]}
+  - {name: vs31, class: vec, width: 128, enc: 31, flags: [readable, writable]}
+  - {name: vs32, class: vec, width: 128, enc: 0, flags: [readable, writable]}
+  - {name: vs33, class: vec, width: 128, enc: 1, flags: [readable, writable]}
+  - {name: vs34, class: vec, width: 128, enc: 2, flags: [readable, writable]}
+  - {name: vs35, class: vec, width: 128, enc: 3, flags: [readable, writable]}
+  - {name: vs36, class: vec, width: 128, enc: 4, flags: [readable, writable]}
+  - {name: vs37, class: vec, width: 128, enc: 5, flags: [readable, writable]}
+  - {name: vs38, class: vec, width: 128, enc: 6, flags: [readable, writable]}
+  - {name: vs39, class: vec, width: 128, enc: 7, flags: [readable, writable]}
+  - {name: vs40, class: vec, width: 128, enc: 8, flags: [readable, writable]}
+  - {name: vs41, class: vec, width: 128, enc: 9, flags: [readable, writable]}
+  - {name: vs42, class: vec, width: 128, enc: 10, flags: [readable, writable]}
+  - {name: vs43, class: vec, width: 128, enc: 11, flags: [readable, writable]}
+  - {name: vs44, class: vec, width: 128, enc: 12, flags: [readable, writable]}
+  - {name: vs45, class: vec, width: 128, enc: 13, flags: [readable, writable]}
+  - {name: vs46, class: vec, width: 128, enc: 14, flags: [readable, writable]}
+  - {name: vs47, class: vec, width: 128, enc: 15, flags: [readable, writable]}
+  - {name: vs48, class: vec, width: 128, enc: 16, flags: [readable, writable]}
+  - {name: vs49, class: vec, width: 128, enc: 17, flags: [readable, writable]}
+  - {name: vs50, class: vec, width: 128, enc: 18, flags: [readable, writable]}
+  - {name: vs51, class: vec, width: 128, enc: 19, flags: [readable, writable]}
+  - {name: vs52, class: vec, width: 128, enc: 20, flags: [readable, writable]}
+  - {name: vs53, class: vec, width: 128, enc: 21, flags: [readable, writable]}
+  - {name: vs54, class: vec, width: 128, enc: 22, flags: [readable, writable]}
+  - {name: vs55, class: vec, width: 128, enc: 23, flags: [readable, writable]}
+  - {name: vs56, class: vec, width: 128, enc: 24, flags: [readable, writable]}
+  - {name: vs57, class: vec, width: 128, enc: 25, flags: [readable, writable]}
+  - {name: vs58, class: vec, width: 128, enc: 26, flags: [readable, writable]}
+  - {name: vs59, class: vec, width: 128, enc: 27, flags: [readable, writable]}
+  - {name: vs60, class: vec, width: 128, enc: 28, flags: [readable, writable]}
+  - {name: vs61, class: vec, width: 128, enc: 29, flags: [readable, writable]}
+  - {name: vs62, class: vec, width: 128, enc: 30, flags: [readable, writable]}
+  - {name: vs63, class: vec, width: 128, enc: 31, flags: [readable, writable]}
+  - {name: cr0, class: status, width: 8, enc: 0, flags: [readable, writable]}
+  - {name: cr1, class: status, width: 8, enc: 1, flags: [readable, writable]}
+  - {name: cr2, class: status, width: 8, enc: 2, flags: [readable, writable]}
+  - {name: cr3, class: status, width: 8, enc: 3, flags: [readable, writable]}
+  - {name: cr4, class: status, width: 8, enc: 4, flags: [readable, writable]}
+  - {name: cr5, class: status, width: 8, enc: 5, flags: [readable, writable]}
+  - {name: cr6, class: status, width: 8, enc: 6, flags: [readable, writable]}
+  - {name: cr7, class: status, width: 8, enc: 7, flags: [readable, writable]}
+  - {name: lr, class: special, width: 64, enc: 0}
+  - {name: ctr, class: special, width: 64, enc: 0}
+  - {name: cr, class: status, width: 32, enc: 0}
+  - {name: xer, class: status, width: 32, enc: 0}
+  - {name: fpscr, class: status, width: 32, enc: 0}
+  - {name: vrsave, class: status, width: 32, enc: 0}
+  - {name: msr, class: ctrl, width: 64, enc: 0, flags: [modedep]}
+  - {name: srr0, class: ctrl, width: 64, enc: 0, flags: [modedep]}
+  - {name: srr1, class: ctrl, width: 64, enc: 0, flags: [modedep]}
+  - {name: dar, class: ctrl, width: 64, enc: 0, flags: [modedep]}
+  - {name: dsisr, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: pc, class: special, width: 64, enc: 0}
+mnemonics:
+  - {name: nop}
+  - {name: add}
+  - {name: subf}
+  - {name: and}
+  - {name: or}
+  - {name: xor}
+  - {name: mulli}
+  - {name: mullw}
+  - {name: divw}
+  - {name: cmpw}
+  - {name: li}
+  - {name: addi}
+  - {name: addis}
+  - {name: lwz}
+  - {name: stw}
+  - {name: lbz}
+  - {name: stb}
+  - {name: ld}
+  - {name: std}
+  - {name: lmw}
+  - {name: stmw}
+  - {name: lwarx}
+  - {name: stwcx}
+  - {name: bc}
+  - {name: bl}
+  - {name: b}
+  - {name: bclr}
+  - {name: bcctr}
+  - {name: blr}
+  - {name: tw}
+  - {name: sc}
+  - {name: sync}
+  - {name: isync}
+  - {name: rfid}
+  - {name: mfspr}
+  - {name: mtspr}
+  - {name: fadd}
+  - {name: fmul}
+  - {name: fmr}
+  - {name: vand}
+  - {name: vor}
+  - {name: vadd}
+  - {name: lxvd2x}
+  - {name: stxvd2x}
+  - {name: vcipher}
+  - {name: dadd}
+  - {name: tbegin}
+  - {name: tend}
+encoders:
+  # Power encodings: XO/D/I/B skeletons; shifts as multiplication
+  # (RT<<21 == *2097152, RA<<16 == *65536, RB<<11 == *2048).
+  - name: nop
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x60000000
+  - name: add
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x7C000214 + rd*2097152 + ra*65536 + rb*2048
+  - name: subf
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x7C000050 + rd*2097152 + ra*65536 + rb*2048
+  - name: and
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x7C000038 + rd*2097152 + ra*65536 + rb*2048
+  - name: or
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x7C000378 + rd*2097152 + ra*65536 + rb*2048
+  - name: xor
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x7C000278 + rd*2097152 + ra*65536 + rb*2048
+  - name: mulli
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x1C000000 + rd*2097152 + ra*65536 + ((imm + 65536) % 65536)
+  - name: mullw
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x7C0001D6 + rd*2097152 + ra*65536 + rb*2048
+  - name: divw
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x7C0003D6 + rd*2097152 + ra*65536 + rb*2048
+  - name: cmpw
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x7C000000 + ra*65536 + rb*2048
+  - name: li
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x38000000 + rd*2097152 + ((imm + 65536) % 65536)
+  - name: addi
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x38000000 + rd*2097152 + ra*65536 + ((imm + 65536) % 65536)
+  - name: addis
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x3C000000 + rd*2097152 + ra*65536 + ((imm + 65536) % 65536)
+  - name: lwz
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x80000000 + rd*2097152 + ra*65536 + ((imm + 65536) % 65536)
+  - name: stw
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x90000000 + rs*2097152 + ra*65536 + ((imm + 65536) % 65536)
+  - name: lbz
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x88000000 + rd*2097152 + ra*65536 + ((imm + 65536) % 65536)
+  - name: stb
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x98000000 + rs*2097152 + ra*65536 + ((imm + 65536) % 65536)
+  - name: ld
+    max_bytes: 4
+    body: |
+      EMIT32LE 0xE8000000 + rd*2097152 + ra*65536 + ((imm + 65536) % 65536)
+  - name: std
+    max_bytes: 4
+    body: |
+      EMIT32LE 0xF8000000 + rs*2097152 + ra*65536 + ((imm + 65536) % 65536)
+  - name: lmw
+    max_bytes: 4
+    body: |
+      EMIT32LE 0xB8000000 + rd*2097152 + ra*65536 + ((imm + 65536) % 65536)
+  - name: stmw
+    max_bytes: 4
+    body: |
+      EMIT32LE 0xBC000000 + rs*2097152 + ra*65536 + ((imm + 65536) % 65536)
+  - name: lwarx
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x7C000028 + rd*2097152 + ra*65536
+  - name: stwcx
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x7C00012D + rs*2097152 + ra*65536
+  - name: bc
+    max_bytes: 4
+    max_relocs: 1
+    body: |
+      EMIT32LE 0x40000000
+      EMIT_RELOCATION sym, R_PPC64_REL24
+  - name: bl
+    max_bytes: 4
+    max_relocs: 1
+    body: |
+      EMIT32LE 0x48000001
+      EMIT_RELOCATION sym, R_PPC64_REL24
+  - name: b
+    max_bytes: 4
+    max_relocs: 1
+    body: |
+      EMIT32LE 0x48000000
+      EMIT_RELOCATION sym, R_PPC64_REL24
+  - name: bclr
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x4E800020
+  - name: bcctr
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x4E800420
+  - name: blr
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x4E800020
+  - name: tw
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x7C000008 + ra*65536 + rb*2048
+  - name: sc
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x44000002
+  - name: sync
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x7C0004AC
+  - name: isync
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x4C00012C
+  - name: rfid
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x4C000024
+  - name: mfspr
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x7C0002A6 + rd*2097152 + ((spr + 1024) % 1024)*65536
+  - name: mtspr
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x7C0003A6 + rs*2097152 + ((spr + 1024) % 1024)*65536
+  - name: fadd
+    max_bytes: 4
+    body: |
+      EMIT32LE 0xFC00002A + rd*2097152 + ra*65536 + rb*2048
+  - name: fmul
+    max_bytes: 4
+    body: |
+      EMIT32LE 0xFC000032 + rd*2097152 + ra*65536 + rb*65536
+  - name: fmr
+    max_bytes: 4
+    body: |
+      EMIT32LE 0xFC000090 + rd*2097152 + rb*2048
+  - name: vand
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x10000442 + rd*2097152 + ra*65536 + rb*2048
+  - name: vor
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x1000044A + rd*2097152 + ra*65536 + rb*2048
+  - name: vadd
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x10000080 + rd*2097152 + ra*65536 + rb*2048
+  - name: lxvd2x
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x7C000698 + rd*2097152 + ra*65536 + rb*2048
+  - name: stxvd2x
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x7C000798 + rs*2097152 + ra*65536 + rb*2048
+  - name: vcipher
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x10000548 + rd*2097152 + ra*65536 + rb*2048
+  - name: dadd
+    max_bytes: 4
+    body: |
+      EMIT32LE 0xFC000004 + rd*2097152 + ra*65536 + rb*2048
+  - name: tbegin
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x7C0005AC
+  - name: tend
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x7C0005DC
+forms:
+  - mnemonic: nop
+    encoder: nop
+  - mnemonic: add
+    encoder: add
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: subf
+    encoder: subf
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: and
+    encoder: and
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: or
+    encoder: or
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: xor
+    encoder: xor
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: mulli
+    encoder: mulli
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: imm, width: 16, imm_min: -32768, imm_max: 32767, signed: true}
+  - mnemonic: mullw
+    encoder: mullw
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: divw
+    encoder: divw
+    flags: [may_trap]
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: cmpw
+    encoder: cmpw
+    operands:
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: li
+    encoder: li
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: imm, width: 16, imm_min: -32768, imm_max: 32767, signed: true}
+  - mnemonic: addi
+    encoder: addi
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: imm, width: 16, imm_min: -32768, imm_max: 32767, signed: true}
+  - mnemonic: addis
+    encoder: addis
+    flags: [reloc]
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: sym, width: 64}
+  - mnemonic: lwz
+    encoder: lwz
+    flags: [reads_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: mem, width: 16, imm_min: -32768, imm_max: 32767, signed: true}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: stw
+    encoder: stw
+    flags: [writes_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: mem, width: 16, imm_min: -32768, imm_max: 32767, signed: true}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: lbz
+    encoder: lbz
+    flags: [reads_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: mem, width: 16, imm_min: -32768, imm_max: 32767, signed: true}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: stb
+    encoder: stb
+    flags: [writes_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: mem, width: 16, imm_min: -32768, imm_max: 32767, signed: true}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: ld
+    encoder: ld
+    flags: [reads_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: mem, width: 16, imm_min: -32768, imm_max: 32767, signed: true}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: std
+    encoder: std
+    flags: [writes_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: mem, width: 16, imm_min: -32768, imm_max: 32767, signed: true}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: lmw
+    encoder: lmw
+    flags: [reads_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: mem, width: 16, imm_min: -32768, imm_max: 32767, signed: true}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: stmw
+    encoder: stmw
+    flags: [writes_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: mem, width: 16, imm_min: -32768, imm_max: 32767, signed: true}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: lwarx
+    encoder: lwarx
+    flags: [reads_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: mem, width: 32}
+  - mnemonic: stwcx
+    encoder: stwcx
+    flags: [writes_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: mem, width: 32}
+  - mnemonic: bc
+    encoder: bc
+    flags: [cond_branch, reloc]
+    operands:
+      - {kind: cond, width: 8}
+      - {kind: sym, width: 64}
+  - mnemonic: bl
+    encoder: bl
+    flags: [branch, reloc]
+    operands:
+      - {kind: sym, width: 64}
+  - mnemonic: b
+    encoder: b
+    flags: [branch, terminator, reloc]
+    operands:
+      - {kind: sym, width: 64}
+  - mnemonic: bclr
+    encoder: bclr
+    flags: [branch, cond_branch]
+    operands:
+      - {kind: cond, width: 8}
+  - mnemonic: bcctr
+    encoder: bcctr
+    flags: [branch]
+    operands:
+      - {kind: cond, width: 8}
+  - mnemonic: blr
+    encoder: blr
+    flags: [return, terminator]
+  - mnemonic: tw
+    encoder: tw
+    flags: [may_trap]
+    operands:
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: sc
+    encoder: sc
+    flags: [may_trap]
+  - mnemonic: sync
+    encoder: sync
+  - mnemonic: isync
+    encoder: isync
+  - mnemonic: rfid
+    encoder: rfid
+    flags: [privileged, return]
+    required: [priv]
+  - mnemonic: mfspr
+    encoder: mfspr
+    flags: [privileged]
+    required: [priv]
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: imm, width: 16, imm_min: 0, imm_max: 1023, signed: false}
+  - mnemonic: mtspr
+    encoder: mtspr
+    flags: [privileged]
+    required: [priv]
+    operands:
+      - {kind: imm, width: 16, imm_min: 0, imm_max: 1023, signed: false}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: fadd
+    encoder: fadd
+    required: [fpu]
+    operands:
+      - {kind: reg, class: fp, width: 64, access: write}
+      - {kind: reg, class: fp, width: 64}
+      - {kind: reg, class: fp, width: 64}
+  - mnemonic: fmul
+    encoder: fmul
+    required: [fpu]
+    operands:
+      - {kind: reg, class: fp, width: 64, access: write}
+      - {kind: reg, class: fp, width: 64}
+      - {kind: reg, class: fp, width: 64}
+  - mnemonic: fmr
+    encoder: fmr
+    required: [fpu]
+    operands:
+      - {kind: reg, class: fp, width: 64, access: write}
+      - {kind: reg, class: fp, width: 64}
+  - mnemonic: vand
+    encoder: vand
+    required: [altivec]
+    operands:
+      - {kind: reg, class: vec, width: 128, access: write}
+      - {kind: reg, class: vec, width: 128}
+      - {kind: reg, class: vec, width: 128}
+  - mnemonic: vor
+    encoder: vor
+    required: [altivec]
+    operands:
+      - {kind: reg, class: vec, width: 128, access: write}
+      - {kind: reg, class: vec, width: 128}
+      - {kind: reg, class: vec, width: 128}
+  - mnemonic: vadd
+    encoder: vadd
+    required: [altivec]
+    operands:
+      - {kind: reg, class: vec, width: 128, access: write}
+      - {kind: reg, class: vec, width: 128}
+      - {kind: reg, class: vec, width: 128}
+  - mnemonic: lxvd2x
+    encoder: lxvd2x
+    flags: [reads_mem]
+    required: [vsx]
+    operands:
+      - {kind: reg, class: vec, width: 128, access: write}
+      - {kind: mem, width: 128}
+  - mnemonic: stxvd2x
+    encoder: stxvd2x
+    flags: [writes_mem]
+    required: [vsx]
+    operands:
+      - {kind: reg, class: vec, width: 128}
+      - {kind: mem, width: 128}
+  - mnemonic: vcipher
+    encoder: vcipher
+    required: [crypto]
+    operands:
+      - {kind: reg, class: vec, width: 128, access: write}
+      - {kind: reg, class: vec, width: 128}
+      - {kind: reg, class: vec, width: 128}
+  - mnemonic: dadd
+    encoder: dadd
+    required: [dfp]
+    operands:
+      - {kind: reg, class: fp, width: 64, access: write}
+      - {kind: reg, class: fp, width: 64}
+      - {kind: reg, class: fp, width: 64}
+  - mnemonic: tbegin
+    encoder: tbegin
+    required: [htm]
+  - mnemonic: tend
+    encoder: tend
+    required: [htm]
+syntaxes:
+  - {name: default, comment: "#", separator: ", "}
+sections:
+  - {name: ".text", flags: [exec, alloc, code], align: 4, content: code}
+  - {name: ".rodata", flags: [alloc, readonly, data], align: 8, content: data}
+  - {name: ".data", flags: [write, alloc, data], align: 8, content: data}
+  - {name: ".bss", flags: [write, alloc, zerofill, data], align: 8, content: data}
+  - {name: ".toc", flags: [write, alloc, data], align: 8, content: data}
+  - {name: ".got", flags: [write, alloc, data], align: 8, content: data}
+  - {name: ".plt", flags: [exec, alloc, code], align: 8, content: code}
+  - {name: ".eh_frame", flags: [alloc, readonly, data], align: 8, content: data}
+linkages:
+  - {name: func_global, binding: global, visibility: default, symtype: func}
+  - {name: func_weak, binding: weak, visibility: default, symtype: func}
+  - {name: object_global, binding: global, visibility: default, symtype: object}
+  - {name: tls_var, binding: tls, visibility: default, symtype: object}
+  - {name: local_sym, binding: local, visibility: default, symtype: none}
+relocs:
+  - {name: R_PPC64_NONE, width: 64, expr: "S + A"}
+  - {name: R_PPC64_ADDR64, width: 64, expr: "S + A"}
+  - {name: R_PPC64_ADDR32, width: 32, expr: "S + A"}
+  - {name: R_PPC64_ADDR16, width: 32, expr: "S + A"}
+  - {name: R_PPC64_REL24, width: 32, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_PPC64_REL64, width: 64, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_PPC64_REL32, width: 32, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_PPC64_TOC16, width: 32, expr: "S + A - TOC"}
+  - {name: R_PPC64_TOC16_HA, width: 32, expr: "S + A - TOC"}
+  - {name: R_PPC64_TOC16_LO, width: 32, expr: "S + A - TOC"}
+  - {name: R_PPC64_TOC16_DS, width: 32, expr: "S + A - TOC"}
+  - {name: R_PPC64_REL16_HA, width: 32, expr: "S + A - P"}
+  - {name: R_PPC64_REL16_LO, width: 32, expr: "S + A - P"}
+  - {name: R_PPC64_GOT16, width: 32, expr: "GOT(S) + A"}
+  - {name: R_PPC64_PLT16_HA, width: 32, expr: "PLT(S) + A"}
+  - {name: R_PPC64_TLSGD, width: 64, expr: "TLS(S) + A"}
+  - {name: R_PPC64_TLSLD, width: 64, expr: "TLS(S) + A"}
+  - {name: R_PPC64_TPREL16_HA, width: 32, expr: "TLS(S) + A"}
+  - {name: R_PPC64_RELATIVE, width: 64, expr: "B + A"}
+  - {name: R_PPC64_GLOB_DAT, width: 64, expr: "S + A"}
+  - {name: R_PPC64_JMP_SLOT, width: 64, expr: "S + A"}
+  - {name: R_PPC64_IRELATIVE, width: 64, expr: "B + A"}
+debug:
+  - {kind: target, ref: "", msg: "power64 base+fpu+altivec/vsx+powerisa+htm/mma stratification"}
+  - {kind: form, ref: vadd, msg: "vector forms require altivec/vsx"}
+  - {kind: form, ref: rfid, msg: "privileged forms require priv"}
+backend:
+  file: backend/ppc64.json

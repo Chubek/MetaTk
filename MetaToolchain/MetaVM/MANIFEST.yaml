@@ -1,0 +1,832 @@
+{
+  "schema": "metavm.catalog/1",
+  "machines": [
+    {
+      "schema": "metavm.machine/1",
+      "name": "ALEX",
+      "symbol": "ALEX",
+      "architecture": "unspecified",
+      "description": "No authoritative ISA or version supplied; preserve this identity pending specification",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "ALEX.mvm",
+      "vmweave": "ALEX.vmweave",
+      "vmspc": "ALEX.vmspc",
+      "vmdesc": "ALEX.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "ART",
+      "symbol": "ART",
+      "architecture": "runtime",
+      "description": "Android runtime consuming DEX; not a separate guest instruction set",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "ART.mvm",
+      "vmweave": "ART.vmweave",
+      "vmspc": "ART.vmspc",
+      "vmdesc": "ART.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "AVM2",
+      "symbol": "AVM2",
+      "architecture": "stack",
+      "description": "ActionScript bytecode virtual machine",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "AVM2.mvm",
+      "vmweave": "AVM2.vmweave",
+      "vmspc": "AVM2.vmspc",
+      "vmdesc": "AVM2.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "B-Code",
+      "symbol": "B_Code",
+      "architecture": "unspecified",
+      "description": "No authoritative ISA or version supplied; preserve this identity pending specification",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "B-Code.mvm",
+      "vmweave": "B-Code.vmweave",
+      "vmspc": "B-Code.vmspc",
+      "vmdesc": "B-Code.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "BCPL",
+      "symbol": "BCPL",
+      "architecture": "stack",
+      "description": "BCPL abstract machine; dialect must be selected",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "BCPL.mvm",
+      "vmweave": "BCPL.vmweave",
+      "vmspc": "BCPL.vmspc",
+      "vmdesc": "BCPL.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "BEAM",
+      "symbol": "BEAM",
+      "architecture": "register",
+      "description": "Erlang instruction runtime with process scheduling",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "BEAM.mvm",
+      "vmweave": "BEAM.vmweave",
+      "vmspc": "BEAM.vmspc",
+      "vmdesc": "BEAM.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "C-Machine",
+      "symbol": "C_Machine",
+      "architecture": "unspecified",
+      "description": "No authoritative ISA or version supplied; preserve this identity pending specification",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "C-Machine.mvm",
+      "vmweave": "C-Machine.vmweave",
+      "vmspc": "C-Machine.vmspc",
+      "vmdesc": "C-Machine.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "CAM",
+      "symbol": "CAM",
+      "architecture": "closure",
+      "description": "Categorical abstract machine",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "CAM.mvm",
+      "vmweave": "CAM.vmweave",
+      "vmspc": "CAM.vmspc",
+      "vmdesc": "CAM.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "CESK",
+      "symbol": "CESK",
+      "architecture": "closure",
+      "description": "Control, environment, store, continuation",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "CESK.mvm",
+      "vmweave": "CESK.vmweave",
+      "vmspc": "CESK.vmspc",
+      "vmdesc": "CESK.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "CHIP-8",
+      "symbol": "CHIP_8",
+      "architecture": "register",
+      "description": "Classic CHIP-8; legacy, COSMAC VIP and CHIP-48 opcode presets; 4 KiB memory and 64x32 display",
+      "native_coverage": "classic-opcode-interpreter",
+      "native_format_loader": false,
+      "portable_example": "CHIP-8.mvm",
+      "vmweave": "CHIP-8.vmweave",
+      "vmspc": "CHIP-8.vmspc",
+      "vmdesc": "CHIP-8.vmdesc",
+      "limitations": [
+        "Selected classic-opcode presets, sampled key waits and host-driven vblank; see docs/CHIP8.md.",
+        "Pinned Corax+ and flags ROM tests, not full hardware compatibility; no SCHIP/XO-CHIP, audio synthesis or cycle-accurate scheduling."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "CLR",
+      "symbol": "CLR",
+      "architecture": "stack",
+      "description": "Common intermediate language runtime",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "CLR.mvm",
+      "vmweave": "CLR.vmweave",
+      "vmspc": "CLR.vmspc",
+      "vmdesc": "CLR.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "CPython",
+      "symbol": "CPython",
+      "architecture": "stack",
+      "description": "Python bytecode; version must be pinned",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "CPython.mvm",
+      "vmweave": "CPython.vmweave",
+      "vmspc": "CPython.vmspc",
+      "vmdesc": "CPython.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "ConcurrentML",
+      "symbol": "ConcurrentML",
+      "architecture": "runtime",
+      "description": "Concurrent ML language and concurrency runtime; guest ISA unspecified",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "ConcurrentML.mvm",
+      "vmweave": "ConcurrentML.vmweave",
+      "vmspc": "ConcurrentML.vmspc",
+      "vmdesc": "ConcurrentML.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "DRMVM",
+      "symbol": "DRMVM",
+      "architecture": "graphics",
+      "description": "Machinery host imports into XRGB8888 surfaces; optional libdrm dumb buffers",
+      "native_coverage": "graphics-subset",
+      "native_format_loader": false,
+      "portable_example": "DRMVM.mvm",
+      "vmweave": "DRMVM.vmweave",
+      "vmspc": "DRMVM.vmspc",
+      "vmdesc": "DRMVM.vmdesc",
+      "limitations": [
+        "See native API header for exact implemented subset. No full platform runtime or file loader."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "DVI",
+      "symbol": "DVI",
+      "architecture": "document",
+      "description": "TeX device independent output command interpreter",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "DVI.mvm",
+      "vmweave": "DVI.vmweave",
+      "vmspc": "DVI.vmspc",
+      "vmdesc": "DVI.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "Dalvik",
+      "symbol": "Dalvik",
+      "architecture": "register",
+      "description": "DEX register instructions",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "Dalvik.mvm",
+      "vmweave": "Dalvik.vmweave",
+      "vmspc": "Dalvik.vmspc",
+      "vmdesc": "Dalvik.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "Dart",
+      "symbol": "Dart",
+      "architecture": "runtime",
+      "description": "Dart runtime; guest ABI requires a version",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "Dart.mvm",
+      "vmweave": "Dart.vmweave",
+      "vmspc": "Dart.vmspc",
+      "vmdesc": "Dart.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "Dis",
+      "symbol": "Dis",
+      "architecture": "register",
+      "description": "Inferno Dis virtual machine",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "Dis.mvm",
+      "vmweave": "Dis.vmweave",
+      "vmspc": "Dis.vmspc",
+      "vmdesc": "Dis.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "FAM",
+      "symbol": "FAM",
+      "architecture": "unspecified",
+      "description": "No authoritative ISA or version supplied; preserve this identity pending specification",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "FAM.mvm",
+      "vmweave": "FAM.vmweave",
+      "vmspc": "FAM.vmspc",
+      "vmdesc": "FAM.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "FORTH",
+      "symbol": "FORTH",
+      "architecture": "stack",
+      "description": "Data and return stacks, dictionary, colon definitions",
+      "native_coverage": "integer-word-subset",
+      "native_format_loader": false,
+      "portable_example": "FORTH.mvm",
+      "vmweave": "FORTH.vmweave",
+      "vmspc": "FORTH.vmspc",
+      "vmdesc": "FORTH.vmdesc",
+      "limitations": [
+        "See native API header for exact implemented subset. No full platform runtime or file loader."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "FUL",
+      "symbol": "FUL",
+      "architecture": "unspecified",
+      "description": "No authoritative ISA or version supplied; preserve this identity pending specification",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "FUL.mvm",
+      "vmweave": "FUL.vmweave",
+      "vmspc": "FUL.vmspc",
+      "vmdesc": "FUL.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "G-Code",
+      "symbol": "G_Code",
+      "architecture": "motion",
+      "description": "Modal machine control command interpreter; dialect must be selected",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "G-Code.mvm",
+      "vmweave": "G-Code.vmweave",
+      "vmspc": "G-Code.vmspc",
+      "vmdesc": "G-Code.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "Harrison",
+      "symbol": "Harrison",
+      "architecture": "unspecified",
+      "description": "No authoritative ISA or version supplied; preserve this identity pending specification",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "Harrison.mvm",
+      "vmweave": "Harrison.vmweave",
+      "vmspc": "Harrison.vmspc",
+      "vmdesc": "Harrison.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "IKL",
+      "symbol": "IKL",
+      "architecture": "unspecified",
+      "description": "No authoritative ISA or version supplied; preserve this identity pending specification",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "IKL.mvm",
+      "vmweave": "IKL.vmweave",
+      "vmspc": "IKL.vmspc",
+      "vmdesc": "IKL.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "JSCore",
+      "symbol": "JSCore",
+      "architecture": "runtime",
+      "description": "JavaScriptCore runtime; internal bytecode must be versioned",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "JSCore.mvm",
+      "vmweave": "JSCore.vmweave",
+      "vmspc": "JSCore.vmspc",
+      "vmdesc": "JSCore.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "JVM",
+      "symbol": "JVM",
+      "architecture": "stack",
+      "description": "JVM integer Code arrays with local variables and bounded operand stack",
+      "native_coverage": "integer-method-subset",
+      "native_format_loader": false,
+      "portable_example": "JVM.mvm",
+      "vmweave": "JVM.vmweave",
+      "vmspc": "JVM.vmspc",
+      "vmdesc": "JVM.vmdesc",
+      "limitations": [
+        "See native API header for exact implemented subset. No full platform runtime or file loader."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "Krivine",
+      "symbol": "Krivine",
+      "architecture": "closure",
+      "description": "Version-1 closed de Bruijn terms; bounded call-by-name weak-head closure evaluation",
+      "native_coverage": "krivine-whnf-subset",
+      "native_format_loader": false,
+      "portable_example": "Krivine.mvm",
+      "vmweave": "Krivine.vmweave",
+      "vmspc": "Krivine.vmspc",
+      "vmdesc": "Krivine.vmdesc",
+      "limitations": [
+        "MetaVM in-memory closed-term Krivine profile v1; see docs/CLOSURE_VMS.md.",
+        "Weak-head call-by-name only; no binary loader, full normalization, call-by-need memoization, control operators or GC."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "LuaVM",
+      "symbol": "LuaVM",
+      "architecture": "register",
+      "description": "Lua VM; bytecode version must be pinned",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "LuaVM.mvm",
+      "vmweave": "LuaVM.vmweave",
+      "vmspc": "LuaVM.vmspc",
+      "vmdesc": "LuaVM.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "Lucide",
+      "symbol": "Lucide",
+      "architecture": "unspecified",
+      "description": "No authoritative ISA or version supplied; preserve this identity pending specification",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "Lucide.mvm",
+      "vmweave": "Lucide.vmweave",
+      "vmspc": "Lucide.vmspc",
+      "vmdesc": "Lucide.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "Monty",
+      "symbol": "Monty",
+      "architecture": "unspecified",
+      "description": "No authoritative ISA or version supplied; preserve this identity pending specification",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "Monty.mvm",
+      "vmweave": "Monty.vmweave",
+      "vmspc": "Monty.vmspc",
+      "vmdesc": "Monty.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "MoscowML",
+      "symbol": "MoscowML",
+      "architecture": "closure",
+      "description": "Moscow ML runtime",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "MoscowML.mvm",
+      "vmweave": "MoscowML.vmweave",
+      "vmspc": "MoscowML.vmspc",
+      "vmdesc": "MoscowML.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "P-Code",
+      "symbol": "P_Code",
+      "architecture": "stack",
+      "description": "Pascal p-code; dialect must be selected",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "P-Code.mvm",
+      "vmweave": "P-Code.vmweave",
+      "vmspc": "P-Code.vmspc",
+      "vmdesc": "P-Code.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "P4",
+      "symbol": "P4",
+      "architecture": "unspecified",
+      "description": "No authoritative ISA or version supplied; preserve this identity pending specification",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "P4.mvm",
+      "vmweave": "P4.vmweave",
+      "vmspc": "P4.vmspc",
+      "vmdesc": "P4.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "ParrotVM",
+      "symbol": "ParrotVM",
+      "architecture": "register",
+      "description": "Parrot virtual machine",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "ParrotVM.mvm",
+      "vmweave": "ParrotVM.vmweave",
+      "vmspc": "ParrotVM.vmspc",
+      "vmdesc": "ParrotVM.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "PostScript",
+      "symbol": "PostScript",
+      "architecture": "stack",
+      "description": "PostScript operand, dictionary and execution stacks",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "PostScript.mvm",
+      "vmweave": "PostScript.vmweave",
+      "vmspc": "PostScript.vmspc",
+      "vmdesc": "PostScript.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "Prol",
+      "symbol": "Prol",
+      "architecture": "unspecified",
+      "description": "No authoritative ISA or version supplied; preserve this identity pending specification",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "Prol.mvm",
+      "vmweave": "Prol.vmweave",
+      "vmspc": "Prol.vmspc",
+      "vmdesc": "Prol.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "SCUMM",
+      "symbol": "SCUMM",
+      "architecture": "script",
+      "description": "Versioned game scripting machine",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "SCUMM.mvm",
+      "vmweave": "SCUMM.vmweave",
+      "vmspc": "SCUMM.vmspc",
+      "vmdesc": "SCUMM.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "SECD",
+      "symbol": "SECD",
+      "architecture": "closure",
+      "description": "Version-1 unary SECD subset; lexical closures, i64 arithmetic, typed call/selection dump",
+      "native_coverage": "secd-unary-subset",
+      "native_format_loader": false,
+      "portable_example": "SECD.mvm",
+      "vmweave": "SECD.vmweave",
+      "vmspc": "SECD.vmspc",
+      "vmdesc": "SECD.vmdesc",
+      "limitations": [
+        "MetaVM in-memory unary/i64 SECD profile v1; see docs/CLOSURE_VMS.md.",
+        "No Lispkit binary loader, lists, DUM/RAP, mutable recursive environments, I/O or GC; cumulative environment budgets apply."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "SOM",
+      "symbol": "SOM",
+      "architecture": "object",
+      "description": "Simple object machine",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "SOM.mvm",
+      "vmweave": "SOM.vmweave",
+      "vmspc": "SOM.vmspc",
+      "vmdesc": "SOM.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "SSAVM",
+      "symbol": "SSAVM",
+      "architecture": "ssa",
+      "description": "Bounded i64 ISSA subset; opt-in definite-assignment/type analysis; CEN selection; simultaneous PHI/PFE; persistent arrays",
+      "native_coverage": "issa-subset",
+      "native_format_loader": false,
+      "portable_example": "SSAVM.mvm",
+      "vmweave": "SSAVM.vmweave",
+      "vmspc": "SSAVM.vmspc",
+      "vmdesc": "SSAVM.vmdesc",
+      "limitations": [
+        "Textual i64/scalar-array subset with configurable runtime and static-analysis limits; see docs/SSAVM.md.",
+        "Opt-in analysis checks defined operands, types and PHI selections; no conventional SSA dominance certificate, value-range/termination proof, calls, floats or SafeTSA loader."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "Self",
+      "symbol": "Self",
+      "architecture": "object",
+      "description": "Prototype-based object language runtime",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "Self.mvm",
+      "vmweave": "Self.vmweave",
+      "vmspc": "Self.vmspc",
+      "vmdesc": "Self.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "Smaltalk-80",
+      "symbol": "Smaltalk_80",
+      "architecture": "object",
+      "description": "Original directory spelling retained; Smalltalk-80 object machine",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "Smaltalk-80.mvm",
+      "vmweave": "Smaltalk-80.vmweave",
+      "vmspc": "Smaltalk-80.vmspc",
+      "vmdesc": "Smaltalk-80.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "TAMMY",
+      "symbol": "TAMMY",
+      "architecture": "unspecified",
+      "description": "No authoritative ISA or version supplied; preserve this identity pending specification",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "TAMMY.mvm",
+      "vmweave": "TAMMY.vmweave",
+      "vmspc": "TAMMY.vmspc",
+      "vmdesc": "TAMMY.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "V8",
+      "symbol": "V8",
+      "architecture": "runtime",
+      "description": "JavaScript engine; no stable external bytecode ABI",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "V8.mvm",
+      "vmweave": "V8.vmweave",
+      "vmspc": "V8.vmspc",
+      "vmdesc": "V8.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "WAM",
+      "symbol": "WAM",
+      "architecture": "logic",
+      "description": "Warren abstract machine for logic programs",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "WAM.mvm",
+      "vmweave": "WAM.vmweave",
+      "vmspc": "WAM.vmspc",
+      "vmdesc": "WAM.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "WASM",
+      "symbol": "WASM",
+      "architecture": "stack",
+      "description": "WebAssembly typed instructions and linear memory",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "WASM.mvm",
+      "vmweave": "WASM.vmweave",
+      "vmspc": "WASM.vmspc",
+      "vmdesc": "WASM.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "YARV",
+      "symbol": "YARV",
+      "architecture": "stack",
+      "description": "Ruby instruction sequences; version must be pinned",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "YARV.mvm",
+      "vmweave": "YARV.vmweave",
+      "vmspc": "YARV.vmspc",
+      "vmdesc": "YARV.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "Z-Machine",
+      "symbol": "Z_Machine",
+      "architecture": "unspecified",
+      "description": "No authoritative ISA or version supplied; preserve this identity pending specification",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "Z-Machine.mvm",
+      "vmweave": "Z-Machine.vmweave",
+      "vmspc": "Z-Machine.vmspc",
+      "vmdesc": "Z-Machine.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    },
+    {
+      "schema": "metavm.machine/1",
+      "name": "Zand",
+      "symbol": "Zand",
+      "architecture": "unspecified",
+      "description": "No authoritative ISA or version supplied; preserve this identity pending specification",
+      "native_coverage": "catalog-only",
+      "native_format_loader": false,
+      "portable_example": "Zand.mvm",
+      "vmweave": "Zand.vmweave",
+      "vmspc": "Zand.vmspc",
+      "vmdesc": "Zand.vmdesc",
+      "limitations": [
+        "No native execution implemented. Descriptor and portable Machinery example only."
+      ]
+    }
+  ],
+  "paths": {
+    "Machinery": "Existing C11 execution engine, module verifier, serialization, heap and host bridge",
+    "vmweave": "C bootstrap compiler/emitter and optional MetaML C++20 evaluator",
+    "VMDesc": "MetaTeX embedding adapter",
+    "VMLibrary": "Catalog profiles, portable examples and selected native interpreters",
+    "vmspecs": "Legacy explicitly named example adapters",
+    "third_party": "Supplied MetaML header and dependency provenance",
+    "tests": "Integration and semantic regression tests",
+    "AGENTS.md": "Implementation/refinement contract",
+    "driver": "Command-line runners; ssavm runs the implemented textual ISSA subset",
+    "history": "Exact prior source archive retained; do not delete"
+  },
+  "framework_layers": {
+    "authoring": [
+      "vmweave/Builder.hpp",
+      "vmweave/MetaMLAdapter.hpp"
+    ],
+    "definition": [
+      "vmweave/Definition.hpp",
+      "vmweave/examples/ToyR16.hpp",
+      "vmweave/examples/ToyR16.vmweave"
+    ],
+    "execution": [
+      "Machinery/MetaVM.c",
+      "Machinery/CBridge.h"
+    ],
+    "documentation": [
+      "VMDesc/MetaTeXAdapter.hpp"
+    ],
+    "native_subsets": [
+      "VMLibrary/SSAVM/ISSA.hpp",
+      "VMLibrary/CHIP-8/Chip8.hpp",
+      "VMLibrary/DRMVM/Graphics.hpp",
+      "VMLibrary/JVM/IntegerMethod.hpp",
+      "VMLibrary/FORTH/Forth.hpp",
+      "VMLibrary/SECD/SECDMachine.hpp",
+      "VMLibrary/Krivine/KrivineMachine.hpp"
+    ]
+  }
+}

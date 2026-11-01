@@ -1,0 +1,14 @@
+-- Typed VMWeave authoring; MetaML evaluates calls into Machinery's builder.
+val _ := vm_function "main" 0 5
+val _ := vm_const 0 1
+val _ := vm_const 1 10
+val _ := vm_const 2 1
+val _ := vm_const 3 0
+val _ := vm_label "loop"
+val _ := vm_binary "mul" 0 0 1
+val _ := vm_binary "sub" 1 1 2
+val _ := vm_binary "eq" 4 1 3
+val _ := vm_jump_false 4 "loop"
+val _ := vm_label "done"
+val _ := vm_return 0
+val _ := vm_end ()

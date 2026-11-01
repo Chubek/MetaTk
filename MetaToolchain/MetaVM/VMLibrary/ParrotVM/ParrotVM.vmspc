@@ -1,0 +1,16 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "ParrotVM",
+  "symbol": "ParrotVM",
+  "architecture": "register",
+  "description": "Parrot virtual machine",
+  "native_coverage": "catalog-only",
+  "native_format_loader": false,
+  "portable_example": "ParrotVM.mvm",
+  "vmweave": "ParrotVM.vmweave",
+  "vmspc": "ParrotVM.vmspc",
+  "vmdesc": "ParrotVM.vmdesc",
+  "limitations": [
+    "No native execution implemented. Descriptor and portable Machinery example only."
+  ]
+}

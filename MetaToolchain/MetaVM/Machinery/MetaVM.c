@@ -53,6 +53,55 @@ mvm_status mvm_register_native(mvm_vm *vm, const char *name, uint32_t arity,
     vm->bindings[vm->binding_count++].user = user;
     return MVM_OK;
 }
+mvm_status mvm_register_natives(mvm_vm *vm, const mvm_native_binding *entries,
+    size_t count, mvm_error *e) {
+    mvm_binding *pending;
+    size_t i, j, total;
+    void *data;
+    mvm_status status;
+    mvm_error_clear(e);
+    if (!vm || (count && !entries)) return mvm_fail(e, MVM_INVALID, "invalid native batch");
+    if (vm->busy) return mvm_fail(e, MVM_BUSY, "cannot register during execution");
+    if (!count) return MVM_OK;
+    if (count > SIZE_MAX - vm->binding_count || count > SIZE_MAX / sizeof(*pending))
+        return mvm_fail(e, MVM_LIMIT, "native batch too large");
+    total = vm->binding_count + count;
+    for (i = 0; i < count; ++i) {
+        if (!mvm_name_valid(entries[i].name) || !entries[i].callback)
+            return mvm_fail(e, MVM_INVALID, "invalid native batch entry");
+        for (j = 0; j < vm->binding_count; ++j)
+            if (!strcmp(entries[i].name, vm->bindings[j].name))
+                return mvm_fail(e, MVM_INVALID, "duplicate native: %s", entries[i].name);
+        for (j = 0; j < i; ++j)
+            if (!strcmp(entries[i].name, entries[j].name))
+                return mvm_fail(e, MVM_INVALID, "duplicate native in batch: %s", entries[i].name);
+    }
+    pending = calloc(count, sizeof(*pending));
+    if (!pending) return mvm_fail(e, MVM_OOM, "native batch allocation failed");
+    for (i = 0; i < count; ++i) {
+        pending[i].name = mvm_copy_string(entries[i].name);
+        if (!pending[i].name) {
+            for (j = 0; j < i; ++j) free(pending[j].name);
+            free(pending);
+            return mvm_fail(e, MVM_OOM, "native batch name allocation failed");
+        }
+        pending[i].arity = entries[i].arity;
+        pending[i].callback = entries[i].callback;
+        pending[i].user = entries[i].user;
+    }
+    data = vm->bindings;
+    status = mvm_grow(&data, &vm->binding_capacity, total, sizeof(*pending));
+    if (status != MVM_OK) {
+        for (i = 0; i < count; ++i) free(pending[i].name);
+        free(pending);
+        return mvm_fail(e, status, "native batch table allocation failed");
+    }
+    vm->bindings = data;
+    memcpy(vm->bindings + vm->binding_count, pending, count * sizeof(*pending));
+    vm->binding_count = total;
+    free(pending);
+    return MVM_OK;
+}
 static mvm_status push_frame(mvm_vm *vm, uint32_t fn, uint32_t dst, const mvm_value *args) {
     const mvm_function *f = &vm->module->functions[fn];
     mvm_frame frame;

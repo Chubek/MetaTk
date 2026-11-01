@@ -1,0 +1,492 @@
+# wasm.dsymspec.yaml
+# Migrated from the Lua DSL (wasm.dsymspec). Encoder bodies are imperative
+# pseudo-code; the grammar is documented in README.md.
+#
+# wasm.dsymspec — WebAssembly 2.0 (wasm32/wasm64), stack/value-type model.
+# Note: WebAssembly is a structured stack machine, not a register machine;
+# operands are LEB128 indices/immediates (modelled as fixed-width imm here).
+# Data: isa_reference wasm quick spec (i32/i64/f32/f64/v128 + sections +
+# block/loop/if/br/call + load/store align+offset), wasm_oracle litdir
+# (wasm-spec.txt, wasm-2-specs.txt, art-of-wasm.txt).
+# Strata: base(mvp) | simd | bulk-memory | multi-value | reference-types |
+#   tail-calls | threads | sign-ext | gc.
+
+schema: 1
+targets:
+  - {arch: wasm, subarch: wasm32, addr_size: 32, op_size: 32, addr_def: 32, align: 1, byte_order: little, obj_format: wasm, abi: wasm-stack, calling_conv: wasm-c-abi, features: [mvp, sign-ext, bulk-memory]}
+features:
+  - {name: mvp, desc: "WebAssembly 1.0 MVP"}
+  - {name: simd, desc: "128-bit fixed-width SIMD"}
+  - {name: bulk-memory, desc: "bulk memory operations"}
+  - {name: multi-value, desc: "multi-value returns"}
+  - {name: reference-types, desc: "reference types (funcref/externref)"}
+  - {name: tail-calls, desc: "tail calls"}
+  - {name: threads, desc: "threads/atomics"}
+  - {name: sign-ext, desc: "sign-extension operators"}
+  - {name: nontrapping-fptoint, desc: "non-trapping float-to-int"}
+  - {name: gc, desc: "garbage collection (struct/array)"}
+  - {name: priv, desc: "privileged host imports (wasi)"}
+registers:
+  # No GPR file: typed operand stack + locals/globals modelled as specials.
+  - {name: stack, class: special, width: 32, enc: 0}
+  - {name: memory0, class: special, width: 32, enc: 0}
+  - {name: table0, class: special, width: 32, enc: 0}
+  - {name: global0, class: special, width: 32, enc: 0}
+mnemonics:
+  - {name: unreachable}
+  - {name: nop}
+  - {name: block}
+  - {name: loop}
+  - {name: if}
+  - {name: else}
+  - {name: end}
+  - {name: br}
+  - {name: br_if}
+  - {name: return}
+  - {name: call}
+  - {name: call_indirect}
+  - {name: drop}
+  - {name: select}
+  - {name: local.get}
+  - {name: local.set}
+  - {name: local.tee}
+  - {name: global.get}
+  - {name: i32.load}
+  - {name: i64.load}
+  - {name: i32.store}
+  - {name: i64.store}
+  - {name: memory.size}
+  - {name: memory.grow}
+  - {name: memory.copy}
+  - {name: memory.fill}
+  - {name: i32.const}
+  - {name: i64.const}
+  - {name: i32.add}
+  - {name: i32.sub}
+  - {name: i32.mul}
+  - {name: i32.div_s}
+  - {name: i32.and}
+  - {name: i32.or}
+  - {name: i32.xor}
+  - {name: i32.eqz}
+  - {name: i64.add}
+  - {name: f32.add}
+  - {name: f64.add}
+  - {name: i32.wrap_i64}
+  - {name: i32.extend8_s}
+  - {name: v128.load}
+  - {name: i32x4.add}
+  - {name: i32.atomic.add}
+  - {name: return_call}
+encoders:
+  # Single-byte opcodes + LEB128 immediates (modelled as emit8 + emit_imm).
+  - name: unreachable
+    max_bytes: 1
+    body: |
+      EMIT8 0x00
+  - name: nop
+    max_bytes: 1
+    body: |
+      EMIT8 0x01
+  - name: block
+    max_bytes: 2
+    body: |
+      EMIT8 0x02
+      EMIT_IMM 1, type
+  - name: loop
+    max_bytes: 2
+    body: |
+      EMIT8 0x03
+      EMIT_IMM 1, type
+  - name: if
+    max_bytes: 2
+    body: |
+      EMIT8 0x04
+      EMIT_IMM 1, type
+  - name: else
+    max_bytes: 1
+    body: |
+      EMIT8 0x05
+  - name: end
+    max_bytes: 1
+    body: |
+      EMIT8 0x0B
+  - name: br
+    max_bytes: 5
+    body: |
+      EMIT8 0x0C
+      EMIT_IMM 4, label
+  - name: br_if
+    max_bytes: 5
+    body: |
+      EMIT8 0x0D
+      EMIT_IMM 4, label
+  - name: return
+    max_bytes: 1
+    body: |
+      EMIT8 0x0F
+  - name: call
+    max_bytes: 5
+    max_relocs: 1
+    body: |
+      EMIT8 0x10
+      EMIT_IMM 4, fn
+      EMIT_RELOCATION sym, R_WASM_FUNCTION_INDEX_LEB
+  - name: call_indirect
+    max_bytes: 9
+    body: |
+      EMIT8 0x11
+      EMIT_IMM 4, type
+      EMIT_IMM 4, table
+  - name: drop
+    max_bytes: 1
+    body: |
+      EMIT8 0x1A
+  - name: select
+    max_bytes: 1
+    body: |
+      EMIT8 0x1B
+  - name: localget
+    max_bytes: 5
+    body: |
+      EMIT8 0x20
+      EMIT_IMM 4, idx
+  - name: localset
+    max_bytes: 5
+    body: |
+      EMIT8 0x21
+      EMIT_IMM 4, idx
+  - name: localtee
+    max_bytes: 5
+    body: |
+      EMIT8 0x22
+      EMIT_IMM 4, idx
+  - name: globalget
+    max_bytes: 5
+    body: |
+      EMIT8 0x23
+      EMIT_IMM 4, idx
+  - name: i32load
+    max_bytes: 9
+    body: |
+      EMIT8 0x28
+      EMIT_IMM 4, align
+      EMIT_IMM 4, off
+  - name: i64load
+    max_bytes: 9
+    body: |
+      EMIT8 0x29
+      EMIT_IMM 4, align
+      EMIT_IMM 4, off
+  - name: i32store
+    max_bytes: 9
+    body: |
+      EMIT8 0x36
+      EMIT_IMM 4, align
+      EMIT_IMM 4, off
+  - name: i64store
+    max_bytes: 9
+    body: |
+      EMIT8 0x37
+      EMIT_IMM 4, align
+      EMIT_IMM 4, off
+  - name: memsize
+    max_bytes: 2
+    body: |
+      EMIT8 0x3F
+      EMIT8 0x00
+  - name: memgrow
+    max_bytes: 2
+    body: |
+      EMIT8 0x40
+      EMIT8 0x00
+  - name: memcopy
+    max_bytes: 2
+    body: |
+      EMIT8 0xFC
+      EMIT8 0x0A
+  - name: memfill
+    max_bytes: 2
+    body: |
+      EMIT8 0xFC
+      EMIT8 0x0B
+  - name: i32const
+    max_bytes: 5
+    body: |
+      EMIT8 0x41
+      EMIT_IMM 4, imm
+  - name: i64const
+    max_bytes: 9
+    body: |
+      EMIT8 0x42
+      EMIT_IMM 8, imm
+  - name: i32add
+    max_bytes: 1
+    body: |
+      EMIT8 0x6A
+  - name: i32sub
+    max_bytes: 1
+    body: |
+      EMIT8 0x6B
+  - name: i32mul
+    max_bytes: 1
+    body: |
+      EMIT8 0x6C
+  - name: i32div
+    max_bytes: 1
+    body: |
+      EMIT8 0x6D
+  - name: i32and
+    max_bytes: 1
+    body: |
+      EMIT8 0x71
+  - name: i32or
+    max_bytes: 1
+    body: |
+      EMIT8 0x72
+  - name: i32xor
+    max_bytes: 1
+    body: |
+      EMIT8 0x73
+  - name: i32eqz
+    max_bytes: 1
+    body: |
+      EMIT8 0x45
+  - name: i64add
+    max_bytes: 1
+    body: |
+      EMIT8 0x7C
+  - name: f32add
+    max_bytes: 1
+    body: |
+      EMIT8 0x92
+  - name: f64add
+    max_bytes: 1
+    body: |
+      EMIT8 0xA0
+  - name: i32wrap
+    max_bytes: 1
+    body: |
+      EMIT8 0xA7
+  - name: i32extend
+    max_bytes: 1
+    body: |
+      EMIT8 0xC0
+  - name: v128load
+    max_bytes: 10
+    body: |
+      EMIT8 0xFD
+      EMIT8 0x00
+      EMIT_IMM 4, align
+      EMIT_IMM 4, off
+  - name: i32x4add
+    max_bytes: 2
+    body: |
+      EMIT8 0xFD
+      EMIT8 0x4E
+  - name: atomicadd
+    max_bytes: 10
+    body: |
+      EMIT8 0xFE
+      EMIT8 0x1E
+      EMIT_IMM 4, align
+      EMIT_IMM 4, off
+  - name: returncall
+    max_bytes: 5
+    body: |
+      EMIT8 0x12
+      EMIT_IMM 4, fn
+forms:
+  - mnemonic: unreachable
+    encoder: unreachable
+    flags: [terminator, may_trap]
+  - mnemonic: nop
+    encoder: nop
+  - mnemonic: block
+    encoder: block
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: loop
+    encoder: loop
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: if
+    encoder: if
+    flags: [cond_branch]
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: else
+    encoder: else
+  - mnemonic: end
+    encoder: end
+  - mnemonic: br
+    encoder: br
+    flags: [branch, terminator]
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: br_if
+    encoder: br_if
+    flags: [cond_branch]
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: return
+    encoder: return
+    flags: [return, terminator]
+  - mnemonic: call
+    encoder: call
+    flags: [branch, reloc]
+    operands:
+      - {kind: sym, width: 32}
+  - mnemonic: call_indirect
+    encoder: call_indirect
+    flags: [branch]
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: drop
+    encoder: drop
+  - mnemonic: select
+    encoder: select
+  - mnemonic: local.get
+    encoder: localget
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: local.set
+    encoder: localset
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: local.tee
+    encoder: localtee
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: global.get
+    encoder: globalget
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: i32.load
+    encoder: i32load
+    flags: [reads_mem]
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: i64.load
+    encoder: i64load
+    flags: [reads_mem]
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: i32.store
+    encoder: i32store
+    flags: [writes_mem]
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: i64.store
+    encoder: i64store
+    flags: [writes_mem]
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: memory.size
+    encoder: memsize
+    flags: [reads_mem]
+  - mnemonic: memory.grow
+    encoder: memgrow
+    flags: [writes_mem]
+  - mnemonic: memory.copy
+    encoder: memcopy
+    flags: [reads_mem, writes_mem]
+    required: [bulk-memory]
+  - mnemonic: memory.fill
+    encoder: memfill
+    flags: [writes_mem]
+    required: [bulk-memory]
+  - mnemonic: i32.const
+    encoder: i32const
+    operands:
+      - {kind: imm, width: 32, imm_min: -2147483648, imm_max: 2147483647, signed: true}
+  - mnemonic: i64.const
+    encoder: i64const
+    operands:
+      - {kind: imm, width: 32, imm_min: -2147483648, imm_max: 2147483647, signed: true}
+  - mnemonic: i32.add
+    encoder: i32add
+  - mnemonic: i32.sub
+    encoder: i32sub
+  - mnemonic: i32.mul
+    encoder: i32mul
+  - mnemonic: i32.div_s
+    encoder: i32div
+    flags: [may_trap]
+  - mnemonic: i32.and
+    encoder: i32and
+  - mnemonic: i32.or
+    encoder: i32or
+  - mnemonic: i32.xor
+    encoder: i32xor
+  - mnemonic: i32.eqz
+    encoder: i32eqz
+  - mnemonic: i64.add
+    encoder: i64add
+  - mnemonic: f32.add
+    encoder: f32add
+  - mnemonic: f64.add
+    encoder: f64add
+  - mnemonic: i32.wrap_i64
+    encoder: i32wrap
+  - mnemonic: i32.extend8_s
+    encoder: i32extend
+    required: [sign-ext]
+  - mnemonic: v128.load
+    encoder: v128load
+    flags: [reads_mem]
+    required: [simd]
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: i32x4.add
+    encoder: i32x4add
+    required: [simd]
+  - mnemonic: i32.atomic.add
+    encoder: atomicadd
+    flags: [reads_mem, writes_mem]
+    required: [threads]
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: return_call
+    encoder: returncall
+    flags: [branch, terminator]
+    required: [tail-calls]
+    operands:
+      - {kind: sym, width: 32}
+syntaxes:
+  - {name: default, comment: ";;", separator: " "}
+  - {name: wat, comment: ";;", separator: " "}
+sections:
+  - {name: wasm.type, flags: [alloc, readonly, meta], align: 1, content: meta}
+  - {name: wasm.import, flags: [alloc, readonly, meta], align: 1, content: meta}
+  - {name: wasm.function, flags: [alloc, code], align: 1, content: code}
+  - {name: wasm.table, flags: [alloc, readonly, meta], align: 1, content: meta}
+  - {name: wasm.memory, flags: [write, alloc, data], align: 1, content: data}
+  - {name: wasm.global, flags: [write, alloc, data], align: 1, content: data}
+  - {name: wasm.export, flags: [alloc, readonly, meta], align: 1, content: meta}
+  - {name: wasm.code, flags: [exec, alloc, code], align: 1, content: code}
+  - {name: wasm.data, flags: [write, alloc, data], align: 1, content: data}
+linkages:
+  - {name: func_export, binding: global, visibility: default, symtype: func}
+  - {name: memory_export, binding: global, visibility: default, symtype: object}
+  - {name: local_func, binding: local, visibility: default, symtype: func}
+relocs:
+  - {name: R_WASM_FUNCTION_INDEX_LEB, width: 32, expr: "S + A"}
+  - {name: R_WASM_TABLE_INDEX_SLEB, width: 32, signed: true, expr: "S + A"}
+  - {name: R_WASM_MEMORY_ADDR_LEB, width: 32, expr: "S + A"}
+  - {name: R_WASM_TYPE_INDEX_LEB, width: 32, expr: "S + A"}
+  - {name: R_WASM_GLOBAL_INDEX_LEB, width: 32, expr: "S + A"}
+  - {name: R_WASM_FUNCTION_OFFSET_I32, width: 32, expr: "S + A"}
+debug:
+  - {kind: target, ref: "", msg: "wasm stack machine: mvp+simd+bulk+threads+tail stratification"}
+  - {kind: form, ref: v128.load, msg: "simd forms require simd"}
+  - {kind: form, ref: i32.atomic.add, msg: "atomic forms require threads"}
+backend:
+  file: backend/wasm.json

@@ -1,0 +1,16 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "P4",
+  "symbol": "P4",
+  "architecture": "unspecified",
+  "description": "No authoritative ISA or version supplied; preserve this identity pending specification",
+  "native_coverage": "catalog-only",
+  "native_format_loader": false,
+  "portable_example": "P4.mvm",
+  "vmweave": "P4.vmweave",
+  "vmspc": "P4.vmspc",
+  "vmdesc": "P4.vmdesc",
+  "limitations": [
+    "No native execution implemented. Descriptor and portable Machinery example only."
+  ]
+}

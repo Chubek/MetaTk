@@ -1,0 +1,16 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "Prol",
+  "symbol": "Prol",
+  "architecture": "unspecified",
+  "description": "No authoritative ISA or version supplied; preserve this identity pending specification",
+  "native_coverage": "catalog-only",
+  "native_format_loader": false,
+  "portable_example": "Prol.mvm",
+  "vmweave": "Prol.vmweave",
+  "vmspc": "Prol.vmspc",
+  "vmdesc": "Prol.vmdesc",
+  "limitations": [
+    "No native execution implemented. Descriptor and portable Machinery example only."
+  ]
+}

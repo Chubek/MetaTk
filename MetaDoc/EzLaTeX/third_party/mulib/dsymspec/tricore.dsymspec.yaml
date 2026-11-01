@@ -1,0 +1,428 @@
+# tricore.dsymspec.yaml
+# Migrated from the Lua DSL (tricore.dsymspec). Encoder bodies are imperative
+# pseudo-code; the grammar is documented in README.md.
+#
+# tricore.dsymspec — Infineon TriCore (v1.6.x), EABI, little-endian.
+# 16/32-bit mixed instructions. Register file (D0-D15 data, A0-A15 address,
+# PSW/PCXI/PC + CSFR), features (FPU/SIMD/PCP/saturation), and TriCore ELF
+# relocations (R_TRICORE_*) are accurate; encodings are representative.
+# Cross-checked via arch_oracle + ccbe_oracle (ABI/frame lowering) +
+# toolchain_orace (TriCore ELF).
+# Strata: base | fpu | simd | saturation | pcp | priv.
+
+schema: 1
+targets:
+  - {arch: tricore, subarch: tc1.6, addr_size: 32, op_size: 32, addr_def: 32, align: 2, byte_order: little, obj_format: ELF32, abi: TriCore-EABI, calling_conv: tricore-eabi, features: [base, fpu]}
+features:
+  - {name: base, desc: "TriCore base integer"}
+  - {name: fpu, desc: "floating-point unit"}
+  - {name: simd1, desc: "SIMD packed arithmetic 1"}
+  - {name: simd2, desc: "SIMD packed arithmetic 2"}
+  - {name: pcp, desc: "Peripheral Control Processor"}
+  - {name: saturation, desc: "saturating arithmetic"}
+  - {name: bitops, desc: "bit operations (extr/ins)"}
+  - {name: loops, desc: "zero-overhead loops"}
+  - {name: mmu, desc: "MMU (vm/vmt)"}
+  - {name: priv, desc: "privileged (PSW/CSFR access)"}
+registers:
+  - {name: d0, class: gpr, width: 32, enc: 0, flags: [readable, writable]}
+  - {name: d1, class: gpr, width: 32, enc: 1, flags: [readable, writable]}
+  - {name: d2, class: gpr, width: 32, enc: 2, flags: [readable, writable]}
+  - {name: d3, class: gpr, width: 32, enc: 3, flags: [readable, writable]}
+  - {name: d4, class: gpr, width: 32, enc: 4, flags: [readable, writable]}
+  - {name: d5, class: gpr, width: 32, enc: 5, flags: [readable, writable]}
+  - {name: d6, class: gpr, width: 32, enc: 6, flags: [readable, writable]}
+  - {name: d7, class: gpr, width: 32, enc: 7, flags: [readable, writable]}
+  - {name: d8, class: gpr, width: 32, enc: 8, flags: [readable, writable]}
+  - {name: d9, class: gpr, width: 32, enc: 9, flags: [readable, writable]}
+  - {name: d10, class: gpr, width: 32, enc: 10, flags: [readable, writable]}
+  - {name: d11, class: gpr, width: 32, enc: 11, flags: [readable, writable]}
+  - {name: d12, class: gpr, width: 32, enc: 12, flags: [readable, writable]}
+  - {name: d13, class: gpr, width: 32, enc: 13, flags: [readable, writable]}
+  - {name: d14, class: gpr, width: 32, enc: 14, flags: [readable, writable]}
+  - {name: d15, class: gpr, width: 32, enc: 15, flags: [readable, writable]}
+  - {name: a0, class: gpr, width: 32, enc: 0, flags: [readable, writable]}
+  - {name: a1, class: gpr, width: 32, enc: 1, flags: [readable, writable]}
+  - {name: a2, class: gpr, width: 32, enc: 2, flags: [readable, writable]}
+  - {name: a3, class: gpr, width: 32, enc: 3, flags: [readable, writable]}
+  - {name: a4, class: gpr, width: 32, enc: 4, flags: [readable, writable]}
+  - {name: a5, class: gpr, width: 32, enc: 5, flags: [readable, writable]}
+  - {name: a6, class: gpr, width: 32, enc: 6, flags: [readable, writable]}
+  - {name: a7, class: gpr, width: 32, enc: 7, flags: [readable, writable]}
+  - {name: a8, class: gpr, width: 32, enc: 8, flags: [readable, writable]}
+  - {name: a9, class: gpr, width: 32, enc: 9, flags: [readable, writable]}
+  - {name: a10, class: gpr, width: 32, enc: 10, flags: [readable, writable]}
+  - {name: a11, class: gpr, width: 32, enc: 11, flags: [readable, writable]}
+  - {name: a12, class: gpr, width: 32, enc: 12, flags: [readable, writable]}
+  - {name: a13, class: gpr, width: 32, enc: 13, flags: [readable, writable]}
+  - {name: a14, class: gpr, width: 32, enc: 14, flags: [readable, writable]}
+  - {name: a15, class: gpr, width: 32, enc: 15, flags: [readable, writable]}
+  - {name: sp, class: gpr, width: 32, enc: 10, flags: [readable, writable]}
+  - {name: pc, class: special, width: 32, enc: 0}
+  - {name: psw, class: status, width: 32, enc: 0}
+  - {name: pcxi, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: fcx, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: lcx, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: isp, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+mnemonics:
+  - {name: nop}
+  - {name: mov}
+  - {name: add}
+  - {name: sub}
+  - {name: and}
+  - {name: or}
+  - {name: xor}
+  - {name: addi}
+  - {name: mul}
+  - {name: madd}
+  - {name: sh}
+  - {name: extr}
+  - {name: ld.w}
+  - {name: st.w}
+  - {name: ld.b}
+  - {name: st.b}
+  - {name: lea}
+  - {name: j}
+  - {name: jl}
+  - {name: ji}
+  - {name: jli}
+  - {name: ret}
+  - {name: bisr}
+  - {name: syscall}
+  - {name: isync}
+  - {name: dsync}
+  - {name: rslcx}
+  - {name: fadd}
+  - {name: add.h}
+  - {name: adds}
+  - {name: loop}
+encoders:
+  - name: nop
+    max_bytes: 2
+    body: |
+      EMIT16LE 0x0000
+  - name: mov
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x1B000000 + rd*4096 + rs*65536
+  - name: add
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x0B000000 + rd*4096 + ra*65536 + rb*256
+  - name: sub
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x0B800000 + rd*4096 + ra*65536 + rb*256
+  - name: and
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x0F000000 + rd*4096 + ra*65536 + rb*256
+  - name: or
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x0F800000 + rd*4096 + ra*65536 + rb*256
+  - name: xor
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x0F400000 + rd*4096 + ra*65536 + rb*256
+  - name: addi
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x1D000000 + rd*4096 + ((imm + 32768) % 65536)
+  - name: mul
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x13000000 + rd*4096 + ra*65536 + rb*256
+  - name: madd
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x17000000 + rd*4096 + ra*65536 + rb*256
+  - name: sh
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x21000000 + rd*4096 + ra*65536 + rb*256
+  - name: extr
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x2B000000 + rd*4096 + ra*65536 + ((imm + 65536) % 65536)
+  - name: ldw
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x91000000 + rd*4096 + ra*65536
+  - name: stw
+    max_bytes: 4
+    body: |
+      EMIT32LE 0xB1000000 + ra*65536 + rb*4096
+  - name: ldb
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x90000000 + rd*4096 + ra*65536
+  - name: stb
+    max_bytes: 4
+    body: |
+      EMIT32LE 0xB0000000 + ra*65536 + rb*4096
+  - name: lea
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x49000000 + rd*4096 + ra*65536
+  - name: j
+    max_bytes: 4
+    max_relocs: 1
+    body: |
+      EMIT32LE 0x1D000000
+      EMIT_RELOCATION sym, R_TRICORE_PC22
+  - name: jl
+    max_bytes: 4
+    max_relocs: 1
+    body: |
+      EMIT32LE 0x5D000000
+      EMIT_RELOCATION sym, R_TRICORE_PC22
+  - name: ji
+    max_bytes: 4
+    body: |
+      EMIT32LE 0xDC000000 + ra*65536
+  - name: jli
+    max_bytes: 4
+    body: |
+      EMIT32LE 0xEC000000 + ra*65536
+  - name: ret
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x80000000
+  - name: bisr
+    max_bytes: 2
+    body: |
+      EMIT16LE 0x0400 + (imm % 256)
+  - name: syscall
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x01000000 + (imm % 65536)
+  - name: isync
+    max_bytes: 2
+    body: |
+      EMIT16LE 0x000C
+  - name: dsync
+    max_bytes: 2
+    body: |
+      EMIT16LE 0x000D
+  - name: rslcx
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x80000100
+  - name: fadd
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x43000000 + rd*4096 + ra*65536 + rb*256
+  - name: addh
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x4B000000 + rd*4096 + ra*65536 + rb*256
+  - name: adds
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x0B000100 + rd*4096 + ra*65536 + rb*256
+  - name: loop
+    max_bytes: 4
+    max_relocs: 1
+    body: |
+      EMIT32LE 0x7D000000 + ra*65536
+      EMIT_RELOCATION sym, R_TRICORE_PC16
+forms:
+  - mnemonic: nop
+    encoder: nop
+  - mnemonic: mov
+    encoder: mov
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: add
+    encoder: add
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: sub
+    encoder: sub
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: and
+    encoder: and
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: or
+    encoder: or
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: xor
+    encoder: xor
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: addi
+    encoder: addi
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: imm, width: 16, imm_min: -32768, imm_max: 32767, signed: true}
+  - mnemonic: mul
+    encoder: mul
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: madd
+    encoder: madd
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: sh
+    encoder: sh
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: extr
+    encoder: extr
+    required: [bitops]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: imm, width: 16, imm_min: 0, imm_max: 65535, signed: false}
+  - mnemonic: ld.w
+    encoder: ldw
+    flags: [reads_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: mem, width: 32}
+  - mnemonic: st.w
+    encoder: stw
+    flags: [writes_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: mem, width: 32}
+  - mnemonic: ld.b
+    encoder: ldb
+    flags: [reads_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: mem, width: 8}
+  - mnemonic: st.b
+    encoder: stb
+    flags: [writes_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: mem, width: 8}
+  - mnemonic: lea
+    encoder: lea
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: mem, width: 32}
+  - mnemonic: j
+    encoder: j
+    flags: [branch, terminator, reloc]
+    operands:
+      - {kind: sym, width: 32}
+  - mnemonic: jl
+    encoder: jl
+    flags: [branch, reloc]
+    operands:
+      - {kind: sym, width: 32}
+  - mnemonic: ji
+    encoder: ji
+    flags: [branch, terminator]
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: jli
+    encoder: jli
+    flags: [branch]
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: ret
+    encoder: ret
+    flags: [return, terminator]
+  - mnemonic: bisr
+    encoder: bisr
+    operands:
+      - {kind: imm, width: 8, imm_min: 0, imm_max: 255, signed: false}
+  - mnemonic: syscall
+    encoder: syscall
+    flags: [may_trap]
+    operands:
+      - {kind: imm, width: 16, imm_min: 0, imm_max: 65535, signed: false}
+  - mnemonic: isync
+    encoder: isync
+  - mnemonic: dsync
+    encoder: dsync
+  - mnemonic: rslcx
+    encoder: rslcx
+    flags: [privileged]
+    required: [priv]
+  - mnemonic: fadd
+    encoder: fadd
+    required: [fpu]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: add.h
+    encoder: addh
+    required: [simd1]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: adds
+    encoder: adds
+    required: [saturation]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: loop
+    encoder: loop
+    flags: [cond_branch, reloc]
+    required: [loops]
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: sym, width: 32}
+syntaxes:
+  - {name: default, comment: ";", separator: ", "}
+sections:
+  - {name: ".text", flags: [exec, alloc, code], align: 2, content: code}
+  - {name: ".rodata", flags: [alloc, readonly, data], align: 4, content: data}
+  - {name: ".data", flags: [write, alloc, data], align: 4, content: data}
+  - {name: ".bss", flags: [write, alloc, zerofill, data], align: 4, content: data}
+  - {name: ".csa", flags: [write, alloc, data], align: 8, content: data}
+linkages:
+  - {name: func_global, binding: global, visibility: default, symtype: func}
+  - {name: object_global, binding: global, visibility: default, symtype: object}
+  - {name: local_sym, binding: local, visibility: default, symtype: none}
+relocs:
+  - {name: R_TRICORE_NONE, width: 32, expr: "S + A"}
+  - {name: R_TRICORE_32, width: 32, expr: "S + A"}
+  - {name: R_TRICORE_16, width: 16, expr: "S + A"}
+  - {name: R_TRICORE_8, width: 8, expr: "S + A"}
+  - {name: R_TRICORE_PC22, width: 32, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_TRICORE_PC16, width: 32, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_TRICORE_HI16, width: 16, expr: "S + A"}
+  - {name: R_TRICORE_LO16, width: 16, expr: "S + A"}
+  - {name: R_TRICORE_GOT_HI16, width: 16, expr: "GOT(S) + A"}
+  - {name: R_TRICORE_GOT_LO16, width: 16, expr: "GOT(S) + A"}
+  - {name: R_TRICORE_TLS_GD, width: 32, expr: "TLS(S) + A"}
+  - {name: R_TRICORE_GLOB_DAT, width: 32, expr: S}
+  - {name: R_TRICORE_JMP_SLOT, width: 32, expr: S}
+  - {name: R_TRICORE_RELATIVE, width: 32, expr: "B + A"}
+debug:
+  - {kind: target, ref: "", msg: "tricore base+fpu/simd/saturation+pcp+priv stratification"}
+  - {kind: form, ref: add.h, msg: "simd forms require simd1"}
+  - {kind: form, ref: rslcx, msg: "context forms require priv"}
+backend:
+  file: backend/tricore.json

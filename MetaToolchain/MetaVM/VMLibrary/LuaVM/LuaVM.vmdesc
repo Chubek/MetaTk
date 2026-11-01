@@ -1,0 +1,4 @@
+\VMName{LuaVM}
+\VMArchitecture{Lua VM; bytecode version must be pinned}
+\VMStatus{catalog-only}
+\VMInvariant{Portable example bytecode is Machinery bytecode; it does not establish native compatibility.}

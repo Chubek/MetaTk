@@ -1,0 +1,335 @@
+# directx.dsymspec.yaml
+# Migrated from the Lua DSL (directx.dsymspec). Encoder bodies are imperative
+# pseudo-code; the grammar is documented in README.md.
+#
+# directx.dsymspec — DirectX DXIL shader IR (SM 6.x), signature ABI.
+# DXIL is LLVM bitcode; registers are typed virtual values (i1/i16/i32/
+# i64/f16/f32/f64 + resources cbv/srv/uav/sampler + ids). Register/feature
+# facts are accurate; encodings are representative bitcode words.
+# Cross-checked via arch_oracle + ccbe_oracle (GPU/SIMT, vector ISA) +
+# grammar_shaper-adjacent DXIL opcodes.
+# Strata: base(sm6.0) | 16-bit | wave-ops | raytracing | mesh |
+#   work-graphs | priv(validator).
+
+schema: 1
+targets:
+  - {arch: directx, subarch: dxil, addr_size: 64, op_size: 32, addr_def: 64, align: 4, byte_order: little, obj_format: dxil, abi: DXIL, calling_conv: dxil-signature, features: [base, sm6.0, wave-ops]}
+features:
+  - {name: base, desc: "DXIL base arithmetic + memory"}
+  - {name: sm6.0, desc: "Shader Model 6.0"}
+  - {name: sm6.8, desc: "Shader Model 6.8"}
+  - {name: wave-ops, desc: "wave intrinsics"}
+  - {name: raytracing, desc: "ray tracing (DXR)"}
+  - {name: mesh, desc: "mesh shaders"}
+  - {name: "16-bit", desc: "16-bit types"}
+  - {name: work-graphs, desc: "work graphs"}
+  - {name: dot, desc: "dot-product/DP2/DP4"}
+  - {name: sample, desc: "texture sample/gather"}
+  - {name: barrier, desc: "sync/barrier"}
+  - {name: priv, desc: "validator-privileged ops"}
+registers:
+  - {name: i1, class: gpr, width: 32, enc: 0}
+  - {name: i16, class: gpr, width: 32, enc: 0}
+  - {name: i32, class: gpr, width: 32, enc: 0}
+  - {name: i64, class: gpr, width: 32, enc: 0}
+  - {name: f16, class: gpr, width: 32, enc: 0}
+  - {name: f32, class: gpr, width: 32, enc: 0}
+  - {name: f64, class: gpr, width: 32, enc: 0}
+  - {name: cbv, class: special, width: 32, enc: 0}
+  - {name: srv, class: special, width: 32, enc: 0}
+  - {name: uav, class: special, width: 32, enc: 0}
+  - {name: sampler, class: special, width: 32, enc: 0}
+  - {name: thread_id, class: special, width: 32, enc: 0}
+  - {name: group_id, class: special, width: 32, enc: 0}
+  - {name: lane_id, class: special, width: 32, enc: 0}
+  - {name: wave_mask, class: special, width: 32, enc: 0}
+  - {name: payload, class: special, width: 32, enc: 0}
+  - {name: mesh_vertices, class: special, width: 32, enc: 0}
+  - {name: mesh_primitives, class: special, width: 32, enc: 0}
+mnemonics:
+  - {name: nop}
+  - {name: mov}
+  - {name: add}
+  - {name: sub}
+  - {name: mul}
+  - {name: fadd}
+  - {name: fmul}
+  - {name: fma}
+  - {name: dot4}
+  - {name: ld}
+  - {name: st}
+  - {name: cbuf}
+  - {name: sample}
+  - {name: gather}
+  - {name: br}
+  - {name: br.cond}
+  - {name: ret}
+  - {name: call}
+  - {name: wave.op}
+  - {name: wave.lane}
+  - {name: trace}
+  - {name: mesh.v}
+  - {name: barrier}
+  - {name: bitcast}
+encoders:
+  - name: nop
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x00000000
+  - name: mov
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x01000000 + dst*256 + src*65536
+  - name: add
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x01020000 + dst*256 + a*65536 + b*131072
+  - name: sub
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x01040000 + dst*256 + a*65536 + b*131072
+  - name: mul
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x01060000 + dst*256 + a*65536 + b*131072
+  - name: fadd
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x02020000 + dst*256 + a*65536 + b*131072
+  - name: fmul
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x02060000 + dst*256 + a*65536 + b*131072
+  - name: fma
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x02080000 + dst*256 + a*65536 + b*131072
+  - name: dot4
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x02100000 + dst*256 + a*65536 + b*131072
+  - name: ld
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x03000000 + dst*256 + addr*65536
+  - name: st
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x03020000 + addr*65536 + val*256
+  - name: cbuf
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x03040000 + dst*256 + addr*65536
+  - name: sample
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x03100000 + dst*256 + srv*65536 + sampler*256
+  - name: gather
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x03120000 + dst*256 + srv*65536 + sampler*256
+  - name: br
+    max_bytes: 4
+    max_relocs: 1
+    body: |
+      EMIT32LE 0x04000000
+      EMIT_RELOCATION sym, R_DXIL_REL32
+  - name: brcond
+    max_bytes: 4
+    max_relocs: 1
+    body: |
+      EMIT32LE 0x04020000
+      EMIT_RELOCATION sym, R_DXIL_REL32
+  - name: ret
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x04040000
+  - name: call
+    max_bytes: 4
+    max_relocs: 1
+    body: |
+      EMIT32LE 0x04060000
+      EMIT_RELOCATION sym, R_DXIL_FN
+  - name: waveop
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x05000000 + dst*256 + src*65536
+  - name: wavelane
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x05020000 + dst*256
+  - name: trace
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x06000000 + srv*65536
+  - name: meshv
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x07000000 + dst*256 + src*65536
+  - name: barrier
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x08000000
+  - name: bitcast
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x09000000 + dst*256 + src*65536
+forms:
+  - mnemonic: nop
+    encoder: nop
+  - mnemonic: mov
+    encoder: mov
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: add
+    encoder: add
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: sub
+    encoder: sub
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: mul
+    encoder: mul
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: fadd
+    encoder: fadd
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: fmul
+    encoder: fmul
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: fma
+    encoder: fma
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: dot4
+    encoder: dot4
+    required: [dot]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: ld
+    encoder: ld
+    flags: [reads_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: st
+    encoder: st
+    flags: [writes_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: cbuf
+    encoder: cbuf
+    flags: [reads_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: sample
+    encoder: sample
+    flags: [reads_mem]
+    required: [sample]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: gather
+    encoder: gather
+    flags: [reads_mem]
+    required: [sample]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: br
+    encoder: br
+    flags: [branch, terminator, reloc]
+    operands:
+      - {kind: sym, width: 64}
+  - mnemonic: br.cond
+    encoder: brcond
+    flags: [cond_branch, reloc]
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: sym, width: 64}
+  - mnemonic: ret
+    encoder: ret
+    flags: [return, terminator]
+  - mnemonic: call
+    encoder: call
+    flags: [branch, reloc]
+    operands:
+      - {kind: sym, width: 64}
+  - mnemonic: wave.op
+    encoder: waveop
+    required: [wave-ops]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: wave.lane
+    encoder: wavelane
+    required: [wave-ops]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+  - mnemonic: trace
+    encoder: trace
+    required: [raytracing]
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: mesh.v
+    encoder: meshv
+    required: [mesh]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: barrier
+    encoder: barrier
+    required: [barrier]
+  - mnemonic: bitcast
+    encoder: bitcast
+    required: ["16-bit"]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+syntaxes:
+  - {name: dxil, comment: ";", separator: ", "}
+  - {name: dxbc, comment: ";", separator: ", "}
+sections:
+  - {name: ".text", flags: [exec, alloc, code], align: 4, content: code}
+  - {name: ".rodata", flags: [alloc, readonly, data], align: 4, content: data}
+  - {name: ".dxil.signature", flags: [alloc, readonly, meta], align: 4, content: meta}
+  - {name: ".dxil.validator", flags: [alloc, readonly, meta], align: 4, content: meta}
+linkages:
+  - {name: entry_export, binding: global, visibility: default, symtype: func}
+  - {name: func_local, binding: local, visibility: default, symtype: func}
+relocs:
+  - {name: R_DXIL_NONE, width: 32, expr: "S + A"}
+  - {name: R_DXIL_REL32, width: 32, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_DXIL_FN, width: 32, expr: "S + A"}
+  - {name: R_DXIL_HANDLE, width: 32, expr: "S + A"}
+  - {name: R_DXIL_RESOURCE, width: 32, expr: "S + A"}
+debug:
+  - {kind: target, ref: "", msg: "dxil shader IR: base+wave+ray/mesh+sample+barrier"}
+  - {kind: form, ref: wave.op, msg: "wave forms require wave-ops"}
+  - {kind: form, ref: sample, msg: "resource forms require sample"}
+backend:
+  file: backend/directx.json

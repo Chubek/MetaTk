@@ -1,0 +1,559 @@
+# spirv.dsymspec.yaml
+# Migrated from the Lua DSL (spirv.dsymspec). Encoder bodies are imperative
+# pseudo-code; the grammar is documented in README.md.
+#
+# spirv.dsymspec — SPIR-V 1.6 (compute/graphics IR), logical layout.
+# Instructions are 32-bit little-endian words; word 0 = (wordcount << 16) |
+# opcode. SSA <id> operands throughout (modelled as imm ids).
+# Data: isa_reference SPIR-V quick spec (5-word header, OpLoad/OpStore/
+# OpFAdd word-0 layout), TableGen SPIRV target, wasm_oracle-adjacent
+# graphics literature.
+# Strata: base(core 1.6) | shader | kernel | addresses | int8/16/64 |
+#   float16/64 | matrix?/vector16 | atomic | group | priv(ocl).
+
+schema: 1
+targets:
+  - {arch: spirv, subarch: spirv1.6, addr_size: 32, op_size: 32, addr_def: 64, align: 4, byte_order: little, obj_format: spirv, abi: spirv-logical, calling_conv: spirv-logical, features: [core, shader, addresses]}
+features:
+  - {name: core, desc: "SPIR-V 1.6 core"}
+  - {name: shader, desc: "shader capability"}
+  - {name: kernel, desc: "kernel capability"}
+  - {name: addresses, desc: "Addresses capability"}
+  - {name: int8, desc: "Int8 capability"}
+  - {name: int16, desc: "Int16 capability"}
+  - {name: int64, desc: "Int64 capability"}
+  - {name: float16, desc: "Float16 capability"}
+  - {name: float64, desc: "Float64 capability"}
+  - {name: vector16, desc: "Vector16 capability"}
+  - {name: atomic, desc: "atomic storage (OpAtomicIAdd)"}
+  - {name: group, desc: "group operations"}
+  - {name: priv, desc: "OpenCL stdlib (privileged host)"}
+registers:
+  # SPIR-V uses SSA ids, not named registers; model two id banks.
+  - {name: "%idtype0", class: special, width: 32, enc: 0}
+  - {name: "%idtype1", class: special, width: 32, enc: 1}
+  - {name: "%idtype2", class: special, width: 32, enc: 2}
+  - {name: "%idtype3", class: special, width: 32, enc: 3}
+  - {name: "%idtype4", class: special, width: 32, enc: 4}
+  - {name: "%idtype5", class: special, width: 32, enc: 5}
+  - {name: "%idtype6", class: special, width: 32, enc: 6}
+  - {name: "%idtype7", class: special, width: 32, enc: 7}
+  - {name: bound, class: special, width: 32, enc: 0}
+  - {name: schema, class: special, width: 32, enc: 0}
+mnemonics:
+  - {name: nop}
+  - {name: undef}
+  - {name: name}
+  - {name: entrypoint}
+  - {name: execmode}
+  - {name: memorymodel}
+  - {name: typevoid}
+  - {name: typeint}
+  - {name: typefloat}
+  - {name: typevector}
+  - {name: constant}
+  - {name: function}
+  - {name: param}
+  - {name: label}
+  - {name: variable}
+  - {name: decorate}
+  - {name: load}
+  - {name: store}
+  - {name: accesschain}
+  - {name: iadd}
+  - {name: isub}
+  - {name: imul}
+  - {name: fadd}
+  - {name: fmul}
+  - {name: logicaland}
+  - {name: select}
+  - {name: iequal}
+  - {name: phi}
+  - {name: branch}
+  - {name: branchcond}
+  - {name: return}
+  - {name: returnvalue}
+  - {name: function_end}
+  - {name: call}
+  - {name: barrier}
+  - {name: atomiciadd}
+  - {name: extinst}
+encoders:
+  - name: nop
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x00010000
+  - name: undef
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x00010001
+  - name: name
+    max_bytes: 8
+    body: |
+      EMIT32LE 0x00020005
+      EMIT_IMM 4, target
+  - name: entrypoint
+    max_bytes: 12
+    body: |
+      EMIT32LE 0x0004000F
+      EMIT_IMM 4, model
+      EMIT_IMM 4, fn
+  - name: execmode
+    max_bytes: 12
+    body: |
+      EMIT32LE 0x00030010
+      EMIT_IMM 4, fn
+      EMIT_IMM 4, mode
+  - name: memorymodel
+    max_bytes: 12
+    body: |
+      EMIT32LE 0x0003000E
+      EMIT_IMM 4, addr
+      EMIT_IMM 4, mem
+  - name: typevoid
+    max_bytes: 8
+    body: |
+      EMIT32LE 0x00020013
+      EMIT_IMM 4, result
+  - name: typeint
+    max_bytes: 16
+    body: |
+      EMIT32LE 0x00040015
+      EMIT_IMM 4, result
+      EMIT_IMM 4, width
+      EMIT_IMM 4, sign
+  - name: typefloat
+    max_bytes: 12
+    body: |
+      EMIT32LE 0x00030016
+      EMIT_IMM 4, result
+      EMIT_IMM 4, width
+  - name: typevector
+    max_bytes: 16
+    body: |
+      EMIT32LE 0x00040017
+      EMIT_IMM 4, result
+      EMIT_IMM 4, comp
+      EMIT_IMM 4, count
+  - name: constant
+    max_bytes: 16
+    body: |
+      EMIT32LE 0x0004002B
+      EMIT_IMM 4, type
+      EMIT_IMM 4, result
+      EMIT_IMM 4, value
+  - name: function
+    max_bytes: 20
+    body: |
+      EMIT32LE 0x00050036
+      EMIT_IMM 4, type
+      EMIT_IMM 4, result
+      EMIT_IMM 4, ctrl
+      EMIT_IMM 4, ftype
+  - name: param
+    max_bytes: 12
+    body: |
+      EMIT32LE 0x00030037
+      EMIT_IMM 4, type
+      EMIT_IMM 4, result
+  - name: label
+    max_bytes: 8
+    body: |
+      EMIT32LE 0x000200F8
+      EMIT_IMM 4, result
+  - name: variable
+    max_bytes: 16
+    body: |
+      EMIT32LE 0x0004003B
+      EMIT_IMM 4, type
+      EMIT_IMM 4, result
+      EMIT_IMM 4, storage
+  - name: decorate
+    max_bytes: 12
+    body: |
+      EMIT32LE 0x00030047
+      EMIT_IMM 4, target
+      EMIT_IMM 4, deco
+  - name: load
+    max_bytes: 16
+    body: |
+      EMIT32LE 0x0004003D
+      EMIT_IMM 4, type
+      EMIT_IMM 4, result
+      EMIT_IMM 4, ptr
+  - name: store
+    max_bytes: 12
+    body: |
+      EMIT32LE 0x0003003E
+      EMIT_IMM 4, ptr
+      EMIT_IMM 4, object
+  - name: accesschain
+    max_bytes: 16
+    body: |
+      EMIT32LE 0x00040041
+      EMIT_IMM 4, type
+      EMIT_IMM 4, result
+      EMIT_IMM 4, base
+  - name: iadd
+    max_bytes: 20
+    body: |
+      EMIT32LE 0x00050080
+      EMIT_IMM 4, type
+      EMIT_IMM 4, result
+      EMIT_IMM 4, op1
+      EMIT_IMM 4, op2
+  - name: isub
+    max_bytes: 20
+    body: |
+      EMIT32LE 0x00050081
+      EMIT_IMM 4, type
+      EMIT_IMM 4, result
+      EMIT_IMM 4, op1
+      EMIT_IMM 4, op2
+  - name: imul
+    max_bytes: 20
+    body: |
+      EMIT32LE 0x00050082
+      EMIT_IMM 4, type
+      EMIT_IMM 4, result
+      EMIT_IMM 4, op1
+      EMIT_IMM 4, op2
+  - name: fadd
+    max_bytes: 20
+    body: |
+      EMIT32LE 0x00050083
+      EMIT_IMM 4, type
+      EMIT_IMM 4, result
+      EMIT_IMM 4, op1
+      EMIT_IMM 4, op2
+  - name: fmul
+    max_bytes: 20
+    body: |
+      EMIT32LE 0x00050085
+      EMIT_IMM 4, type
+      EMIT_IMM 4, result
+      EMIT_IMM 4, op1
+      EMIT_IMM 4, op2
+  - name: logicaland
+    max_bytes: 20
+    body: |
+      EMIT32LE 0x000500A8
+      EMIT_IMM 4, type
+      EMIT_IMM 4, result
+      EMIT_IMM 4, op1
+      EMIT_IMM 4, op2
+  - name: select
+    max_bytes: 24
+    body: |
+      EMIT32LE 0x000600A9
+      EMIT_IMM 4, type
+      EMIT_IMM 4, result
+      EMIT_IMM 4, cond
+      EMIT_IMM 4, o1
+  - name: iequal
+    max_bytes: 20
+    body: |
+      EMIT32LE 0x000500AA
+      EMIT_IMM 4, type
+      EMIT_IMM 4, result
+      EMIT_IMM 4, op1
+      EMIT_IMM 4, op2
+  - name: phi
+    max_bytes: 16
+    body: |
+      EMIT32LE 0x000400F0
+      EMIT_IMM 4, type
+      EMIT_IMM 4, result
+      EMIT_IMM 4, v0
+  - name: branch
+    max_bytes: 8
+    body: |
+      EMIT32LE 0x000200F9
+      EMIT_IMM 4, target
+  - name: branchcond
+    max_bytes: 16
+    body: |
+      EMIT32LE 0x000400FA
+      EMIT_IMM 4, cond
+      EMIT_IMM 4, t
+      EMIT_IMM 4, f
+  - name: return
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x000100FD
+  - name: returnvalue
+    max_bytes: 8
+    body: |
+      EMIT32LE 0x000200FE
+      EMIT_IMM 4, value
+  - name: function_end
+    max_bytes: 4
+    body: |
+      EMIT32LE 0x00010038
+  - name: call
+    max_bytes: 16
+    body: |
+      EMIT32LE 0x00040039
+      EMIT_IMM 4, type
+      EMIT_IMM 4, result
+      EMIT_IMM 4, fn
+  - name: barrier
+    max_bytes: 12
+    body: |
+      EMIT32LE 0x000300F6
+      EMIT_IMM 4, scope
+      EMIT_IMM 4, semantics
+  - name: atomiciadd
+    max_bytes: 24
+    body: |
+      EMIT32LE 0x000600E1
+      EMIT_IMM 4, type
+      EMIT_IMM 4, result
+      EMIT_IMM 4, ptr
+      EMIT_IMM 4, value
+  - name: extinst
+    max_bytes: 20
+    body: |
+      EMIT32LE 0x0005000B
+      EMIT_IMM 4, type
+      EMIT_IMM 4, result
+      EMIT_IMM 4, set
+      EMIT_IMM 4, inst
+forms:
+  - mnemonic: nop
+    encoder: nop
+  - mnemonic: undef
+    encoder: undef
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: name
+    encoder: name
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: entrypoint
+    encoder: entrypoint
+    required: [shader]
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: execmode
+    encoder: execmode
+    required: [shader]
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: memorymodel
+    encoder: memorymodel
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: typevoid
+    encoder: typevoid
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: typeint
+    encoder: typeint
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: typefloat
+    encoder: typefloat
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: typevector
+    encoder: typevector
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: constant
+    encoder: constant
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: function
+    encoder: function
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: param
+    encoder: param
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: label
+    encoder: label
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: variable
+    encoder: variable
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: decorate
+    encoder: decorate
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: load
+    encoder: load
+    flags: [reads_mem]
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: store
+    encoder: store
+    flags: [writes_mem]
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: accesschain
+    encoder: accesschain
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: iadd
+    encoder: iadd
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: isub
+    encoder: isub
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: imul
+    encoder: imul
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: fadd
+    encoder: fadd
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: fmul
+    encoder: fmul
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: logicaland
+    encoder: logicaland
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: select
+    encoder: select
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: iequal
+    encoder: iequal
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: phi
+    encoder: phi
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: branch
+    encoder: branch
+    flags: [branch, terminator]
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: branchcond
+    encoder: branchcond
+    flags: [cond_branch, terminator]
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: return
+    encoder: return
+    flags: [return, terminator]
+  - mnemonic: returnvalue
+    encoder: returnvalue
+    flags: [return, terminator]
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: function_end
+    encoder: function_end
+    flags: [terminator]
+  - mnemonic: call
+    encoder: call
+    flags: [branch]
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: barrier
+    encoder: barrier
+    required: [group]
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: atomiciadd
+    encoder: atomiciadd
+    flags: [reads_mem, writes_mem]
+    required: [atomic]
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+  - mnemonic: extinst
+    encoder: extinst
+    required: [priv]
+    operands:
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+      - {kind: imm, width: 32, imm_min: 0, imm_max: 4294967295, signed: false}
+syntaxes:
+  - {name: default, comment: ";", separator: " "}
+  - {name: asm, comment: ";", separator: " "}
+sections:
+  - {name: spirv.module, flags: [alloc, code], align: 4, content: code}
+  - {name: spirv.debug, flags: [debug, meta], align: 4, content: meta}
+  - {name: spirv.annotations, flags: [alloc, readonly, meta], align: 4, content: meta}
+linkages:
+  - {name: entry_export, binding: global, visibility: default, symtype: func}
+  - {name: func_local, binding: local, visibility: default, symtype: func}
+relocs:
+  - {name: R_SPIRV_WORD, width: 32, expr: "S + A"}
+  - {name: R_SPIRV_ID, width: 32, expr: "S + A"}
+  - {name: R_SPIRV_TYPE, width: 32, expr: "S + A"}
+debug:
+  - {kind: target, ref: "", msg: "spirv 1.6 logical: types/consts/functions + arith + cf + atomics"}
+  - {kind: form, ref: entrypoint, msg: "shader entry forms require shader"}
+  - {kind: form, ref: atomiciadd, msg: "atomic forms require atomic"}
+backend:
+  file: backend/spirv.json

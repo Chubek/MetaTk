@@ -1,0 +1,16 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "DVI",
+  "symbol": "DVI",
+  "architecture": "document",
+  "description": "TeX device independent output command interpreter",
+  "native_coverage": "catalog-only",
+  "native_format_loader": false,
+  "portable_example": "DVI.mvm",
+  "vmweave": "DVI.vmweave",
+  "vmspc": "DVI.vmspc",
+  "vmdesc": "DVI.vmdesc",
+  "limitations": [
+    "No native execution implemented. Descriptor and portable Machinery example only."
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "CLR",
+  "symbol": "CLR",
+  "architecture": "stack",
+  "description": "Common intermediate language runtime",
+  "native_coverage": "catalog-only",
+  "native_format_loader": false,
+  "portable_example": "CLR.mvm",
+  "vmweave": "CLR.vmweave",
+  "vmspc": "CLR.vmspc",
+  "vmdesc": "CLR.vmdesc",
+  "limitations": [
+    "No native execution implemented. Descriptor and portable Machinery example only."
+  ]
+}

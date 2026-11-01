@@ -1,0 +1,17 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "SECD",
+  "symbol": "SECD",
+  "architecture": "closure",
+  "description": "Version-1 unary SECD subset; lexical closures, i64 arithmetic, typed call/selection dump",
+  "native_coverage": "secd-unary-subset",
+  "native_format_loader": false,
+  "portable_example": "SECD.mvm",
+  "vmweave": "SECD.vmweave",
+  "vmspc": "SECD.vmspc",
+  "vmdesc": "SECD.vmdesc",
+  "limitations": [
+    "MetaVM in-memory unary/i64 SECD profile v1; see docs/CLOSURE_VMS.md.",
+    "No Lispkit binary loader, lists, DUM/RAP, mutable recursive environments, I/O or GC; cumulative environment budgets apply."
+  ]
+}

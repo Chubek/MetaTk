@@ -1,0 +1,4 @@
+\VMName{DVI}
+\VMArchitecture{TeX device independent output command interpreter}
+\VMStatus{catalog-only}
+\VMInvariant{Portable example bytecode is Machinery bytecode; it does not establish native compatibility.}

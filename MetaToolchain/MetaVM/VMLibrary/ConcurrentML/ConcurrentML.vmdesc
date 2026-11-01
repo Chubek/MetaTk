@@ -1,0 +1,4 @@
+\VMName{ConcurrentML}
+\VMArchitecture{Concurrent ML language and concurrency runtime; guest ISA unspecified}
+\VMStatus{catalog-only}
+\VMInvariant{Portable example bytecode is Machinery bytecode; it does not establish native compatibility.}

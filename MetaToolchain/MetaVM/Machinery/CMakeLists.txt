@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 project(MetaVMMachinery VERSION 0.1.0 LANGUAGES C)
+include(GNUInstallDirs)
 
 option(METAVM_BUILD_TESTS "Build Machinery tests" ON)
 option(METAVM_BUILD_EXAMPLES "Build the C11 example runner" ON)
@@ -13,7 +14,7 @@ add_library(MetaVM::Machinery ALIAS metavm)
 add_library(MetaVM::VM ALIAS metavm)
 target_include_directories(metavm PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-  $<INSTALL_INTERFACE:include/MetaVM/Machinery>)
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/MetaVM/Machinery>)
 target_compile_features(metavm PUBLIC c_std_11)
 set_target_properties(metavm PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED YES
   C_EXTENSIONS OFF WINDOWS_EXPORT_ALL_SYMBOLS ON)
@@ -70,7 +71,6 @@ if(METAVM_BUILD_TESTS)
   endif()
 endif()
 
-include(GNUInstallDirs)
 install(TARGETS metavm EXPORT MetaVMMachineryTargets
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

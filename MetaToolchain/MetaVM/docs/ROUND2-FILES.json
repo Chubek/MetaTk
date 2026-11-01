@@ -1,0 +1,186 @@
+{
+  "baseline_archive": "history/round1.zip",
+  "baseline_archive_sha256": "3f9fa146e3d4b03d900940f1ec22aaa5d56b042e7bd6a866171561c9b3352504",
+  "previous_file_count": 688,
+  "current_file_count": 701,
+  "removed_files": [],
+  "modified_files": [
+    {
+      "path": "AGENTS.md",
+      "previous_sha256": "b424d6441944d51caaaa2629eb50be527aeb58a6167bc0925e2aa917fcdd50b9",
+      "current_sha256": "434c5b4a72bba80730ebc48055be0bc1e58691b3fb9fde6818c3cc72c1dce7fa"
+    },
+    {
+      "path": "CMakeLists.txt",
+      "previous_sha256": "94cc1e020dd7dc2468f60ecff02b735adf29de7e64107fb36e5543899c179579",
+      "current_sha256": "e05a101c58c7dae386a2830e24ae2dce80826d523343307771795623c489a1d7"
+    },
+    {
+      "path": "MANIFEST.yaml",
+      "previous_sha256": "5bb51a3cfd77c2c9877b6320fe5ec1b80a59e144c231a5d05ddd234caa1ac639",
+      "current_sha256": "0bc81e10905fbfa9e3a5d60e9fb260fd505d66f84ac59b8a12520c181b72f55d"
+    },
+    {
+      "path": "Machinery/CBridge.h",
+      "previous_sha256": "b01fae0e96ea410d965d3ec2777b7b37c7a659a9f09461a7d4ece0ec428ac8ab",
+      "current_sha256": "79e9f504cc75cbdde06064d4d500368d0e7f2dfc9282e56185e2d21cfad51652"
+    },
+    {
+      "path": "Machinery/Loader.h",
+      "previous_sha256": "ad34c48620311a571ffc06dbf04ae5ab193a80ea0005a1911837d16d72782a16",
+      "current_sha256": "1563a12c15be3623e612618aa0ae9e6160564c18c6917d1d089f20491654e4b8"
+    },
+    {
+      "path": "Machinery/MetaVM.c",
+      "previous_sha256": "5457b0f3da751353fcb88082377a1bfaa65072bb583cace2a0768ab9ce2d889d",
+      "current_sha256": "5d5377ef0d08a22f7ab05a510ab558769cb6f04df4f1b5bc9b118a36e308adf0"
+    },
+    {
+      "path": "Machinery/MetaVM.hpp",
+      "previous_sha256": "49bfd58c3468272507b81f6476c6df938e8dacbdd740a0e1cd4aceb492354316",
+      "current_sha256": "c0cc0829054cba94cd459ce634b35018b7f57f7a54631424f06850de094c1469"
+    },
+    {
+      "path": "Machinery/OS.c",
+      "previous_sha256": "477739ab404a3cb3dc7557006e202a6239612da4a4ae8e29e92f4dbe89626b06",
+      "current_sha256": "43429f932b64ba1b0452c919e8b2c0e0d2c57d9040d7c06281617345f1f70357"
+    },
+    {
+      "path": "Machinery/OS.h",
+      "previous_sha256": "03b1ad9e671bf198da4cc1bf235de93ae325de5c132dfc771ed7f13dd9461b0a",
+      "current_sha256": "bce852369b0a7761f14260f5d7d8ab0feb70da21496fceb52275ceb689e97fd5"
+    },
+    {
+      "path": "MetaVM.hpp",
+      "previous_sha256": "404e0a1893f5ab90df7800af63a5d2ea39ff352a0dc30bcff5ede05f849604dc",
+      "current_sha256": "5842173f4390444a42d40074789d4618fb0da498030f10d3e27d182b39776ba4"
+    },
+    {
+      "path": "README.md",
+      "previous_sha256": "810c7c67b5a36a3607774c23b39c6805c3910e49160a64357507500e326fb801",
+      "current_sha256": "975d970dcaa83bba6fe11f4ef121b8d772a84ac8630a12faa2c02c2201879069"
+    },
+    {
+      "path": "VMLibrary/DRMVM/Graphics.cpp",
+      "previous_sha256": "8c506dd295d1899ce291ebb1d47cd9676ec886b22d1b12d954570a0fb8a6fe99",
+      "current_sha256": "4c4a8aece2501ed87f599dd2d7393cfef62459faefa06c5a2a54099fb4394390"
+    },
+    {
+      "path": "VMLibrary/SSAVM/ISSA.cpp",
+      "previous_sha256": "50314aa919b7855c1376851c017732429ce6be4c3027c2598e9f77e9e726572b",
+      "current_sha256": "282a790682db41c7a02f60b121b02e44ed53155e45e144727550ce62dcbe80da"
+    },
+    {
+      "path": "VMLibrary/SSAVM/ISSA.hpp",
+      "previous_sha256": "72b56f9e89281d78d5269855a6a118103d0dd5acc02de6cdf74ab3665b675a78",
+      "current_sha256": "de6590504203006d897babb9d66169526999baee67910be24e7267f61f89d9e3"
+    },
+    {
+      "path": "docs/VALIDATION.md",
+      "previous_sha256": "0f74a2891bebd0b8e82903a53d2bdf94c8bc7251c18b2dcc56d6dfa7b0863ee6",
+      "current_sha256": "ceb50cd75e3a9921e79260e1f04a830c1597a1722c5f9e87208e949f90bdde97"
+    },
+    {
+      "path": "third_party/DEPENDENCIES.md",
+      "previous_sha256": "a1c842ebb4856b05eb7339986f79f751ce464cc9e6336cbb6a8e408ef1e8bdf2",
+      "current_sha256": "cabd9682ded3a38b60b2af01e932c9ce369f12a939db69532587c9e3d90c583b"
+    },
+    {
+      "path": "tools/build.py",
+      "previous_sha256": "b45083b6d785213b3ab849fa17f73b537bb50195f919f233517f5189f6f8c382",
+      "current_sha256": "5bf2a08f5aa75797dac29f2af65ff75c5f580b81bdb5635f2cfc09f2e327eadd"
+    },
+    {
+      "path": "tools/generate_catalog.py",
+      "previous_sha256": "f560994b9fa4f2ecbeb641bb1bb558dd3f44342b4e5102cf9886a67995d33d14",
+      "current_sha256": "181472fa173084be31ac40b1645d2b4ef48ad9699ac8bbc7d6f5d730be6881b9"
+    },
+    {
+      "path": "vmweave/Builder.hpp",
+      "previous_sha256": "52683eceed8c5ba0ce1eb89e477f902556cbd8419e5c56ca27f95ee6422569d7",
+      "current_sha256": "92b59c67d59bcfc54d1b54668e1b1c36a40c52f2104ef02220e389a17b200bfd"
+    },
+    {
+      "path": "vmweave/MetaMLAdapter.hpp",
+      "previous_sha256": "6dafc8ffc7f52bcbd8c94c20d459613d5214a52182bc960d27f8c595081762de",
+      "current_sha256": "8b9e71a38e549472a8d59e43fc411263e57dab213ce6ffd14fe852590ba50957"
+    },
+    {
+      "path": "vmweave/factorial.vmweave",
+      "previous_sha256": "75d4e44dae5a05290c230e99ca465bd9d64c74c69b50b7e40e96e330b5411616",
+      "current_sha256": "a2a2a107aa34f8563020d33f5d1f4be576eb743ef6e59eb25c512dfdcc641867"
+    },
+    {
+      "path": "vmweave/main.c",
+      "previous_sha256": "58af4262ad4d79994a07e4312f78ad7910e893c02f40d268ae976a669d9d7b86",
+      "current_sha256": "090b13104c4781f87dff68b79f9208f70bbcfa877fe35f5e65bafd4401b319e7"
+    },
+    {
+      "path": "vmweave/metaml_main.cpp",
+      "previous_sha256": "dfe8b8291795ed3a76ca3aef81ec6dca40d3ae417c1b7dae3d229b8ff424a2ad",
+      "current_sha256": "b619232fe3aaeec24105df3f25fdd8d92c39c8dbdae97fe43f7922e93a854273"
+    },
+    {
+      "path": "vmweave/vmweave.c",
+      "previous_sha256": "f7f8c9fd0888f4c50ecf7640861f761b410dc80b21f805e0127a1366f543c909",
+      "current_sha256": "9196f4aaf58556b04ab05ede297547d3e378c8299fb6fd7c15ae7b3c8d5a8dc4"
+    },
+    {
+      "path": "vmweave/vmweave.h",
+      "previous_sha256": "e1bb0f521fe160a8fc56f36e0ac51512c0b67ac3da4360c53d7ac4f4f11a1737",
+      "current_sha256": "6212a28ae3e4bba8a55c234fd82438e4ba3d59dedf561c4385cd908c02edf86e"
+    }
+  ],
+  "added_files": [
+    {
+      "path": "VMLibrary/SSAVM/ISSAAssembly.cpp",
+      "sha256": "57b5dd113fd0b5a5ea250e5f47155cfaebe723f8fada384481838907c8356302"
+    },
+    {
+      "path": "VMLibrary/SSAVM/fibonacci.ssa",
+      "sha256": "1a3388a8c5468c59af6426c1f32473355e576c4a49d9daa078e31edadf29c8ad"
+    },
+    {
+      "path": "docs/ROUND2.md",
+      "sha256": "b83ce8b8e3ef257fcd28f3aa604a4c4117da1b401b789763b0cab99aadd46f9a"
+    },
+    {
+      "path": "driver/ssavm.cpp",
+      "sha256": "8ac697349c8d18e0859bead9233fba526958a248cfe7656bd71dca1a6d36dbec"
+    },
+    {
+      "path": "history/round1.zip",
+      "sha256": "3f9fa146e3d4b03d900940f1ec22aaa5d56b042e7bd6a866171561c9b3352504"
+    },
+    {
+      "path": "tests/definition_factory.c",
+      "sha256": "91b9af48ed230a96679ed15a1d38a8e5747f27e503d7ed0f50dc6ebd1c3572ae"
+    },
+    {
+      "path": "tests/refinement.cpp",
+      "sha256": "0b326b4adb05569f3ca77fe4c9f4167e8cc8005a7d74cb07d91857e62dbf8ddc"
+    },
+    {
+      "path": "tools/test_cli.py",
+      "sha256": "0f0cb7415ba676acc0ffe9a7133716a175920f19138e4b8469ae0219a3d498a8"
+    },
+    {
+      "path": "tools/test_headers.py",
+      "sha256": "45cc3d4da39bd3d24b8186fda93bda5258c90eb39531bebb1dc6a03deaa019e7"
+    },
+    {
+      "path": "vmweave/Definition.hpp",
+      "sha256": "1cc3f4eb46c7ef8a2816e632449f30760132740f75dced609e9766d4dd10d125"
+    },
+    {
+      "path": "vmweave/examples/ToyR16.hpp",
+      "sha256": "bd442fd0adda9274831606d26f6e4654973815de1f6dd9706104303008077061"
+    },
+    {
+      "path": "vmweave/examples/definition.cpp",
+      "sha256": "a5d3e5d30e6b76dfde1a633a397c72c11a75a8b2160f3e17655814f4e01c6480"
+    }
+  ],
+  "report_excludes_its_own_hash": true,
+  "note": "Every earlier file remains at its original path. Exact earlier content is retained in the baseline archive, including modified files."
+}

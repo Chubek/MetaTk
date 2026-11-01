@@ -1,0 +1,4 @@
+\VMName{SECD}
+\VMArchitecture{Version-1 unary SECD subset; lexical closures, i64 arithmetic, typed call/selection dump}
+\VMStatus{secd-unary-subset}
+\VMInvariant{Portable example bytecode is Machinery bytecode; it does not establish native compatibility.}

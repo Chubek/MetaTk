@@ -1,0 +1,4 @@
+\VMName{JVM}
+\VMArchitecture{JVM integer Code arrays with local variables and bounded operand stack}
+\VMStatus{integer-method-subset}
+\VMInvariant{Portable example bytecode is Machinery bytecode; it does not establish native compatibility.}

@@ -1,0 +1,16 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "PostScript",
+  "symbol": "PostScript",
+  "architecture": "stack",
+  "description": "PostScript operand, dictionary and execution stacks",
+  "native_coverage": "catalog-only",
+  "native_format_loader": false,
+  "portable_example": "PostScript.mvm",
+  "vmweave": "PostScript.vmweave",
+  "vmspc": "PostScript.vmspc",
+  "vmdesc": "PostScript.vmdesc",
+  "limitations": [
+    "No native execution implemented. Descriptor and portable Machinery example only."
+  ]
+}

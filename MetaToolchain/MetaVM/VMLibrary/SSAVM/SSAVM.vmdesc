@@ -1,0 +1,4 @@
+\VMName{SSAVM}
+\VMArchitecture{Bounded i64 ISSA subset; opt-in definite-assignment/type analysis; CEN selection; simultaneous PHI/PFE; persistent arrays}
+\VMStatus{issa-subset}
+\VMInvariant{Portable example bytecode is Machinery bytecode; it does not establish native compatibility.}

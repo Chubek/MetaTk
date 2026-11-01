@@ -1,0 +1,16 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "Dis",
+  "symbol": "Dis",
+  "architecture": "register",
+  "description": "Inferno Dis virtual machine",
+  "native_coverage": "catalog-only",
+  "native_format_loader": false,
+  "portable_example": "Dis.mvm",
+  "vmweave": "Dis.vmweave",
+  "vmspc": "Dis.vmspc",
+  "vmdesc": "Dis.vmdesc",
+  "limitations": [
+    "No native execution implemented. Descriptor and portable Machinery example only."
+  ]
+}

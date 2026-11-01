@@ -1,0 +1,13 @@
+# TR 03-19 figure 5 operational subset; print omitted, final scalar returned.
+0 const 0
+1 const 1
+2 const 10
+3 const 2
+4 phi (1) (8)
+5 phi (0) (4)
+6 phi (3) (9)
+7 pfe
+8 add (4) (5)
+9 add (1) (6)
+10 ble (9) (2) [4] 1
+11 return (8)

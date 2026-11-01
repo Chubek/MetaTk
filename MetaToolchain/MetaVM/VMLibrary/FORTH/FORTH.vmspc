@@ -1,0 +1,16 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "FORTH",
+  "symbol": "FORTH",
+  "architecture": "stack",
+  "description": "Data and return stacks, dictionary, colon definitions",
+  "native_coverage": "integer-word-subset",
+  "native_format_loader": false,
+  "portable_example": "FORTH.mvm",
+  "vmweave": "FORTH.vmweave",
+  "vmspc": "FORTH.vmspc",
+  "vmdesc": "FORTH.vmdesc",
+  "limitations": [
+    "See native API header for exact implemented subset. No full platform runtime or file loader."
+  ]
+}

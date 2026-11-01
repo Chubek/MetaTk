@@ -1,0 +1,14 @@
+.import drm_clear 1
+.import drm_rect 5
+.function main 0 7
+const r0 0
+host r6 drm_clear r0
+const r0 1
+const r1 1
+const r2 2
+const r3 2
+const r4 16711680
+host r6 drm_rect r0
+const r6 42
+ret r6
+.end

@@ -7,6 +7,8 @@ extern "C" {
 /* Detect MVM binary magic; otherwise compile assembly. Caller owns output. */
 mvm_status mvm_load_file(const char *path, size_t max_bytes, mvm_module **, mvm_error *);
 mvm_status mvm_save_file(const char *path, const mvm_module *, mvm_error *);
+/* Versioned serialization followed by mvm_write_file_atomic. */
+mvm_status mvm_save_file_atomic(const char *, const mvm_module *, mvm_error *);
 #ifdef __cplusplus
 }
 #endif

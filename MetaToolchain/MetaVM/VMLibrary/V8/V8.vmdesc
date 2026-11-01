@@ -1,0 +1,4 @@
+\VMName{V8}
+\VMArchitecture{JavaScript engine; no stable external bytecode ABI}
+\VMStatus{catalog-only}
+\VMInvariant{Portable example bytecode is Machinery bytecode; it does not establish native compatibility.}

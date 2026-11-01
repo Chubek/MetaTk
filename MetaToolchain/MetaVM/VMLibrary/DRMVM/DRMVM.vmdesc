@@ -1,0 +1,4 @@
+\VMName{DRMVM}
+\VMArchitecture{Machinery host imports into XRGB8888 surfaces; optional libdrm dumb buffers}
+\VMStatus{graphics-subset}
+\VMInvariant{Portable example bytecode is Machinery bytecode; it does not establish native compatibility.}

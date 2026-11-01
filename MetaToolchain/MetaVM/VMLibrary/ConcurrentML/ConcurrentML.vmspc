@@ -1,0 +1,16 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "ConcurrentML",
+  "symbol": "ConcurrentML",
+  "architecture": "runtime",
+  "description": "Concurrent ML language and concurrency runtime; guest ISA unspecified",
+  "native_coverage": "catalog-only",
+  "native_format_loader": false,
+  "portable_example": "ConcurrentML.mvm",
+  "vmweave": "ConcurrentML.vmweave",
+  "vmspc": "ConcurrentML.vmspc",
+  "vmdesc": "ConcurrentML.vmdesc",
+  "limitations": [
+    "No native execution implemented. Descriptor and portable Machinery example only."
+  ]
+}

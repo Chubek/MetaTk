@@ -1,0 +1,4 @@
+\VMName{CHIP-8}
+\VMArchitecture{Classic CHIP-8; legacy, COSMAC VIP and CHIP-48 opcode presets; 4 KiB memory and 64x32 display}
+\VMStatus{classic-opcode-interpreter}
+\VMInvariant{Portable example bytecode is Machinery bytecode; it does not establish native compatibility.}

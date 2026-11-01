@@ -1,0 +1,16 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "Z-Machine",
+  "symbol": "Z_Machine",
+  "architecture": "unspecified",
+  "description": "No authoritative ISA or version supplied; preserve this identity pending specification",
+  "native_coverage": "catalog-only",
+  "native_format_loader": false,
+  "portable_example": "Z-Machine.mvm",
+  "vmweave": "Z-Machine.vmweave",
+  "vmspc": "Z-Machine.vmspc",
+  "vmdesc": "Z-Machine.vmdesc",
+  "limitations": [
+    "No native execution implemented. Descriptor and portable Machinery example only."
+  ]
+}

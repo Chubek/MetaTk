@@ -1,0 +1,612 @@
+# s390x.dsymspec.yaml
+# Migrated from the Lua DSL (s390x.dsymspec). Encoder bodies are imperative
+# pseudo-code; the grammar is documented in README.md.
+#
+# s390x.dsymspec — IBM z/Architecture (s390x), big-endian, ELFv2 ABI.
+# Data: TableGen SystemZ target (GR64 R0-R15, FP F0-F15, VR V0-V31, AR
+# A0-A15, CC/FPC status, PSW), arch_oracle s390x summary (variable-length
+# 2/4/6-byte instructions), osdev_oracle (z/Architecture priv facilities),
+# toolchain_orace (R_390_* ELF relocations).
+# Strata: base | high-word | distinct-ops | load-store-on-cond |
+#   vector | dfp | tx | misc-ext | priv.
+
+schema: 1
+targets:
+  - {arch: s390x, subarch: "z/arch", addr_size: 64, op_size: 32, addr_def: 64, align: 2, byte_order: big, obj_format: ELF64, abi: s390x-ELF, calling_conv: s390x-elf, features: [base, high-word, distinct-ops]}
+features:
+  - {name: base, desc: "z/Architecture base (RR/RX/S/SI)"}
+  - {name: high-word, desc: "high-word facility"}
+  - {name: distinct-ops, desc: "distinct-operands facility"}
+  - {name: load-store-on-cond, desc: "load/store on condition"}
+  - {name: misc-ext, desc: "miscellaneous-instruction extensions"}
+  - {name: vector, desc: "vector facility (SIMD)"}
+  - {name: dfp, desc: "decimal floating point"}
+  - {name: tx, desc: "transactional execution"}
+  - {name: dfp-zoned, desc: "decimal zoned conversion"}
+  - {name: crypto, desc: "message-security assist (CPACF)"}
+  - {name: priv, desc: "privileged (PSW/control regs)"}
+registers:
+  - {name: r0, class: gpr, width: 64, enc: 0, flags: [readable, writable]}
+  - {name: r1, class: gpr, width: 64, enc: 1, flags: [readable, writable]}
+  - {name: r2, class: gpr, width: 64, enc: 2, flags: [readable, writable]}
+  - {name: r3, class: gpr, width: 64, enc: 3, flags: [readable, writable]}
+  - {name: r4, class: gpr, width: 64, enc: 4, flags: [readable, writable]}
+  - {name: r5, class: gpr, width: 64, enc: 5, flags: [readable, writable]}
+  - {name: r6, class: gpr, width: 64, enc: 6, flags: [readable, writable]}
+  - {name: r7, class: gpr, width: 64, enc: 7, flags: [readable, writable]}
+  - {name: r8, class: gpr, width: 64, enc: 8, flags: [readable, writable]}
+  - {name: r9, class: gpr, width: 64, enc: 9, flags: [readable, writable]}
+  - {name: r10, class: gpr, width: 64, enc: 10, flags: [readable, writable]}
+  - {name: r11, class: gpr, width: 64, enc: 11, flags: [readable, writable]}
+  - {name: r12, class: gpr, width: 64, enc: 12, flags: [readable, writable]}
+  - {name: r13, class: gpr, width: 64, enc: 13, flags: [readable, writable]}
+  - {name: r14, class: gpr, width: 64, enc: 14, flags: [readable, writable]}
+  - {name: r15, class: gpr, width: 64, enc: 15, flags: [readable, writable]}
+  - {name: f0, class: fp, width: 64, enc: 0, flags: [readable, writable]}
+  - {name: f1, class: fp, width: 64, enc: 1, flags: [readable, writable]}
+  - {name: f2, class: fp, width: 64, enc: 2, flags: [readable, writable]}
+  - {name: f3, class: fp, width: 64, enc: 3, flags: [readable, writable]}
+  - {name: f4, class: fp, width: 64, enc: 4, flags: [readable, writable]}
+  - {name: f5, class: fp, width: 64, enc: 5, flags: [readable, writable]}
+  - {name: f6, class: fp, width: 64, enc: 6, flags: [readable, writable]}
+  - {name: f7, class: fp, width: 64, enc: 7, flags: [readable, writable]}
+  - {name: f8, class: fp, width: 64, enc: 8, flags: [readable, writable]}
+  - {name: f9, class: fp, width: 64, enc: 9, flags: [readable, writable]}
+  - {name: f10, class: fp, width: 64, enc: 10, flags: [readable, writable]}
+  - {name: f11, class: fp, width: 64, enc: 11, flags: [readable, writable]}
+  - {name: f12, class: fp, width: 64, enc: 12, flags: [readable, writable]}
+  - {name: f13, class: fp, width: 64, enc: 13, flags: [readable, writable]}
+  - {name: f14, class: fp, width: 64, enc: 14, flags: [readable, writable]}
+  - {name: f15, class: fp, width: 64, enc: 15, flags: [readable, writable]}
+  - {name: a0, class: gpr, width: 32, enc: 0, flags: [readable, writable]}
+  - {name: a1, class: gpr, width: 32, enc: 1, flags: [readable, writable]}
+  - {name: a2, class: gpr, width: 32, enc: 2, flags: [readable, writable]}
+  - {name: a3, class: gpr, width: 32, enc: 3, flags: [readable, writable]}
+  - {name: a4, class: gpr, width: 32, enc: 4, flags: [readable, writable]}
+  - {name: a5, class: gpr, width: 32, enc: 5, flags: [readable, writable]}
+  - {name: a6, class: gpr, width: 32, enc: 6, flags: [readable, writable]}
+  - {name: a7, class: gpr, width: 32, enc: 7, flags: [readable, writable]}
+  - {name: a8, class: gpr, width: 32, enc: 8, flags: [readable, writable]}
+  - {name: a9, class: gpr, width: 32, enc: 9, flags: [readable, writable]}
+  - {name: a10, class: gpr, width: 32, enc: 10, flags: [readable, writable]}
+  - {name: a11, class: gpr, width: 32, enc: 11, flags: [readable, writable]}
+  - {name: a12, class: gpr, width: 32, enc: 12, flags: [readable, writable]}
+  - {name: a13, class: gpr, width: 32, enc: 13, flags: [readable, writable]}
+  - {name: a14, class: gpr, width: 32, enc: 14, flags: [readable, writable]}
+  - {name: a15, class: gpr, width: 32, enc: 15, flags: [readable, writable]}
+  - {name: v0, class: vec, width: 128, enc: 0, flags: [readable, writable]}
+  - {name: v1, class: vec, width: 128, enc: 1, flags: [readable, writable]}
+  - {name: v2, class: vec, width: 128, enc: 2, flags: [readable, writable]}
+  - {name: v3, class: vec, width: 128, enc: 3, flags: [readable, writable]}
+  - {name: v4, class: vec, width: 128, enc: 4, flags: [readable, writable]}
+  - {name: v5, class: vec, width: 128, enc: 5, flags: [readable, writable]}
+  - {name: v6, class: vec, width: 128, enc: 6, flags: [readable, writable]}
+  - {name: v7, class: vec, width: 128, enc: 7, flags: [readable, writable]}
+  - {name: v8, class: vec, width: 128, enc: 8, flags: [readable, writable]}
+  - {name: v9, class: vec, width: 128, enc: 9, flags: [readable, writable]}
+  - {name: v10, class: vec, width: 128, enc: 10, flags: [readable, writable]}
+  - {name: v11, class: vec, width: 128, enc: 11, flags: [readable, writable]}
+  - {name: v12, class: vec, width: 128, enc: 12, flags: [readable, writable]}
+  - {name: v13, class: vec, width: 128, enc: 13, flags: [readable, writable]}
+  - {name: v14, class: vec, width: 128, enc: 14, flags: [readable, writable]}
+  - {name: v15, class: vec, width: 128, enc: 15, flags: [readable, writable]}
+  - {name: v16, class: vec, width: 128, enc: 16, flags: [readable, writable]}
+  - {name: v17, class: vec, width: 128, enc: 17, flags: [readable, writable]}
+  - {name: v18, class: vec, width: 128, enc: 18, flags: [readable, writable]}
+  - {name: v19, class: vec, width: 128, enc: 19, flags: [readable, writable]}
+  - {name: v20, class: vec, width: 128, enc: 20, flags: [readable, writable]}
+  - {name: v21, class: vec, width: 128, enc: 21, flags: [readable, writable]}
+  - {name: v22, class: vec, width: 128, enc: 22, flags: [readable, writable]}
+  - {name: v23, class: vec, width: 128, enc: 23, flags: [readable, writable]}
+  - {name: v24, class: vec, width: 128, enc: 24, flags: [readable, writable]}
+  - {name: v25, class: vec, width: 128, enc: 25, flags: [readable, writable]}
+  - {name: v26, class: vec, width: 128, enc: 26, flags: [readable, writable]}
+  - {name: v27, class: vec, width: 128, enc: 27, flags: [readable, writable]}
+  - {name: v28, class: vec, width: 128, enc: 28, flags: [readable, writable]}
+  - {name: v29, class: vec, width: 128, enc: 29, flags: [readable, writable]}
+  - {name: v30, class: vec, width: 128, enc: 30, flags: [readable, writable]}
+  - {name: v31, class: vec, width: 128, enc: 31, flags: [readable, writable]}
+  - {name: cr0, class: ctrl, width: 64, enc: 0, flags: [modedep]}
+  - {name: cr1, class: ctrl, width: 64, enc: 1, flags: [modedep]}
+  - {name: cr2, class: ctrl, width: 64, enc: 2, flags: [modedep]}
+  - {name: cr3, class: ctrl, width: 64, enc: 3, flags: [modedep]}
+  - {name: cr4, class: ctrl, width: 64, enc: 4, flags: [modedep]}
+  - {name: cr5, class: ctrl, width: 64, enc: 5, flags: [modedep]}
+  - {name: cr6, class: ctrl, width: 64, enc: 6, flags: [modedep]}
+  - {name: cr7, class: ctrl, width: 64, enc: 7, flags: [modedep]}
+  - {name: cr8, class: ctrl, width: 64, enc: 8, flags: [modedep]}
+  - {name: cr9, class: ctrl, width: 64, enc: 9, flags: [modedep]}
+  - {name: cr10, class: ctrl, width: 64, enc: 10, flags: [modedep]}
+  - {name: cr11, class: ctrl, width: 64, enc: 11, flags: [modedep]}
+  - {name: cr12, class: ctrl, width: 64, enc: 12, flags: [modedep]}
+  - {name: cr13, class: ctrl, width: 64, enc: 13, flags: [modedep]}
+  - {name: cr14, class: ctrl, width: 64, enc: 14, flags: [modedep]}
+  - {name: cr15, class: ctrl, width: 64, enc: 15, flags: [modedep]}
+  - {name: psw, class: special, width: 128, enc: 0}
+  - {name: pc, class: special, width: 64, enc: 0}
+  - {name: cc, class: status, width: 8, enc: 0}
+  - {name: fpc, class: status, width: 32, enc: 0}
+mnemonics:
+  - {name: nop}
+  - {name: lr}
+  - {name: ar}
+  - {name: sr}
+  - {name: nr}
+  - {name: or}
+  - {name: xr}
+  - {name: clr}
+  - {name: lgr}
+  - {name: agr}
+  - {name: sgr}
+  - {name: msr}
+  - {name: lghi}
+  - {name: aghi}
+  - {name: chi}
+  - {name: l}
+  - {name: st}
+  - {name: la}
+  - {name: lg}
+  - {name: stg}
+  - {name: sll}
+  - {name: srl}
+  - {name: cli}
+  - {name: mvi}
+  - {name: br}
+  - {name: bcr}
+  - {name: ret}
+  - {name: basr}
+  - {name: brasl}
+  - {name: brcl}
+  - {name: svc}
+  - {name: diag}
+  - {name: lpsw}
+  - {name: sck}
+  - {name: adbr}
+  - {name: vadd}
+  - {name: vst}
+  - {name: adtr}
+  - {name: tbegin}
+  - {name: tend}
+  - {name: km}
+encoders:
+  # RR/RRE/RI/RX/RXY/RS/SI/S/RIL skeletons (big-endian).
+  - name: nop
+    max_bytes: 2
+    body: |
+      EMIT16BE 0x0700
+  - name: lr
+    max_bytes: 2
+    body: |
+      EMIT16BE 0x1800 + r1*256 + r2
+  - name: ar
+    max_bytes: 2
+    body: |
+      EMIT16BE 0x1A00 + r1*256 + r2
+  - name: sr
+    max_bytes: 2
+    body: |
+      EMIT16BE 0x1B00 + r1*256 + r2
+  - name: nr
+    max_bytes: 2
+    body: |
+      EMIT16BE 0x1400 + r1*256 + r2
+  - name: or
+    max_bytes: 2
+    body: |
+      EMIT16BE 0x1600 + r1*256 + r2
+  - name: xr
+    max_bytes: 2
+    body: |
+      EMIT16BE 0x1700 + r1*256 + r2
+  - name: clr
+    max_bytes: 2
+    body: |
+      EMIT16BE 0x1500 + r1*256 + r2
+  - name: lgr
+    max_bytes: 4
+    body: |
+      EMIT32BE 0xB9040000 + r1*4096 + r2
+  - name: agr
+    max_bytes: 4
+    body: |
+      EMIT32BE 0xB9080000 + r1*4096 + r2
+  - name: sgr
+    max_bytes: 4
+    body: |
+      EMIT32BE 0xB9090000 + r1*4096 + r2
+  - name: msr
+    max_bytes: 4
+    body: |
+      EMIT32BE 0xB2520000 + r1*4096 + r2
+  - name: lghi
+    max_bytes: 4
+    body: |
+      EMIT32BE 0xA7090000 + r1*4096 + ((imm + 32768) % 65536)
+  - name: aghi
+    max_bytes: 4
+    body: |
+      EMIT32BE 0xA70B0000 + r1*4096 + ((imm + 32768) % 65536)
+  - name: chi
+    max_bytes: 4
+    body: |
+      EMIT32BE 0xA70E0000 + r1*4096 + ((imm + 32768) % 65536)
+  - name: l
+    max_bytes: 4
+    body: |
+      EMIT32BE 0x58000000 + r1*4096 + r2*65536
+  - name: st
+    max_bytes: 4
+    body: |
+      EMIT32BE 0x50000000 + r1*4096 + r2*65536
+  - name: la
+    max_bytes: 4
+    body: |
+      EMIT32BE 0x41000000 + r1*4096 + r2*65536
+  - name: lg
+    max_bytes: 6
+    body: |
+      EMIT32BE 0xE3000000 + r1*4096 + r2*65536 + 4
+  - name: stg
+    max_bytes: 6
+    body: |
+      EMIT32BE 0xE3000000 + r1*4096 + r2*65536 + 36
+  - name: sll
+    max_bytes: 4
+    body: |
+      EMIT32BE 0x89000000 + r1*4096 + r2*65536
+  - name: srl
+    max_bytes: 4
+    body: |
+      EMIT32BE 0x88000000 + r1*4096 + r2*65536
+  - name: cli
+    max_bytes: 4
+    body: |
+      EMIT32BE 0x95000000 + r2*65536 + (imm % 256)
+  - name: mvi
+    max_bytes: 4
+    body: |
+      EMIT32BE 0x92000000 + r2*65536 + (imm % 256)
+  - name: br
+    max_bytes: 2
+    body: |
+      EMIT16BE 0x07F0 + r1
+  - name: bcr
+    max_bytes: 2
+    body: |
+      EMIT16BE 0x0700 + m*256 + r1
+  - name: ret
+    max_bytes: 2
+    body: |
+      EMIT16BE 0x07FE
+  - name: basr
+    max_bytes: 2
+    body: |
+      EMIT16BE 0x0D00 + r1*256 + r2
+  - name: brasl
+    max_bytes: 6
+    max_relocs: 1
+    body: |
+      EMIT8 0xC0
+      EMIT8 r1*16 + 5
+      EMIT32BE 0
+      EMIT_RELOCATION sym, R_390_PLT32DBL
+  - name: brcl
+    max_bytes: 6
+    max_relocs: 1
+    body: |
+      EMIT8 0xC0
+      EMIT8 m*16 + 4
+      EMIT32BE 0
+      EMIT_RELOCATION sym, R_390_PC32DBL
+  - name: svc
+    max_bytes: 2
+    body: |
+      EMIT16BE 0x0A00 + (imm % 256)
+  - name: diag
+    max_bytes: 4
+    body: |
+      EMIT32BE 0x83000000 + r1*4096 + r2*65536
+  - name: lpsw
+    max_bytes: 4
+    body: |
+      EMIT32BE 0x82000000 + r2*65536
+  - name: sck
+    max_bytes: 4
+    body: |
+      EMIT32BE 0xB2040000 + r2*65536
+  - name: adbr
+    max_bytes: 2
+    body: |
+      EMIT16BE 0xB30A + f1*256 + f2
+  - name: vadd
+    max_bytes: 6
+    body: |
+      EMIT32BE 0xE7F10000 + v1*4096 + v2*16 + v3
+  - name: vst
+    max_bytes: 6
+    body: |
+      EMIT32BE 0xE70E0000 + v1*4096 + r2*65536
+  - name: adtr
+    max_bytes: 4
+    body: |
+      EMIT32BE 0xB3F60000 + f1*256 + f2
+  - name: tbegin
+    max_bytes: 6
+    body: |
+      EMIT32BE 0xE5600000 + r2*65536
+  - name: tend
+    max_bytes: 2
+    body: |
+      EMIT16BE 0xB2F8
+  - name: km
+    max_bytes: 4
+    body: |
+      EMIT32BE 0xB92E0000 + r1*256 + r2
+forms:
+  - mnemonic: nop
+    encoder: nop
+  - mnemonic: lr
+    encoder: lr
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: ar
+    encoder: ar
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: sr
+    encoder: sr
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: nr
+    encoder: nr
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: or
+    encoder: or
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: xr
+    encoder: xr
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: clr
+    encoder: clr
+    operands:
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: lgr
+    encoder: lgr
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: agr
+    encoder: agr
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: sgr
+    encoder: sgr
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: msr
+    encoder: msr
+    required: [high-word]
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: lghi
+    encoder: lghi
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: imm, width: 16, imm_min: -32768, imm_max: 32767, signed: true}
+  - mnemonic: aghi
+    encoder: aghi
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: imm, width: 16, imm_min: -32768, imm_max: 32767, signed: true}
+  - mnemonic: chi
+    encoder: chi
+    operands:
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: imm, width: 16, imm_min: -32768, imm_max: 32767, signed: true}
+  - mnemonic: l
+    encoder: l
+    flags: [reads_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: mem, width: 32}
+  - mnemonic: st
+    encoder: st
+    flags: [writes_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: mem, width: 32}
+  - mnemonic: la
+    encoder: la
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: mem, width: 32}
+  - mnemonic: lg
+    encoder: lg
+    flags: [reads_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: mem, width: 64}
+  - mnemonic: stg
+    encoder: stg
+    flags: [writes_mem]
+    operands:
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: mem, width: 64}
+  - mnemonic: sll
+    encoder: sll
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: mem, width: 32}
+  - mnemonic: srl
+    encoder: srl
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: readwrite}
+      - {kind: mem, width: 32}
+  - mnemonic: cli
+    encoder: cli
+    operands:
+      - {kind: mem, width: 8}
+      - {kind: imm, width: 8, imm_min: 0, imm_max: 255, signed: false}
+  - mnemonic: mvi
+    encoder: mvi
+    flags: [writes_mem]
+    operands:
+      - {kind: mem, width: 8}
+      - {kind: imm, width: 8, imm_min: 0, imm_max: 255, signed: false}
+  - mnemonic: br
+    encoder: br
+    flags: [branch, terminator]
+    operands:
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: bcr
+    encoder: bcr
+    flags: [cond_branch]
+    operands:
+      - {kind: cond, width: 8}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: ret
+    encoder: ret
+    flags: [return, terminator]
+  - mnemonic: basr
+    encoder: basr
+    flags: [branch]
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: brasl
+    encoder: brasl
+    flags: [branch, reloc]
+    operands:
+      - {kind: reg, class: gpr, width: 64, access: write}
+      - {kind: sym, width: 64}
+  - mnemonic: brcl
+    encoder: brcl
+    flags: [cond_branch, reloc]
+    operands:
+      - {kind: cond, width: 8}
+      - {kind: sym, width: 64}
+  - mnemonic: svc
+    encoder: svc
+    flags: [may_trap]
+    operands:
+      - {kind: imm, width: 8, imm_min: 0, imm_max: 255, signed: false}
+  - mnemonic: diag
+    encoder: diag
+    flags: [privileged]
+    required: [priv]
+    operands:
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: reg, class: gpr, width: 64}
+  - mnemonic: lpsw
+    encoder: lpsw
+    flags: [privileged]
+    required: [priv]
+    operands:
+      - {kind: mem, width: 64}
+  - mnemonic: sck
+    encoder: sck
+    flags: [privileged]
+    required: [priv]
+    operands:
+      - {kind: mem, width: 64}
+  - mnemonic: adbr
+    encoder: adbr
+    operands:
+      - {kind: reg, class: fp, width: 64, access: readwrite}
+      - {kind: reg, class: fp, width: 64}
+  - mnemonic: vadd
+    encoder: vadd
+    required: [vector]
+    operands:
+      - {kind: reg, class: vec, width: 128, access: write}
+      - {kind: reg, class: vec, width: 128}
+      - {kind: reg, class: vec, width: 128}
+  - mnemonic: vst
+    encoder: vst
+    flags: [writes_mem]
+    required: [vector]
+    operands:
+      - {kind: reg, class: vec, width: 128}
+      - {kind: mem, width: 128}
+  - mnemonic: adtr
+    encoder: adtr
+    required: [dfp]
+    operands:
+      - {kind: reg, class: fp, width: 64, access: readwrite}
+      - {kind: reg, class: fp, width: 64}
+  - mnemonic: tbegin
+    encoder: tbegin
+    required: [tx]
+    operands:
+      - {kind: mem, width: 64}
+  - mnemonic: tend
+    encoder: tend
+    required: [tx]
+  - mnemonic: km
+    encoder: km
+    required: [crypto]
+    operands:
+      - {kind: reg, class: gpr, width: 64}
+      - {kind: reg, class: gpr, width: 64}
+syntaxes:
+  - {name: default, comment: "#", separator: ", "}
+sections:
+  - {name: ".text", flags: [exec, alloc, code], align: 2, content: code}
+  - {name: ".rodata", flags: [alloc, readonly, data], align: 8, content: data}
+  - {name: ".data", flags: [write, alloc, data], align: 8, content: data}
+  - {name: ".bss", flags: [write, alloc, zerofill, data], align: 8, content: data}
+  - {name: ".tdata", flags: [write, alloc, tls, data], align: 8, content: data}
+  - {name: ".got", flags: [write, alloc, data], align: 8, content: data}
+  - {name: ".eh_frame", flags: [alloc, readonly, data], align: 8, content: data}
+linkages:
+  - {name: func_global, binding: global, visibility: default, symtype: func}
+  - {name: func_weak, binding: weak, visibility: default, symtype: func}
+  - {name: object_global, binding: global, visibility: default, symtype: object}
+  - {name: tls_var, binding: tls, visibility: default, symtype: object}
+  - {name: local_sym, binding: local, visibility: default, symtype: none}
+relocs:
+  - {name: R_390_NONE, width: 32, expr: "S + A"}
+  - {name: R_390_8, width: 32, expr: "S + A"}
+  - {name: R_390_12, width: 32, expr: "S + A"}
+  - {name: R_390_16, width: 32, expr: "S + A"}
+  - {name: R_390_20, width: 32, expr: "S + A"}
+  - {name: R_390_32, width: 32, expr: "S + A"}
+  - {name: R_390_64, width: 64, expr: "S + A"}
+  - {name: R_390_PC16, width: 32, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_390_PC32, width: 32, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_390_PC64, width: 64, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_390_PC16DBL, width: 32, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_390_PC32DBL, width: 32, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_390_PLT32DBL, width: 32, signed: true, pcrel: true, expr: "PLT(S) + A - P"}
+  - {name: R_390_GOT12, width: 32, expr: "GOT(S) + A"}
+  - {name: R_390_GOT16, width: 32, expr: "GOT(S) + A"}
+  - {name: R_390_GOT32, width: 32, expr: "GOT(S) + A"}
+  - {name: R_390_GOT64, width: 64, expr: "GOT(S) + A"}
+  - {name: R_390_GOTENT, width: 64, expr: "GOT(S) + A"}
+  - {name: R_390_TLS_GD64, width: 64, expr: "TLS(S) + A"}
+  - {name: R_390_TLS_LDM64, width: 64, expr: "TLS(S) + A"}
+  - {name: R_390_TLS_TPOFF, width: 64, expr: "TLS(S) + A"}
+  - {name: R_390_GLOB_DAT, width: 64, expr: "S + A"}
+  - {name: R_390_JMP_SLOT, width: 64, expr: "S + A"}
+  - {name: R_390_RELATIVE, width: 64, expr: "B + A"}
+  - {name: R_390_IRELATIVE, width: 64, expr: "B + A"}
+  - {name: R_390_COPY, width: 64, expr: S}
+debug:
+  - {kind: target, ref: "", msg: "z/arch base+vector+dfp+tx+crypto+priv stratification"}
+  - {kind: form, ref: vadd, msg: "vector forms require vector"}
+  - {kind: form, ref: lpsw, msg: "privileged forms require priv"}
+backend:
+  file: backend/s390x.json

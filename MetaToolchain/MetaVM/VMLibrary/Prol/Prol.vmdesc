@@ -1,0 +1,4 @@
+\VMName{Prol}
+\VMArchitecture{No authoritative ISA or version supplied; preserve this identity pending specification}
+\VMStatus{catalog-only}
+\VMInvariant{Portable example bytecode is Machinery bytecode; it does not establish native compatibility.}

@@ -1,0 +1,17 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "Krivine",
+  "symbol": "Krivine",
+  "architecture": "closure",
+  "description": "Version-1 closed de Bruijn terms; bounded call-by-name weak-head closure evaluation",
+  "native_coverage": "krivine-whnf-subset",
+  "native_format_loader": false,
+  "portable_example": "Krivine.mvm",
+  "vmweave": "Krivine.vmweave",
+  "vmspc": "Krivine.vmspc",
+  "vmdesc": "Krivine.vmdesc",
+  "limitations": [
+    "MetaVM in-memory closed-term Krivine profile v1; see docs/CLOSURE_VMS.md.",
+    "Weak-head call-by-name only; no binary loader, full normalization, call-by-need memoization, control operators or GC."
+  ]
+}

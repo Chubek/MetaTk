@@ -1,0 +1,4 @@
+\VMName{Krivine}
+\VMArchitecture{Version-1 closed de Bruijn terms; bounded call-by-name weak-head closure evaluation}
+\VMStatus{krivine-whnf-subset}
+\VMInvariant{Portable example bytecode is Machinery bytecode; it does not establish native compatibility.}

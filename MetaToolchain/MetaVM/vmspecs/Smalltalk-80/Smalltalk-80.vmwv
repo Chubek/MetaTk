@@ -1,0 +1,5 @@
+# Legacy assembly companion; canonical MetaML is in VMLibrary.
+.function main 0 1
+const r0 42
+ret r0
+.end

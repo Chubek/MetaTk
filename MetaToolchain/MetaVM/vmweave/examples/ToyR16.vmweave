@@ -1,0 +1,41 @@
+-- Same specified example ISA as ToyR16.hpp. MetaML constructs the Definition IR.
+val _ := vd_machine "ToyR16-v1" 16 "big" 16 8 256
+val _ := vd_rule "load" 61440 4096
+val rd := vd_field 8 4 false
+val imm := vd_field 0 8 false
+val _ := vd_write_register rd imm
+val _ := vd_end ()
+
+-- A MetaML function emits an entire instruction rule, invoked twice.
+val arithmetic := fn name opcode operation -> do {
+    vd_rule name 61455 opcode;
+    let dst := vd_field 8 4 false;
+    let src := vd_field 4 4 false;
+    let a := vd_read_register dst;
+    let b := vd_read_register src;
+    let result := vd_binary operation a b;
+    vd_write_register dst result;
+    vd_end ()
+}
+val _ := arithmetic "add" 8192 "add"
+val _ := arithmetic "sub" 24576 "sub"
+
+val _ := vd_rule "store" 61440 12288
+val src := vd_field 8 4 false
+val address := vd_field 0 8 false
+val value := vd_read_register src
+val _ := vd_write_byte address value
+val _ := vd_end ()
+
+val _ := vd_rule "branch" 61440 16384
+val condition_reg := vd_field 8 4 false
+val target := vd_field 0 8 false
+val condition := vd_read_register condition_reg
+val _ := vd_branch condition target
+val _ := vd_end ()
+
+val _ := vd_rule "halt" 65520 20480
+val result_reg := vd_field 0 4 false
+val result := vd_read_register result_reg
+val _ := vd_halt result
+val _ := vd_end ()

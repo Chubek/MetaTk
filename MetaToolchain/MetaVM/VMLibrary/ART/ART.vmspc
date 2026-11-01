@@ -1,0 +1,16 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "ART",
+  "symbol": "ART",
+  "architecture": "runtime",
+  "description": "Android runtime consuming DEX; not a separate guest instruction set",
+  "native_coverage": "catalog-only",
+  "native_format_loader": false,
+  "portable_example": "ART.mvm",
+  "vmweave": "ART.vmweave",
+  "vmspc": "ART.vmspc",
+  "vmdesc": "ART.vmdesc",
+  "limitations": [
+    "No native execution implemented. Descriptor and portable Machinery example only."
+  ]
+}

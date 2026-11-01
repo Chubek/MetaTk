@@ -1,0 +1,787 @@
+# x86.dsymspec.yaml
+# Migrated from the Lua DSL (x86.dsymspec). Encoder bodies are imperative
+# pseudo-code; the grammar is documented in README.md.
+#
+# x86.dsymspec — IA-32 / i386, SysV i386 (cdecl) ABI.
+# Two syntaxes share one encoding: "intel" (default) and "att" (reversed).
+# Data: TableGen X86RegisterInfo.td (GR32/GR16/GR8,
+# FR32/VR128/VR256, EFLAGS/EIP) + X86.td features (SSE2..AVX512, FMA,
+# BMI2, AES, POPCNT, SHA, RDRAND...), cross-checked via tablegen_inquiry +
+# arch_oracle + toolchain_orace (ELF i386 relocs) + BFD i386 target
+# (cdecl calling convention, ModR/M+SIB+disp+imm encoding).
+# Operand names: dst, src, imm, sym.
+# Strata: base | bmi/popcnt | sse/avx/fma | aes/sha | rdrnd | x87 | priv.
+
+schema: 1
+targets:
+  - {arch: x86, subarch: i386, addr_size: 32, op_size: 32, addr_def: 32, align: 1, byte_order: little, obj_format: ELF32, abi: SysV, calling_conv: cdecl, features: [base, sse, sse2]}
+features:
+  - {name: base, desc: "x86-64 base integer"}
+  - {name: sse, desc: "Streaming SIMD Extensions"}
+  - {name: sse2, desc: SSE2}
+  - {name: sse3, desc: SSE3}
+  - {name: ssse3, desc: SSSE3}
+  - {name: sse4.1, desc: SSE4.1}
+  - {name: sse4.2, desc: SSE4.2}
+  - {name: avx, desc: "Advanced Vector Extensions"}
+  - {name: avx2, desc: AVX2}
+  - {name: avx512, desc: AVX-512}
+  - {name: fma, desc: FMA3}
+  - {name: bmi1, desc: "Bit Manipulation Instruction Set 1"}
+  - {name: bmi2, desc: "Bit Manipulation Instruction Set 2"}
+  - {name: aes, desc: AES-NI}
+  - {name: vaes, desc: "vector AES"}
+  - {name: pclmulqdq, desc: "carry-less multiply"}
+  - {name: popcnt, desc: POPCNT}
+  - {name: lzcnt, desc: LZCNT}
+  - {name: movbe, desc: MOVBE}
+  - {name: rdrnd, desc: RDRAND}
+  - {name: rdseed, desc: RDSEED}
+  - {name: sha, desc: "SHA extensions"}
+  - {name: gfni, desc: "Galois Field New Instructions"}
+  - {name: fsgsbase, desc: FSGSBASE}
+  - {name: adx, desc: "ADX multi-precision add"}
+  - {name: rdpid, desc: RDPID}
+  - {name: clflushopt, desc: CLFLUSHOPT}
+  - {name: clwb, desc: CLWB}
+  - {name: x87, desc: "x87 floating point stack"}
+  - {name: mmx, desc: MMX}
+  - {name: cet, desc: "Control-flow Enforcement (SHSTK+IBT)"}
+  - {name: rtm, desc: "Restricted Transactional Memory"}
+  - {name: sgx, desc: "Software Guard Extensions"}
+  - {name: serialize, desc: SERIALIZE}
+  - {name: uintr, desc: "user interrupts"}
+  - {name: cldemote, desc: "cache line demote"}
+  - {name: movdiri, desc: "MOVDIRI direct store"}
+  - {name: waitpkg, desc: "UMONITOR/UMWAIT/TPAUSE"}
+  - {name: clzero, desc: CLZERO}
+  - {name: priv, desc: "privileged system instructions"}
+registers:
+  # 64-bit GPRs (TableGen GR64 incl. R16-R31 APX extension regs).
+  - {name: rax, class: gpr, width: 64, enc: 0, flags: [readable, writable]}
+  - {name: eax, class: gpr, width: 32, enc: 0, parent: rax, sub_lo: 0, sub_hi: 32, flags: [readable, writable]}
+  - {name: ax, class: gpr, width: 16, enc: 0, parent: eax, sub_lo: 0, sub_hi: 16, flags: [readable, writable]}
+  - {name: al, class: gpr, width: 8, enc: 0, parent: eax, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: rcx, class: gpr, width: 64, enc: 1, flags: [readable, writable]}
+  - {name: ecx, class: gpr, width: 32, enc: 1, parent: rcx, sub_lo: 0, sub_hi: 32, flags: [readable, writable]}
+  - {name: cx, class: gpr, width: 16, enc: 1, parent: ecx, sub_lo: 0, sub_hi: 16, flags: [readable, writable]}
+  - {name: cl, class: gpr, width: 8, enc: 1, parent: ecx, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: rdx, class: gpr, width: 64, enc: 2, flags: [readable, writable]}
+  - {name: edx, class: gpr, width: 32, enc: 2, parent: rdx, sub_lo: 0, sub_hi: 32, flags: [readable, writable]}
+  - {name: dx, class: gpr, width: 16, enc: 2, parent: edx, sub_lo: 0, sub_hi: 16, flags: [readable, writable]}
+  - {name: dl, class: gpr, width: 8, enc: 2, parent: edx, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: rbx, class: gpr, width: 64, enc: 3, flags: [readable, writable]}
+  - {name: ebx, class: gpr, width: 32, enc: 3, parent: rbx, sub_lo: 0, sub_hi: 32, flags: [readable, writable]}
+  - {name: bx, class: gpr, width: 16, enc: 3, parent: ebx, sub_lo: 0, sub_hi: 16, flags: [readable, writable]}
+  - {name: bl, class: gpr, width: 8, enc: 3, parent: ebx, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: rsp, class: gpr, width: 64, enc: 4, flags: [readable, writable]}
+  - {name: esp, class: gpr, width: 32, enc: 4, parent: rsp, sub_lo: 0, sub_hi: 32, flags: [readable, writable]}
+  - {name: sp, class: gpr, width: 16, enc: 4, parent: esp, sub_lo: 0, sub_hi: 16, flags: [readable, writable]}
+  - {name: spl, class: gpr, width: 8, enc: 4, parent: esp, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: rbp, class: gpr, width: 64, enc: 5, flags: [readable, writable]}
+  - {name: ebp, class: gpr, width: 32, enc: 5, parent: rbp, sub_lo: 0, sub_hi: 32, flags: [readable, writable]}
+  - {name: bp, class: gpr, width: 16, enc: 5, parent: ebp, sub_lo: 0, sub_hi: 16, flags: [readable, writable]}
+  - {name: bpl, class: gpr, width: 8, enc: 5, parent: ebp, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: rsi, class: gpr, width: 64, enc: 6, flags: [readable, writable]}
+  - {name: esi, class: gpr, width: 32, enc: 6, parent: rsi, sub_lo: 0, sub_hi: 32, flags: [readable, writable]}
+  - {name: si, class: gpr, width: 16, enc: 6, parent: esi, sub_lo: 0, sub_hi: 16, flags: [readable, writable]}
+  - {name: sil, class: gpr, width: 8, enc: 6, parent: esi, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: rdi, class: gpr, width: 64, enc: 7, flags: [readable, writable]}
+  - {name: edi, class: gpr, width: 32, enc: 7, parent: rdi, sub_lo: 0, sub_hi: 32, flags: [readable, writable]}
+  - {name: di, class: gpr, width: 16, enc: 7, parent: edi, sub_lo: 0, sub_hi: 16, flags: [readable, writable]}
+  - {name: dil, class: gpr, width: 8, enc: 7, parent: edi, sub_lo: 0, sub_hi: 8, flags: [readable, writable]}
+  - {name: ah, class: gpr, width: 8, enc: 4, parent: eax, sub_lo: 8, sub_hi: 16}
+  - {name: bh, class: gpr, width: 8, enc: 7, parent: ebx, sub_lo: 8, sub_hi: 16}
+  - {name: ch, class: gpr, width: 8, enc: 5, parent: ecx, sub_lo: 8, sub_hi: 16}
+  - {name: dh, class: gpr, width: 8, enc: 6, parent: edx, sub_lo: 8, sub_hi: 16}
+  # Vector: XMM (128) / YMM (256) / ZMM (512), subregister-chained.
+  - {name: ymm0, class: vec, width: 256, enc: 0, flags: [readable, writable]}
+  - {name: ymm1, class: vec, width: 256, enc: 1, flags: [readable, writable]}
+  - {name: ymm2, class: vec, width: 256, enc: 2, flags: [readable, writable]}
+  - {name: ymm3, class: vec, width: 256, enc: 3, flags: [readable, writable]}
+  - {name: ymm4, class: vec, width: 256, enc: 4, flags: [readable, writable]}
+  - {name: ymm5, class: vec, width: 256, enc: 5, flags: [readable, writable]}
+  - {name: ymm6, class: vec, width: 256, enc: 6, flags: [readable, writable]}
+  - {name: ymm7, class: vec, width: 256, enc: 7, flags: [readable, writable]}
+  - {name: xmm0, class: vec, width: 128, enc: 0, parent: ymm0, sub_lo: 0, sub_hi: 128, flags: [readable, writable]}
+  - {name: xmm1, class: vec, width: 128, enc: 1, parent: ymm1, sub_lo: 0, sub_hi: 128, flags: [readable, writable]}
+  - {name: xmm2, class: vec, width: 128, enc: 2, parent: ymm2, sub_lo: 0, sub_hi: 128, flags: [readable, writable]}
+  - {name: xmm3, class: vec, width: 128, enc: 3, parent: ymm3, sub_lo: 0, sub_hi: 128, flags: [readable, writable]}
+  - {name: xmm4, class: vec, width: 128, enc: 4, parent: ymm4, sub_lo: 0, sub_hi: 128, flags: [readable, writable]}
+  - {name: xmm5, class: vec, width: 128, enc: 5, parent: ymm5, sub_lo: 0, sub_hi: 128, flags: [readable, writable]}
+  - {name: xmm6, class: vec, width: 128, enc: 6, parent: ymm6, sub_lo: 0, sub_hi: 128, flags: [readable, writable]}
+  - {name: xmm7, class: vec, width: 128, enc: 7, parent: ymm7, sub_lo: 0, sub_hi: 128, flags: [readable, writable]}
+  # x87 stack + MMX.
+  - {name: st0, class: fp, width: 80, enc: 0, flags: [readable, writable]}
+  - {name: st1, class: fp, width: 80, enc: 1, flags: [readable, writable]}
+  - {name: st2, class: fp, width: 80, enc: 2, flags: [readable, writable]}
+  - {name: st3, class: fp, width: 80, enc: 3, flags: [readable, writable]}
+  - {name: st4, class: fp, width: 80, enc: 4, flags: [readable, writable]}
+  - {name: st5, class: fp, width: 80, enc: 5, flags: [readable, writable]}
+  - {name: st6, class: fp, width: 80, enc: 6, flags: [readable, writable]}
+  - {name: st7, class: fp, width: 80, enc: 7, flags: [readable, writable]}
+  - {name: mm0, class: vec, width: 64, enc: 0, flags: [readable, writable]}
+  - {name: mm1, class: vec, width: 64, enc: 1, flags: [readable, writable]}
+  - {name: mm2, class: vec, width: 64, enc: 2, flags: [readable, writable]}
+  - {name: mm3, class: vec, width: 64, enc: 3, flags: [readable, writable]}
+  - {name: mm4, class: vec, width: 64, enc: 4, flags: [readable, writable]}
+  - {name: mm5, class: vec, width: 64, enc: 5, flags: [readable, writable]}
+  - {name: mm6, class: vec, width: 64, enc: 6, flags: [readable, writable]}
+  - {name: mm7, class: vec, width: 64, enc: 7, flags: [readable, writable]}
+  - {name: eip, class: special, width: 32, enc: 0}
+  - {name: eflags, class: status, width: 32, enc: 0}
+  - {name: cs, class: seg, width: 16, enc: 0}
+  - {name: ss, class: seg, width: 16, enc: 0}
+  - {name: ds, class: seg, width: 16, enc: 0}
+  - {name: es, class: seg, width: 16, enc: 0}
+  - {name: fs, class: seg, width: 16, enc: 0}
+  - {name: gs, class: seg, width: 16, enc: 0}
+  - {name: cr0, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: cr2, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: cr3, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: cr4, class: ctrl, width: 32, enc: 0, flags: [modedep]}
+  - {name: dr0, class: debug, width: 32, enc: 0, flags: [modedep]}
+  - {name: dr1, class: debug, width: 32, enc: 1, flags: [modedep]}
+  - {name: dr2, class: debug, width: 32, enc: 2, flags: [modedep]}
+  - {name: dr3, class: debug, width: 32, enc: 3, flags: [modedep]}
+  - {name: dr4, class: debug, width: 32, enc: 4, flags: [modedep]}
+  - {name: dr5, class: debug, width: 32, enc: 5, flags: [modedep]}
+  - {name: dr6, class: debug, width: 32, enc: 6, flags: [modedep]}
+  - {name: dr7, class: debug, width: 32, enc: 7, flags: [modedep]}
+mnemonics:
+  - {name: nop}
+  - {name: ret}
+  - {name: mov}
+  - {name: movabs}
+  - {name: movzx}
+  - {name: movsx}
+  - {name: xchg}
+  - {name: lea}
+  - {name: add}
+  - {name: sub}
+  - {name: and}
+  - {name: or}
+  - {name: xor}
+  - {name: adc}
+  - {name: sbb}
+  - {name: cmp}
+  - {name: test}
+  - {name: inc}
+  - {name: dec}
+  - {name: neg}
+  - {name: not}
+  - {name: imul}
+  - {name: div}
+  - {name: idiv}
+  - {name: shl}
+  - {name: shr}
+  - {name: sar}
+  - {name: andn}
+  - {name: popcnt}
+  - {name: tzcnt}
+  - {name: push}
+  - {name: pop}
+  - {name: pushf}
+  - {name: popf}
+  - {name: call}
+  - {name: jmp}
+  - {name: jcc}
+  - {name: leave}
+  - {name: syscall}
+  - {name: int}
+  - {name: cpuid}
+  - {name: movaps}
+  - {name: addps}
+  - {name: vaddps}
+  - {name: vfmadd}
+  - {name: aesenc}
+  - {name: fld}
+  - {name: fadd}
+  - {name: rdrnd}
+  - {name: cli}
+  - {name: sti}
+  - {name: hlt}
+  - {name: pause}
+encoders:
+  # Legacy/REX.W encodings. emit_modrm(dst,src) -> mod=11 reg=dst rm=src.
+  - name: nop
+    max_bytes: 1
+    body: |
+      EMIT8 0x90
+  - name: ret
+    max_bytes: 1
+    body: |
+      EMIT8 0xC3
+  - name: mov
+    max_bytes: 3
+    body: |
+      EMIT8 0x89
+      EMIT_MODRM src, dst
+  - name: movimm
+    max_bytes: 10
+    body: |
+      EMIT8 0xB8 + dst
+      EMIT_IMM 8, imm
+  - name: movzx
+    max_bytes: 4
+    body: |
+      EMIT8 0x0F
+      EMIT8 0xB7
+      EMIT_MODRM src, dst
+  - name: movsx
+    max_bytes: 4
+    body: |
+      EMIT8 0x0F
+      EMIT8 0xBF
+      EMIT_MODRM src, dst
+  - name: xchg
+    max_bytes: 3
+    body: |
+      EMIT8 0x87
+      EMIT_MODRM src, dst
+  - name: lea
+    max_bytes: 3
+    body: |
+      EMIT8 0x8D
+      EMIT_MODRM src, dst
+  - name: add
+    max_bytes: 3
+    body: |
+      EMIT8 0x01
+      EMIT_MODRM src, dst
+  - name: sub
+    max_bytes: 3
+    body: |
+      EMIT8 0x29
+      EMIT_MODRM src, dst
+  - name: and
+    max_bytes: 3
+    body: |
+      EMIT8 0x21
+      EMIT_MODRM src, dst
+  - name: or
+    max_bytes: 3
+    body: |
+      EMIT8 0x09
+      EMIT_MODRM src, dst
+  - name: xor
+    max_bytes: 3
+    body: |
+      EMIT8 0x31
+      EMIT_MODRM src, dst
+  - name: adc
+    max_bytes: 3
+    body: |
+      EMIT8 0x11
+      EMIT_MODRM src, dst
+  - name: sbb
+    max_bytes: 3
+    body: |
+      EMIT8 0x19
+      EMIT_MODRM src, dst
+  - name: cmp
+    max_bytes: 3
+    body: |
+      EMIT8 0x39
+      EMIT_MODRM src, dst
+  - name: test
+    max_bytes: 3
+    body: |
+      EMIT8 0x85
+      EMIT_MODRM src, dst
+  - name: inc
+    max_bytes: 3
+    body: |
+      EMIT8 0xFF
+      EMIT_MODRM 0, dst
+  - name: dec
+    max_bytes: 3
+    body: |
+      EMIT8 0xFF
+      EMIT_MODRM 1, dst
+  - name: neg
+    max_bytes: 3
+    body: |
+      EMIT8 0xF7
+      EMIT_MODRM 3, dst
+  - name: not
+    max_bytes: 3
+    body: |
+      EMIT8 0xF7
+      EMIT_MODRM 2, dst
+  - name: imul
+    max_bytes: 4
+    body: |
+      EMIT8 0x0F
+      EMIT8 0xAF
+      EMIT_MODRM src, dst
+  - name: div
+    max_bytes: 3
+    body: |
+      EMIT8 0xF7
+      EMIT_MODRM 6, src
+  - name: idiv
+    max_bytes: 3
+    body: |
+      EMIT8 0xF7
+      EMIT_MODRM 7, src
+  - name: shl
+    max_bytes: 3
+    body: |
+      EMIT8 0xD3
+      EMIT_MODRM 4, dst
+  - name: shr
+    max_bytes: 3
+    body: |
+      EMIT8 0xD3
+      EMIT_MODRM 5, dst
+  - name: sar
+    max_bytes: 3
+    body: |
+      EMIT8 0xD3
+      EMIT_MODRM 7, dst
+  - name: andn
+    max_bytes: 5
+    body: |
+      EMIT8 0xC4
+      EMIT8 0xE2
+      EMIT8 0xF0
+      EMIT_MODRM src, dst
+      EMIT8 0xC0 + src2
+  - name: popcnt
+    max_bytes: 5
+    body: |
+      EMIT8 0xF3
+      EMIT8 0x0F
+      EMIT8 0xB8
+      EMIT_MODRM src, dst
+  - name: tzcnt
+    max_bytes: 5
+    body: |
+      EMIT8 0xF3
+      EMIT8 0x0F
+      EMIT8 0xBC
+      EMIT_MODRM src, dst
+  - name: push
+    max_bytes: 1
+    body: |
+      EMIT8 0x50 + dst
+  - name: pop
+    max_bytes: 1
+    body: |
+      EMIT8 0x58 + dst
+  - name: pushf
+    max_bytes: 1
+    body: |
+      EMIT8 0x9C
+  - name: popf
+    max_bytes: 1
+    body: |
+      EMIT8 0x9D
+  - name: call
+    max_bytes: 5
+    max_relocs: 1
+    body: |
+      EMIT8 0xE8
+      EMIT_IMM 4, 0
+      EMIT_RELOCATION sym, R_386_PLT32
+  - name: jmp
+    max_bytes: 5
+    max_relocs: 1
+    body: |
+      EMIT8 0xE9
+      EMIT_IMM 4, 0
+      EMIT_RELOCATION sym, R_386_PLT32
+  - name: jcc
+    max_bytes: 6
+    max_relocs: 1
+    body: |
+      EMIT8 0x0F
+      EMIT8 0x80 + cond
+      EMIT_IMM 4, 0
+      EMIT_RELOCATION sym, R_386_PC32
+  - name: leave
+    max_bytes: 1
+    body: |
+      EMIT8 0xC9
+  - name: syscall
+    max_bytes: 2
+    body: |
+      EMIT8 0x0F
+      EMIT8 0x05
+  - name: int
+    max_bytes: 2
+    body: |
+      EMIT8 0xCD
+      EMIT8 imm
+  - name: cpuid
+    max_bytes: 2
+    body: |
+      EMIT8 0x0F
+      EMIT8 0xA2
+  - name: movaps
+    max_bytes: 3
+    body: |
+      EMIT8 0x0F
+      EMIT8 0x28
+      EMIT_MODRM src, dst
+  - name: addps
+    max_bytes: 3
+    body: |
+      EMIT8 0x0F
+      EMIT8 0x58
+      EMIT_MODRM src, dst
+  - name: vaddps
+    max_bytes: 5
+    body: |
+      EMIT8 0xC5
+      EMIT8 0xF8
+      EMIT8 0x58
+      EMIT_MODRM src, dst
+      EMIT8 0xC0 + src2
+  - name: vfmadd
+    max_bytes: 6
+    body: |
+      EMIT8 0xC4
+      EMIT8 0xE2
+      EMIT8 0x78
+      EMIT8 0x98
+      EMIT_MODRM src, dst
+      EMIT8 0xC0 + src2
+  - name: aesenc
+    max_bytes: 5
+    body: |
+      EMIT8 0x66
+      EMIT8 0x0F
+      EMIT8 0x38
+      EMIT8 0xDC
+      EMIT_MODRM src, dst
+  - name: fld
+    max_bytes: 2
+    body: |
+      EMIT8 0xD9
+      EMIT8 0x00 + dst
+  - name: fadd
+    max_bytes: 2
+    body: |
+      EMIT8 0xD8
+      EMIT8 0xC0 + dst
+  - name: rdrnd
+    max_bytes: 4
+    body: |
+      EMIT8 0x0F
+      EMIT8 0xC7
+      EMIT_MODRM 6, dst
+  - name: cli
+    max_bytes: 1
+    body: |
+      EMIT8 0xFA
+  - name: sti
+    max_bytes: 1
+    body: |
+      EMIT8 0xFB
+  - name: hlt
+    max_bytes: 1
+    body: |
+      EMIT8 0xF4
+  - name: pause
+    max_bytes: 2
+    body: |
+      EMIT8 0xF3
+      EMIT8 0x90
+forms:
+  - mnemonic: nop
+    encoder: nop
+  - mnemonic: ret
+    encoder: ret
+    flags: [return, terminator]
+  - mnemonic: mov
+    encoder: mov
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: movabs
+    encoder: movimm
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: imm, width: 32, imm_min: -2147483648, imm_max: 2147483647, signed: true}
+  - mnemonic: movzx
+    encoder: movzx
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: movsx
+    encoder: movsx
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: xchg
+    encoder: xchg
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: lea
+    encoder: lea
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: mem, width: 32}
+  - mnemonic: add
+    encoder: add
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: sub
+    encoder: sub
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: and
+    encoder: and
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: or
+    encoder: or
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: xor
+    encoder: xor
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: adc
+    encoder: adc
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: sbb
+    encoder: sbb
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: cmp
+    encoder: cmp
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: test
+    encoder: test
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: inc
+    encoder: inc
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+  - mnemonic: dec
+    encoder: dec
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+  - mnemonic: neg
+    encoder: neg
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+  - mnemonic: not
+    encoder: not
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+  - mnemonic: imul
+    encoder: imul
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: div
+    encoder: div
+    flags: [may_trap]
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: idiv
+    encoder: idiv
+    flags: [may_trap]
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: shl
+    encoder: shl
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: shr
+    encoder: shr
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: sar
+    encoder: sar
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: readwrite}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: andn
+    encoder: andn
+    required: [bmi1]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: popcnt
+    encoder: popcnt
+    required: [popcnt]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: tzcnt
+    encoder: tzcnt
+    required: [lzcnt]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: push
+    encoder: push
+    operands:
+      - {kind: reg, class: gpr, width: 32}
+  - mnemonic: pop
+    encoder: pop
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+  - mnemonic: pushf
+    encoder: pushf
+  - mnemonic: popf
+    encoder: popf
+  - mnemonic: call
+    encoder: call
+    flags: [branch, reloc]
+    operands:
+      - {kind: sym, width: 32}
+  - mnemonic: jmp
+    encoder: jmp
+    flags: [branch, terminator, reloc]
+    operands:
+      - {kind: sym, width: 32}
+  - mnemonic: jcc
+    encoder: jcc
+    flags: [cond_branch, reloc]
+    operands:
+      - {kind: cond, width: 8}
+      - {kind: sym, width: 32}
+  - mnemonic: leave
+    encoder: leave
+  - mnemonic: syscall
+    encoder: syscall
+    flags: [privileged, may_trap]
+  - mnemonic: int
+    encoder: int
+    flags: [may_trap]
+    operands:
+      - {kind: imm, width: 8, imm_min: 0, imm_max: 255, signed: false}
+  - mnemonic: cpuid
+    encoder: cpuid
+  - mnemonic: movaps
+    encoder: movaps
+    required: [sse]
+    operands:
+      - {kind: reg, class: vec, width: 128, access: write}
+      - {kind: reg, class: vec, width: 128}
+  - mnemonic: addps
+    encoder: addps
+    required: [sse]
+    operands:
+      - {kind: reg, class: vec, width: 128, access: write}
+      - {kind: reg, class: vec, width: 128}
+  - mnemonic: vaddps
+    encoder: vaddps
+    required: [avx]
+    operands:
+      - {kind: reg, class: vec, width: 128, access: write}
+      - {kind: reg, class: vec, width: 128}
+      - {kind: reg, class: vec, width: 128}
+  - mnemonic: vfmadd
+    encoder: vfmadd
+    required: [fma]
+    operands:
+      - {kind: reg, class: vec, width: 128, access: write}
+      - {kind: reg, class: vec, width: 128}
+      - {kind: reg, class: vec, width: 128}
+  - mnemonic: aesenc
+    encoder: aesenc
+    required: [aes]
+    operands:
+      - {kind: reg, class: vec, width: 128, access: write}
+      - {kind: reg, class: vec, width: 128}
+  - mnemonic: fld
+    encoder: fld
+    required: [x87]
+    operands:
+      - {kind: mem, width: 80}
+  - mnemonic: fadd
+    encoder: fadd
+    required: [x87]
+    operands:
+      - {kind: reg, class: fp, width: 80, access: readwrite}
+  - mnemonic: rdrnd
+    encoder: rdrnd
+    required: [rdrnd]
+    operands:
+      - {kind: reg, class: gpr, width: 32, access: write}
+  - mnemonic: cli
+    encoder: cli
+    flags: [privileged]
+    required: [priv]
+  - mnemonic: sti
+    encoder: sti
+    flags: [privileged]
+    required: [priv]
+  - mnemonic: hlt
+    encoder: hlt
+    flags: [privileged]
+    required: [priv]
+  - mnemonic: pause
+    encoder: pause
+syntaxes:
+  - {name: intel, comment: ";", separator: ", "}
+  - {name: att, order: 1, reg_prefix: "%", imm_prefix: "$", comment: "#", separator: ", "}
+sections:
+  - {name: ".text", flags: [exec, alloc, code], align: 16, content: code}
+  - {name: ".rodata", flags: [alloc, readonly, data], align: 8, content: data}
+  - {name: ".data", flags: [write, alloc, data], align: 8, content: data}
+  - {name: ".bss", flags: [write, alloc, zerofill, data], align: 8, content: data}
+  - {name: ".tdata", flags: [write, alloc, tls, data], align: 8, content: data}
+  - {name: ".tbss", flags: [write, alloc, zerofill, tls, data], align: 8, content: data}
+  - {name: ".init", flags: [exec, alloc, code], align: 16, content: code}
+  - {name: ".fini", flags: [exec, alloc, code], align: 16, content: code}
+  - {name: ".plt", flags: [exec, alloc, code], align: 16, content: code}
+  - {name: ".got", flags: [write, alloc, data], align: 8, content: data}
+  - {name: ".eh_frame", flags: [alloc, readonly, data], align: 8, content: data}
+  - {name: ".comment", flags: [merge, readonly, meta], align: 1, content: meta}
+linkages:
+  - {name: func_global, binding: global, visibility: default, symtype: func}
+  - {name: func_weak, binding: weak, visibility: default, symtype: func}
+  - {name: object_global, binding: global, visibility: default, symtype: object}
+  - {name: tls_var, binding: tls, visibility: default, symtype: object}
+  - {name: local_sym, binding: local, visibility: default, symtype: none}
+  - {name: hidden_func, binding: global, visibility: hidden, symtype: func}
+relocs:
+  - {name: R_386_NONE, width: 32, expr: "S + A"}
+  - {name: R_386_32, width: 32, expr: "S + A"}
+  - {name: R_386_PC8, width: 32, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_386_PC16, width: 32, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_386_PC32, width: 32, signed: true, pcrel: true, expr: "S + A - P"}
+  - {name: R_386_PLT32, width: 32, signed: true, pcrel: true, expr: "PLT(S) + A - P"}
+  - {name: R_386_GOT32, width: 32, expr: "GOT(S) + A"}
+  - {name: R_386_GOTPC, width: 32, pcrel: true, expr: "GOT + A - P"}
+  - {name: R_386_GOTOFF, width: 32, expr: "S + A - GOT"}
+  - {name: R_386_GOT32X, width: 32, expr: "GOT(S) + A"}
+  - {name: R_386_TLS_GD, width: 32, pcrel: true, expr: "TLS(S) + A - P"}
+  - {name: R_386_TLS_LD, width: 32, pcrel: true, expr: "TLS(S) + A - P"}
+  - {name: R_386_TLS_TPOFF32, width: 32, expr: "TLS(S) + A"}
+  - {name: R_386_TLS_DTPOFF32, width: 32, expr: "TLS(S) + A"}
+  - {name: R_386_GLOB_DAT, width: 32, expr: S}
+  - {name: R_386_JMP_SLOT, width: 32, expr: S}
+  - {name: R_386_RELATIVE, width: 32, expr: "B + A"}
+  - {name: R_386_IRELATIVE, width: 32, expr: "B + A"}
+  - {name: R_386_COPY, width: 32, expr: S}
+debug:
+  - {kind: target, ref: "", msg: "i386 base + bmi + sse/avx/fma + aes + x87 + priv"}
+  - {kind: form, ref: vaddps, msg: "vector forms require sse/avx/fma"}
+  - {kind: form, ref: cli, msg: "privileged forms require priv"}
+backend:
+  file: backend/x86.json

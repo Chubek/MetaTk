@@ -1,0 +1,6 @@
+.function main 0 3
+const r0 6
+const r1 7
+mul r2 r0 r1
+ret r2
+.end

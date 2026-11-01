@@ -1,0 +1,5282 @@
+format: TeX-Primitive-Catalog/1
+scope:
+  interpretation: TeX primitives, including control symbols; not macro packages or primitives of all descendant
+    engines
+  baseline: The supplied TeX82-family source snapshot, which includes later TeX features; not a claim
+    of the unmodified 1982 release.
+  registered_primitive_count: 325
+  completeness: Every primitive(s,c,o) registration in both supplied files is represented exactly once.
+    This does not enumerate unnamed/frozen internal equivalences or format-defined control sequences.
+  etex: No e-TeX-only primitive registrations found. Internal e-TeX-inspired changes are not ruled out.
+    No e-TeX-only primitive is claimed to be supported.
+  excluded_examples:
+  - \documentclass (LaTeX macro)
+  - \bye (plain TeX macro)
+  - \numexpr (e-TeX primitive, absent here)
+  - \pdfoutput (pdfTeX primitive, absent here)
+sources:
+- file: TeX.yaml
+  sha256: f02ad0688c48e8e7e037659ddc4e0c0edef8279b5701d917ca5dd2af5dcbe5e7
+- file: TeX.c
+  sha256: 57c8a9472c23b486f51546ee6dc9f4e7b836ae2c52038c79e1b2754654e551de
+- file: CodeYAML.schema.json
+  sha256: 9356202927217f707a766f1cd290aead701c35bfc292add45bb77d906d4586da
+conventions:
+  name: Unescaped name; the one-space name is control-space.
+  expandable: Whether the registered command is handled by TeX expansion rather than ordinary execution.
+    Context can suppress expansion.
+  command_code: Implementation-local numeric code; not a portable opcode.
+  operand: Implementation-local modifier or equivalence-table address.
+  pascal_line: Original Pascal line stored in CodeYAML, not the physical YAML line.
+  availability: Static registration evidence, not a runtime conformance result.
+primitives:
+- name: ' '
+  control_sequence: '\ '
+  family: TeX82
+  category: spacing
+  expandable: false
+  description: Control-space inserts an explicit space using TeX's spacing rules.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 32
+    command_code: 64
+    operand: 0
+  source:
+    pascal_line: 5964
+    c_line: 28580
+- name: '-'
+  control_sequence: \-
+  family: TeX82
+  category: hyphenation
+  expandable: false
+  description: Creates a discretionary hyphen using the current font's hyphen character.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 45
+    command_code: 47
+    operand: 1
+  source:
+    pascal_line: 6025
+    c_line: 28743
+- name: /
+  control_sequence: \/
+  family: TeX82
+  category: fonts
+  expandable: false
+  description: Inserts an italic correction for the preceding character or ligature.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 47
+    command_code: 44
+    operand: 0
+  source:
+    pascal_line: 5965
+    c_line: 28581
+- name: above
+  control_sequence: \above
+  family: TeX82
+  category: math
+  expandable: false
+  description: Builds a generalized fraction with an explicitly specified rule thickness.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1147
+    command_code: 52
+    operand: 0
+  source:
+    pascal_line: 6034
+    c_line: 28764
+- name: abovedisplayshortskip
+  control_sequence: \abovedisplayshortskip
+  family: TeX82
+  category: glue-parameters
+  expandable: false
+  description: Glue above a display following a sufficiently short line.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 381
+    command_code: 75
+    operand: 2887
+  source:
+    pascal_line: 5930
+    c_line: 28482
+- name: abovedisplayskip
+  control_sequence: \abovedisplayskip
+  family: TeX82
+  category: glue-parameters
+  expandable: false
+  description: Vertical glue above a displayed formula.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 379
+    command_code: 75
+    operand: 2885
+  source:
+    pascal_line: 5929
+    c_line: 28480
+- name: abovewithdelims
+  control_sequence: \abovewithdelims
+  family: TeX82
+  category: math
+  expandable: false
+  description: Builds a fraction with explicit delimiters and rule thickness.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1150
+    command_code: 52
+    operand: 3
+  source:
+    pascal_line: 6035
+    c_line: 28767
+- name: accent
+  control_sequence: \accent
+  family: TeX82
+  category: characters
+  expandable: false
+  description: Places a text accent over a following character, allowing intervening assignments.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 508
+    command_code: 45
+    operand: 0
+  source:
+    pascal_line: 5965
+    c_line: 28582
+- name: adjdemerits
+  control_sequence: \adjdemerits
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Additional demerits for adjacent lines with incompatible fitness classes.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 436
+    command_code: 73
+    operand: 5279
+  source:
+    pascal_line: 5943
+    c_line: 28520
+- name: advance
+  control_sequence: \advance
+  family: TeX82
+  category: arithmetic
+  expandable: false
+  description: Adds a quantity to an integer, dimension, or glue variable.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 509
+    command_code: 90
+    operand: 0
+  source:
+    pascal_line: 5965
+    c_line: 28583
+- name: afterassignment
+  control_sequence: \afterassignment
+  family: TeX82
+  category: assignment
+  expandable: false
+  description: Saves one token for insertion after the next assignment.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 510
+    command_code: 40
+    operand: 0
+  source:
+    pascal_line: 5966
+    c_line: 28584
+- name: aftergroup
+  control_sequence: \aftergroup
+  family: TeX82
+  category: grouping
+  expandable: false
+  description: Saves one token for insertion after the current group ends.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 511
+    command_code: 41
+    operand: 0
+  source:
+    pascal_line: 5966
+    c_line: 28585
+- name: atop
+  control_sequence: \atop
+  family: TeX82
+  category: math
+  expandable: false
+  description: Builds a generalized fraction without a rule.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1149
+    command_code: 52
+    operand: 2
+  source:
+    pascal_line: 6035
+    c_line: 28766
+- name: atopwithdelims
+  control_sequence: \atopwithdelims
+  family: TeX82
+  category: math
+  expandable: false
+  description: Builds a fraction with explicit delimiters and no rule.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1152
+    command_code: 52
+    operand: 5
+  source:
+    pascal_line: 6036
+    c_line: 28769
+- name: badness
+  control_sequence: \badness
+  family: TeX82
+  category: internal-quantities
+  expandable: false
+  description: Returns the badness computed by the most recent box packaging operation.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 679
+    command_code: 70
+    operand: 4
+  source:
+    pascal_line: 5990
+    c_line: 28652
+- name: baselineskip
+  control_sequence: \baselineskip
+  family: TeX82
+  category: glue-parameters
+  expandable: false
+  description: Desired distance between consecutive baselines.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 377
+    command_code: 75
+    operand: 2883
+  source:
+    pascal_line: 5928
+    c_line: 28478
+- name: batchmode
+  control_sequence: \batchmode
+  family: TeX82
+  category: interaction
+  expandable: false
+  description: Selects batch interaction with no terminal output.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 274
+    command_code: 100
+    operand: 0
+  source:
+    pascal_line: 6050
+    c_line: 28803
+- name: begingroup
+  control_sequence: \begingroup
+  family: TeX82
+  category: grouping
+  expandable: false
+  description: Begins a semi-simple group, closed by endgroup.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 512
+    command_code: 61
+    operand: 0
+  source:
+    pascal_line: 5966
+    c_line: 28586
+- name: belowdisplayshortskip
+  control_sequence: \belowdisplayshortskip
+  family: TeX82
+  category: glue-parameters
+  expandable: false
+  description: Glue below a display that used the short above-display skip.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 382
+    command_code: 75
+    operand: 2888
+  source:
+    pascal_line: 5930
+    c_line: 28483
+- name: belowdisplayskip
+  control_sequence: \belowdisplayskip
+  family: TeX82
+  category: glue-parameters
+  expandable: false
+  description: Vertical glue below a displayed formula.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 380
+    command_code: 75
+    operand: 2886
+  source:
+    pascal_line: 5929
+    c_line: 28481
+- name: binoppenalty
+  control_sequence: \binoppenalty
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Line-break penalty after a binary mathematical operator.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 429
+    command_code: 73
+    operand: 5272
+  source:
+    pascal_line: 5941
+    c_line: 28513
+- name: botmark
+  control_sequence: \botmark
+  family: TeX82
+  category: marks
+  expandable: true
+  description: Expands to the last mark associated with the current page.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 633
+    command_code: 110
+    operand: 2
+  source:
+    pascal_line: 5983
+    c_line: 28634
+- name: box
+  control_sequence: \box
+  family: TeX82
+  category: boxes
+  expandable: false
+  description: Fetches a numbered box and empties its register.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 409
+    command_code: 20
+    operand: 0
+  source:
+    pascal_line: 6017
+    c_line: 28723
+- name: boxmaxdepth
+  control_sequence: \boxmaxdepth
+  family: TeX82
+  category: dimension-parameters
+  expandable: false
+  description: Maximum depth used when packaging vertical boxes.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 485
+    command_code: 74
+    operand: 5837
+  source:
+    pascal_line: 5959
+    c_line: 28566
+- name: brokenpenalty
+  control_sequence: \brokenpenalty
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Additional page-break penalty after a hyphenated line.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 428
+    command_code: 73
+    operand: 5271
+  source:
+    pascal_line: 5941
+    c_line: 28512
+- name: catcode
+  control_sequence: \catcode
+  family: TeX82
+  category: character-codes
+  expandable: false
+  description: Reads or assigns a character's input category code.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 415
+    command_code: 85
+    operand: 3983
+  source:
+    pascal_line: 6045
+    c_line: 28790
+- name: char
+  control_sequence: \char
+  family: TeX82
+  category: characters
+  expandable: false
+  description: Typesets a character specified by its character code.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 513
+    command_code: 16
+    operand: 0
+  source:
+    pascal_line: 5967
+    c_line: 28587
+- name: chardef
+  control_sequence: \chardef
+  family: TeX82
+  category: definitions
+  expandable: false
+  description: Defines a control sequence as a character-code constant.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1193
+    command_code: 95
+    operand: 0
+  source:
+    pascal_line: 6042
+    c_line: 28783
+- name: cleaders
+  control_sequence: \cleaders
+  family: TeX82
+  category: output
+  expandable: false
+  description: Fills glue with a centered run of repeated boxes or a rule.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1064
+    command_code: 31
+    operand: 101
+  source:
+    pascal_line: 6020
+    c_line: 28732
+- name: closein
+  control_sequence: \closein
+  family: TeX82
+  category: input-streams
+  expandable: false
+  description: Closes a numbered text input stream.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1229
+    command_code: 60
+    operand: 0
+  source:
+    pascal_line: 6052
+    c_line: 28808
+- name: closeout
+  control_sequence: \closeout
+  family: TeX82
+  category: io-and-output
+  expandable: false
+  description: Schedules closing a numbered output stream; immediate performs it now.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1286
+    command_code: 59
+    operand: 2
+  source:
+    pascal_line: 6058
+    c_line: 28820
+- name: clubpenalty
+  control_sequence: \clubpenalty
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Penalty for a page break after the first line of a paragraph.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 425
+    command_code: 73
+    operand: 5268
+  source:
+    pascal_line: 5940
+    c_line: 28509
+- name: copy
+  control_sequence: \copy
+  family: TeX82
+  category: boxes
+  expandable: false
+  description: Fetches a copy of a numbered box without emptying its register.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1058
+    command_code: 20
+    operand: 1
+  source:
+    pascal_line: 6018
+    c_line: 28724
+- name: count
+  control_sequence: \count
+  family: TeX82
+  category: registers
+  expandable: false
+  description: Selects a numbered integer register.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 476
+    command_code: 89
+    operand: 0
+  source:
+    pascal_line: 5984
+    c_line: 28637
+- name: countdef
+  control_sequence: \countdef
+  family: TeX82
+  category: definitions
+  expandable: false
+  description: Defines a control sequence as an alias for a numbered integer register.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1195
+    command_code: 95
+    operand: 2
+  source:
+    pascal_line: 6043
+    c_line: 28785
+- name: cr
+  control_sequence: \cr
+  family: TeX82
+  category: alignment
+  expandable: false
+  description: Ends an alignment row or alignment preamble.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 899
+    command_code: 5
+    operand: 257
+  source:
+    pascal_line: 6003
+    c_line: 28685
+- name: crcr
+  control_sequence: \crcr
+  family: TeX82
+  category: alignment
+  expandable: false
+  description: Ends an alignment row, but is ignored when a row has just ended.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 900
+    command_code: 5
+    operand: 258
+  source:
+    pascal_line: 6004
+    c_line: 28688
+- name: csname
+  control_sequence: \csname
+  family: TeX82
+  category: expansion
+  expandable: true
+  description: Expands tokens to form a control-sequence name up to endcsname.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 504
+    command_code: 107
+    operand: 0
+  source:
+    pascal_line: 5967
+    c_line: 28588
+- name: day
+  control_sequence: \day
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Day of month at job initialization; assignable integer parameter.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 441
+    command_code: 73
+    operand: 5284
+  source:
+    pascal_line: 5945
+    c_line: 28525
+- name: deadcycles
+  control_sequence: \deadcycles
+  family: TeX82
+  category: internal-quantities
+  expandable: false
+  description: Reads or assigns the number of output cycles since the last shipout.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 670
+    command_code: 82
+    operand: 0
+  source:
+    pascal_line: 5987
+    c_line: 28643
+- name: def
+  control_sequence: \def
+  family: TeX82
+  category: definitions
+  expandable: false
+  description: Defines a macro without expanding its replacement text.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1174
+    command_code: 97
+    operand: 0
+  source:
+    pascal_line: 6039
+    c_line: 28777
+- name: defaulthyphenchar
+  control_sequence: \defaulthyphenchar
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Initial hyphen character assigned to newly loaded fonts.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 466
+    command_code: 73
+    operand: 5309
+  source:
+    pascal_line: 5953
+    c_line: 28550
+- name: defaultskewchar
+  control_sequence: \defaultskewchar
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Initial skew character assigned to newly loaded fonts.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 467
+    command_code: 73
+    operand: 5310
+  source:
+    pascal_line: 5954
+    c_line: 28551
+- name: delcode
+  control_sequence: \delcode
+  family: TeX82
+  category: character-codes
+  expandable: false
+  description: Reads or assigns a character's small and large delimiter mappings.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 477
+    command_code: 85
+    operand: 5574
+  source:
+    pascal_line: 6047
+    c_line: 28795
+- name: delimiter
+  control_sequence: \delimiter
+  family: TeX82
+  category: math
+  expandable: false
+  description: Creates a mathematical delimiter from an explicit delimiter code.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 514
+    command_code: 15
+    operand: 0
+  source:
+    pascal_line: 5967
+    c_line: 28589
+- name: delimiterfactor
+  control_sequence: \delimiterfactor
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Multiplier in thousandths used to choose variable-size delimiters.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 438
+    command_code: 73
+    operand: 5281
+  source:
+    pascal_line: 5944
+    c_line: 28522
+- name: delimitershortfall
+  control_sequence: \delimitershortfall
+  family: TeX82
+  category: dimension-parameters
+  expandable: false
+  description: Allowed shortfall in the height of a chosen variable-size delimiter.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 488
+    command_code: 74
+    operand: 5840
+  source:
+    pascal_line: 5960
+    c_line: 28569
+- name: dimen
+  control_sequence: \dimen
+  family: TeX82
+  category: registers
+  expandable: false
+  description: Selects a numbered dimension register.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 500
+    command_code: 89
+    operand: 1
+  source:
+    pascal_line: 5985
+    c_line: 28638
+- name: dimendef
+  control_sequence: \dimendef
+  family: TeX82
+  category: definitions
+  expandable: false
+  description: Defines a control sequence as an alias for a numbered dimension register.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1196
+    command_code: 95
+    operand: 3
+  source:
+    pascal_line: 6043
+    c_line: 28786
+- name: discretionary
+  control_sequence: \discretionary
+  family: TeX82
+  category: hyphenation
+  expandable: false
+  description: Creates explicit pre-break, post-break, and no-break lists.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 349
+    command_code: 47
+    operand: 0
+  source:
+    pascal_line: 6025
+    c_line: 28744
+- name: displayindent
+  control_sequence: \displayindent
+  family: TeX82
+  category: dimension-parameters
+  expandable: false
+  description: Left indentation of the current display.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 493
+    command_code: 74
+    operand: 5845
+  source:
+    pascal_line: 5962
+    c_line: 28574
+- name: displaylimits
+  control_sequence: \displaylimits
+  family: TeX82
+  category: math
+  expandable: false
+  description: Places operator limits above and below in display style, beside otherwise.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1129
+    command_code: 51
+    operand: 0
+  source:
+    pascal_line: 6030
+    c_line: 28757
+- name: displaystyle
+  control_sequence: \displaystyle
+  family: TeX82
+  category: math
+  expandable: false
+  description: Selects display mathematical style.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 861
+    command_code: 53
+    operand: 0
+  source:
+    pascal_line: 6032
+    c_line: 28760
+- name: displaywidowpenalty
+  control_sequence: \displaywidowpenalty
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Widow penalty for a paragraph immediately preceding a display.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 427
+    command_code: 73
+    operand: 5270
+  source:
+    pascal_line: 5940
+    c_line: 28511
+- name: displaywidth
+  control_sequence: \displaywidth
+  family: TeX82
+  category: dimension-parameters
+  expandable: false
+  description: Available width of the current display.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 492
+    command_code: 74
+    operand: 5844
+  source:
+    pascal_line: 5962
+    c_line: 28573
+- name: divide
+  control_sequence: \divide
+  family: TeX82
+  category: arithmetic
+  expandable: false
+  description: Divides a numeric or glue variable by an integer, truncating components toward zero.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 515
+    command_code: 92
+    operand: 0
+  source:
+    pascal_line: 5968
+    c_line: 28590
+- name: doublehyphendemerits
+  control_sequence: \doublehyphendemerits
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Additional line-breaking demerits for consecutive hyphenated lines.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 434
+    command_code: 73
+    operand: 5277
+  source:
+    pascal_line: 5943
+    c_line: 28518
+- name: dp
+  control_sequence: \dp
+  family: TeX82
+  category: box-dimensions
+  expandable: false
+  description: Reads or assigns the depth of a numbered box register.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 674
+    command_code: 83
+    operand: 2
+  source:
+    pascal_line: 5988
+    c_line: 28647
+- name: dump
+  control_sequence: \dump
+  family: TeX82
+  category: job-control
+  expandable: false
+  description: Writes an initialization format snapshot and finishes the job; restricted to INITEX.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1026
+    command_code: 14
+    operand: 1
+  source:
+    pascal_line: 6010
+    c_line: 28705
+- name: edef
+  control_sequence: \edef
+  family: TeX82
+  category: definitions
+  expandable: false
+  description: Defines a macro with expanded replacement text.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1176
+    command_code: 97
+    operand: 2
+  source:
+    pascal_line: 6040
+    c_line: 28779
+- name: else
+  control_sequence: \else
+  family: TeX82
+  category: conditionals
+  expandable: true
+  description: Starts the alternative branch of a conditional.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 776
+    command_code: 106
+    operand: 3
+  source:
+    pascal_line: 6000
+    c_line: 28680
+- name: emergencystretch
+  control_sequence: \emergencystretch
+  family: TeX82
+  category: dimension-parameters
+  expandable: false
+  description: Extra per-line stretch used on the emergency paragraph-breaking pass.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 498
+    command_code: 74
+    operand: 5850
+  source:
+    pascal_line: 5964
+    c_line: 28579
+- name: end
+  control_sequence: \end
+  family: TeX82
+  category: job-control
+  expandable: false
+  description: Finishes the job after pending page material has been handled.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1025
+    command_code: 14
+    operand: 0
+  source:
+    pascal_line: 6010
+    c_line: 28704
+- name: endcsname
+  control_sequence: \endcsname
+  family: TeX82
+  category: expansion
+  expandable: false
+  description: Terminates control-sequence name construction.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 505
+    command_code: 67
+    operand: 0
+  source:
+    pascal_line: 5968
+    c_line: 28591
+- name: endgroup
+  control_sequence: \endgroup
+  family: TeX82
+  category: grouping
+  expandable: false
+  description: Closes a group opened by begingroup.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 516
+    command_code: 62
+    operand: 0
+  source:
+    pascal_line: 5968
+    c_line: 28592
+- name: endinput
+  control_sequence: \endinput
+  family: TeX82
+  category: input
+  expandable: true
+  description: Ends the current input file after the current input line is exhausted.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 630
+    command_code: 104
+    operand: 1
+  source:
+    pascal_line: 5982
+    c_line: 28631
+- name: endlinechar
+  control_sequence: \endlinechar
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Character appended to input lines; out-of-range values suppress it.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 468
+    command_code: 73
+    operand: 5311
+  source:
+    pascal_line: 5954
+    c_line: 28552
+- name: eqno
+  control_sequence: \eqno
+  family: TeX82
+  category: math
+  expandable: false
+  description: Attaches a right-side equation number to a display.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1127
+    command_code: 48
+    operand: 0
+  source:
+    pascal_line: 6026
+    c_line: 28745
+- name: errhelp
+  control_sequence: \errhelp
+  family: TeX82
+  category: token-parameters
+  expandable: false
+  description: Custom help token list used with an error message.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 406
+    command_code: 72
+    operand: 3421
+  source:
+    pascal_line: 5937
+    c_line: 28503
+- name: errmessage
+  control_sequence: \errmessage
+  family: TeX82
+  category: diagnostics
+  expandable: false
+  description: Expands a token list and reports it as an error.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1231
+    command_code: 58
+    operand: 1
+  source:
+    pascal_line: 6053
+    c_line: 28810
+- name: errorcontextlines
+  control_sequence: \errorcontextlines
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Number of intermediate input-context lines displayed in error reports.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 474
+    command_code: 73
+    operand: 5317
+  source:
+    pascal_line: 5956
+    c_line: 28558
+- name: errorstopmode
+  control_sequence: \errorstopmode
+  family: TeX82
+  category: interaction
+  expandable: false
+  description: Stops for terminal interaction on ordinary errors.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1227
+    command_code: 100
+    operand: 3
+  source:
+    pascal_line: 6051
+    c_line: 28806
+- name: escapechar
+  control_sequence: \escapechar
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Character used to print control-sequence escapes; out-of-range values suppress it.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 465
+    command_code: 73
+    operand: 5308
+  source:
+    pascal_line: 5953
+    c_line: 28549
+- name: everycr
+  control_sequence: \everycr
+  family: TeX82
+  category: token-parameters
+  expandable: false
+  description: Tokens inserted after alignment row terminators, subject to alignment rules.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 405
+    command_code: 72
+    operand: 3420
+  source:
+    pascal_line: 5937
+    c_line: 28502
+- name: everydisplay
+  control_sequence: \everydisplay
+  family: TeX82
+  category: token-parameters
+  expandable: false
+  description: Tokens inserted when entering display math.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 401
+    command_code: 72
+    operand: 3416
+  source:
+    pascal_line: 5935
+    c_line: 28498
+- name: everyhbox
+  control_sequence: \everyhbox
+  family: TeX82
+  category: token-parameters
+  expandable: false
+  description: Tokens inserted when starting a newly constructed horizontal box.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 402
+    command_code: 72
+    operand: 3417
+  source:
+    pascal_line: 5936
+    c_line: 28499
+- name: everyjob
+  control_sequence: \everyjob
+  family: TeX82
+  category: token-parameters
+  expandable: false
+  description: Tokens inserted when a job starts with a loaded format.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 404
+    command_code: 72
+    operand: 3419
+  source:
+    pascal_line: 5936
+    c_line: 28501
+- name: everymath
+  control_sequence: \everymath
+  family: TeX82
+  category: token-parameters
+  expandable: false
+  description: Tokens inserted when entering inline math.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 400
+    command_code: 72
+    operand: 3415
+  source:
+    pascal_line: 5935
+    c_line: 28497
+- name: everypar
+  control_sequence: \everypar
+  family: TeX82
+  category: token-parameters
+  expandable: false
+  description: Tokens inserted at the start of a paragraph.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 399
+    command_code: 72
+    operand: 3414
+  source:
+    pascal_line: 5935
+    c_line: 28496
+- name: everyvbox
+  control_sequence: \everyvbox
+  family: TeX82
+  category: token-parameters
+  expandable: false
+  description: Tokens inserted when starting a newly constructed vertical box.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 403
+    command_code: 72
+    operand: 3418
+  source:
+    pascal_line: 5936
+    c_line: 28500
+- name: exhyphenpenalty
+  control_sequence: \exhyphenpenalty
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Penalty for breaking after an explicit hyphen.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 424
+    command_code: 73
+    operand: 5267
+  source:
+    pascal_line: 5939
+    c_line: 28508
+- name: expandafter
+  control_sequence: \expandafter
+  family: TeX82
+  category: expansion
+  expandable: true
+  description: Expands the token after the next token before processing the saved next token.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 517
+    command_code: 102
+    operand: 0
+  source:
+    pascal_line: 5969
+    c_line: 28595
+- name: fam
+  control_sequence: \fam
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Current mathematical family; a negative value allows character math codes to choose it.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 464
+    command_code: 73
+    operand: 5307
+  source:
+    pascal_line: 5953
+    c_line: 28548
+- name: fi
+  control_sequence: \fi
+  family: TeX82
+  category: conditionals
+  expandable: true
+  description: Closes the current conditional.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 774
+    command_code: 106
+    operand: 2
+  source:
+    pascal_line: 5999
+    c_line: 28676
+- name: finalhyphendemerits
+  control_sequence: \finalhyphendemerits
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Additional demerits when the penultimate line ends in a discretionary break.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 435
+    command_code: 73
+    operand: 5278
+  source:
+    pascal_line: 5943
+    c_line: 28519
+- name: firstmark
+  control_sequence: \firstmark
+  family: TeX82
+  category: marks
+  expandable: true
+  description: Expands to the first mark associated with the current page.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 632
+    command_code: 110
+    operand: 1
+  source:
+    pascal_line: 5983
+    c_line: 28633
+- name: floatingpenalty
+  control_sequence: \floatingpenalty
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Penalty contributed by a split insertion whose remainder is deferred.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 462
+    command_code: 73
+    operand: 5305
+  source:
+    pascal_line: 5952
+    c_line: 28546
+- name: font
+  control_sequence: \font
+  family: TeX82
+  category: fonts
+  expandable: false
+  description: Defines a font control sequence by loading a font metric file with optional sizing.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 518
+    command_code: 88
+    operand: 0
+  source:
+    pascal_line: 5970
+    c_line: 28596
+- name: fontdimen
+  control_sequence: \fontdimen
+  family: TeX82
+  category: fonts
+  expandable: false
+  description: Reads or assigns a numbered font dimension.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 519
+    command_code: 77
+    operand: 0
+  source:
+    pascal_line: 5970
+    c_line: 28597
+- name: fontname
+  control_sequence: \fontname
+  family: TeX82
+  category: expansion
+  expandable: true
+  description: Expands a font identifier into its external name and size information.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 739
+    command_code: 108
+    operand: 4
+  source:
+    pascal_line: 5992
+    c_line: 28657
+- name: futurelet
+  control_sequence: \futurelet
+  family: TeX82
+  category: definitions
+  expandable: false
+  description: Copies the meaning of a lookahead token while preserving the following token order.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1192
+    command_code: 94
+    operand: 1
+  source:
+    pascal_line: 6041
+    c_line: 28782
+- name: gdef
+  control_sequence: \gdef
+  family: TeX82
+  category: definitions
+  expandable: false
+  description: Defines a global macro without expanding its replacement text.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1175
+    command_code: 97
+    operand: 1
+  source:
+    pascal_line: 6039
+    c_line: 28778
+- name: global
+  control_sequence: \global
+  family: TeX82
+  category: prefixes
+  expandable: false
+  description: Makes the following eligible assignment global.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1173
+    command_code: 93
+    operand: 4
+  source:
+    pascal_line: 6039
+    c_line: 28776
+- name: globaldefs
+  control_sequence: \globaldefs
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Overrides local/global assignment behavior when positive or negative.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 463
+    command_code: 73
+    operand: 5306
+  source:
+    pascal_line: 5952
+    c_line: 28547
+- name: halign
+  control_sequence: \halign
+  family: TeX82
+  category: alignment
+  expandable: false
+  description: Builds an alignment whose entries are horizontal lists arranged in rows.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 520
+    command_code: 32
+    operand: 0
+  source:
+    pascal_line: 5970
+    c_line: 28598
+- name: hangafter
+  control_sequence: \hangafter
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Number and sign determining which paragraph lines receive hanging indentation.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 461
+    command_code: 73
+    operand: 5304
+  source:
+    pascal_line: 5952
+    c_line: 28545
+- name: hangindent
+  control_sequence: \hangindent
+  family: TeX82
+  category: dimension-parameters
+  expandable: false
+  description: Amount of hanging indentation applied according to hangafter.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 495
+    command_code: 74
+    operand: 5847
+  source:
+    pascal_line: 5963
+    c_line: 28576
+- name: hbadness
+  control_sequence: \hbadness
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Badness threshold for reporting underfull horizontal boxes.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 446
+    command_code: 73
+    operand: 5289
+  source:
+    pascal_line: 5947
+    c_line: 28530
+- name: hbox
+  control_sequence: \hbox
+  family: TeX82
+  category: boxes
+  expandable: false
+  description: Builds a horizontal box with optional target size or spread.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1061
+    command_code: 20
+    operand: 106
+  source:
+    pascal_line: 6019
+    c_line: 28729
+- name: hfil
+  control_sequence: \hfil
+  family: TeX82
+  category: glue
+  expandable: false
+  description: Appends horizontal glue with one fil of stretch.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1028
+    command_code: 26
+    operand: 0
+  source:
+    pascal_line: 6011
+    c_line: 28707
+- name: hfill
+  control_sequence: \hfill
+  family: TeX82
+  category: glue
+  expandable: false
+  description: Appends horizontal glue with one fill of stretch.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1029
+    command_code: 26
+    operand: 1
+  source:
+    pascal_line: 6012
+    c_line: 28708
+- name: hfilneg
+  control_sequence: \hfilneg
+  family: TeX82
+  category: glue
+  expandable: false
+  description: Appends horizontal glue with negative one fil of stretch.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1031
+    command_code: 26
+    operand: 3
+  source:
+    pascal_line: 6012
+    c_line: 28710
+- name: hfuzz
+  control_sequence: \hfuzz
+  family: TeX82
+  category: dimension-parameters
+  expandable: false
+  description: Horizontal overfull amount tolerated without a warning.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 486
+    command_code: 74
+    operand: 5838
+  source:
+    pascal_line: 5960
+    c_line: 28567
+- name: hoffset
+  control_sequence: \hoffset
+  family: TeX82
+  category: dimension-parameters
+  expandable: false
+  description: Horizontal displacement added to the normal page origin.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 496
+    command_code: 74
+    operand: 5848
+  source:
+    pascal_line: 5963
+    c_line: 28577
+- name: holdinginserts
+  control_sequence: \holdinginserts
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Suppresses normal insertion processing by the page builder when positive.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 473
+    command_code: 73
+    operand: 5316
+  source:
+    pascal_line: 5956
+    c_line: 28557
+- name: hrule
+  control_sequence: \hrule
+  family: TeX82
+  category: rules
+  expandable: false
+  description: Appends a horizontal rule with optional width, height, and depth.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 521
+    command_code: 36
+    operand: 0
+  source:
+    pascal_line: 5971
+    c_line: 28599
+- name: hsize
+  control_sequence: \hsize
+  family: TeX82
+  category: dimension-parameters
+  expandable: false
+  description: Target paragraph line width before shape and indentation adjustments.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 481
+    command_code: 74
+    operand: 5833
+  source:
+    pascal_line: 5958
+    c_line: 28562
+- name: hskip
+  control_sequence: \hskip
+  family: TeX82
+  category: glue
+  expandable: false
+  description: Appends horizontal glue specified by a glue expression.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1027
+    command_code: 26
+    operand: 4
+  source:
+    pascal_line: 6011
+    c_line: 28706
+- name: hss
+  control_sequence: \hss
+  family: TeX82
+  category: glue
+  expandable: false
+  description: Appends horizontal glue with one fil of both stretch and shrink.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1030
+    command_code: 26
+    operand: 2
+  source:
+    pascal_line: 6012
+    c_line: 28709
+- name: ht
+  control_sequence: \ht
+  family: TeX82
+  category: box-dimensions
+  expandable: false
+  description: Reads or assigns the height of a numbered box register.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 673
+    command_code: 83
+    operand: 3
+  source:
+    pascal_line: 5988
+    c_line: 28646
+- name: hyphenation
+  control_sequence: \hyphenation
+  family: TeX82
+  category: hyphenation
+  expandable: false
+  description: Adds explicit word-hyphenation exceptions for the current language.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 941
+    command_code: 99
+    operand: 0
+  source:
+    pascal_line: 6048
+    c_line: 28799
+- name: hyphenchar
+  control_sequence: \hyphenchar
+  family: TeX82
+  category: fonts
+  expandable: false
+  description: Reads or assigns the hyphen character associated with a font.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1217
+    command_code: 78
+    operand: 0
+  source:
+    pascal_line: 6049
+    c_line: 28801
+- name: hyphenpenalty
+  control_sequence: \hyphenpenalty
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Penalty for breaking at an automatically generated discretionary hyphen.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 423
+    command_code: 73
+    operand: 5266
+  source:
+    pascal_line: 5939
+    c_line: 28507
+- name: if
+  control_sequence: \if
+  family: TeX82
+  category: conditionals
+  expandable: true
+  description: Compares the character codes of the next two expanded nonexpandable tokens.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 757
+    command_code: 105
+    operand: 0
+  source:
+    pascal_line: 5993
+    c_line: 28659
+- name: ifcase
+  control_sequence: \ifcase
+  family: TeX82
+  category: conditionals
+  expandable: true
+  description: Selects a zero-based alternative from or-separated branches.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 773
+    command_code: 105
+    operand: 16
+  source:
+    pascal_line: 5998
+    c_line: 28675
+- name: ifcat
+  control_sequence: \ifcat
+  family: TeX82
+  category: conditionals
+  expandable: true
+  description: Compares the category or command codes of the next two expanded nonexpandable tokens.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 758
+    command_code: 105
+    operand: 1
+  source:
+    pascal_line: 5993
+    c_line: 28660
+- name: ifdim
+  control_sequence: \ifdim
+  family: TeX82
+  category: conditionals
+  expandable: true
+  description: Tests a dimension relation using less-than, equals, or greater-than.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 760
+    command_code: 105
+    operand: 3
+  source:
+    pascal_line: 5994
+    c_line: 28662
+- name: ifeof
+  control_sequence: \ifeof
+  family: TeX82
+  category: conditionals
+  expandable: true
+  description: Tests whether an input stream is closed or at end of file.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 770
+    command_code: 105
+    operand: 13
+  source:
+    pascal_line: 5997
+    c_line: 28672
+- name: iffalse
+  control_sequence: \iffalse
+  family: TeX82
+  category: conditionals
+  expandable: true
+  description: Starts a conditional whose test is always false.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 772
+    command_code: 105
+    operand: 15
+  source:
+    pascal_line: 5998
+    c_line: 28674
+- name: ifhbox
+  control_sequence: \ifhbox
+  family: TeX82
+  category: conditionals
+  expandable: true
+  description: Tests whether a numbered box register contains a horizontal box.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 767
+    command_code: 105
+    operand: 10
+  source:
+    pascal_line: 5996
+    c_line: 28669
+- name: ifhmode
+  control_sequence: \ifhmode
+  family: TeX82
+  category: conditionals
+  expandable: true
+  description: Tests whether the current mode is horizontal.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 763
+    command_code: 105
+    operand: 6
+  source:
+    pascal_line: 5995
+    c_line: 28665
+- name: ifinner
+  control_sequence: \ifinner
+  family: TeX82
+  category: conditionals
+  expandable: true
+  description: Tests whether the current mode is an internal or restricted mode.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 765
+    command_code: 105
+    operand: 8
+  source:
+    pascal_line: 5996
+    c_line: 28667
+- name: ifmmode
+  control_sequence: \ifmmode
+  family: TeX82
+  category: conditionals
+  expandable: true
+  description: Tests whether the current mode is mathematical.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 764
+    command_code: 105
+    operand: 7
+  source:
+    pascal_line: 5995
+    c_line: 28666
+- name: ifnum
+  control_sequence: \ifnum
+  family: TeX82
+  category: conditionals
+  expandable: true
+  description: Tests an integer relation using less-than, equals, or greater-than.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 759
+    command_code: 105
+    operand: 2
+  source:
+    pascal_line: 5994
+    c_line: 28661
+- name: ifodd
+  control_sequence: \ifodd
+  family: TeX82
+  category: conditionals
+  expandable: true
+  description: Tests whether an integer is odd.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 761
+    command_code: 105
+    operand: 4
+  source:
+    pascal_line: 5994
+    c_line: 28663
+- name: iftrue
+  control_sequence: \iftrue
+  family: TeX82
+  category: conditionals
+  expandable: true
+  description: Starts a conditional whose test is always true.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 771
+    command_code: 105
+    operand: 14
+  source:
+    pascal_line: 5998
+    c_line: 28673
+- name: ifvbox
+  control_sequence: \ifvbox
+  family: TeX82
+  category: conditionals
+  expandable: true
+  description: Tests whether a numbered box register contains a vertical box.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 768
+    command_code: 105
+    operand: 11
+  source:
+    pascal_line: 5997
+    c_line: 28670
+- name: ifvmode
+  control_sequence: \ifvmode
+  family: TeX82
+  category: conditionals
+  expandable: true
+  description: Tests whether the current mode is vertical.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 762
+    command_code: 105
+    operand: 5
+  source:
+    pascal_line: 5995
+    c_line: 28664
+- name: ifvoid
+  control_sequence: \ifvoid
+  family: TeX82
+  category: conditionals
+  expandable: true
+  description: Tests whether a numbered box register is empty.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 766
+    command_code: 105
+    operand: 9
+  source:
+    pascal_line: 5996
+    c_line: 28668
+- name: ifx
+  control_sequence: \ifx
+  family: TeX82
+  category: conditionals
+  expandable: true
+  description: Compares two unexpanded tokens for matching meanings, including macro definitions.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 769
+    command_code: 105
+    operand: 12
+  source:
+    pascal_line: 5997
+    c_line: 28671
+- name: ignorespaces
+  control_sequence: \ignorespaces
+  family: TeX82
+  category: scanning
+  expandable: false
+  description: Expands and discards following space tokens until a nonspace command is found.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 522
+    command_code: 39
+    operand: 0
+  source:
+    pascal_line: 5971
+    c_line: 28600
+- name: immediate
+  control_sequence: \immediate
+  family: TeX82
+  category: io-and-output
+  expandable: false
+  description: Executes the following eligible openout, write, or closeout immediately.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1288
+    command_code: 59
+    operand: 4
+  source:
+    pascal_line: 6058
+    c_line: 28822
+- name: indent
+  control_sequence: \indent
+  family: TeX82
+  category: paragraph
+  expandable: false
+  description: Starts a paragraph with indentation, or inserts the indentation box in horizontal mode.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1080
+    command_code: 43
+    operand: 1
+  source:
+    pascal_line: 6021
+    c_line: 28734
+- name: input
+  control_sequence: \input
+  family: TeX82
+  category: input
+  expandable: true
+  description: Starts reading a named input file.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 629
+    command_code: 104
+    operand: 0
+  source:
+    pascal_line: 5981
+    c_line: 28630
+- name: inputlineno
+  control_sequence: \inputlineno
+  family: TeX82
+  category: internal-quantities
+  expandable: false
+  description: Returns the current input line number.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 678
+    command_code: 70
+    operand: 3
+  source:
+    pascal_line: 5989
+    c_line: 28651
+- name: insert
+  control_sequence: \insert
+  family: TeX82
+  category: insertions
+  expandable: false
+  description: Builds an insertion in a numbered class for later page-builder processing.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 330
+    command_code: 37
+    operand: 0
+  source:
+    pascal_line: 5971
+    c_line: 28601
+- name: insertpenalties
+  control_sequence: \insertpenalties
+  family: TeX82
+  category: internal-quantities
+  expandable: false
+  description: Reads or assigns the insertion-related integer maintained by the page builder.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 671
+    command_code: 82
+    operand: 1
+  source:
+    pascal_line: 5987
+    c_line: 28644
+- name: interlinepenalty
+  control_sequence: \interlinepenalty
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Page-break penalty between paragraph lines.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 433
+    command_code: 73
+    operand: 5276
+  source:
+    pascal_line: 5942
+    c_line: 28517
+- name: jobname
+  control_sequence: \jobname
+  family: TeX82
+  category: expansion
+  expandable: true
+  description: Expands to the current job's base name.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 740
+    command_code: 108
+    operand: 5
+  source:
+    pascal_line: 5992
+    c_line: 28658
+- name: kern
+  control_sequence: \kern
+  family: TeX82
+  category: kern
+  expandable: false
+  description: Appends a fixed ordinary kern dimension.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 340
+    command_code: 29
+    operand: 1
+  source:
+    pascal_line: 6015
+    c_line: 28717
+- name: language
+  control_sequence: \language
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Current hyphenation language identifier.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 470
+    command_code: 73
+    operand: 5313
+  source:
+    pascal_line: 5955
+    c_line: 28554
+- name: lastbox
+  control_sequence: \lastbox
+  family: TeX82
+  category: boxes
+  expandable: false
+  description: Removes and returns the final box on the current list where permitted.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1059
+    command_code: 20
+    operand: 2
+  source:
+    pascal_line: 6018
+    c_line: 28725
+- name: lastkern
+  control_sequence: \lastkern
+  family: TeX82
+  category: internal-quantities
+  expandable: false
+  description: Returns the final kern on the current list, or zero when unavailable.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 676
+    command_code: 70
+    operand: 1
+  source:
+    pascal_line: 5989
+    c_line: 28649
+- name: lastpenalty
+  control_sequence: \lastpenalty
+  family: TeX82
+  category: internal-quantities
+  expandable: false
+  description: Returns the final penalty on the current list, or zero when unavailable.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 675
+    command_code: 70
+    operand: 0
+  source:
+    pascal_line: 5988
+    c_line: 28648
+- name: lastskip
+  control_sequence: \lastskip
+  family: TeX82
+  category: internal-quantities
+  expandable: false
+  description: Returns the final glue on the current list, or zero glue when unavailable.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 677
+    command_code: 70
+    operand: 2
+  source:
+    pascal_line: 5989
+    c_line: 28650
+- name: lccode
+  control_sequence: \lccode
+  family: TeX82
+  category: character-codes
+  expandable: false
+  description: Reads or assigns a character's lowercase mapping, also used by hyphenation.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 416
+    command_code: 85
+    operand: 4239
+  source:
+    pascal_line: 6046
+    c_line: 28792
+- name: leaders
+  control_sequence: \leaders
+  family: TeX82
+  category: output
+  expandable: false
+  description: Fills glue with repeated boxes or rules aligned to the enclosing box's grid.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1063
+    command_code: 31
+    operand: 100
+  source:
+    pascal_line: 6020
+    c_line: 28731
+- name: left
+  control_sequence: \left
+  family: TeX82
+  category: math
+  expandable: false
+  description: Begins a variable-size delimiter pair and its enclosed mathematical subformula.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 876
+    command_code: 49
+    operand: 30
+  source:
+    pascal_line: 6036
+    c_line: 28770
+- name: lefthyphenmin
+  control_sequence: \lefthyphenmin
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Minimum letters retained before an automatic hyphenation point.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 471
+    command_code: 73
+    operand: 5314
+  source:
+    pascal_line: 5955
+    c_line: 28555
+- name: leftskip
+  control_sequence: \leftskip
+  family: TeX82
+  category: glue-parameters
+  expandable: false
+  description: Glue at the left edge of each paragraph line.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 383
+    command_code: 75
+    operand: 2889
+  source:
+    pascal_line: 5930
+    c_line: 28484
+- name: leqno
+  control_sequence: \leqno
+  family: TeX82
+  category: math
+  expandable: false
+  description: Attaches a left-side equation number to a display.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1128
+    command_code: 48
+    operand: 1
+  source:
+    pascal_line: 6026
+    c_line: 28746
+- name: let
+  control_sequence: \let
+  family: TeX82
+  category: definitions
+  expandable: false
+  description: Copies the current meaning of one token to a control sequence.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1191
+    command_code: 94
+    operand: 0
+  source:
+    pascal_line: 6041
+    c_line: 28781
+- name: limits
+  control_sequence: \limits
+  family: TeX82
+  category: math
+  expandable: false
+  description: Places operator limits above and below in every style.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 878
+    command_code: 51
+    operand: 1
+  source:
+    pascal_line: 6031
+    c_line: 28758
+- name: linepenalty
+  control_sequence: \linepenalty
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Penalty term contributing to the demerits of each line.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 422
+    command_code: 73
+    operand: 5265
+  source:
+    pascal_line: 5939
+    c_line: 28506
+- name: lineskip
+  control_sequence: \lineskip
+  family: TeX82
+  category: glue-parameters
+  expandable: false
+  description: Glue between lines when the baseline-based gap is too small.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 376
+    command_code: 75
+    operand: 2882
+  source:
+    pascal_line: 5928
+    c_line: 28477
+- name: lineskiplimit
+  control_sequence: \lineskiplimit
+  family: TeX82
+  category: dimension-parameters
+  expandable: false
+  description: Minimum baseline-derived interline gap before lineskip is used.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 480
+    command_code: 74
+    operand: 5832
+  source:
+    pascal_line: 5958
+    c_line: 28561
+- name: long
+  control_sequence: \long
+  family: TeX82
+  category: prefixes
+  expandable: false
+  description: Allows paragraph tokens in arguments of the macro being defined.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1171
+    command_code: 93
+    operand: 1
+  source:
+    pascal_line: 6038
+    c_line: 28774
+- name: looseness
+  control_sequence: \looseness
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Requested change in the number of paragraph lines relative to the best solution.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 439
+    command_code: 73
+    operand: 5282
+  source:
+    pascal_line: 5944
+    c_line: 28523
+- name: lower
+  control_sequence: \lower
+  family: TeX82
+  category: boxes
+  expandable: false
+  description: Lowers a box by a dimension.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1057
+    command_code: 22
+    operand: 0
+  source:
+    pascal_line: 6017
+    c_line: 28722
+- name: lowercase
+  control_sequence: \lowercase
+  family: TeX82
+  category: characters
+  expandable: false
+  description: Transforms character tokens using lowercase codes without expanding the token list.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1237
+    command_code: 57
+    operand: 4239
+  source:
+    pascal_line: 6054
+    c_line: 28811
+- name: mag
+  control_sequence: \mag
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Global magnification ratio in thousandths; constrained once true dimensions or output fix
+    it.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 437
+    command_code: 73
+    operand: 5280
+  source:
+    pascal_line: 5944
+    c_line: 28521
+- name: mark
+  control_sequence: \mark
+  family: TeX82
+  category: marks
+  expandable: false
+  description: Appends a mark node containing an expanded token list.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 351
+    command_code: 18
+    operand: 0
+  source:
+    pascal_line: 5972
+    c_line: 28602
+- name: mathaccent
+  control_sequence: \mathaccent
+  family: TeX82
+  category: math
+  expandable: false
+  description: Builds an accented mathematical atom from a math accent code.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 523
+    command_code: 46
+    operand: 0
+  source:
+    pascal_line: 5972
+    c_line: 28603
+- name: mathbin
+  control_sequence: \mathbin
+  family: TeX82
+  category: math
+  expandable: false
+  description: Builds a binary-operation mathematical atom.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 868
+    command_code: 50
+    operand: 18
+  source:
+    pascal_line: 6028
+    c_line: 28749
+- name: mathchar
+  control_sequence: \mathchar
+  family: TeX82
+  category: math
+  expandable: false
+  description: Creates a mathematical character atom from an explicit math code.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 524
+    command_code: 17
+    operand: 0
+  source:
+    pascal_line: 5972
+    c_line: 28604
+- name: mathchardef
+  control_sequence: \mathchardef
+  family: TeX82
+  category: definitions
+  expandable: false
+  description: Defines a control sequence as a mathematical-character constant.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1194
+    command_code: 95
+    operand: 1
+  source:
+    pascal_line: 6042
+    c_line: 28784
+- name: mathchoice
+  control_sequence: \mathchoice
+  family: TeX82
+  category: math
+  expandable: false
+  description: Stores four alternatives selected by the eventual mathematical style.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 525
+    command_code: 54
+    operand: 0
+  source:
+    pascal_line: 5973
+    c_line: 28605
+- name: mathclose
+  control_sequence: \mathclose
+  family: TeX82
+  category: math
+  expandable: false
+  description: Builds a closing mathematical atom.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 871
+    command_code: 50
+    operand: 21
+  source:
+    pascal_line: 6029
+    c_line: 28752
+- name: mathcode
+  control_sequence: \mathcode
+  family: TeX82
+  category: character-codes
+  expandable: false
+  description: Reads or assigns a character's mathematical class, family, and character mapping.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 419
+    command_code: 85
+    operand: 5007
+  source:
+    pascal_line: 6045
+    c_line: 28791
+- name: mathinner
+  control_sequence: \mathinner
+  family: TeX82
+  category: math
+  expandable: false
+  description: Builds an inner mathematical atom.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 873
+    command_code: 50
+    operand: 23
+  source:
+    pascal_line: 6029
+    c_line: 28754
+- name: mathop
+  control_sequence: \mathop
+  family: TeX82
+  category: math
+  expandable: false
+  description: Builds an operator mathematical atom.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 867
+    command_code: 50
+    operand: 17
+  source:
+    pascal_line: 6027
+    c_line: 28748
+- name: mathopen
+  control_sequence: \mathopen
+  family: TeX82
+  category: math
+  expandable: false
+  description: Builds an opening mathematical atom.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 870
+    command_code: 50
+    operand: 20
+  source:
+    pascal_line: 6028
+    c_line: 28751
+- name: mathord
+  control_sequence: \mathord
+  family: TeX82
+  category: math
+  expandable: false
+  description: Builds an ordinary mathematical atom.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 866
+    command_code: 50
+    operand: 16
+  source:
+    pascal_line: 6027
+    c_line: 28747
+- name: mathpunct
+  control_sequence: \mathpunct
+  family: TeX82
+  category: math
+  expandable: false
+  description: Builds a punctuation mathematical atom.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 872
+    command_code: 50
+    operand: 22
+  source:
+    pascal_line: 6029
+    c_line: 28753
+- name: mathrel
+  control_sequence: \mathrel
+  family: TeX82
+  category: math
+  expandable: false
+  description: Builds a relation mathematical atom.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 869
+    command_code: 50
+    operand: 19
+  source:
+    pascal_line: 6028
+    c_line: 28750
+- name: mathsurround
+  control_sequence: \mathsurround
+  family: TeX82
+  category: dimension-parameters
+  expandable: false
+  description: Horizontal space placed before and after inline math.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 479
+    command_code: 74
+    operand: 5831
+  source:
+    pascal_line: 5957
+    c_line: 28560
+- name: maxdeadcycles
+  control_sequence: \maxdeadcycles
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Maximum output-routine cycles allowed without shipping a page.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 460
+    command_code: 73
+    operand: 5303
+  source:
+    pascal_line: 5951
+    c_line: 28544
+- name: maxdepth
+  control_sequence: \maxdepth
+  family: TeX82
+  category: dimension-parameters
+  expandable: false
+  description: Maximum depth of the page box.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 483
+    command_code: 74
+    operand: 5835
+  source:
+    pascal_line: 5959
+    c_line: 28564
+- name: meaning
+  control_sequence: \meaning
+  family: TeX82
+  category: expansion
+  expandable: true
+  description: Expands the next token's current meaning into descriptive character tokens.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 738
+    command_code: 108
+    operand: 3
+  source:
+    pascal_line: 5991
+    c_line: 28656
+- name: medmuskip
+  control_sequence: \medmuskip
+  family: TeX82
+  category: math-glue-parameters
+  expandable: false
+  description: Medium mathematical spacing glue.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 392
+    command_code: 76
+    operand: 2898
+  source:
+    pascal_line: 5933
+    c_line: 28493
+- name: message
+  control_sequence: \message
+  family: TeX82
+  category: diagnostics
+  expandable: false
+  description: Expands and prints a token list as a normal message.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1230
+    command_code: 58
+    operand: 0
+  source:
+    pascal_line: 6053
+    c_line: 28809
+- name: mkern
+  control_sequence: \mkern
+  family: TeX82
+  category: math
+  expandable: false
+  description: Appends a fixed mathematical kern measured in mu units.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 342
+    command_code: 30
+    operand: 99
+  source:
+    pascal_line: 6015
+    c_line: 28718
+- name: month
+  control_sequence: \month
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Month at job initialization; assignable integer parameter.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 442
+    command_code: 73
+    operand: 5285
+  source:
+    pascal_line: 5945
+    c_line: 28526
+- name: moveleft
+  control_sequence: \moveleft
+  family: TeX82
+  category: boxes
+  expandable: false
+  description: Shifts a box left by a dimension.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1054
+    command_code: 21
+    operand: 1
+  source:
+    pascal_line: 6016
+    c_line: 28719
+- name: moveright
+  control_sequence: \moveright
+  family: TeX82
+  category: boxes
+  expandable: false
+  description: Shifts a box right by a dimension.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1055
+    command_code: 21
+    operand: 0
+  source:
+    pascal_line: 6016
+    c_line: 28720
+- name: mskip
+  control_sequence: \mskip
+  family: TeX82
+  category: math
+  expandable: false
+  description: Appends mathematical glue measured in mu units.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 336
+    command_code: 28
+    operand: 5
+  source:
+    pascal_line: 6014
+    c_line: 28716
+- name: multiply
+  control_sequence: \multiply
+  family: TeX82
+  category: arithmetic
+  expandable: false
+  description: Multiplies an integer, dimension, or glue variable by an integer.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 526
+    command_code: 91
+    operand: 0
+  source:
+    pascal_line: 5973
+    c_line: 28606
+- name: muskip
+  control_sequence: \muskip
+  family: TeX82
+  category: registers
+  expandable: false
+  description: Selects a numbered mathematical glue register.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 396
+    command_code: 89
+    operand: 3
+  source:
+    pascal_line: 5985
+    c_line: 28640
+- name: muskipdef
+  control_sequence: \muskipdef
+  family: TeX82
+  category: definitions
+  expandable: false
+  description: Defines a control sequence as an alias for a numbered mathematical glue register.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1198
+    command_code: 95
+    operand: 5
+  source:
+    pascal_line: 6044
+    c_line: 28788
+- name: newlinechar
+  control_sequence: \newlinechar
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Character treated as a line break when printing; out-of-range values disable it.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 469
+    command_code: 73
+    operand: 5312
+  source:
+    pascal_line: 5954
+    c_line: 28553
+- name: noalign
+  control_sequence: \noalign
+  family: TeX82
+  category: alignment
+  expandable: false
+  description: Inserts material between alignment rows outside the alignment template.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 527
+    command_code: 34
+    operand: 0
+  source:
+    pascal_line: 5973
+    c_line: 28607
+- name: noboundary
+  control_sequence: \noboundary
+  family: TeX82
+  category: fonts
+  expandable: false
+  description: Suppresses a font boundary-character ligature interaction.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 528
+    command_code: 65
+    operand: 0
+  source:
+    pascal_line: 5974
+    c_line: 28608
+- name: noexpand
+  control_sequence: \noexpand
+  family: TeX82
+  category: expansion
+  expandable: true
+  description: Prevents the next token from expanding during the current expansion step.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 529
+    command_code: 103
+    operand: 0
+  source:
+    pascal_line: 5974
+    c_line: 28609
+- name: noindent
+  control_sequence: \noindent
+  family: TeX82
+  category: paragraph
+  expandable: false
+  description: Starts a paragraph without its initial indentation box.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1081
+    command_code: 43
+    operand: 0
+  source:
+    pascal_line: 6022
+    c_line: 28735
+- name: nolimits
+  control_sequence: \nolimits
+  family: TeX82
+  category: math
+  expandable: false
+  description: Places operator limits beside the operator in every style.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 879
+    command_code: 51
+    operand: 2
+  source:
+    pascal_line: 6031
+    c_line: 28759
+- name: nonscript
+  control_sequence: \nonscript
+  family: TeX82
+  category: math
+  expandable: false
+  description: Removes following math glue or kern when the style is script or scriptscript.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 335
+    command_code: 55
+    operand: 0
+  source:
+    pascal_line: 5974
+    c_line: 28610
+- name: nonstopmode
+  control_sequence: \nonstopmode
+  family: TeX82
+  category: interaction
+  expandable: false
+  description: Continues after errors without requesting terminal input.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 275
+    command_code: 100
+    operand: 1
+  source:
+    pascal_line: 6051
+    c_line: 28804
+- name: nulldelimiterspace
+  control_sequence: \nulldelimiterspace
+  family: TeX82
+  category: dimension-parameters
+  expandable: false
+  description: Width assigned to a null delimiter in a left/right construction.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 489
+    command_code: 74
+    operand: 5841
+  source:
+    pascal_line: 5961
+    c_line: 28570
+- name: nullfont
+  control_sequence: \nullfont
+  family: TeX82
+  category: fonts
+  expandable: false
+  description: Selects the built-in empty font.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 801
+    command_code: 87
+    operand: 0
+  source:
+    pascal_line: 6001
+    c_line: 28681
+- name: number
+  control_sequence: \number
+  family: TeX82
+  category: expansion
+  expandable: true
+  description: Expands an integer into decimal character tokens.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 735
+    command_code: 108
+    operand: 0
+  source:
+    pascal_line: 5990
+    c_line: 28653
+- name: omit
+  control_sequence: \omit
+  family: TeX82
+  category: alignment
+  expandable: false
+  description: Omits the alignment template for the current entry.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 530
+    command_code: 63
+    operand: 0
+  source:
+    pascal_line: 5975
+    c_line: 28611
+- name: openin
+  control_sequence: \openin
+  family: TeX82
+  category: input-streams
+  expandable: false
+  description: Opens a numbered text input stream.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1228
+    command_code: 60
+    operand: 1
+  source:
+    pascal_line: 6052
+    c_line: 28807
+- name: openout
+  control_sequence: \openout
+  family: TeX82
+  category: io-and-output
+  expandable: false
+  description: Schedules opening a numbered output stream; immediate performs it now.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1285
+    command_code: 59
+    operand: 0
+  source:
+    pascal_line: 6057
+    c_line: 28817
+- name: or
+  control_sequence: \or
+  family: TeX82
+  category: conditionals
+  expandable: true
+  description: Separates alternatives in an ifcase conditional.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 775
+    command_code: 106
+    operand: 4
+  source:
+    pascal_line: 6000
+    c_line: 28679
+- name: outer
+  control_sequence: \outer
+  family: TeX82
+  category: prefixes
+  expandable: false
+  description: Marks the macro being defined as forbidden in restricted scanning contexts.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1172
+    command_code: 93
+    operand: 2
+  source:
+    pascal_line: 6038
+    c_line: 28775
+- name: output
+  control_sequence: \output
+  family: TeX82
+  category: token-parameters
+  expandable: false
+  description: Token list executed by the page builder's output routine.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 398
+    command_code: 72
+    operand: 3413
+  source:
+    pascal_line: 5934
+    c_line: 28495
+- name: outputpenalty
+  control_sequence: \outputpenalty
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Penalty at the page break that triggered the output routine.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 459
+    command_code: 73
+    operand: 5302
+  source:
+    pascal_line: 5951
+    c_line: 28543
+- name: over
+  control_sequence: \over
+  family: TeX82
+  category: math
+  expandable: false
+  description: Builds a generalized fraction with the default rule thickness.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1148
+    command_code: 52
+    operand: 1
+  source:
+    pascal_line: 6034
+    c_line: 28765
+- name: overfullrule
+  control_sequence: \overfullrule
+  family: TeX82
+  category: dimension-parameters
+  expandable: false
+  description: Width of a visible rule marking overfull horizontal boxes; zero disables it.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 494
+    command_code: 74
+    operand: 5846
+  source:
+    pascal_line: 5962
+    c_line: 28575
+- name: overline
+  control_sequence: \overline
+  family: TeX82
+  category: math
+  expandable: false
+  description: Builds an overlined mathematical atom.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 874
+    command_code: 50
+    operand: 27
+  source:
+    pascal_line: 6030
+    c_line: 28756
+- name: overwithdelims
+  control_sequence: \overwithdelims
+  family: TeX82
+  category: math
+  expandable: false
+  description: Builds a fraction with explicit delimiters and default rule thickness.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1151
+    command_code: 52
+    operand: 4
+  source:
+    pascal_line: 6035
+    c_line: 28768
+- name: pagedepth
+  control_sequence: \pagedepth
+  family: TeX82
+  category: page-quantities
+  expandable: false
+  description: Reads or assigns the current page's trailing depth.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 977
+    command_code: 81
+    operand: 7
+  source:
+    pascal_line: 6009
+    c_line: 28703
+- name: pagefilllstretch
+  control_sequence: \pagefilllstretch
+  family: TeX82
+  category: page-quantities
+  expandable: false
+  description: Reads or assigns the accumulated filll-order page stretch.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 975
+    command_code: 81
+    operand: 5
+  source:
+    pascal_line: 6008
+    c_line: 28701
+- name: pagefillstretch
+  control_sequence: \pagefillstretch
+  family: TeX82
+  category: page-quantities
+  expandable: false
+  description: Reads or assigns the accumulated fill-order page stretch.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 974
+    command_code: 81
+    operand: 4
+  source:
+    pascal_line: 6008
+    c_line: 28700
+- name: pagefilstretch
+  control_sequence: \pagefilstretch
+  family: TeX82
+  category: page-quantities
+  expandable: false
+  description: Reads or assigns the accumulated fil-order page stretch.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 973
+    command_code: 81
+    operand: 3
+  source:
+    pascal_line: 6008
+    c_line: 28699
+- name: pagegoal
+  control_sequence: \pagegoal
+  family: TeX82
+  category: page-quantities
+  expandable: false
+  description: Reads or assigns the page builder's current target height.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 970
+    command_code: 81
+    operand: 0
+  source:
+    pascal_line: 6007
+    c_line: 28696
+- name: pageshrink
+  control_sequence: \pageshrink
+  family: TeX82
+  category: page-quantities
+  expandable: false
+  description: Reads or assigns the accumulated page shrink.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 976
+    command_code: 81
+    operand: 6
+  source:
+    pascal_line: 6009
+    c_line: 28702
+- name: pagestretch
+  control_sequence: \pagestretch
+  family: TeX82
+  category: page-quantities
+  expandable: false
+  description: Reads or assigns the accumulated finite stretch of the current page.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 972
+    command_code: 81
+    operand: 2
+  source:
+    pascal_line: 6007
+    c_line: 28698
+- name: pagetotal
+  control_sequence: \pagetotal
+  family: TeX82
+  category: page-quantities
+  expandable: false
+  description: Reads or assigns the accumulated natural page height.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 971
+    command_code: 81
+    operand: 1
+  source:
+    pascal_line: 6007
+    c_line: 28697
+- name: par
+  control_sequence: \par
+  family: TeX82
+  category: paragraph
+  expandable: false
+  description: Ends a paragraph and invokes line breaking when in unrestricted horizontal mode.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 597
+    command_code: 13
+    operand: 256
+  source:
+    pascal_line: 5980
+    c_line: 28627
+- name: parfillskip
+  control_sequence: \parfillskip
+  family: TeX82
+  category: glue-parameters
+  expandable: false
+  description: Glue appended at the end of a paragraph before line breaking.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 390
+    command_code: 75
+    operand: 2896
+  source:
+    pascal_line: 5933
+    c_line: 28491
+- name: parindent
+  control_sequence: \parindent
+  family: TeX82
+  category: dimension-parameters
+  expandable: false
+  description: Width of the indentation box at the start of an indented paragraph.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 478
+    command_code: 74
+    operand: 5830
+  source:
+    pascal_line: 5957
+    c_line: 28559
+- name: parshape
+  control_sequence: \parshape
+  family: TeX82
+  category: paragraph
+  expandable: false
+  description: Reads or assigns explicit indentation and width pairs for paragraph lines.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 408
+    command_code: 84
+    operand: 0
+  source:
+    pascal_line: 5975
+    c_line: 28612
+- name: parskip
+  control_sequence: \parskip
+  family: TeX82
+  category: glue-parameters
+  expandable: false
+  description: Vertical glue inserted between paragraphs.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 378
+    command_code: 75
+    operand: 2884
+  source:
+    pascal_line: 5929
+    c_line: 28479
+- name: patterns
+  control_sequence: \patterns
+  family: TeX82
+  category: hyphenation
+  expandable: false
+  description: Loads hyphenation patterns for the current language during initialization.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 953
+    command_code: 99
+    operand: 1
+  source:
+    pascal_line: 6049
+    c_line: 28800
+- name: pausing
+  control_sequence: \pausing
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Controls terminal interaction after reading input lines.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 448
+    command_code: 73
+    operand: 5291
+  source:
+    pascal_line: 5947
+    c_line: 28532
+- name: penalty
+  control_sequence: \penalty
+  family: TeX82
+  category: breaking
+  expandable: false
+  description: Appends a penalty node influencing line or page breaking.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 531
+    command_code: 42
+    operand: 0
+  source:
+    pascal_line: 5975
+    c_line: 28613
+- name: postdisplaypenalty
+  control_sequence: \postdisplaypenalty
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Page-break penalty immediately after a display.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 432
+    command_code: 73
+    operand: 5275
+  source:
+    pascal_line: 5942
+    c_line: 28516
+- name: predisplaypenalty
+  control_sequence: \predisplaypenalty
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Page-break penalty immediately before a display.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 431
+    command_code: 73
+    operand: 5274
+  source:
+    pascal_line: 5942
+    c_line: 28515
+- name: predisplaysize
+  control_sequence: \predisplaysize
+  family: TeX82
+  category: dimension-parameters
+  expandable: false
+  description: Width information from the line preceding a display.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 491
+    command_code: 74
+    operand: 5843
+  source:
+    pascal_line: 5961
+    c_line: 28572
+- name: pretolerance
+  control_sequence: \pretolerance
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Badness threshold for the first paragraph-breaking pass without automatic hyphenation.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 420
+    command_code: 73
+    operand: 5263
+  source:
+    pascal_line: 5938
+    c_line: 28504
+- name: prevdepth
+  control_sequence: \prevdepth
+  family: TeX82
+  category: internal-quantities
+  expandable: false
+  description: Reads or assigns the previous vertical-list box depth used for interline spacing.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 669
+    command_code: 79
+    operand: 1
+  source:
+    pascal_line: 5986
+    c_line: 28642
+- name: prevgraf
+  control_sequence: \prevgraf
+  family: TeX82
+  category: internal-quantities
+  expandable: false
+  description: Reads or assigns the line count associated with the preceding paragraph.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 532
+    command_code: 80
+    operand: 0
+  source:
+    pascal_line: 5976
+    c_line: 28614
+- name: radical
+  control_sequence: \radical
+  family: TeX82
+  category: math
+  expandable: false
+  description: Builds a mathematical radical using an explicit delimiter code.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 533
+    command_code: 66
+    operand: 0
+  source:
+    pascal_line: 5976
+    c_line: 28615
+- name: raise
+  control_sequence: \raise
+  family: TeX82
+  category: boxes
+  expandable: false
+  description: Raises a box by a dimension.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1056
+    command_code: 22
+    operand: 1
+  source:
+    pascal_line: 6017
+    c_line: 28721
+- name: read
+  control_sequence: \read
+  family: TeX82
+  category: input-streams
+  expandable: false
+  description: Reads an input stream line into a macro, balancing braces as required.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 534
+    command_code: 96
+    operand: 0
+  source:
+    pascal_line: 5976
+    c_line: 28616
+- name: relax
+  control_sequence: \relax
+  family: TeX82
+  category: execution
+  expandable: false
+  description: Executes no action; commonly terminates numeric scanning.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 535
+    command_code: 0
+    operand: 256
+  source:
+    pascal_line: 5977
+    c_line: 28617
+- name: relpenalty
+  control_sequence: \relpenalty
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Line-break penalty after a mathematical relation.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 430
+    command_code: 73
+    operand: 5273
+  source:
+    pascal_line: 5941
+    c_line: 28514
+- name: right
+  control_sequence: \right
+  family: TeX82
+  category: math
+  expandable: false
+  description: Closes a variable-size delimiter pair.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 877
+    command_code: 49
+    operand: 31
+  source:
+    pascal_line: 6037
+    c_line: 28771
+- name: righthyphenmin
+  control_sequence: \righthyphenmin
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Minimum letters retained after an automatic hyphenation point.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 472
+    command_code: 73
+    operand: 5315
+  source:
+    pascal_line: 5955
+    c_line: 28556
+- name: rightskip
+  control_sequence: \rightskip
+  family: TeX82
+  category: glue-parameters
+  expandable: false
+  description: Glue at the right edge of each paragraph line.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 384
+    command_code: 75
+    operand: 2890
+  source:
+    pascal_line: 5931
+    c_line: 28485
+- name: romannumeral
+  control_sequence: \romannumeral
+  family: TeX82
+  category: expansion
+  expandable: true
+  description: Expands a positive integer into lowercase Roman numerals; nonpositive values yield nothing.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 736
+    command_code: 108
+    operand: 1
+  source:
+    pascal_line: 5991
+    c_line: 28654
+- name: scriptfont
+  control_sequence: \scriptfont
+  family: TeX82
+  category: fonts
+  expandable: false
+  description: Reads or assigns a family's font for script mathematical style.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 413
+    command_code: 86
+    operand: 3951
+  source:
+    pascal_line: 6047
+    c_line: 28797
+- name: scriptscriptfont
+  control_sequence: \scriptscriptfont
+  family: TeX82
+  category: fonts
+  expandable: false
+  description: Reads or assigns a family's font for scriptscript mathematical style.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 414
+    command_code: 86
+    operand: 3967
+  source:
+    pascal_line: 6048
+    c_line: 28798
+- name: scriptscriptstyle
+  control_sequence: \scriptscriptstyle
+  family: TeX82
+  category: math
+  expandable: false
+  description: Selects scriptscript mathematical style.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 864
+    command_code: 53
+    operand: 6
+  source:
+    pascal_line: 6033
+    c_line: 28763
+- name: scriptspace
+  control_sequence: \scriptspace
+  family: TeX82
+  category: dimension-parameters
+  expandable: false
+  description: Extra width added after a subscript or superscript.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 490
+    command_code: 74
+    operand: 5842
+  source:
+    pascal_line: 5961
+    c_line: 28571
+- name: scriptstyle
+  control_sequence: \scriptstyle
+  family: TeX82
+  category: math
+  expandable: false
+  description: Selects script mathematical style.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 863
+    command_code: 53
+    operand: 4
+  source:
+    pascal_line: 6033
+    c_line: 28762
+- name: scrollmode
+  control_sequence: \scrollmode
+  family: TeX82
+  category: interaction
+  expandable: false
+  description: Continues through ordinary errors but may stop for missing files.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 276
+    command_code: 100
+    operand: 2
+  source:
+    pascal_line: 6051
+    c_line: 28805
+- name: setbox
+  control_sequence: \setbox
+  family: TeX82
+  category: boxes
+  expandable: false
+  description: Assigns a constructed or fetched box to a numbered box register.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 536
+    command_code: 98
+    operand: 0
+  source:
+    pascal_line: 5978
+    c_line: 28620
+- name: setlanguage
+  control_sequence: \setlanguage
+  family: TeX82
+  category: io-and-output
+  expandable: false
+  description: Appends an explicit language node with current hyphenation minima in horizontal mode.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1289
+    command_code: 59
+    operand: 5
+  source:
+    pascal_line: 6059
+    c_line: 28823
+- name: sfcode
+  control_sequence: \sfcode
+  family: TeX82
+  category: character-codes
+  expandable: false
+  description: Reads or assigns a character's effect on the space factor.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 418
+    command_code: 85
+    operand: 4751
+  source:
+    pascal_line: 6046
+    c_line: 28794
+- name: shipout
+  control_sequence: \shipout
+  family: TeX82
+  category: output
+  expandable: false
+  description: Writes a box as a page to the DVI output.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1062
+    command_code: 31
+    operand: 99
+  source:
+    pascal_line: 6020
+    c_line: 28730
+- name: show
+  control_sequence: \show
+  family: TeX82
+  category: diagnostics
+  expandable: false
+  description: Displays the meaning of the next unexpanded token.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1239
+    command_code: 19
+    operand: 0
+  source:
+    pascal_line: 6055
+    c_line: 28813
+- name: showbox
+  control_sequence: \showbox
+  family: TeX82
+  category: diagnostics
+  expandable: false
+  description: Displays the contents of a numbered box register.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1240
+    command_code: 19
+    operand: 1
+  source:
+    pascal_line: 6055
+    c_line: 28814
+- name: showboxbreadth
+  control_sequence: \showboxbreadth
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Maximum number of nodes displayed at each level of a box diagnostic.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 444
+    command_code: 73
+    operand: 5287
+  source:
+    pascal_line: 5946
+    c_line: 28528
+- name: showboxdepth
+  control_sequence: \showboxdepth
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Maximum nesting depth displayed by box diagnostics.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 445
+    command_code: 73
+    operand: 5288
+  source:
+    pascal_line: 5946
+    c_line: 28529
+- name: showlists
+  control_sequence: \showlists
+  family: TeX82
+  category: diagnostics
+  expandable: false
+  description: Displays the current semantic nesting and list contents.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1242
+    command_code: 19
+    operand: 3
+  source:
+    pascal_line: 6056
+    c_line: 28816
+- name: showthe
+  control_sequence: \showthe
+  family: TeX82
+  category: diagnostics
+  expandable: false
+  description: Displays an internal quantity in the manner used by the.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1241
+    command_code: 19
+    operand: 2
+  source:
+    pascal_line: 6056
+    c_line: 28815
+- name: skewchar
+  control_sequence: \skewchar
+  family: TeX82
+  category: fonts
+  expandable: false
+  description: Reads or assigns the skew character associated with a font.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1218
+    command_code: 78
+    operand: 1
+  source:
+    pascal_line: 6050
+    c_line: 28802
+- name: skip
+  control_sequence: \skip
+  family: TeX82
+  category: registers
+  expandable: false
+  description: Selects a numbered ordinary glue register.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 395
+    command_code: 89
+    operand: 2
+  source:
+    pascal_line: 5985
+    c_line: 28639
+- name: skipdef
+  control_sequence: \skipdef
+  family: TeX82
+  category: definitions
+  expandable: false
+  description: Defines a control sequence as an alias for a numbered glue register.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1197
+    command_code: 95
+    operand: 4
+  source:
+    pascal_line: 6043
+    c_line: 28787
+- name: spacefactor
+  control_sequence: \spacefactor
+  family: TeX82
+  category: internal-quantities
+  expandable: false
+  description: Reads or assigns the current horizontal-mode space factor.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 668
+    command_code: 79
+    operand: 102
+  source:
+    pascal_line: 5986
+    c_line: 28641
+- name: spaceskip
+  control_sequence: \spaceskip
+  family: TeX82
+  category: glue-parameters
+  expandable: false
+  description: Explicit interword glue; zero selects font-derived spacing.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 388
+    command_code: 75
+    operand: 2894
+  source:
+    pascal_line: 5932
+    c_line: 28489
+- name: span
+  control_sequence: \span
+  family: TeX82
+  category: alignment
+  expandable: false
+  description: Continues the current alignment entry into the next column.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 898
+    command_code: 4
+    operand: 256
+  source:
+    pascal_line: 6002
+    c_line: 28684
+- name: special
+  control_sequence: \special
+  family: TeX82
+  category: io-and-output
+  expandable: false
+  description: Creates a DVI special carrying an expanded token list for the output driver.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1287
+    command_code: 59
+    operand: 3
+  source:
+    pascal_line: 6058
+    c_line: 28821
+- name: splitbotmark
+  control_sequence: \splitbotmark
+  family: TeX82
+  category: marks
+  expandable: true
+  description: Expands to the last mark found by the most recent vertical split.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 635
+    command_code: 110
+    operand: 4
+  source:
+    pascal_line: 5984
+    c_line: 28636
+- name: splitfirstmark
+  control_sequence: \splitfirstmark
+  family: TeX82
+  category: marks
+  expandable: true
+  description: Expands to the first mark found by the most recent vertical split.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 634
+    command_code: 110
+    operand: 3
+  source:
+    pascal_line: 5983
+    c_line: 28635
+- name: splitmaxdepth
+  control_sequence: \splitmaxdepth
+  family: TeX82
+  category: dimension-parameters
+  expandable: false
+  description: Maximum depth of a box produced by vertical splitting.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 484
+    command_code: 74
+    operand: 5836
+  source:
+    pascal_line: 5959
+    c_line: 28565
+- name: splittopskip
+  control_sequence: \splittopskip
+  family: TeX82
+  category: glue-parameters
+  expandable: false
+  description: Top glue for the remainder of a vertically split box.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 386
+    command_code: 75
+    operand: 2892
+  source:
+    pascal_line: 5931
+    c_line: 28487
+- name: string
+  control_sequence: \string
+  family: TeX82
+  category: expansion
+  expandable: true
+  description: Expands the next token into character tokens without expanding that token.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 737
+    command_code: 108
+    operand: 2
+  source:
+    pascal_line: 5991
+    c_line: 28655
+- name: tabskip
+  control_sequence: \tabskip
+  family: TeX82
+  category: glue-parameters
+  expandable: false
+  description: Glue between alignment columns and at alignment edges.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 387
+    command_code: 75
+    operand: 2893
+  source:
+    pascal_line: 5932
+    c_line: 28488
+- name: textfont
+  control_sequence: \textfont
+  family: TeX82
+  category: fonts
+  expandable: false
+  description: Reads or assigns a family's font for text and display mathematical styles.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 412
+    command_code: 86
+    operand: 3935
+  source:
+    pascal_line: 6047
+    c_line: 28796
+- name: textstyle
+  control_sequence: \textstyle
+  family: TeX82
+  category: math
+  expandable: false
+  description: Selects text mathematical style.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 862
+    command_code: 53
+    operand: 2
+  source:
+    pascal_line: 6032
+    c_line: 28761
+- name: the
+  control_sequence: \the
+  family: TeX82
+  category: expansion
+  expandable: true
+  description: Expands an internal quantity to character tokens or returns a token-list quantity.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 537
+    command_code: 109
+    operand: 0
+  source:
+    pascal_line: 5978
+    c_line: 28621
+- name: thickmuskip
+  control_sequence: \thickmuskip
+  family: TeX82
+  category: math-glue-parameters
+  expandable: false
+  description: Thick mathematical spacing glue.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 393
+    command_code: 76
+    operand: 2899
+  source:
+    pascal_line: 5934
+    c_line: 28494
+- name: thinmuskip
+  control_sequence: \thinmuskip
+  family: TeX82
+  category: math-glue-parameters
+  expandable: false
+  description: Thin mathematical spacing glue.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 391
+    command_code: 76
+    operand: 2897
+  source:
+    pascal_line: 5933
+    c_line: 28492
+- name: time
+  control_sequence: \time
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Minutes since midnight at job initialization; assignable integer parameter.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 440
+    command_code: 73
+    operand: 5283
+  source:
+    pascal_line: 5945
+    c_line: 28524
+- name: toks
+  control_sequence: \toks
+  family: TeX82
+  category: registers
+  expandable: false
+  description: Selects a numbered token-list register for reading or assignment.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 407
+    command_code: 71
+    operand: 0
+  source:
+    pascal_line: 5978
+    c_line: 28622
+- name: toksdef
+  control_sequence: \toksdef
+  family: TeX82
+  category: definitions
+  expandable: false
+  description: Defines a control sequence as an alias for a numbered token-list register.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1199
+    command_code: 95
+    operand: 6
+  source:
+    pascal_line: 6044
+    c_line: 28789
+- name: tolerance
+  control_sequence: \tolerance
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Badness threshold for the paragraph-breaking pass with hyphenation.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 421
+    command_code: 73
+    operand: 5264
+  source:
+    pascal_line: 5938
+    c_line: 28505
+- name: topmark
+  control_sequence: \topmark
+  family: TeX82
+  category: marks
+  expandable: true
+  description: Expands to the mark inherited at the top of the current page.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 631
+    command_code: 110
+    operand: 0
+  source:
+    pascal_line: 5982
+    c_line: 28632
+- name: topskip
+  control_sequence: \topskip
+  family: TeX82
+  category: glue-parameters
+  expandable: false
+  description: Glue establishing the first baseline on a page.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 385
+    command_code: 75
+    operand: 2891
+  source:
+    pascal_line: 5931
+    c_line: 28486
+- name: tracingcommands
+  control_sequence: \tracingcommands
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Controls tracing of executed commands and expanded commands.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 456
+    command_code: 73
+    operand: 5299
+  source:
+    pascal_line: 5950
+    c_line: 28540
+- name: tracinglostchars
+  control_sequence: \tracinglostchars
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Controls diagnostics for characters missing from a font.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 455
+    command_code: 73
+    operand: 5298
+  source:
+    pascal_line: 5950
+    c_line: 28539
+- name: tracingmacros
+  control_sequence: \tracingmacros
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Controls tracing of macro expansion and argument substitution.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 450
+    command_code: 73
+    operand: 5293
+  source:
+    pascal_line: 5948
+    c_line: 28534
+- name: tracingonline
+  control_sequence: \tracingonline
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Controls whether diagnostic tracing also appears on the terminal.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 449
+    command_code: 73
+    operand: 5292
+  source:
+    pascal_line: 5948
+    c_line: 28533
+- name: tracingoutput
+  control_sequence: \tracingoutput
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Controls detailed box tracing at page shipout.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 454
+    command_code: 73
+    operand: 5297
+  source:
+    pascal_line: 5949
+    c_line: 28538
+- name: tracingpages
+  control_sequence: \tracingpages
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Controls tracing of page-builder calculations.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 453
+    command_code: 73
+    operand: 5296
+  source:
+    pascal_line: 5949
+    c_line: 28537
+- name: tracingparagraphs
+  control_sequence: \tracingparagraphs
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Controls tracing of paragraph line-breaking calculations.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 452
+    command_code: 73
+    operand: 5295
+  source:
+    pascal_line: 5949
+    c_line: 28536
+- name: tracingrestores
+  control_sequence: \tracingrestores
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Controls tracing of equivalences restored when groups end.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 457
+    command_code: 73
+    operand: 5300
+  source:
+    pascal_line: 5950
+    c_line: 28541
+- name: tracingstats
+  control_sequence: \tracingstats
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Controls memory and resource statistics in the transcript.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 451
+    command_code: 73
+    operand: 5294
+  source:
+    pascal_line: 5948
+    c_line: 28535
+- name: uccode
+  control_sequence: \uccode
+  family: TeX82
+  category: character-codes
+  expandable: false
+  description: Reads or assigns a character's uppercase mapping.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 417
+    command_code: 85
+    operand: 4495
+  source:
+    pascal_line: 6046
+    c_line: 28793
+- name: uchyph
+  control_sequence: \uchyph
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Controls automatic hyphenation of words beginning with uppercase letters.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 458
+    command_code: 73
+    operand: 5301
+  source:
+    pascal_line: 5951
+    c_line: 28542
+- name: underline
+  control_sequence: \underline
+  family: TeX82
+  category: math
+  expandable: false
+  description: Builds an underlined mathematical atom.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 875
+    command_code: 50
+    operand: 26
+  source:
+    pascal_line: 6030
+    c_line: 28755
+- name: unhbox
+  control_sequence: \unhbox
+  family: TeX82
+  category: boxes
+  expandable: false
+  description: Unpacks a horizontal box into the current list and clears its register.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1093
+    command_code: 23
+    operand: 0
+  source:
+    pascal_line: 6023
+    c_line: 28739
+- name: unhcopy
+  control_sequence: \unhcopy
+  family: TeX82
+  category: boxes
+  expandable: false
+  description: Unpacks a copy of a horizontal box while retaining its register.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1094
+    command_code: 23
+    operand: 1
+  source:
+    pascal_line: 6024
+    c_line: 28740
+- name: unkern
+  control_sequence: \unkern
+  family: TeX82
+  category: list-editing
+  expandable: false
+  description: Removes the final kern from the current list where permitted.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1091
+    command_code: 25
+    operand: 11
+  source:
+    pascal_line: 6023
+    c_line: 28737
+- name: unpenalty
+  control_sequence: \unpenalty
+  family: TeX82
+  category: list-editing
+  expandable: false
+  description: Removes the final penalty from the current list where permitted.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1090
+    command_code: 25
+    operand: 12
+  source:
+    pascal_line: 6022
+    c_line: 28736
+- name: unskip
+  control_sequence: \unskip
+  family: TeX82
+  category: list-editing
+  expandable: false
+  description: Removes the final glue from the current list where permitted.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1092
+    command_code: 25
+    operand: 10
+  source:
+    pascal_line: 6023
+    c_line: 28738
+- name: unvbox
+  control_sequence: \unvbox
+  family: TeX82
+  category: boxes
+  expandable: false
+  description: Unpacks a vertical box into the current list and clears its register.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1095
+    command_code: 24
+    operand: 0
+  source:
+    pascal_line: 6024
+    c_line: 28741
+- name: unvcopy
+  control_sequence: \unvcopy
+  family: TeX82
+  category: boxes
+  expandable: false
+  description: Unpacks a copy of a vertical box while retaining its register.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1096
+    command_code: 24
+    operand: 1
+  source:
+    pascal_line: 6024
+    c_line: 28742
+- name: uppercase
+  control_sequence: \uppercase
+  family: TeX82
+  category: characters
+  expandable: false
+  description: Transforms character tokens using uppercase codes without expanding the token list.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1238
+    command_code: 57
+    operand: 4495
+  source:
+    pascal_line: 6054
+    c_line: 28812
+- name: vadjust
+  control_sequence: \vadjust
+  family: TeX82
+  category: insertions
+  expandable: false
+  description: Builds vertical adjustment material associated with a horizontal-list position.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 352
+    command_code: 38
+    operand: 0
+  source:
+    pascal_line: 5979
+    c_line: 28623
+- name: valign
+  control_sequence: \valign
+  family: TeX82
+  category: alignment
+  expandable: false
+  description: Builds an alignment whose entries are vertical lists arranged in columns.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 538
+    command_code: 33
+    operand: 0
+  source:
+    pascal_line: 5979
+    c_line: 28624
+- name: vbadness
+  control_sequence: \vbadness
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Badness threshold for reporting underfull vertical boxes.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 447
+    command_code: 73
+    operand: 5290
+  source:
+    pascal_line: 5947
+    c_line: 28531
+- name: vbox
+  control_sequence: \vbox
+  family: TeX82
+  category: boxes
+  expandable: false
+  description: Builds a vertical box referenced to its bottom baseline.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 967
+    command_code: 20
+    operand: 5
+  source:
+    pascal_line: 6019
+    c_line: 28728
+- name: vcenter
+  control_sequence: \vcenter
+  family: TeX82
+  category: math
+  expandable: false
+  description: Builds a vertical box centered on the mathematical axis.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 539
+    command_code: 56
+    operand: 0
+  source:
+    pascal_line: 5979
+    c_line: 28625
+- name: vfil
+  control_sequence: \vfil
+  family: TeX82
+  category: glue
+  expandable: false
+  description: Appends vertical glue with one fil of stretch.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1033
+    command_code: 27
+    operand: 0
+  source:
+    pascal_line: 6013
+    c_line: 28712
+- name: vfill
+  control_sequence: \vfill
+  family: TeX82
+  category: glue
+  expandable: false
+  description: Appends vertical glue with one fill of stretch.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1034
+    command_code: 27
+    operand: 1
+  source:
+    pascal_line: 6013
+    c_line: 28713
+- name: vfilneg
+  control_sequence: \vfilneg
+  family: TeX82
+  category: glue
+  expandable: false
+  description: Appends vertical glue with negative one fil of stretch.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1036
+    command_code: 27
+    operand: 3
+  source:
+    pascal_line: 6014
+    c_line: 28715
+- name: vfuzz
+  control_sequence: \vfuzz
+  family: TeX82
+  category: dimension-parameters
+  expandable: false
+  description: Vertical overfull amount tolerated without a warning.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 487
+    command_code: 74
+    operand: 5839
+  source:
+    pascal_line: 5960
+    c_line: 28568
+- name: voffset
+  control_sequence: \voffset
+  family: TeX82
+  category: dimension-parameters
+  expandable: false
+  description: Vertical displacement added to the normal page origin.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 497
+    command_code: 74
+    operand: 5849
+  source:
+    pascal_line: 5963
+    c_line: 28578
+- name: vrule
+  control_sequence: \vrule
+  family: TeX82
+  category: rules
+  expandable: false
+  description: Appends a vertical rule with optional dimensions.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 540
+    command_code: 35
+    operand: 0
+  source:
+    pascal_line: 5980
+    c_line: 28626
+- name: vsize
+  control_sequence: \vsize
+  family: TeX82
+  category: dimension-parameters
+  expandable: false
+  description: Desired page height used by the page builder.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 482
+    command_code: 74
+    operand: 5834
+  source:
+    pascal_line: 5958
+    c_line: 28563
+- name: vskip
+  control_sequence: \vskip
+  family: TeX82
+  category: glue
+  expandable: false
+  description: Appends vertical glue specified by a glue expression.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1032
+    command_code: 27
+    operand: 4
+  source:
+    pascal_line: 6013
+    c_line: 28711
+- name: vsplit
+  control_sequence: \vsplit
+  family: TeX82
+  category: boxes
+  expandable: false
+  description: Splits a numbered vertical box to a requested height, leaving the remainder in its register.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 965
+    command_code: 20
+    operand: 3
+  source:
+    pascal_line: 6018
+    c_line: 28726
+- name: vss
+  control_sequence: \vss
+  family: TeX82
+  category: glue
+  expandable: false
+  description: Appends vertical glue with one fil of both stretch and shrink.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1035
+    command_code: 27
+    operand: 2
+  source:
+    pascal_line: 6014
+    c_line: 28714
+- name: vtop
+  control_sequence: \vtop
+  family: TeX82
+  category: boxes
+  expandable: false
+  description: Builds a vertical box referenced to its top baseline.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1060
+    command_code: 20
+    operand: 4
+  source:
+    pascal_line: 6019
+    c_line: 28727
+- name: wd
+  control_sequence: \wd
+  family: TeX82
+  category: box-dimensions
+  expandable: false
+  description: Reads or assigns the width of a numbered box register.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 672
+    command_code: 83
+    operand: 1
+  source:
+    pascal_line: 5987
+    c_line: 28645
+- name: widowpenalty
+  control_sequence: \widowpenalty
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Penalty for a page break before the final line of a paragraph.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 426
+    command_code: 73
+    operand: 5269
+  source:
+    pascal_line: 5940
+    c_line: 28510
+- name: write
+  control_sequence: \write
+  family: TeX82
+  category: io-and-output
+  expandable: false
+  description: Schedules expansion and writing of text at shipout; immediate performs it now.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 594
+    command_code: 59
+    operand: 1
+  source:
+    pascal_line: 6057
+    c_line: 28818
+- name: xdef
+  control_sequence: \xdef
+  family: TeX82
+  category: definitions
+  expandable: false
+  description: Defines a global macro with expanded replacement text.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1177
+    command_code: 97
+    operand: 3
+  source:
+    pascal_line: 6040
+    c_line: 28780
+- name: xleaders
+  control_sequence: \xleaders
+  family: TeX82
+  category: output
+  expandable: false
+  description: Fills glue with repeated boxes separated by distributed equal gaps, or a rule.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 1065
+    command_code: 31
+    operand: 102
+  source:
+    pascal_line: 6021
+    c_line: 28733
+- name: xspaceskip
+  control_sequence: \xspaceskip
+  family: TeX82
+  category: glue-parameters
+  expandable: false
+  description: Extra interword glue at sentence spacing factors; zero selects normal rules.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 389
+    command_code: 75
+    operand: 2895
+  source:
+    pascal_line: 5932
+    c_line: 28490
+- name: year
+  control_sequence: \year
+  family: TeX82
+  category: integer-parameters
+  expandable: false
+  description: Year at job initialization; assignable integer parameter.
+  availability:
+    TeX.yaml: registered
+    TeX.c: registered
+  registration:
+    string_id: 443
+    command_code: 73
+    operand: 5286
+  source:
+    pascal_line: 5946
+    c_line: 28527
+character_categories:
+- code: 0
+  name: escape
+  description: Starts a control-word or control-symbol token.
+- code: 1
+  name: begin-group
+  description: Starts a simple group during execution.
+- code: 2
+  name: end-group
+  description: Ends a simple group during execution.
+- code: 3
+  name: math-shift
+  description: Enters or leaves inline or display math according to context.
+- code: 4
+  name: alignment-tab
+  description: Separates alignment entries.
+- code: 5
+  name: end-of-line
+  description: Ends an input line; scanner state determines space, paragraph, or discarded input.
+- code: 6
+  name: parameter
+  description: Introduces macro parameters or argument references in the relevant scanning context.
+- code: 7
+  name: superscript
+  description: Starts a mathematical superscript.
+- code: 8
+  name: subscript
+  description: Starts a mathematical subscript.
+- code: 9
+  name: ignored
+  description: Is discarded during tokenization.
+- code: 10
+  name: space
+  description: Produces a space token or is discarded according to scanner state.
+- code: 11
+  name: letter
+  description: Forms control words after an escape and otherwise produces letter tokens.
+- code: 12
+  name: other
+  description: Produces an ordinary character token.
+- code: 13
+  name: active
+  description: Produces a single-character control-sequence token with a definable meaning.
+- code: 14
+  name: comment
+  description: Discards the remainder of the input line.
+- code: 15
+  name: invalid
+  description: Produces an invalid-character diagnostic.

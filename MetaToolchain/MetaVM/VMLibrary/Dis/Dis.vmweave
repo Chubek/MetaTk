@@ -1,0 +1,7 @@
+-- Portable Machinery example for Dis; not native guest bytecode.
+val _ := vm_emit ".function main 0 3"
+val _ := vm_emit "const r0 6"
+val _ := vm_emit "const r1 7"
+val _ := vm_emit "mul r2 r0 r1"
+val _ := vm_emit "ret r2"
+val _ := vm_emit ".end"

@@ -1,0 +1,16 @@
+{
+  "schema": "metavm.machine/1",
+  "name": "C-Machine",
+  "symbol": "C_Machine",
+  "architecture": "unspecified",
+  "description": "No authoritative ISA or version supplied; preserve this identity pending specification",
+  "native_coverage": "catalog-only",
+  "native_format_loader": false,
+  "portable_example": "C-Machine.mvm",
+  "vmweave": "C-Machine.vmweave",
+  "vmspc": "C-Machine.vmspc",
+  "vmdesc": "C-Machine.vmdesc",
+  "limitations": [
+    "No native execution implemented. Descriptor and portable Machinery example only."
+  ]
+}
