@@ -19,7 +19,7 @@ IO is eager. `map` over a printing callback produces effects as it traverses; a 
 
 The primitive allowlist is not a complete effect system. Core IO is part of the fresh runtime, imports can read source files, and `Frontend.eval` can execute core effects in its nested session. If all external access must be forbidden, isolate execution at the process level and restrict the runtime surface deliberately.
 
-**Sources:** [`io/mod.ml`](../metalib/io/mod.ml), [`cpp/IO.h`](../metalib/cpp/IO.h).
+**Sources:** [`io/mod.mml`](../metalib/io/mod.mml), [`cpp/IO.h`](../metalib/cpp/IO.h).
 
 <!-- nav:begin -->
 [Contents](README.md) · [Previous](30-result-library.md) · [Next](32-buffers.md)

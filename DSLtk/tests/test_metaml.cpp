@@ -44,11 +44,11 @@ int main(int argc, char **argv)
   // Run the extensions without the optional host bundle as well.
   s.set_output([](std::string_view) {});
   require(s.load_file((std::filesystem::path(argv[1]).parent_path()
-                       / "tests/integration/extensions.ml").string()).is_ok());
+                       / "tests/integration/extensions.mml").string()).is_ok());
   auto temporary = std::filesystem::is_directory("/tmp/opencode")
       ? std::filesystem::path("/tmp/opencode") : std::filesystem::temp_directory_path();
   const auto file = temporary / ("metaml-retry-cpp-" + std::to_string(
-      std::chrono::high_resolution_clock::now().time_since_epoch().count()) + ".ml");
+      std::chrono::high_resolution_clock::now().time_since_epoch().count()) + ".mml");
   { std::ofstream out(file); out << "val retry := missing_name\n"; }
   const auto source = "import " + metaml::detail::quote_string(file.string());
   require(s.eval(source).is_err());
@@ -60,7 +60,7 @@ int main(int argc, char **argv)
   // A failed prelude must not replace the active library search directory.
   const auto broken = file.string() + ".stdlib";
   std::filesystem::create_directories(std::filesystem::path(broken) / "prelude");
-  { std::ofstream out(std::filesystem::path(broken) / "prelude/mod.ml");
+  { std::ofstream out(std::filesystem::path(broken) / "prelude/mod.mml");
     out << "val broken := missing_name\n"; }
   const auto original = s.stdlib_dir();
   require(s.load_stdlib(broken).is_err());

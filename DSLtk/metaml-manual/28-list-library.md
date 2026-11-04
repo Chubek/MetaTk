@@ -18,7 +18,7 @@ Sorting is stable. `sort_by` expects a negative/zero/positive comparator result;
 
 The host List module adds chunks, windows, runs, transpose, seeded shuffle, rotation, and comparator-based extrema. A window result can be substantially larger than its input. Prefer portable functions when they already express the operation clearly, and install host extensions only where needed.
 
-**Source:** [`list/mod.ml`](../metalib/list/mod.ml).
+**Source:** [`list/mod.mml`](../metalib/list/mod.mml).
 
 <!-- api:begin -->
 ```text

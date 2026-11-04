@@ -8199,7 +8199,7 @@ public:
     for (auto &c : cands)
       {
         std::error_code ec;
-        if (std::filesystem::is_regular_file (std::filesystem::path (c) / "prelude" / "mod.ml",
+        if (std::filesystem::is_regular_file (std::filesystem::path (c) / "prelude" / "mod.mml",
                                               ec))
           {
             found = c;
@@ -8659,7 +8659,7 @@ public:
             if (path.empty ())
               {
                 rep.errors.push_back (detail::make_diag (
-                    "M0603", "`#load` expects a file name, e.g. `#load \"file.ml\"`", {}));
+                    "M0603", "`#load` expects a file name, e.g. `#load \"file.mml\"`", {}));
                 return rep;
               }
             last_loaded_ = path;
@@ -9003,7 +9003,7 @@ private:
     if (!stdlib_dir_.empty ())
       bases.push_back (stdlib_dir_);
     for (auto &b : bases)
-      for (auto cand : { b / spec, b / (spec + ".ml"), b / spec / "mod.ml" })
+      for (auto cand : { b / spec, b / (spec + ".mml"), b / spec / "mod.mml" })
         {
           std::error_code ec;
           if (std::filesystem::is_regular_file (cand, ec))

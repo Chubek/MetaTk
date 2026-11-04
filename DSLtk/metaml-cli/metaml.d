@@ -3,7 +3,7 @@
 // A thin wrapper over DSLtk.Session (DSLtk.d) instantiated with the
 // MetaML.ReplLanguage policy (MetaML.d). Mirrors metaml-cli/metaml.cpp.
 //
-//   metaml [options] [file.ml ...]
+//   metaml [options] [file.mml ...]
 //
 // Build: ldc2 -O -I.. metaml.d ../MetaML.d ../DSLtk.d [metalib modules] -of=metaml
 //        add -d-version=MetaMLReadline -L-lreadline for GNU Readline support.
@@ -49,7 +49,7 @@ private struct Options
     string[] files;
 }
 
-private enum usage_text = "usage: metaml [options] [file.ml ...]\n"
+private enum usage_text = "usage: metaml [options] [file.mml ...]\n"
     ~ "  --no-tty          never print prompts\n"
     ~ "  --no-history      do not read or write the history file\n"
     ~ "  --no-stdlib       do not load metalib\n"

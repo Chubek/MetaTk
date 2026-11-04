@@ -17,7 +17,7 @@ struct Policy {
     auto candidate=std::make_unique<metaml::Session>();
     candidate->set_primitive_allowlist({});
     candidate->set_max_depth(1000);
-    auto r=candidate->eval(source,"candidate.ml");
+    auto r=candidate->eval(source,"candidate.mml");
     if(r.is_err()) return false;
     auto t=candidate->type_of("allow 20");
     if(t.is_err() || t.unwrap()!="Bool") return false;

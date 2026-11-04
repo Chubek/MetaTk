@@ -174,7 +174,7 @@ if(EXISTS "${METATEX_HTTPLIB_INCLUDE_DIR}/LICENSE")
     install(FILES "${METATEX_HTTPLIB_INCLUDE_DIR}/LICENSE" DESTINATION share/doc/metatex/licenses RENAME cpp-httplib-LICENSE)
 endif()
 install(DIRECTORY "${METATEX_METAML_DIR}/metalib/" DESTINATION share/metaml/stdlib/cpp
-    FILES_MATCHING PATTERN "*.ml" PATTERN "*.mml")
+    FILES_MATCHING PATTERN "*.mml")
 install(TARGETS metatex_core metatex_latex metatex_nekotex metatex_metavect LIBRARY DESTINATION lib/metatex)
 install(TARGETS metavect_scene ARCHIVE DESTINATION lib/metatex)
 install(TARGETS metatex_streams ARCHIVE DESTINATION lib/metatex)

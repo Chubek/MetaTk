@@ -8,10 +8,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def fixtures():
-    return (sorted((ROOT / "metalib").glob("*/test.ml"))
-            + sorted((ROOT / "tests/integration").glob("*.ml"))
-            + [ROOT / f"tests/integration/host/group_{x}.ml" for x in "abc"]
-            + [ROOT / "tests/integration/host/containers.ml"])
+    return (sorted((ROOT / "metalib").glob("*/test.mml"))
+            + sorted((ROOT / "tests/integration").glob("*.mml"))
+            + [ROOT / f"tests/integration/host/group_{x}.mml" for x in "abc"]
+            + [ROOT / "tests/integration/host/containers.mml"])
 
 
 def run(binary, args, input_data=b""):

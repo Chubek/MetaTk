@@ -39,10 +39,10 @@ void main(string[] args)
     assert(rejected && to_string(s.eval("Host.inc 1")) == "3");
     import std.path : dirName;
     s.set_output((string text) {});
-    assert(s.load_file(buildPath(dirName(args[1]), "tests/integration/extensions.ml")).is_ok());
+    assert(s.load_file(buildPath(dirName(args[1]), "tests/integration/extensions.mml")).is_ok());
     import std.uuid : randomUUID;
     auto temporary = exists("/tmp/opencode") && isDir("/tmp/opencode") ? "/tmp/opencode" : tempDir();
-    auto file = buildPath(temporary, "metaml-retry-d-" ~ randomUUID().toString() ~ ".ml");
+    auto file = buildPath(temporary, "metaml-retry-d-" ~ randomUUID().toString() ~ ".mml");
     { auto f = File(file, "w"); f.writeln("val retry := missing_name"); }
     auto source = "import " ~ quote_string(file);
     assert(s.eval(source).is_err());
@@ -54,7 +54,7 @@ void main(string[] args)
     import std.file : mkdirRecurse, rmdirRecurse;
     auto broken = file ~ ".stdlib";
     mkdirRecurse(buildPath(broken, "prelude"));
-    { auto f = File(buildPath(broken, "prelude/mod.ml"), "w");
+    { auto f = File(buildPath(broken, "prelude/mod.mml"), "w");
       f.writeln("val broken := missing_name"); }
     auto original = s.stdlib_dir();
     assert(s.load_stdlib(broken).is_err());

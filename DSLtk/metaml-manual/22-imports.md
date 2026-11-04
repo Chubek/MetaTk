@@ -1,6 +1,6 @@
 # 22. Source imports and library discovery
 
-`import "spec"` loads a source unit into the session. Resolution tries the specification as a file, with `.ml` appended, and as a directory containing `mod.ml`. Search bases include the importing file's directory, the working directory, embedding search paths, and the selected standard-library directory.
+`import "spec"` loads a source unit into the session. Resolution tries the specification as a file, with `.mml` appended, and as a directory containing `mod.mml`. Search bases include the importing file's directory, the working directory, embedding search paths, and the selected standard-library directory.
 
 ```metaml
 import "list"
@@ -11,10 +11,10 @@ Successful imports are tracked by canonical path and normally execute only once.
 
 The interpreter inserts a path before evaluating its contents to prevent unbounded recursive import loading. Cyclic imports are therefore not equivalent to mutually recursive module declarations with fully available members. Organize shared interfaces so initialization order is explicit.
 
-`load_stdlib` searches `$METAML_STDLIB`, a dialect-specific path under `$METAML_PREFIX`, paths relative to the executable, an optional compile-time default, and a working-directory `metalib` fallback. Pass an explicit directory for reproducible embedded deployments. The directory must contain `prelude/mod.ml`.
+`load_stdlib` searches `$METAML_STDLIB`, a dialect-specific path under `$METAML_PREFIX`, paths relative to the executable, an optional compile-time default, and a working-directory `metalib` fallback. Pass an explicit directory for reproducible embedded deployments. The directory must contain `prelude/mod.mml`.
 
 ```sh
-METAML_STDLIB=/opt/myapp/metalib build/metaml-repl-cpp program.ml
+METAML_STDLIB=/opt/myapp/metalib build/metaml-repl-cpp program.mml
 ```
 
 The prelude imports the portable modules and opens Core. Fresh embedding sessions do not silently locate and execute external library files; call the load operation and check its result. The supplied REPL performs this step unless disabled.

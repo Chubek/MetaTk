@@ -19,7 +19,7 @@ Read the workshops in order, then use the chapter review to connect the small ex
 
 \clearpage
 \workshop{22.1}{Explicit standard-library discovery}{C++20}
-load\_stdlib searches for prelude/mod.ml and returns a Result. A missing installation is an actionable configuration failure. The book does not invent metalib contents or claim those modules were bundled with the supplied headers.
+load\_stdlib searches for prelude/mod.mml and returns a Result. A missing installation is an actionable configuration failure. The book does not invent metalib contents or claim those modules were bundled with the supplied headers.
 
 \lstinputlisting[language=C++,caption={Example ex22\_01: C++}]{examples/cpp/ex22_01.inc}
 \section*{Execution, step by step}
@@ -152,7 +152,7 @@ Add an error fixture and compare diagnostic code and span before comparing prese
 \section*{Review the result}
 Keep the original accepted fixture and add the new boundary fixture beside it. Compare observable values and diagnostic categories across the two hosts. Do not label the D run as passed until a D compiler has executed it; the supplied edition records source review separately from runtime evidence.
 
-The shared language fixture is also available as examples/ex22\_05.ml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
+The shared language fixture is also available as examples/ex22\_05.mml. Use that file when comparing native embeddings so escaping differences in host strings do not change the program being tested.
 
 \clearpage
 \section*{Chapter review: Pinning sources and evidence}

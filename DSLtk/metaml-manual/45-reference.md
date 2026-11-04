@@ -6,7 +6,7 @@ This chapter is the compact lookup entry point after the tutorial. Chapters 25â€
 
 Function arrows associate rightward. `['a]` is a homogeneous list; `Option 'a` models absence; `Result 'a String` models a successful value or a textual error. Foreign handle types such as `Buffer`, `Table 'v`, and `Parser 'a` are opaque and session-associated. The `Unit` argument convention makes otherwise zeroargument native operations explicit as `f ()`.
 
-The authoritative implementations remain `MetaML.hpp`, `MetaML.d`, portable `mod.ml` signatures, C++ module headers/implementation fragments, and D module files. Native C ABI declarations are in `metalib/c/MetaML.h`. Consult the adjacent tests for ordering and boundary cases that a type alone cannot express.
+The authoritative implementations remain `MetaML.hpp`, `MetaML.d`, portable `mod.mml` signatures, C++ module headers/implementation fragments, and D module files. Native C ABI declarations are in `metalib/c/MetaML.h`. Consult the adjacent tests for ordering and boundary cases that a type alone cannot express.
 
 ## Maintenance workflow
 

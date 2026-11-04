@@ -98,7 +98,7 @@ Test.equal "parse_expr" (Frontend.parse_expr "1 + x") (Ok "(binop (op +) (int 1)
 Test.section "Loader"
 Test.check "stdlib" (Option.is_some (Loader.stdlib ()))
 Test.check "resolve" (Option.is_some (Loader.resolve "list") && Option.is_none (Loader.resolve "no_such_module_xyz"))
-IO.println (match Loader.load "no/such/file.ml" with | Ok _ -> "ok" | Err e -> e)
+IO.println (match Loader.load "no/such/file.mml" with | Ok _ -> "ok" | Err e -> e)
 
 Test.section "Module"
 Test.check "exists" (Module.exists "List" && not (Module.exists "Nope"))
@@ -122,4 +122,4 @@ Test.check "instance_of" (Type.instance_of "Int -> Int" "'a -> 'a" && not (Type.
 Test.check "equal" (Type.equal "'x -> 'y" "'a -> 'b" && not (Type.equal "'a -> 'a" "'a -> 'b"))
 Test.equal "arity" (Type.arity "Int -> String -> Bool") (Ok 2)
 IO.println (match Type.normalize "Foo Int" with | Ok s -> s | Err e -> e)
-IO.println (match Loader.load "tests/integration/host/loadme.ml" with | Ok _ -> "loaded ok" | Err e -> e)
+IO.println (match Loader.load "tests/integration/host/loadme.mml" with | Ok _ -> "loaded ok" | Err e -> e)

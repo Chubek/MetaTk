@@ -4,7 +4,7 @@
    `Option 'a` (None | Some 'a) and `Result 'a 'e` (Ok 'a | Err 'e) are
    created by every session before metalib loads; this module adds
    identity/composition helpers, structural equality and ordering, error
-   reporting, and the `Test` harness used by every `test.ml`.
+   reporting, and the `Test` harness used by every `test.mml`.
 
    Host primitives used: Core.show, Core.error, Core.compare, Core.equal,
    Core.hash, Core.ignore. -}
@@ -55,7 +55,7 @@ module Core :> CORE := struct
   val uncurry f p := match p with | (a, b) -> f a b
 end
 
-{- Test — a tiny deterministic test harness for metalib `test.ml` files.
+{- Test — a tiny deterministic test harness for metalib `test.mml` files.
    Every check prints one line: `ok - <name>` or `FAIL - <name>: ...`. -}
 module type TEST := sig
   val check : String -> Bool -> Unit

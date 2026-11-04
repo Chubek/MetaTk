@@ -13,11 +13,11 @@ def main():
     parser.add_argument("--trace", action="store_true", help="also compare reduction traces")
     args = parser.parse_args()
     failures = 0
-    sources = fixtures() + sorted((ROOT / "metalib").glob("*/mod.ml"))
+    sources = fixtures() + sorted((ROOT / "metalib").glob("*/mod.mml"))
     for path in sources:
-        # mod.ml units are already evaluated by prelude loading. Re-evaluating
+        # mod.mml units are already evaluated by prelude loading. Re-evaluating
         # an ascribed module in its own existing scope is not an isolated test.
-        for ast in ((True,) if path.name == "mod.ml" else (False, True)):
+        for ast in ((True,) if path.name == "mod.mml" else (False, True)):
             cmd = ["--dump-ast", path] if ast else [path]
             a, b = run(args.cpp, cmd), run(args.d, cmd)
             same = (a.returncode, a.stdout, a.stderr) == (b.returncode, b.stdout, b.stderr)

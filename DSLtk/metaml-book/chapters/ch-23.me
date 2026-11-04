@@ -115,7 +115,7 @@ Keep these distinctions in API documentation as well as tests. A caller should
 know whether None means missing data, invalid data, or an intentionally filtered
 result before deciding to substitute a default.
 .pp
-Read metalib/option/mod.ml and metalib/result/mod.ml for the precise public
+Read metalib/option/mod.mml and metalib/result/mod.mml for the precise public
 signatures and traversal order. Write two validators for a list of counts:
 one that stops at the first invalid count, and one that reports every invalid
 position. Test empty input and two consecutive failures. Explain which work

@@ -18,7 +18,7 @@ Test.equal "string concat" (concat ["Meta", "ML"]) "MetaML"
 
 The library includes a tiny `Test` module used by fixtures. `Test.equal name actual expected` checks structural equality, and `Test.check name condition` checks a boolean. Successful tests print deterministic `ok` lines; a failure aborts the fixture. This harness is also used to validate the manual's complete examples.
 
-**Sources:** [`core/mod.ml`](../metalib/core/mod.ml), [`prelude/mod.ml`](../metalib/prelude/mod.ml).
+**Sources:** [`core/mod.mml`](../metalib/core/mod.mml), [`prelude/mod.mml`](../metalib/prelude/mod.mml).
 
 <!-- nav:begin -->
 [Contents](README.md) · [Previous](23-diagnostics.md) · [Next](25-integer-library.md)

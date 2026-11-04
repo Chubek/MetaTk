@@ -4,12 +4,12 @@ The REPL is a small language policy over DSLtk's generic session. On a terminal 
 
 ```sh
 build/metaml-repl-cpp --stdlib metalib -e 'List.sum [1, 2, 3]'
-build/metaml-repl-cpp --stdlib metalib program.ml
-build/metaml-repl-cpp --dump-ast program.ml
+build/metaml-repl-cpp --stdlib metalib program.mml
+build/metaml-repl-cpp --dump-ast program.mml
 build/metaml-repl-cpp --stdlib metalib --list-primitives
 ```
 
-Useful directives are `#type expr`, `#ast source`, `#trace expr`, `#load "file.ml"`, `#reload`, `#stack`, `#clear`, and `#quit`. The generic REPL also supplies `#help`. `#type` checks without evaluating; `#trace` evaluates and reports named reductions. `#load` remembers a path for subsequent reloads. The terminal wrapper checks the last loaded file for changes when reading subsequent input; this is not a continuously running background file watcher.
+Useful directives are `#type expr`, `#ast source`, `#trace expr`, `#load "file.mml"`, `#reload`, `#stack`, `#clear`, and `#quit`. The generic REPL also supplies `#help`. `#type` checks without evaluating; `#trace` evaluates and reports named reductions. `#load` remembers a path for subsequent reloads. The terminal wrapper checks the last loaded file for changes when reading subsequent input; this is not a continuously running background file watcher.
 
 ```text
 meaml> inc x := x + 1

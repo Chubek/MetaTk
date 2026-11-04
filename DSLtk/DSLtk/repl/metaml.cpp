@@ -3,7 +3,7 @@
 // A thin wrapper over dsltk::repl::Session (DSLtk.hpp) instantiated with the
 // metaml::ReplLanguage policy (MetaML.hpp). Mirrors repl/metaml.d exactly.
 //
-//   metaml [options] [file.ml ...]
+//   metaml [options] [file.mml ...]
 //
 // Build: c++ -std=c++20 -O2 -I.. metaml.cpp -o metaml [-DMETAML_USE_READLINE -lreadline]
 
@@ -48,7 +48,7 @@ struct Options
 };
 
 const char *usage_text
-    = "usage: metaml [options] [file.ml ...]\n"
+    = "usage: metaml [options] [file.mml ...]\n"
       "  --no-tty          never print prompts\n"
       "  --no-history      do not read or write the history file\n"
       "  --no-stdlib       do not load metalib\n"

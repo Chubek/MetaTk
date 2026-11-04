@@ -18,7 +18,7 @@ Test.equal "nested option" (Option.flatten (Some (Some 7))) (Some 7)
 
 Arguments are eager. `get_or expensive_option (expensive_default ())` evaluates the default before calling the helper, even if the Option is Some. Use a `match` when fallback construction must be lazy. The same caution applies to `or_else` alternatives.
 
-**Source:** [`option/mod.ml`](../metalib/option/mod.ml).
+**Source:** [`option/mod.mml`](../metalib/option/mod.mml).
 
 <!-- api:begin -->
 ```text

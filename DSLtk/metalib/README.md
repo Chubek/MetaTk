@@ -6,12 +6,12 @@ connects a session to command-line arguments, files, standard streams and a REPL
 
 ## Language library
 
-`prelude/mod.ml` imports the portable modules (`core`, `int`, `float`, `string`,
+`prelude/mod.mml` imports the portable modules (`core`, `int`, `float`, `string`,
 `list`, `option`, `result`, `io`). Load it with `Session.load_stdlib(directory)`.
-Each module's `test.ml` is exercised by `scripts/run_tests.py`.
+Each module's `test.mml` is exercised by `scripts/run_tests.py`.
 
 Additional modules use `mod.mml`. Both runtimes resolve `import "name"` to
-`name/mod.mml` (and continue to support `.ml` files). Import these modules
+`name/mod.mml`. Import these modules
 explicitly after loading the prelude. Native modules run in both dialects;
 modules backed by host services require their installer first.
 

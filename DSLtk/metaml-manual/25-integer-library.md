@@ -18,7 +18,7 @@ Test.equal "parse bases" (Int.from_string "0xff") (Some 255)
 
 For sizes, indices, and allocation calculations, checked arithmetic is usually preferable to wrapping arithmetic. Bounds checks must still be performed against the target collection's length.
 
-**Source:** [`int/mod.ml`](../metalib/int/mod.ml). The public signature below is refreshed from that source.
+**Source:** [`int/mod.mml`](../metalib/int/mod.mml). The public signature below is refreshed from that source.
 
 <!-- api:begin -->
 ```text

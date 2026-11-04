@@ -4,8 +4,8 @@ book.chapter(19, "Imports, library discovery, and project layout")
 .sh 2 "A source import extends a session"
 .pp
 The form import "spec" loads a source unit into the current session. Resolution
-tries the specification as a file, with an .ml suffix, and as a directory
-containing mod.ml. This convention supports both single-file helpers and
+tries the specification as a file, with an .mml suffix, and as a directory
+containing mod.mml. This convention supports both single-file helpers and
 module directories with adjacent tests. Import is a language operation with
 evaluation consequences; it is not a textual include that merely pastes
 characters before parsing.
@@ -50,15 +50,15 @@ functions, while a separate entry point performs effects. That architecture
 reduces the number of partially completed actions a caller must reason about.
 .sh 2 "Select the standard library deliberately"
 .pp
-Session.load_stdlib locates a tree containing prelude/mod.ml. Discovery can
+Session.load_stdlib locates a tree containing prelude/mod.mml. Discovery can
 consult METAML_STDLIB, a dialect-specific location under METAML_PREFIX,
 paths relative to the executable, a configured default, and a working-directory
 metalib fallback. Passing an explicit directory is the simplest reproducible
 choice for examples and embedded deployments. The CLI does this when given
 --stdlib, and the book checker always supplies the repository's library tree.
 .lua
-book.code("sh", [=[build/metaml-repl-cpp --stdlib /opt/myapp/metalib program.ml
-METAML_STDLIB=/opt/myapp/metalib build/metaml-repl-cpp program.ml
+book.code("sh", [=[build/metaml-repl-cpp --stdlib /opt/myapp/metalib program.mml
+METAML_STDLIB=/opt/myapp/metalib build/metaml-repl-cpp program.mml
 # Inspect the interpreter's registered primitive boundary.
 build/metaml-repl-cpp --stdlib metalib --list-primitives]=],
     "Explicit library selection and inspection")
@@ -69,7 +69,7 @@ The host must request loading and check the result. This matters when an
 application has no useful current directory or when installation is relocated.
 Package the interpreter and library revision together. A source wrapper can
 refer to a host primitive that is absent from an older executable, so copying
-only new .ml files is not always a compatible upgrade.
+only new .mml files is not always a compatible upgrade.
 .sh 2 "Separate portable source from native modules"
 .pp
 The portable metalib directories contain MetaML source used by both dialects.
@@ -96,10 +96,10 @@ driver. This makes a module independently testable and helps graph analysis
 identify genuine cycles instead of artifacts of a tangled startup sequence.
 .lua
 book.code("text", [=[tool/
-  main.ml          -- orchestration and explicit effects
-  syntax/mod.ml    -- data model and constructors
-  check/mod.ml     -- validation
-  emit/mod.ml      -- rendering
+  main.mml          -- orchestration and explicit effects
+  syntax/mod.mml    -- data model and constructors
+  check/mod.mml     -- validation
+  emit/mod.mml      -- rendering
   tests/           -- independent fixture programs]=], "A suggested application layout, not required directories")
 .endlua
 .pp

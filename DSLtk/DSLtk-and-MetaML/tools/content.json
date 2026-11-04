@@ -693,7 +693,7 @@
         "concept": "Start with an expression that uses only built-in syntax. This isolates include-path, compiler and session issues from external library discovery. Once the baseline works, add dependencies one at a time and keep the minimal smoke test in the repository.",
         "cpp": "metaml::Session s;\nauto r = s.eval(\"42\");\nassert(r.is_ok());\nassert(metaml::to_string(r.unwrap()) == \"42\");",
         "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"42\");\nassert(r.is_ok());\nassert(MetaML.to_string(r.unwrap()) == \"42\");",
-        "trace": "A fresh session already understands integer literals. It does not need to find prelude/mod.ml to evaluate this expression.",
+        "trace": "A fresh session already understands integer literals. It does not need to find prelude/mod.mml to evaluate this expression.",
         "caution": "The uploaded files do not include metalib. A book example must not silently depend on a separately installed prelude.",
         "exercise": "Change the input to a Boolean literal and update the expected rendering.",
         "anchor": "Session",
@@ -1150,8 +1150,8 @@
       {
         "title": "Rendering a language diagnostic",
         "concept": "When evaluation fails, the session can render each diagnostic with the source it retained. This gives filenames and carets without requiring the host to rebuild the lexer coordinate map. Store the structured diagnostic as well as any formatted text.",
-        "cpp": "metaml::Session s;\nauto r = s.eval(\"missing\", \"policy.ml\");\nassert(r.is_err());\nauto text = s.render(r.unwrap_err().front());\nassert(!text.empty());",
-        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"missing\", \"policy.ml\");\nassert(r.is_err());\nauto text = s.render(r.unwrap_err()[0]);\nassert(text.length > 0);",
+        "cpp": "metaml::Session s;\nauto r = s.eval(\"missing\", \"policy.mml\");\nassert(r.is_err());\nauto text = s.render(r.unwrap_err().front());\nassert(!text.empty());",
+        "d": "auto s = new MetaML.Session();\nauto r = s.eval(\"missing\", \"policy.mml\");\nassert(r.is_err());\nauto text = s.render(r.unwrap_err()[0]);\nassert(text.length > 0);",
         "trace": "The source filename is attached to the parse and checker context. Rendering consults that context to explain the failure.",
         "caution": "A UI should escape diagnostic text for its display medium. A terminal rendering is not automatically safe HTML.",
         "exercise": "Keep an error list with code, message and offsets alongside the displayed caret text.",
@@ -1160,8 +1160,8 @@
       {
         "title": "Syntax errors versus type errors",
         "concept": "Parsing and checking fail at different stages. A missing delimiter is a syntax error; adding an integer to a Boolean is a type error. Separate those categories in tests so a parser regression cannot masquerade as a successful checker test.",
-        "cpp": "auto r = metaml::parse_expression(\"(1 + 2\", \"bad.ml\");\nassert(r.is_err());\nassert(!r.unwrap_err().empty());",
-        "d": "auto r = MetaML.parse_expression(\"(1 + 2\", \"bad.ml\");\nassert(r.is_err());\nassert(r.unwrap_err().length > 0);",
+        "cpp": "auto r = metaml::parse_expression(\"(1 + 2\", \"bad.mml\");\nassert(r.is_err());\nassert(!r.unwrap_err().empty());",
+        "d": "auto r = MetaML.parse_expression(\"(1 + 2\", \"bad.mml\");\nassert(r.is_err());\nassert(r.unwrap_err().length > 0);",
         "trace": "The parser cannot close the parenthesized expression, so no expression AST is returned to the checker.",
         "caution": "A successful parse does not establish that names resolve or types agree. Syntax-only tools must label their validation scope accurately.",
         "exercise": "Parse an undefined variable successfully, then evaluate it and compare the two results.",
@@ -1170,8 +1170,8 @@
       {
         "title": "Parsing a whole program",
         "concept": "The whole-program parser retains source and file identity with its items. This is the right boundary for tools that want to inspect declarations before deciding whether to evaluate them. Treat returned AST ownership according to the actual smart-pointer or class representation.",
-        "cpp": "auto r = metaml::parse(\"val x := 42\", \"unit.ml\");\nassert(r.ok());\nassert(r.program.items.size() == 1);",
-        "d": "auto r = MetaML.parse(\"val x := 42\", \"unit.ml\");\nassert(r.ok());\nassert(r.program.items.length == 1);",
+        "cpp": "auto r = metaml::parse(\"val x := 42\", \"unit.mml\");\nassert(r.ok());\nassert(r.program.items.size() == 1);",
+        "d": "auto r = MetaML.parse(\"val x := 42\", \"unit.mml\");\nassert(r.ok());\nassert(r.program.items.length == 1);",
         "trace": "The program has one declaration item. No language value is computed by this parse-only operation.",
         "caution": "Editing a parsed AST bypasses the source parser invariants. Revalidate shape, spans and types before executing transformed programs.",
         "exercise": "Add a final expression and compare item count with the eval result.",
@@ -1263,7 +1263,7 @@
     "lessons": [
       {
         "title": "Explicit standard-library discovery",
-        "concept": "load_stdlib searches for prelude/mod.ml and returns a Result. A missing installation is an actionable configuration failure. The book does not invent metalib contents or claim those modules were bundled with the supplied headers.",
+        "concept": "load_stdlib searches for prelude/mod.mml and returns a Result. A missing installation is an actionable configuration failure. The book does not invent metalib contents or claim those modules were bundled with the supplied headers.",
         "cpp": "metaml::Session s;\nauto r = s.load_stdlib(\"__book_missing_metalib__\");\nassert(r.is_err());\nassert(!s.stdlib_loaded());",
         "d": "auto s = new MetaML.Session();\nauto r = s.load_stdlib(\"__book_missing_metalib__\");\nassert(r.is_err());\nassert(!s.stdlib_loaded());",
         "trace": "The explicit directory disables fallback discovery for this attempt. The deliberately absent path produces a controlled failure.",

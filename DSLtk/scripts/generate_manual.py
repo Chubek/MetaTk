@@ -41,7 +41,7 @@ def main():
         text = NAV.sub("\n", f.read_text()).rstrip()
         number = i + 1
         if number in PORTABLE:
-            source = ROOT / "metalib" / PORTABLE[number] / "mod.ml"
+            source = ROOT / "metalib" / PORTABLE[number] / "mod.mml"
             sig = source.read_text().split(":= sig\n", 1)[1].split("\nend", 1)[0]
             block = "<!-- api:begin -->\n```text\n" + sig + "\n```\n<!-- api:end -->"
             text = API.sub(lambda _: block, text)

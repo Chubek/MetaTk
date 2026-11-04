@@ -4,7 +4,7 @@ These twenty files are small, runnable programs covering the portable standard
 library and the optional host-backed modules. Run a portable example with:
 
 ```sh
-metaml --stdlib ../metalib 01-basics.ml
+metaml --stdlib ../metalib 01-basics.mml
 ```
 
 Examples using SQLite, MessagePack, JSON-RPC, or Webserver also require the

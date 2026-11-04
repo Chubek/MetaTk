@@ -21,7 +21,7 @@ Test.equal "Unicode scalars" (String.utf8_chars "a\u{e9}") ["a", "\u{e9}"]
 Test.check "UTF-8 validation" (not (String.utf8_valid (String.of_codes [255])))
 ```
 
-**Sources:** [`string/mod.ml`](../metalib/string/mod.ml), [`cpp/String.h`](../metalib/cpp/String.h).
+**Sources:** [`string/mod.mml`](../metalib/string/mod.mml), [`cpp/String.h`](../metalib/cpp/String.h).
 
 <!-- api:begin -->
 ```text

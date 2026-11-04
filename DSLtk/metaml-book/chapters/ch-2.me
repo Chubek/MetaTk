@@ -41,10 +41,10 @@ is better for a multi-definition experiment because it preserves source
 locations and can be rerun after changes.
 .lua
 book.code("sh", [=[build/metaml-repl-cpp --stdlib metalib
-build/metaml-repl-cpp --stdlib metalib program.ml
+build/metaml-repl-cpp --stdlib metalib program.mml
 build/metaml-repl-cpp --no-tty --no-history --stdlib metalib \
   -e 'Test.equal "arithmetic" (6 * 7) 42'
-build/metaml-repl-cpp --dump-ast program.ml]=], "Interactive, file, and expression modes")
+build/metaml-repl-cpp --dump-ast program.mml]=], "Interactive, file, and expression modes")
 .endlua
 .pp
 Files are quiet except for explicit output and diagnostics; the -e route uses
@@ -65,7 +65,7 @@ that can be inserted into a lambda body.
 book.code("text", [=[meaml> increment x := x + 1
 meaml> #type increment
 meaml> #trace increment 41
-meaml> #load "experiment.ml"
+meaml> #load "experiment.mml"
 meaml> #reload]=], "A workbench transcript: enter the commands, not the prompts")
 .endlua
 .pp

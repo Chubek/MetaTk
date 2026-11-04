@@ -19,7 +19,7 @@ ldc2 -i -I. repl/metaml.d -of=metaml-d
 
 The files named `metalib/cpp/X.c` are C++ implementation fragments included by `X.h`. Never pass them to a C compiler or compile them independently. The genuine C interface is `metalib/c/MetaML.h`; its implementation is `MetaML.cpp` and must be linked with a C++ linker/runtime.
 
-**Check:** run a library fixture with `build/metaml-repl-cpp --stdlib metalib metalib/list/test.ml`. A successful run exits zero and contains no failed assertions.
+**Check:** run a library fixture with `build/metaml-repl-cpp --stdlib metalib metalib/list/test.mml`. A successful run exits zero and contains no failed assertions.
 
 <!-- nav:begin -->
 [Contents](README.md) · [Previous](01-introduction.md) · [Next](03-repl.md)

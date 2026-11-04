@@ -95,9 +95,9 @@ There is also a domain outcome inside a successful language result: a policy can
 \section*{Syntax conventions}
 C++ examples use dsl:: and metaml:: qualification. Compile-time string arguments use angle brackets, such as leaf<"number">. D uses template arguments such as leaf!"number" and dot qualification for enum members. Predicate negation uses ! in C++ and \textasciitilde{} or negated in D. Parser repetition uses unary star in C++ and many in D.
 
-MetaML source appears inside native strings or in .ml fixtures. A value declaration uses val name := expression. Anonymous functions use fn parameters -> body. A local expression uses let name = expression in body. Modules use module Name := struct ... end. Record fields use equals, while the top-level declaration marker is colon-equals.
+MetaML source appears inside native strings or in .mml fixtures. A value declaration uses val name := expression. Anonymous functions use fn parameters -> body. A local expression uses let name = expression in body. Modules use module Name := struct ... end. Record fields use equals, while the top-level declaration marker is colon-equals.
 
-Escaping belongs to the host string layer: a newline in MetaML source may be written as backslash-n in a C++ or D string. A quote within MetaML string syntax must survive host string decoding. Prefer a separate .ml file for long scripts, and typed native primitives for runtime data.
+Escaping belongs to the host string layer: a newline in MetaML source may be written as backslash-n in a C++ or D string. A quote within MetaML string syntax must survive host string decoding. Prefer a separate .mml file for long scripts, and typed native primitives for runtime data.
 
 Identifiers such as ?x inside rewrite S-expressions are rule variables. They are unrelated to MetaML type variables, which use an apostrophe in type syntax. A concrete atom x in an e-graph is data; an unbound ?x pattern cannot be inserted as a concrete expression.
 
@@ -111,7 +111,7 @@ For a new DSL, choose a representation and validate its invariants before writin
 
 For embedding MetaML, bring up a fresh session without the external prelude first. Add typed host primitives one at a time. Replace the final allowlist after registration, configure output and resource shutdown, and prepare source in a candidate environment before publication.
 
-For cross-dialect work, run identical .ml fixtures in both hosts and compare values, types, diagnostic codes and spans. Native adapter tests should remain separate because they exercise host conversion and lifetime behavior that identical scripts cannot reveal.
+For cross-dialect work, run identical .mml fixtures in both hosts and compare values, types, diagnostic codes and spans. Native adapter tests should remain separate because they exercise host conversion and lifetime behavior that identical scripts cannot reveal.
 
 The book test runner checks the C++ workshop programs and complete case studies. Its report is included in VALIDATION.md. A missing D toolchain is explicitly reported. A reproducible build should distinguish completed checks from checks that remain to be run on another machine.
 

@@ -18,7 +18,7 @@ Test.equal "empty parse" (Float.from_string "") None
 
 Use tolerances when testing approximate numerical algorithms. Direct equality is appropriate only when exact results or exact round trips are part of the contract. In particular, avoid assuming `Float.compare` establishes a meaningful total order for NaNs.
 
-**Source:** [`float/mod.ml`](../metalib/float/mod.ml).
+**Source:** [`float/mod.mml`](../metalib/float/mod.mml).
 
 <!-- api:begin -->
 ```text

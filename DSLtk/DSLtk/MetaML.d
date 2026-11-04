@@ -6286,7 +6286,7 @@ final class Session
         string[] cands = !dir.length ? stdlib_candidates() : [dir];
         foreach (c; cands)
         {
-            string f = c ~ "/prelude/mod.ml";
+            string f = c ~ "/prelude/mod.mml";
             try { if (exists(f) && isFile(f)) { found = c; break; } }
             catch (Exception) {}
         }
@@ -6618,7 +6618,7 @@ final class Session
                 string path = unquote(arg);
                 if (!path.length)
                 {
-                    rep.errors ~= make_diag("M0603", "`#load` expects a file name, e.g. `#load \"file.ml\"`", Span.init);
+                    rep.errors ~= make_diag("M0603", "`#load` expects a file name, e.g. `#load \"file.mml\"`", Span.init);
                     return rep;
                 }
                 last_loaded_ = path;
@@ -6876,7 +6876,7 @@ private:
         foreach (s; search_path_) bases ~= s;
         if (stdlib_dir_.length) bases ~= stdlib_dir_;
         foreach (b; bases)
-            foreach (cand; [buildPath(b, spec), buildPath(b, spec ~ ".ml"), buildPath(b, spec, "mod.ml")])
+            foreach (cand; [buildPath(b, spec), buildPath(b, spec ~ ".mml"), buildPath(b, spec, "mod.mml")])
             {
                 try
                 {

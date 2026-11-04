@@ -18,7 +18,7 @@ Test.equal "combine" (Result.map2 (+) (Ok 20) (Ok 22)) (Ok 42)
 
 Keep error types consistent across a chain. An application-specific ADT can preserve categories more reliably than concatenating strings. Render user-facing text at the boundary, where source context or recovery instructions are available.
 
-**Source:** [`result/mod.ml`](../metalib/result/mod.ml).
+**Source:** [`result/mod.mml`](../metalib/result/mod.mml).
 
 <!-- api:begin -->
 ```text

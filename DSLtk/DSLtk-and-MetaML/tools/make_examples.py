@@ -14,7 +14,7 @@ for i,ch in enumerate(chapters,1):
   (root/f'examples/cpp/{name}.inc').write_text(cpp+'\n')
   (root/f'examples/d/{name}.inc').write_text(d+'\n')
   if 'ml' in x:
-   (root/f'examples/{name}.ml').write_text(x['ml']+'\n')
+   (root/f'examples/{name}.mml').write_text(x['ml']+'\n')
   allcpp.append(f'void {name}() {{\n{cpp}\n}}\n')
   runner.append(f'try {{ {name}(); ++passed; }} catch(const std::exception& e) {{ ++failed; std::cerr << "{name}: " << e.what() << "\\n"; }}')
 allcpp.append('int main() { int passed=0, failed=0;\n'+'\n'.join(runner)+'\nstd::cout << passed << " passed, " << failed << " failed\\n"; return failed ? 1 : 0; }\n')

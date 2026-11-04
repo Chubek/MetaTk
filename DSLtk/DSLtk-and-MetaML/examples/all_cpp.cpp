@@ -609,18 +609,18 @@ assert(metaml::to_string(r.unwrap()) == "42");
 }
 void ex20_01() {
 metaml::Session s;
-auto r = s.eval("missing", "policy.ml");
+auto r = s.eval("missing", "policy.mml");
 assert(r.is_err());
 auto text = s.render(r.unwrap_err().front());
 assert(!text.empty());
 }
 void ex20_02() {
-auto r = metaml::parse_expression("(1 + 2", "bad.ml");
+auto r = metaml::parse_expression("(1 + 2", "bad.mml");
 assert(r.is_err());
 assert(!r.unwrap_err().empty());
 }
 void ex20_03() {
-auto r = metaml::parse("val x := 42", "unit.ml");
+auto r = metaml::parse("val x := 42", "unit.mml");
 assert(r.ok());
 assert(r.program.items.size() == 1);
 }

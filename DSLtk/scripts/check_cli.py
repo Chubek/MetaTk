@@ -28,16 +28,16 @@ def main():
         result = run("--unknown")
         assert result.returncode == 2 and b"unknown option" in result.stderr, result
 
-        (cwd / "-input.ml").write_text('IO.print (IO.read_all ())\n')
+        (cwd / "-input.mml").write_text('IO.print (IO.read_all ())\n')
         for data in (b"", b"unterminated", b"a\r\nb\n", b"a\x00b", b"x" * 20000):
-            result = run("--", "-input.ml", data=data)
+            result = run("--", "-input.mml", data=data)
             assert (result.returncode, result.stdout, result.stderr) == (0, data, b""), result
 
-        (cwd / "bad.ml").write_text("val broken :=\n")
-        result = run("--dump-ast", "bad.ml")
+        (cwd / "bad.mml").write_text("val broken :=\n")
+        result = run("--dump-ast", "bad.mml")
         assert result.returncode == 1 and b"error[" in result.stderr, result
         assert b"error[" not in result.stdout, result
-        result = run("bad.ml", "-e", '"should-not-run"')
+        result = run("bad.mml", "-e", '"should-not-run"')
         assert result.returncode == 1 and b"should-not-run" not in result.stdout, result
 
         result = run("--no-tty", "-e", "1 + 2", "-i", data=b"4 + 5\n")

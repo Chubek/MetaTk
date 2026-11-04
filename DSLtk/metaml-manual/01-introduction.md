@@ -4,7 +4,7 @@ MetaML is an embeddable ML-family language implemented in C++ and D. It combines
 
 This manual describes the implementation in this repository, rather than treating every exploratory design note as a shipped feature. In particular, ordinary evaluation is eager, function bodies are closures, and module bodies initialize lazily. C++20 is required by the current DSLtk dependency. Network servers, fibers, channels, and threading modules have reserved files but are not implemented libraries.
 
-There are two library layers. The portable `metalib/*/mod.ml` files provide the prelude, numeric functions, strings, lists, Option, Result, and IO wrappers. The host modules in `metalib/cpp` and `metalib/d` add parsers, structured data, buffers, tables, graphs, and tooling. Installing a host module and permitting its primitives are separate operations.
+There are two library layers. The portable `metalib/*/mod.mml` files provide the prelude, numeric functions, strings, lists, Option, Result, and IO wrappers. The host modules in `metalib/cpp` and `metalib/d` add parsers, structured data, buffers, tables, graphs, and tooling. Installing a host module and permitting its primitives are separate operations.
 
 ```metaml
 square x := x * x
