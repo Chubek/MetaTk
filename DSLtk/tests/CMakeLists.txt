@@ -41,6 +41,10 @@ set_target_properties(metaml_c_tests PROPERTIES C_STANDARD 99 C_STANDARD_REQUIRE
 add_test(NAME metaml_c_api COMMAND metaml_c_tests ${CMAKE_CURRENT_SOURCE_DIR}/../metalib)
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
+if(TARGET metaml)
+    add_test(NAME metaml_replxx COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/check_replxx.py --binary $<TARGET_FILE:metaml>)
+endif()
 add_test(NAME metaml_cli COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/check_cli.py --binary $<TARGET_FILE:metaml-repl-cpp>)
 find_program(METAML_D_COMPILER NAMES ldc2 dmd gdc)
