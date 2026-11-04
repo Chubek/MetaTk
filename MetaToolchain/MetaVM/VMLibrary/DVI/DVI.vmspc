@@ -3,14 +3,15 @@
   "name": "DVI",
   "symbol": "DVI",
   "architecture": "document",
-  "description": "TeX device independent output command interpreter",
-  "native_coverage": "catalog-only",
-  "native_format_loader": false,
+  "description": "Standard DVI format 2 decoder and integer-coordinate interpreter; external font metrics and opaque specials",
+  "native_coverage": "dvi2-interpreter",
+  "native_format_loader": true,
   "portable_example": "DVI.mvm",
   "vmweave": "DVI.vmweave",
   "vmspc": "DVI.vmspc",
   "vmdesc": "DVI.vmdesc",
   "limitations": [
-    "No native execution implemented. Descriptor and portable Machinery example only."
+    "Standard DVI version 2; all defined opcode families, structural validation and integer-coordinate event output; see docs/DVI.md.",
+    "SET characters require caller-supplied scaled font metrics; no font discovery, rasterization, driver-specific special semantics, XDV or pTeX extensions."
   ]
 }

@@ -1,4 +1,4 @@
 \VMName{DVI}
-\VMArchitecture{TeX device independent output command interpreter}
-\VMStatus{catalog-only}
+\VMArchitecture{Standard DVI format 2 decoder and integer-coordinate interpreter; external font metrics and opaque specials}
+\VMStatus{dvi2-interpreter}
 \VMInvariant{Portable example bytecode is Machinery bytecode; it does not establish native compatibility.}

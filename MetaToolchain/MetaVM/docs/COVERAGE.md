@@ -1,10 +1,10 @@
 # Machine coverage
 
-Portable examples run on Machinery. Native support is separate. No machine has a complete external runtime/image loader.
+Portable examples run on Machinery. Native support is separate. DVI has a standard format-2 loader; no complete language/platform runtime is provided.
 
-7 executable native subsets; 42 catalog-only profiles. SECD and Krivine use explicit in-memory closure-machine profiles; see [CLOSURE_VMS.md](CLOSURE_VMS.md).
+8 executable native subsets; 41 catalog-only profiles. SECD and Krivine use explicit in-memory closure-machine profiles; see [CLOSURE_VMS.md](CLOSURE_VMS.md).
 
-The SSAVM i64 textual subset and its configurable limits are specified in [SSAVM.md](SSAVM.md). The validated MetaML Definition embedding is described in [ROUND3.md](ROUND3.md). CHIP-8 presets and pinned ROM coverage are specified in [CHIP8.md](CHIP8.md); SDK packaging is described in [PACKAGING.md](PACKAGING.md).
+DVI version 2 and VMWeave event replay are specified in [DVI.md](DVI.md). The manual for every legacy entry is [VMS.md](VMS.md). The SSAVM i64 textual subset and its configurable limits are specified in [SSAVM.md](SSAVM.md). The validated MetaML Definition embedding is described in [ROUND3.md](ROUND3.md). CHIP-8 presets and pinned ROM coverage are specified in [CHIP8.md](CHIP8.md); SDK packaging is described in [PACKAGING.md](PACKAGING.md).
 
 | Machine | Architecture | Native coverage |
 |---|---|---|
@@ -22,7 +22,7 @@ The SSAVM i64 textual subset and its configurable limits are specified in [SSAVM
 | CPython | stack | catalog-only |
 | ConcurrentML | runtime | catalog-only |
 | DRMVM | graphics | graphics-subset |
-| DVI | document | catalog-only |
+| DVI | document | dvi2-interpreter |
 | Dalvik | register | catalog-only |
 | Dart | runtime | catalog-only |
 | Dis | register | catalog-only |

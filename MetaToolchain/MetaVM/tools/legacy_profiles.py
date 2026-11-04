@@ -1,0 +1,46 @@
+"""Explicit legacy identities and unresolved compatibility requirements.
+
+These are requirements for future native work, not invented guest formats.
+Keep every vmspecs directory represented; generate_vmspec_manual.py checks this.
+"""
+ALIASES = {'Smalltalk-80': 'Smaltalk-80', 'Postscript': 'PostScript', 'Parrot': 'ParrotVM'}
+REQUIREMENTS = {
+    'ALEX': 'Supply an authoritative ISA, operand semantics and executable examples.',
+    'BCPL': 'Select an abstract machine and dialect, word size, memory model and object format.',
+    'BEAM': 'Pin an OTP release, instruction definitions, BEAM container and scheduler/runtime contracts.',
+    'BMachine': 'Identify this machine and supply its transition rules or ISA; no catalog mapping exists.',
+    'C-Machine': 'Identify this machine and supply its transition rules, value representation and examples.',
+    'CAM': 'Select a categorical abstract machine presentation, instruction set and value representation.',
+    'CESK': 'Select a source calculus, evaluation strategy, store allocation and continuation rules.',
+    'CLR': 'Select an ECMA-335 edition, CIL scope, assembly loading, metadata and managed-runtime requirements.',
+    'CPython': 'Pin a Python bytecode release and specify code-object, object-model and runtime compatibility.',
+    'DVI': 'Standard DVI identifier 2 is implemented; supply scaled glyph advances and a rendering/specials policy.',
+    'FAM': 'Identify the intended FAM and supply an authoritative ISA and executable examples.',
+    'FORTH': 'The current i64 word subset is executable; select a Forth standard and environment for expansion.',
+    'FUL': 'Supply an authoritative machine definition, operand semantics and executable examples.',
+    'GMachine': 'Select a G-machine presentation, graph representation, update rules and compiler interface.',
+    'GraalVM': 'Specify the intended guest language/format, runtime release and interoperability contract.',
+    'Harrison': 'Identify this machine and supply its transition rules or ISA and executable examples.',
+    'JVM': 'The current i32 Code-array subset is executable; select a JVMS edition and class/runtime compatibility target.',
+    'Krivine': 'The closed-term, weak-head call-by-name profile v1 is executable; specify any requested extensions.',
+    'LASSIE': 'Supply an authoritative machine definition and executable examples; no catalog mapping exists.',
+    'LuaJIT': 'Pin a LuaJIT release, bytecode dump format and runtime/FFI scope; no catalog mapping exists.',
+    'LuaVM': 'Pin a Lua release, binary chunk format, number representation and object-runtime scope.',
+    'P-Code': 'Select a Pascal p-code dialect, instruction encoding, memory layout and runtime interface.',
+    'Parrot': 'Pin a Parrot release, packfile format, op libraries and object/runtime behavior.',
+    'Postscript': 'Select a PostScript language level, operators, fonts and graphics-device contract.',
+    'Prol': 'Identify this machine and supply its transition rules or ISA and executable examples.',
+    'PyPy': 'Specify the intended bytecode/IR, release, Python language scope and runtime behavior.',
+    'SECD': 'The unary/i64 lexical-closure profile v1 is executable; specify lists, recursive environments or image formats if needed.',
+    'SOM': 'Pin a SOM implementation, instruction set, source/image format and object primitives.',
+    'Smalltalk-80': 'Select an image format, bytecode dialect, object memory, primitives and host-device interface.',
+    'SynthBE': 'Supply an authoritative machine definition and executable examples; no catalog mapping exists.',
+    'TAM': 'Identify this machine and supply its ISA; it is not silently aliased to TAMMY.',
+    'Truffles': 'Specify the intended machine or language implementation and version; no catalog mapping exists.',
+    'VMGL': 'Supply an authoritative command format, version, graphics semantics and host-device contract.',
+    'VirGL': 'Specify the intended wire protocol/version, command semantics, resources and renderer interface.',
+    'WAM': 'Select a WAM presentation, instruction encoding, term/store model and Prolog runtime scope.',
+    'WASM': 'Select a WebAssembly specification version, feature set, module loading and host-import contract.',
+    'YARV': 'Pin a Ruby release, instruction-sequence format and object/runtime compatibility.',
+    'Zend': 'Pin a PHP/Zend release, opcode representation and value/runtime behavior.',
+}

@@ -488,6 +488,7 @@ out/
 build/
 _output/
 _output_files/
+out-*/
 
 # OS generated files
 .DS_Store

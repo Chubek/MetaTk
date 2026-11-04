@@ -1,3 +1,12 @@
+# Generation repair — 2026-11-04
+
+See [GENERATION.md](GENERATION.md) for the failed baseline, repair scope,
+reproduction commands and artifact/failure-preservation tests. GCC Release passes
+22/22 CTest cases; Clang Release with real MetaML passes 24/24; Clang Debug
+ASan/UBSan passes 22/22 with default leak detection (MetaML disabled). The GCC
+fallback suite also passes, retaining 5,056 Machinery checks and adding compilation
+and dual-engine execution of all 49 generated C factories. Historical records follow.
+
 # Sixth-pass validation — 2026-10-31
 
 The two new native closure-machine profiles are documented in `ROUND6.md` and

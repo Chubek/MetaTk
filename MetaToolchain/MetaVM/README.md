@@ -1,4 +1,21 @@
-> **Current implementation:** [ROUND6.md](docs/ROUND6.md) adds executable SECD and
+**[Read the complete 40-chapter manual](manual/README.md)** for build instructions,
+API contracts, generation workflows, native profiles, and runnable SDK examples.
+
+> **Generation repair:** The build now generates verified binary modules and C
+> factories for all 49 portable catalog examples. See [GENERATION.md](docs/GENERATION.md)
+> for commands, failure guarantees and the distinction from native guest runtimes.
+>
+> **Current refinement:** [VMS.md](docs/VMS.md) is the manual for all 38 legacy
+> `vmspecs` entries, with exact implementation status and compatibility requirements.
+> [DVI.md](docs/DVI.md) documents the new standard DVI version-2 decoder,
+> interpreter, `dvi-run` and VMWeave/Machinery event replay. The 49-entry catalog
+> now has eight native execution profiles and 41 catalog-only entries; five native
+> profiles correspond to legacy names. The request to implement every VM remains
+> incomplete. Unspecified ISAs and unpinned runtime versions are listed explicitly.
+> CMake builds and the relocated SDK are exercised; see [REPORT.md](REPORT.md).
+> Historical implementation notes below describe earlier passes.
+>
+> **Previous implementation:** [ROUND6.md](docs/ROUND6.md) adds executable SECD and
 > Krivine closure-machine subsets. There are now seven native subsets and 42
 > catalog-only profiles. See [CLOSURE_VMS.md](docs/CLOSURE_VMS.md) for their APIs,
 > semantics and limits; run `build/closure-vm-demo` for a native example.

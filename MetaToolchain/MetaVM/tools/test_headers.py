@@ -8,6 +8,7 @@ cxx=shlex.split(sys.argv[2] if len(sys.argv)>2 else os.environ.get('CXX','c++'))
 c_headers=['Machinery/CBridge.h','Machinery/OS.h','Machinery/Loader.h','vmweave/vmweave.h','MetaVM.h']
 cpp_headers=['vmweave/Builder.hpp','vmweave/Definition.hpp','vmweave/examples/ToyR16.hpp','VMLibrary/SSAVM/ISSA.hpp','VMLibrary/CHIP-8/Chip8.hpp','MetaVM.hpp']
 cpp_headers+=['VMLibrary/SECD/SECDMachine.hpp','VMLibrary/Krivine/KrivineMachine.hpp']
+cpp_headers+=['VMLibrary/DVI/DviMachine.hpp','vmweave/DviReplay.hpp']
 optional_headers=['vmweave/MetaMLAdapter.hpp'] if len(sys.argv)>3 else []
 for header in c_headers+cpp_headers+optional_headers:
  modes=['c11','c++11'] if header in c_headers else ['c++20' if header in optional_headers else 'c++17']

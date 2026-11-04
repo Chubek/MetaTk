@@ -7,6 +7,7 @@
 #include "MetaVM.hpp"
 #include "vmweave.h"
 #include "vmweave/Builder.hpp"
+#include "vmspecs/BMachine/BMachine.h"
 #include <algorithm>
 #include <functional>
 #include <iostream>
@@ -17,11 +18,18 @@ static void traps(const std::function<void()>&f) {bool caught=false;try{f();}cat
 static void test_catalog() {
     size_t native=0;
     for(const auto&p:metavm::library::catalog())if(std::string(p.coverage)!="catalog-only")++native;
-    CHECK(native==7);
+    CHECK(native==8); // DVI format-2 execution added alongside the prior seven profiles.
+    CHECK(std::string(metavm::library::find("DVI")->coverage)=="dvi2-interpreter");
     CHECK(std::string(metavm::library::find("SECD")->coverage)=="secd-unary-subset");
     CHECK(std::string(metavm::library::find("Krivine")->coverage)=="krivine-whnf-subset");
     CHECK(metavm::library::catalog().size()==49);
     CHECK(!metavm::library::find("absent"));
+    mvm_module*missing=reinterpret_cast<mvm_module*>(uintptr_t(1));mvm_error missing_error{};
+    CHECK(legacy_BMachine_example(&missing,&missing_error)==MVM_NOT_FOUND);
+    CHECK(missing==nullptr&&missing_error.status==MVM_NOT_FOUND);
+    CHECK(std::string(missing_error.message).find("BMachine")!=std::string::npos);
+    CHECK(legacy_BMachine_example(nullptr,&missing_error)==MVM_INVALID);
+    CHECK(missing_error.status==MVM_INVALID);
     for(const auto&p:metavm::library::catalog()) {
         mvm_module*m=nullptr;mvm_error e{};CHECK(p.example_module(&m,&e)==MVM_OK);
         CHECK(mvm_module_verify(m,&e)==MVM_OK);
