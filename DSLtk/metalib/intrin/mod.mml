@@ -1,0 +1,19 @@
+import "int"
+{- Portable operations on 64-bit words. Shift counts are checked. -}
+module Intrin := struct
+  val land := Int.land
+  val lor := Int.lor
+  val lxor := Int.lxor
+  val complement x := Int.lxor x (~1)
+  val popcount x :=
+    let rec go n word count := if n == 64 then count
+      else go (n + 1) (Int.shift_right word 1) (count + Int.land word 1) in
+    go 0 x 0
+  val trailing_zeros x :=
+    let rec go n word := if n == 64 then 64 else
+      if Int.land word 1 != 0 then n else go (n + 1) (Int.shift_right word 1) in
+    go 0 x
+  val shift_left x n := if n < 0 || n >= 64 then None else Some (Int.shift_left x n)
+  val shift_right x n := if n < 0 || n >= 64 then None else Some (Int.shift_right x n)
+  val is_power_of_two x := x > 0 && Int.land x (x - 1) == 0
+end

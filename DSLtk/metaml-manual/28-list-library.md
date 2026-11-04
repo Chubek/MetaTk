@@ -71,6 +71,8 @@ The host List module adds chunks, windows, runs, transpose, seeded shuffle, rota
   val zip_with : ('a -> 'b -> 'c) -> ['a] -> ['b] -> ['c]
   val scan : ('b -> 'a -> 'b) -> 'b -> ['a] -> ['b]
   val find_index : ('a -> Bool) -> ['a] -> Option Int
+  val chunks_checked : Int -> ['a] -> Option [['a]]
+  val assoc : 'a -> [('a, 'b)] -> Option 'b
 ```
 <!-- api:end -->
 

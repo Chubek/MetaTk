@@ -53,6 +53,10 @@ Test.check "UTF-8 validation" (not (String.utf8_valid (String.of_codes [255])))
   val of_int : Int -> t
   val of_float : Float -> t
   val to_int : t -> Option Int
+  val sub_checked : Int -> Int -> t -> Option t
+  val split_once : t -> t -> Option (t, t)
+  val strip_prefix : t -> t -> Option t
+  val strip_suffix : t -> t -> Option t
 ```
 <!-- api:end -->
 

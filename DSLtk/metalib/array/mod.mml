@@ -10,6 +10,15 @@ module Array := struct
   val make n x := List.replicate n x
   val map f xs := List.map f xs
   val fold f z xs := List.fold_left f z xs
+  val mapi := List.mapi
+  val append := List.append
+  val reverse := List.reverse
+  val exists := List.any
+  val all := List.all
+  val find := List.find
+  val update i f xs := match List.nth i xs with
+    | None -> None
+    | Some value -> set i (f value) xs
   val set i value xs :=
     if i < 0 || i >= List.length xs then None
     else Some (List.mapi (fn j x -> if i == j then value else x) xs)

@@ -8,6 +8,10 @@
 #include "metalib/jsonrpc/JSONRPC.hpp"
 #include "metalib/msgpack/MsgPack.hpp"
 #include "metalib/sysipc/IPC.hpp"
+#include "metalib/bignum/Bignum.hpp"
+#include "metalib/atomic/Atomic.hpp"
+#include "metalib/thread/Thread.hpp"
+#include <fstream>
 #ifdef METAML_TEST_SERVICES
 #include "metalib/sqlite/SQLite.hpp"
 #include "metalib/nng/NNG.hpp"
@@ -20,6 +24,8 @@ int main(int argc, char **argv) {
   if (argc != 2) return 2;
   metaml::Session s;
   metalib::install_all(s);
+  metalib::install_Bignum(s); metalib::install_Atomic(s); metalib::install_Threading(s);
+  metalib::install_Bignum(s); metalib::install_Atomic(s); metalib::install_Threading(s);
   metalib::install_HTTP(s); metalib::install_FFI(s); metalib::install_Shell(s);
   metalib::install_MsgPack(s); metalib::install_IPC(s);
 #ifdef METAML_TEST_SERVICES
@@ -39,6 +45,17 @@ int main(int argc, char **argv) {
   auto check = [&](const std::string &source) {
     if (metaml::to_string(eval(source)) != "true") throw std::runtime_error(source);
   };
+  for (auto name : {"peg", "bignum", "intrin", "seq", "array", "buffer", "cliopt", "sexpr", "json", "yaml", "fmt", "log", "thread", "atomic"})
+    eval(std::string("import \"") + name + "\"");
+  std::ifstream contracts(std::string(argv[1]) + "/../tests/metalib_contracts.txt");
+  if (!contracts) throw std::runtime_error("missing metalib contracts");
+  for (std::string line; std::getline(contracts, line);) if (!line.empty()) check(line);
+  auto recursive = s.eval("let rec rule := Peg.lazy (fn _ -> rule) in Peg.run rule \"\"");
+  if (!recursive.is_err()) throw std::runtime_error("left recursion was not rejected");
+  bool recursion_diagnostic = false;
+  for (const auto &d : recursive.unwrap_err())
+    recursion_diagnostic |= d.message.find("left recursion") != std::string::npos;
+  if (!recursion_diagnostic) throw std::runtime_error("missing left recursion diagnostic");
   for (auto name : {"http", "uri", "ffi", "memory", "parsec", "shell", "sequence", "array", "stream", "getopt", "db", "nosqldb", "transpile", "weblets", "jsonrpc", "msgpack", "sysipc"})
     eval(std::string("import \"") + name + "\"");
   check("Array.set 1 9 [1,2,3] == Some [1,9,3]");

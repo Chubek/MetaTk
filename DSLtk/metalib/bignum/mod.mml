@@ -1,0 +1,17 @@
+module Bignum := struct
+  val parse := Bignum.parse($1)
+  val of_int := Bignum.of_int($1)
+  val to_int := Bignum.to_int($1)
+  val to_string := Bignum.to_string($1)
+  val add := Bignum.add($1, $2)
+  val sub := Bignum.sub($1, $2)
+  val mul := Bignum.mul($1, $2)
+  val neg := Bignum.neg($1)
+  val compare := Bignum.compare($1, $2)
+  val equal a b := Bignum.compare(a, b) == 0
+  val divmod := Bignum.divmod($1, $2)
+  val pow base exponent :=
+    let rec go b n acc := if n == 0 then acc else
+      go (mul b b) (n / 2) (if n % 2 == 0 then acc else mul acc b) in
+    if exponent < 0 then Err "Bignum: negative exponent" else Ok (go base exponent (of_int 1))
+end

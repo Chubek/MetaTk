@@ -57,6 +57,8 @@ module type LIST := sig
   val zip_with : ('a -> 'b -> 'c) -> ['a] -> ['b] -> ['c]
   val scan : ('b -> 'a -> 'b) -> 'b -> ['a] -> ['b]
   val find_index : ('a -> Bool) -> ['a] -> Option Int
+  val chunks_checked : Int -> ['a] -> Option [['a]]
+  val assoc : 'a -> [('a, 'b)] -> Option 'b
 end
 
 module List :> LIST := struct
@@ -161,4 +163,12 @@ module List :> LIST := struct
       | [] -> None
       | y :: rest -> if p y then Some i else go (i + 1) rest in
     go 0 xs
+  val chunks_checked size xs :=
+    let rec go rest out := match rest with
+      | [] -> Some (List.reverse(out))
+      | _ -> match split_at size rest with | (chunk, tail) -> go tail (chunk :: out) in
+    if size <= 0 then None else go xs []
+  val assoc key xs := match find (fn (k, _) -> k == key) xs with
+    | None -> None
+    | Some (_, value) -> Some value
 end

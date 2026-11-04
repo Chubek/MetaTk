@@ -1,0 +1,6 @@
+module SExpr := struct
+  val parse := SExpr.parse($1)
+  val parse_one := SExpr.parse_one($1)
+  val render := SExpr.render($1)
+  val atom_text := SExpr.atom_text($1)
+end

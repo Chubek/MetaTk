@@ -22,6 +22,8 @@ target_link_libraries(metaml_runtime_tests PRIVATE DSLtk Threads::Threads)
 add_test(NAME metaml_runtime COMMAND metaml_runtime_tests ${CMAKE_CURRENT_SOURCE_DIR}/../metalib)
 
 add_executable(metalib_extensions_tests test_metalib_extensions.cpp)
+find_path(METAML_BOOST_INCLUDE_DIR boost/multiprecision/cpp_int.hpp REQUIRED)
+target_include_directories(metalib_extensions_tests PRIVATE ${METAML_BOOST_INCLUDE_DIR})
 target_link_libraries(metalib_extensions_tests PRIVATE DSLtk Threads::Threads ${CMAKE_DL_LIBS})
 if(METAML_BUILD_SERVICES)
     target_link_libraries(metalib_extensions_tests PRIVATE metaml-services)

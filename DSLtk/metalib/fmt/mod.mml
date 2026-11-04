@@ -1,0 +1,19 @@
+import "string"
+import "list"
+{- {} consumes one string; {{ and }} escape braces. Strict arity. -}
+module Fmt := struct
+  val format template args :=
+    let rec go chars values out := match chars with
+      | [] -> if List.is_empty values then Ok (String.join "" (List.reverse out)) else Err "Fmt: extra arguments"
+      | "{" :: "{" :: rest -> go rest values ("{" :: out)
+      | "}" :: "}" :: rest -> go rest values ("}" :: out)
+      | "{" :: "}" :: rest -> (match values with
+        | [] -> Err "Fmt: missing argument"
+        | value :: tail -> go rest tail (value :: out))
+      | "{" :: _ -> Err "Fmt: unmatched opening brace"
+      | "}" :: _ -> Err "Fmt: unmatched closing brace"
+      | ch :: rest -> go rest values (ch :: out) in
+    go (String.chars template) args []
+  val pad_left width text := String.repeat (if width > String.length text then width - String.length text else 0) " " ^ text
+  val pad_right width text := text ^ String.repeat (if width > String.length text then width - String.length text else 0) " "
+end

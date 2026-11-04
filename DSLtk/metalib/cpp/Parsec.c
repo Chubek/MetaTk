@@ -23,6 +23,8 @@ enum class PK
   Map,
   Bind,
   Pure,
+  Look,
+  Not,
   Fail,
   Opt,
   SepBy,
@@ -89,6 +91,7 @@ struct Run
   const std::string &s;
   std::size_t far = 0;
   std::vector<std::string> expected{};
+  std::vector<std::pair<const PObj *, std::size_t>> active{};
 
   void
   expect (std::size_t pos, const std::string &what)
@@ -107,6 +110,12 @@ struct Run
   R
   go (const PP &p, std::size_t pos)
   {
+    c.interp.check_cancelled(c.span);
+    std::pair<const PObj *, std::size_t> key{p.get(), pos};
+    if (active.size() >= 512 || std::find(active.begin(), active.end(), key) != active.end())
+      c.error("M0404", "Parsec: left recursion or nesting limit exceeded");
+    active.push_back(key);
+    struct Pop { decltype(active) &stack; ~Pop() { stack.pop_back(); } } pop{active};
     switch (p->kind)
       {
       case PK::Str:
@@ -217,6 +226,17 @@ struct Run
         }
       case PK::Pure:
         return std::make_pair (p->fn, pos);
+      case PK::Look:
+      case PK::Not:
+        {
+          auto far0 = far; auto saved = expected;
+          auto x = go(p->a, pos);
+          far = far0; expected = std::move(saved);
+          if (p->kind == PK::Look && x) return std::make_pair(x->first, pos);
+          if (p->kind == PK::Not && !x) return std::make_pair(Value::unit(), pos);
+          expect(pos, p->kind == PK::Look ? "lookahead" : "negative lookahead");
+          return std::nullopt;
+        }
       case PK::Fail:
         expect (pos, p->text);
         return std::nullopt;
@@ -415,6 +435,10 @@ install_Parsec (metaml::Session &s)
   prim (s, "Parsec.spaces", "Unit -> Parser Unit", 1,
         [] (C &, V &) { return wrap (mk (PK::Spaces)); });
   prim (s, "Parsec.eof", "Unit -> Parser Unit", 1, [] (C &, V &) { return wrap (mk (PK::Eof)); });
+  prim (s, "Parsec.lookahead", "Parser 'a -> Parser 'a", 1,
+        [] (C &c, V &a) { return wrap(mk(PK::Look, get(a[0], c))); });
+  prim (s, "Parsec.not_followed_by", "Parser 'a -> Parser Unit", 1,
+        [] (C &c, V &a) { return wrap(mk(PK::Not, get(a[0], c))); });
   prim (s, "Parsec.run", "Parser 'a -> String -> Result 'a String", 2, [] (C &c, V &a) {
     Run r{ c, S (a[1]) };
     auto x = r.go (get (a[0], c), 0);

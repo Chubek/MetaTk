@@ -24,6 +24,8 @@ module Parser := struct
   val token := Parsec.token($1)
   val spaces := Parsec.spaces($1)
   val eof := Parsec.eof($1)
+  val lookahead := Parsec.lookahead($1)
+  val not_followed_by := Parsec.not_followed_by($1)
   val run := Parsec.run($1, $2)
   val run_prefix := Parsec.run_prefix($1, $2)
 end

@@ -177,9 +177,11 @@ Parsec.fail	1	String -> Parser 'a
 Parsec.label	2	String -> Parser 'a -> Parser 'a
 Parsec.lazy	1	(Unit -> Parser 'a) -> Parser 'a
 Parsec.left	2	Parser 'a -> Parser 'b -> Parser 'a
+Parsec.lookahead	1	Parser 'a -> Parser 'a
 Parsec.many	1	Parser 'a -> Parser ['a]
 Parsec.many1	1	Parser 'a -> Parser ['a]
 Parsec.map	2	('a -> 'b) -> Parser 'a -> Parser 'b
+Parsec.not_followed_by	1	Parser 'a -> Parser Unit
 Parsec.one_of	1	String -> Parser String
 Parsec.optional	1	Parser 'a -> Parser (Option 'a)
 Parsec.pure	1	'a -> Parser 'a

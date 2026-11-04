@@ -1,0 +1,15 @@
+import "fmt"
+{- Explicit sinks and thresholds avoid process-global logging state.
+   Levels: debug=0, info=1, warn=2, error=3. -}
+module Log := struct
+  val debug := 0
+  val info := 1
+  val warn := 2
+  val error := 3
+  val name level := if level <= 0 then "DEBUG" else if level == 1 then "INFO" else if level == 2 then "WARN" else "ERROR"
+  val write sink threshold level message := if level < threshold then () else sink ("[" ^ name level ^ "] " ^ message)
+  val format sink threshold level template args := if level < threshold then Ok () else
+    match Fmt.format template args with
+      | Err error -> Err error
+      | Ok message -> Ok (write sink threshold level message)
+end

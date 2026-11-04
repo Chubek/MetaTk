@@ -1,0 +1,42 @@
+Fmt.format "{{{}}}: {}" ["name", "value"] == Ok "{name}: value"
+Fmt.format "{}" [] == Err "Fmt: missing argument"
+Fmt.format "" ["extra"] == Err "Fmt: extra arguments"
+Fmt.format "{" [] == Err "Fmt: unmatched opening brace"
+Fmt.format "}" [] == Err "Fmt: unmatched closing brace"
+Fmt.pad_left 5 "abc" == "  abc" && Fmt.pad_right 2 "abc" == "abc"
+Intrin.popcount (~1) == 64 && Intrin.popcount 0 == 0
+Intrin.trailing_zeros 0 == 64 && Intrin.trailing_zeros (~9223372036854775808) == 63
+Intrin.shift_left 1 64 == None && Intrin.shift_right 1 (~1) == None
+Intrin.is_power_of_two 1024 && not (Intrin.is_power_of_two 0)
+Seq.scan (fn a b -> a + b) 0 [1,2,3] == [0,1,3,6]
+Array.update 1 (fn x -> x * 3) [1,2,3] == Some [1,6,3]
+Array.update (~1) (fn x -> x * 3) [1,2,3] == None
+Array.slice 3 0 [1,2,3] == Some []
+Cliopt.parse [("x", false)] ["--x=value"] == Err "flag takes no argument: --x"
+Cliopt.last "x" [("x", Some "first"), ("x", Some "last")] == Some "last"
+let b := Buffer.of_string (String.of_codes [0,255,65]) in Buffer.byte_at 1 b == Some 255 && Buffer.sub 3 0 b == Some "" && Buffer.sub 2 2 b == None
+let b := Buffer.create () in let _ := Log.write (fn text -> Buffer.add_line text b) Log.info Log.debug "hidden" in let _ := Log.format (fn text -> Buffer.add_line text b) Log.info Log.warn "value={}" ["42"] in Buffer.contents b == "[WARN] value=42\n"
+Log.format (fn text -> ()) Log.error Log.debug "{" [] == Ok ()
+Json.path ["outer", "inner"] (JObj [("outer", JObj [("inner", JNum 42.0)])]) == Some (JNum 42.0)
+match Json.parse "{\"x\":}" with | Err _ -> true | _ -> false
+let value := JObj [("message", JStr "hello"), ("items", JArr [JBool true, JNull])] in Json.parse (Json.render value) == Ok value && Yaml.parse (Yaml.render value) == Ok value
+match SExpr.parse_one "(a (b \"c\"))" with | Ok value -> SExpr.parse_one (SExpr.render value) == Ok value | _ -> false
+match SExpr.parse_one "a b" with | Err _ -> true | _ -> false
+Peg.run (Peg.right (Peg.lookahead (Peg.literal "ab")) (Peg.literal "ab")) "ab" == Ok "ab"
+Peg.run_prefix (Peg.not_followed_by (Peg.literal "a")) "b" == Ok ((), "b")
+match Peg.run (Peg.not_followed_by (Peg.literal "a")) "a" with | Err _ -> true | _ -> false
+Peg.run (Peg.alt (Peg.literal "ab") (Peg.literal "ac")) "ac" == Ok "ac"
+Peg.run (Peg.many (Peg.pure 7)) "" == Ok [7]
+Peg.run_prefix (Peg.lookahead (Peg.literal "ab")) "abc" == Ok ("ab", "abc")
+match Peg.run (Peg.alt (Peg.literal "a") (Peg.literal "ab")) "ab" with | Err _ -> true | _ -> false
+match Bignum.parse "000123456789012345678901234567890" with | Ok n -> Bignum.to_string (Bignum.mul n (Bignum.of_int 9)) == "1111111101111111110111111111010" && Bignum.to_int n == None | _ -> false
+match Bignum.parse "-0" with | Ok n -> Bignum.to_string n == "0" | _ -> false
+match Bignum.parse "+" with | Err _ -> true | _ -> false
+match Bignum.parse "12x" with | Err _ -> true | _ -> false
+Bignum.to_int (Bignum.of_int (~9223372036854775808)) == Some (~9223372036854775808)
+match Bignum.divmod (Bignum.of_int (~17)) (Bignum.of_int 5) with | Ok (q, r) -> Bignum.to_string q == "-3" && Bignum.to_string r == "-2" | _ -> false
+match Bignum.divmod (Bignum.of_int 1) (Bignum.of_int 0) with | Err _ -> true | _ -> false
+match Bignum.pow (Bignum.of_int 2) 128 with | Ok n -> Bignum.to_string n == "340282366920938463463374607431768211456" | _ -> false
+let a := Atomic.create 5 in Atomic.compare_exchange a 4 8 == (false, 5) && Atomic.compare_exchange a 5 8 == (true, 5) && Atomic.exchange a 9 == 8 && Atomic.load a == 9
+let a := Atomic.create 9223372036854775807 in Atomic.fetch_add a 1 == 9223372036854775807 && Atomic.load a == (~9223372036854775808)
+let a := Atomic.create 0 in let work := fn _ -> List.for_each (fn _ -> let _ := Atomic.fetch_add a 1 in ()) (List.range 0 100) in let x := Thread.spawn work in let y := Thread.spawn work in Thread.join x == Ok () && Thread.join y == Ok () && Atomic.load a == 200

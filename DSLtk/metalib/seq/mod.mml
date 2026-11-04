@@ -1,0 +1,2 @@
+import "sequence"
+module Seq := Sequence

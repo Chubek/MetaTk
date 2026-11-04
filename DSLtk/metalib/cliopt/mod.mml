@@ -1,0 +1,7 @@
+import "getopt"
+module Cliopt := struct
+  val parse := Getopt.parse
+  val values name options := List.filter_map (fn (key, value) -> if key == name then value else None) options
+  val present name options := List.any (fn (key, _) -> key == name) options
+  val last name options := List.last (values name options)
+end

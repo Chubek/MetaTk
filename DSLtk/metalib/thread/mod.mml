@@ -1,0 +1,9 @@
+{- Requires install_Threading / installThreading. -}
+module Thread := struct
+  val spawn := Threading.spawn($1)
+  val join := Threading.join($1)
+  val cancel := Threading.cancel($1)
+  val finished := Threading.finished($1)
+  val sleep := Threading.sleep($1)
+  val yield := Threading.yield($1)
+end

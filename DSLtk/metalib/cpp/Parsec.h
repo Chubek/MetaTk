@@ -37,6 +37,9 @@
  * Header-only: this header includes Parsec.c, the C++ implementation.
  */
 #pragma once
+// Parsec.lookahead : Parser 'a -> Parser 'a
+// Parsec.not_followed_by : Parser 'a -> Parser Unit
+// Predicates preserve position; left recursion and >512 active calls raise M0404.
 
 #include "Support.h"
 #include "FlexBridge.h"

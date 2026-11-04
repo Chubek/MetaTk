@@ -1,0 +1,8 @@
+module Atomic := struct
+  val create := Atomic.create($1)
+  val load := Atomic.load($1)
+  val store := Atomic.store($1, $2)
+  val exchange := Atomic.exchange($1, $2)
+  val fetch_add := Atomic.fetch_add($1, $2)
+  val compare_exchange := Atomic.compare_exchange($1, $2, $3)
+end

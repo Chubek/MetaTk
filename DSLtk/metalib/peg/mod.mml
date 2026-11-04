@@ -1,0 +1,29 @@
+import "parsec"
+{- Ordered, backtracking PEG combinators; no packrat memoization.
+   Predicates do not consume input. Left recursion is rejected. -}
+module Peg := struct
+  val literal := Parser.string
+  val any := Parser.any
+  val satisfy := Parser.satisfy
+  val seq := Parser.seq
+  val choice := Parser.choice
+  val alt := Parser.alt
+  val many := Parser.many
+  val many1 := Parser.many1
+  val optional := Parser.optional
+  val lookahead := Parser.lookahead
+  val not_followed_by := Parser.not_followed_by
+  val map := Parser.map
+  val bind := Parser.bind
+  val pure := Parser.pure
+  val fail := Parser.fail
+  val lazy := Parser.lazy
+  val between := Parser.between
+  val left := Parser.left
+  val right := Parser.right
+  val sep_by := Parser.sep_by
+  val token := Parser.token
+  val eof := Parser.eof
+  val run := Parser.run
+  val run_prefix := Parser.run_prefix
+end

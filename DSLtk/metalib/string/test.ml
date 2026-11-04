@@ -26,3 +26,8 @@ Test.equal "codes" (String.of_codes (String.to_codes "Hi")) "Hi"
 Test.equal "of_int/of_float" (String.of_int 42 ^ "/" ^ String.of_float 2.5) "42/2.5"
 Test.equal "to_int" (String.to_int "17") (Some 17)
 Test.equal "escapes" (String.length "\u{1F600}\t") 5
+Test.equal "checked end" (String.sub_checked 3 0 "abc") (Some "")
+Test.equal "checked overflow" (String.sub_checked 1 9223372036854775807 "abc") None
+Test.equal "split once" (String.split_once "=" "a=b=c") (Some ("a", "b=c"))
+Test.equal "strip prefix" (String.strip_prefix "ab" "abc") (Some "c")
+Test.equal "strip suffix mismatch" (String.strip_suffix "ab" "abc") None

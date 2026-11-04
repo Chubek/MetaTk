@@ -1,0 +1,13 @@
+module Json := struct
+  val parse := JSON.parse($1)
+  val render := JSON.render($1)
+  val pretty := JSON.pretty($1)
+  val get := JSON.get($1, $2)
+  val at := JSON.at($1, $2)
+  val of_value := JSON.of_value($1)
+  val path keys value := match keys with
+    | [] -> Some value
+    | key :: rest -> match JSON.get(key, value) with
+      | None -> None
+      | Some child -> path rest child
+end

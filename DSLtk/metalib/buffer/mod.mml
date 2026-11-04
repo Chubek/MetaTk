@@ -1,0 +1,15 @@
+{- Mutable byte buffers; individual operations are synchronized. -}
+module Buffer := struct
+  val create := Buffer.create($1)
+  val of_string := Buffer.of_string($1)
+  val add := Buffer.add($1, $2)
+  val add_line := Buffer.add_line($1, $2)
+  val add_byte := Buffer.add_byte($1, $2)
+  val contents := Buffer.contents($1)
+  val length := Buffer.length($1)
+  val byte_at := Buffer.byte_at($1, $2)
+  val clear := Buffer.clear($1)
+  val truncate := Buffer.truncate($1, $2)
+  val sub := Buffer.sub($1, $2, $3)
+  val hex := Buffer.hex($1)
+end

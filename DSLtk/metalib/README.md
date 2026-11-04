@@ -17,6 +17,65 @@ modules backed by host services require their installer first.
 
 ## Extension modules
 
+### Expanded standard modules
+
+The following imports supplement the prelude. Native modules work in both
+C++ and D. Host-backed imports require installation before evaluation; the
+portable bundle already includes Buffer, JSON, YAML, SExpr and Parsec.
+
+| Import / module | Operations and contract | Installer |
+| --- | --- | --- |
+| `peg` / `Peg` | Ordered choice, repetition, lazy rules, positive/negative lookahead, complete/prefix parsing | `install_Peg` / `installPeg`, or portable bundle |
+| `bignum` / `Bignum` | Immutable arbitrary-precision signed integers; decimal parse/render, checked Int conversion, add/sub/mul/neg/compare, divmod, nonnegative power | `install_Bignum` / `installBignum` |
+| `intrin` / `Intrin` | 64-bit bitwise operations, population count, trailing zero count, checked shifts | none |
+| `seq` / `Seq` | `Sequence` alias, including scan, enumeration and filter_map | none |
+| `buffer` / `Buffer` | Synchronized mutable byte buffers, checked slices and byte access | portable bundle |
+| `cliopt` / `Cliopt` | Long-option parser plus presence, values and last-value lookup | none |
+| `json` / `Json` | Parse/render/pretty, key/index lookup, nested key paths | portable bundle |
+| `yaml` / `Yaml` | Parse/render the backend's YAML data subset as Json values | portable bundle |
+| `sexpr` / `SExpr` | Parse multiple forms or exactly one form, render, atom lookup | portable bundle |
+| `fmt` / `Fmt` | Strict `{}` substitution, `{{`/`}}` escaping, byte-width padding | none |
+| `log` / `Log` | Explicit sink and severity threshold, formatted messages | none |
+| `thread` / `Thread` | Managed spawn/join/cancel, completion, sleep/yield | `install_Threading` / `installThreading` |
+| `atomic` / `Atomic` | Linearizable Int cells: load/store/exchange/fetch_add/compare_exchange | `install_Atomic` / `installAtomic` |
+
+Optional C++ entry points are `bignum/Bignum.hpp`, `atomic/Atomic.hpp`,
+`thread/Thread.hpp`, and `peg/Peg.hpp`; corresponding D adapters use `.d`.
+Bignum's C++ backend requires Boost.Multiprecision headers (no binary library);
+D uses `std.bigint`. Extension tests require Boost headers. These installers
+are idempotent and do not grant primitive permissions.
+
+`Bignum.parse` accepts only an optional `+`/`-` and decimal digits, normalizing
+leading zeros and negative zero. `divmod` truncates toward zero; the remainder
+has the dividend's sign. Invalid input, zero divisors and negative powers return
+`Err`. Use `Bignum.equal` for numeric equality of opaque handles.
+
+`Atomic.fetch_add cell delta` returns the previous value and wraps modulo 2^64.
+`Atomic.compare_exchange cell expected desired` returns `(matched, previous)`.
+Cells use mutexes, so no lock-free guarantee is made. Thread joins return Result;
+workers inherit a capability snapshot and session shutdown cancels and joins them.
+
+PEG predicates preserve input position. Choice commits to the first successful
+alternative; this is not a packrat parser. Left-recursive cycles and nesting
+beyond 512 active parser calls raise M0404 rather than overflowing the host stack.
+Repetition of a nullable parser terminates after its first zero-width match.
+
+String now includes `sub_checked`, `split_once`, `strip_prefix`, `strip_suffix`;
+List includes positive-size `chunks_checked` and first-match `assoc`. Array adds
+checked functional `update`, indexed mapping, append/reverse and predicates.
+Array remains persistent and list-backed; indexing is O(n).
+
+```ml
+import "fmt"
+import "cliopt"
+Fmt.format "{{answer}} = {}" [String.of_int 42]
+{- Ok "{answer} = 42" -}
+```
+
+Shared C++/D contracts live in `tests/metalib_contracts.txt`, including large
+integer arithmetic, parser predicates, malformed formats, binary buffers and
+concurrent atomic increments.
+
 | Directory / module | API and representation | Required host installer |
 | --- | --- | --- |
 | `sequence` / `Sequence` | map, filter, fold, append, concat, take, drop, zip, unfold; finite lists | none |

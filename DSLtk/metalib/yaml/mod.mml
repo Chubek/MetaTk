@@ -1,0 +1,5 @@
+{- YAML's supported data subset is represented by Json values. -}
+module Yaml := struct
+  val parse := YAML.parse($1)
+  val render := YAML.render($1)
+end

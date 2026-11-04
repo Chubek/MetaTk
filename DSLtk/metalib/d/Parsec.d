@@ -48,7 +48,7 @@ import std.typecons : Tuple, tuple, Nullable;
 private enum PK
 {
     Str, Any, Satisfy, OneOf, Seq, Alt, Many, Many1, Map, Bind, Pure, Fail, Opt, SepBy,
-    Left, Right, Lazy, Label, Regex, Token, Spaces, Eof
+    Left, Right, Lazy, Label, Regex, Token, Spaces, Eof, Look, Not
 }
 
 private final class PObj : ForeignObj
@@ -108,6 +108,7 @@ private final class Run
     string s;
     size_t far = 0;
     string[] expected;
+    Tuple!(PObj, size_t)[] active;
     this(C c, string s)
     {
         this.c = c;
@@ -126,6 +127,12 @@ private final class Run
 
     R go(PObj p, size_t pos)
     {
+        c.interp.check_cancelled(c.span);
+        auto key = tuple(p, pos);
+        if (active.length >= 512 || active.canFind(key))
+            c.error("M0404", "Parsec: left recursion or nesting limit exceeded");
+        active ~= key;
+        scope(exit) active.length = active.length - 1;
         final switch (p.kind)
         {
             case PK.Str:
@@ -227,6 +234,16 @@ private final class Run
             }
             case PK.Pure:
                 return yes(p.fn, pos);
+            case PK.Look:
+            case PK.Not:
+                auto far0 = far;
+                auto saved = expected.dup;
+                auto x = go(p.a, pos);
+                far = far0; expected = saved;
+                if (p.kind == PK.Look && !x.isNull) return yes(x.get[0], pos);
+                if (p.kind == PK.Not && x.isNull) return yes(unit(), pos);
+                expect(pos, p.kind == PK.Look ? "lookahead" : "negative lookahead");
+                return R.init;
             case PK.Fail:
                 expect(pos, p.text);
                 return R.init;
@@ -411,6 +428,8 @@ void installParsec(Session s)
     prim(s, "Parsec.token", "Parser 'a -> Parser 'a", 1, unary_parser(PK.Token));
     prim(s, "Parsec.spaces", "Unit -> Parser Unit", 1, leaf_parser(PK.Spaces));
     prim(s, "Parsec.eof", "Unit -> Parser Unit", 1, leaf_parser(PK.Eof));
+    prim(s, "Parsec.lookahead", "Parser 'a -> Parser 'a", 1, unary_parser(PK.Look));
+    prim(s, "Parsec.not_followed_by", "Parser 'a -> Parser Unit", 1, unary_parser(PK.Not));
     prim(s, "Parsec.run", "Parser 'a -> String -> Result 'a String", 2, delegate Value(C c, V a) {
         auto r = new Run(c, S(a[1]));
         auto x = r.go(get(a[0], c), 0);
@@ -425,4 +444,3 @@ void installParsec(Session s)
         return err(r.message());
     });
 }
-

@@ -38,6 +38,10 @@ module type STRING := sig
   val of_int : Int -> t
   val of_float : Float -> t
   val to_int : t -> Option Int
+  val sub_checked : Int -> Int -> t -> Option t
+  val split_once : t -> t -> Option (t, t)
+  val strip_prefix : t -> t -> Option t
+  val strip_suffix : t -> t -> Option t
 end
 
 module String :> STRING := struct
@@ -69,4 +73,14 @@ module String :> STRING := struct
   val of_int := Int.render($1)
   val of_float := Float.to_string($1)
   val to_int := Int.parse($1)
+  val sub_checked start count text :=
+    if start < 0 || count < 0 || start > length text then None
+    else if count > length text - start then None else Some (sub start count text)
+  val split_once separator text := match index_of separator text with
+    | None -> None
+    | Some i -> Some (sub 0 i text, sub (i + length separator) (length text - i - length separator) text)
+  val strip_prefix prefix text := if starts_with prefix text
+    then Some (sub (length prefix) (length text - length prefix) text) else None
+  val strip_suffix suffix text := if ends_with suffix text
+    then Some (sub 0 (length text - length suffix) text) else None
 end
