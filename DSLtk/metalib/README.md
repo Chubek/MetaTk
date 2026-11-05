@@ -184,6 +184,14 @@ is available.
 
 ## Host bundles
 
+AST inspection, visitor traversal, OS/architecture/object-format functors and
+XVM/chunks are documented in [toolchain.md](toolchain.md). Their opt-in bundle
+is `metalib/cpp/Toolchain.h` / `metalib.d.Toolchain`, with
+`install_toolchain` / `installToolchain`. It is separate from the portable
+bundle below. [XVM](../XVM.md) is also the default core execution engine: checked
+expressions compile to bytecode and native helper-call blocks. Host library
+installation remains separate from selecting that executor.
+
 Include `metalib/cpp/Metalib.h` or import `metalib.d.Metalib`. Install host
 bundles before loading the language library:
 

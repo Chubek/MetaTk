@@ -31,6 +31,11 @@ if(METAML_BUILD_SERVICES)
 endif()
 add_test(NAME metalib_extensions COMMAND metalib_extensions_tests ${CMAKE_CURRENT_SOURCE_DIR}/../metalib)
 
+add_executable(metalib_toolchain_tests test_metalib_toolchain.cpp)
+target_link_libraries(metalib_toolchain_tests PRIVATE DSLtk Threads::Threads)
+add_test(NAME metalib_toolchain COMMAND metalib_toolchain_tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/../metalib ${CMAKE_CURRENT_BINARY_DIR})
+
 if(NOT TARGET metaml-c)
     add_library(metaml-c STATIC ../metalib/c/MetaML.cpp)
     target_link_libraries(metaml-c PUBLIC DSLtk Threads::Threads)
@@ -47,6 +52,7 @@ if(TARGET metaml)
 endif()
 add_test(NAME metaml_cli COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/check_cli.py --binary $<TARGET_FILE:metaml-repl-cpp>)
+set(_metaml_xvm_args --cpp $<TARGET_FILE:metaml-repl-cpp>)
 find_program(METAML_D_COMPILER NAMES ldc2 dmd gdc)
 if(METAML_D_COMPILER AND DSLtk_TEST_D)
     file(GLOB _metaml_d_modules CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../metalib/d/*.d)
@@ -60,16 +66,19 @@ if(METAML_D_COMPILER AND DSLtk_TEST_D)
     file(GLOB _metaml_d_adapters CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../metalib/*/*.d)
     list(FILTER _metaml_d_adapters EXCLUDE REGEX "/metalib/d/")
     list(APPEND _metaml_d_sources ${_metaml_d_adapters})
-    foreach(_kind IN ITEMS repl tests extensions)
+    foreach(_kind IN ITEMS repl tests extensions toolchain)
         if(_kind STREQUAL repl)
             set(_main ${CMAKE_CURRENT_SOURCE_DIR}/../metaml-cli/metaml.d)
             set(_bin ${CMAKE_CURRENT_BINARY_DIR}/metaml-repl-d)
         elseif(_kind STREQUAL tests)
             set(_main ${CMAKE_CURRENT_SOURCE_DIR}/test_metaml.d)
             set(_bin ${CMAKE_CURRENT_BINARY_DIR}/metaml_runtime_d_tests)
-        else()
+        elseif(_kind STREQUAL extensions)
             set(_main ${CMAKE_CURRENT_SOURCE_DIR}/test_metalib_extensions.d)
             set(_bin ${CMAKE_CURRENT_BINARY_DIR}/metalib_extensions_d_tests)
+        else()
+            set(_main ${CMAKE_CURRENT_SOURCE_DIR}/test_metalib_toolchain.d)
+            set(_bin ${CMAKE_CURRENT_BINARY_DIR}/metalib_toolchain_d_tests)
         endif()
         if(METAML_D_COMPILER MATCHES "gdc")
             set(_flags -o ${_bin})
@@ -80,7 +89,7 @@ if(METAML_D_COMPILER AND DSLtk_TEST_D)
             COMMAND ${METAML_D_COMPILER} ${_flags} -I${CMAKE_CURRENT_SOURCE_DIR}/..
                 ${_main} ${CMAKE_CURRENT_SOURCE_DIR}/../MetaML.d
                 ${CMAKE_CURRENT_SOURCE_DIR}/../DSLtk.d ${_metaml_d_sources}
-            DEPENDS ${_main} ../MetaML.d ../DSLtk.d ${_metaml_d_sources}
+            DEPENDS ${_main} ../MetaML.d ../DSLtk.d ../XVMCode.d ../XVMNative.d ${_metaml_d_sources}
             VERBATIM)
         add_custom_target(metaml_d_${_kind}_build ALL DEPENDS ${_bin})
     endforeach()
@@ -88,6 +97,8 @@ if(METAML_D_COMPILER AND DSLtk_TEST_D)
         ${CMAKE_CURRENT_SOURCE_DIR}/../metalib)
     add_test(NAME metalib_extensions_d COMMAND ${CMAKE_CURRENT_BINARY_DIR}/metalib_extensions_d_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/../metalib)
+    add_test(NAME metalib_toolchain_d COMMAND ${CMAKE_CURRENT_BINARY_DIR}/metalib_toolchain_d_tests
+        ${CMAKE_CURRENT_SOURCE_DIR}/../metalib ${CMAKE_CURRENT_BINARY_DIR})
     add_test(NAME metaml_cli_d COMMAND ${Python3_EXECUTABLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/check_cli.py
         --binary ${CMAKE_CURRENT_BINARY_DIR}/metaml-repl-d)
@@ -97,7 +108,10 @@ if(METAML_D_COMPILER AND DSLtk_TEST_D)
     add_test(NAME metaml_manual_d COMMAND ${Python3_EXECUTABLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/check_manual.py
         --cpp $<TARGET_FILE:metaml-repl-cpp> --d ${CMAKE_CURRENT_BINARY_DIR}/metaml-repl-d)
+    list(APPEND _metaml_xvm_args --d ${CMAKE_CURRENT_BINARY_DIR}/metaml-repl-d)
 endif()
+add_test(NAME metaml_xvm_differential COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/check_xvm.py ${_metaml_xvm_args})
 add_test(NAME metaml_library_tests COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/run_tests.py --cpp $<TARGET_FILE:metaml-repl-cpp>)
 add_test(NAME metaml_manual COMMAND ${Python3_EXECUTABLE}

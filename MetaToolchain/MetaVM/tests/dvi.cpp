@@ -186,7 +186,7 @@ static void limits_and_replay() {
     }
     Fixture empty;D::Limits zero;zero.max_events=zero.max_pages=zero.max_fonts=zero.max_stack=zero.max_special_bytes=0;
     CHECK(D::run(empty.finish(),{},zero).events.empty());
-    for(auto engine:{MVM_ENGINE_BYTECODE,MVM_ENGINE_THREADED}) {
+    for(auto engine:{MVM_ENGINE_BYTECODE,MVM_ENGINE_THREADED,MVM_ENGINE_XVM}) {
         size_t observed=0;
         vmweave::DviReplay replay(result,[&](const D::Event&e) {
             const auto&expected=result.events.at(observed++);

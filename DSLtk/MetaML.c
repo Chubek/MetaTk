@@ -83,6 +83,7 @@ struct Options
   bool trace = false, time = false, no_stdlib = false, no_history = false;
   bool no_init = false, quiet = false;
   std::string file, stdlib, history_file, color = "auto", diagnostic_format = "text";
+  std::string engine = "xvm";
   std::vector<std::string> loads, paths, args;
   std::vector<Action> actions;
 };
@@ -101,6 +102,7 @@ const char usage[] = R"(Usage: metaml [OPTIONS] [FILE] [-- PROGRAM_ARGS...]
   -I, --module-path DIR        Add a search directory (repeatable)
       --stdlib DIR             Select the standard-library directory
       --no-stdlib              Use only the built-in environment
+      --engine NAME            xvm (default), portable, jit, or tree
       --history-file FILE      Select persistent REPL history
       --no-history             Disable persistent history
       --no-init                Skip ~/.metamlrc
@@ -147,6 +149,7 @@ Options parse_options (int argc, char **argv)
       else if (a == "--trace") o.trace = true;
       else if (a == "--time") o.time = true;
       else if (a == "--stdlib") o.stdlib = need ();
+      else if (a == "--engine") o.engine = need ();
       else if (a == "--no-stdlib") o.no_stdlib = true;
       else if (a == "--history-file") o.history_file = need ();
       else if (a == "--no-history") o.no_history = true;
@@ -161,6 +164,8 @@ Options parse_options (int argc, char **argv)
     }
   if (o.color != "auto" && o.color != "always" && o.color != "never")
     throw std::invalid_argument ("--color must be auto, always, or never");
+  if (!metaml::execution_engine_from_name(o.engine))
+    throw std::invalid_argument ("--engine must be xvm, portable, jit, or tree");
   if (o.diagnostic_format != "text" && o.diagnostic_format != "json")
     throw std::invalid_argument ("--diagnostic-format must be text or json");
   if (o.ast && o.check) throw std::invalid_argument ("--ast and --check are mutually exclusive");
@@ -542,6 +547,7 @@ class Frontend
   {
     static_check.reset ();
     session = std::make_unique<Session> ();
+    session->interp().engine = *metaml::execution_engine_from_name(opt.engine);
     session->set_output ([this] (std::string_view s) { *out << s; out->flush (); });
     session->allow_all_primitives ();
     session->args = opt.args;

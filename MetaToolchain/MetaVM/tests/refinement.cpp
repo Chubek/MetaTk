@@ -14,7 +14,7 @@ using vmweave::Definition;
 static void definitions() {
     auto d=vmweave::examples::toy_r16();
     std::vector<uint8_t> code={0x10,40,0x11,2,0x20,0x10,0x30,3,0x50,0};
-    for(auto engine:{MVM_ENGINE_BYTECODE,MVM_ENGINE_THREADED}) {
+    for(auto engine:{MVM_ENGINE_BYTECODE,MVM_ENGINE_THREADED,MVM_ENGINE_XVM}) {
         auto result=d.execute(code,{},{},mvm_default_limits(),engine);
         CHECK(result.value==42&&result.registers[0]==42&&result.memory[3]==42&&result.steps>0);
     }

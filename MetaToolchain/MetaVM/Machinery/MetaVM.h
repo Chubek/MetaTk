@@ -10,6 +10,7 @@
 #include "ExecutionEngine.h"
 #include "Exec-Bytecode.h"
 #include "Exec-ThreadedCode.h"
+#include "Exec-XVM.h"
 #include "CBridge.h"
 #include "Object.h"
 #include "MetaObject.h"

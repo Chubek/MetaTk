@@ -4,7 +4,11 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-typedef enum mvm_engine { MVM_ENGINE_BYTECODE, MVM_ENGINE_THREADED } mvm_engine;
+/* Existing numeric engine values remain ABI-compatible. */
+typedef enum mvm_engine {
+    MVM_ENGINE_BYTECODE = 0, MVM_ENGINE_THREADED = 1, MVM_ENGINE_XVM = 2,
+    MVM_ENGINE_DEFAULT = MVM_ENGINE_XVM
+} mvm_engine;
 /* limits==NULL selects defaults; zero limits are invalid. VM operations require
  * caller synchronization. Independent VMs may execute shared immutable modules.
  * Failures return a status and optional diagnostic; never abort/exit/longjmp. */

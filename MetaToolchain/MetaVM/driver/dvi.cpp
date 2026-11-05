@@ -14,17 +14,19 @@ static std::string hex(const std::string&bytes) {
     return out;
 }
 int main(int argc,char**argv) {
-    std::string input,metrics_file;auto engine=MVM_ENGINE_BYTECODE;
+    std::string input,metrics_file;auto engine=MVM_ENGINE_DEFAULT;
     for(int i=1;i<argc;++i) {
         std::string a=argv[i];
         if(a=="--metrics"&&i+1<argc)metrics_file=argv[++i];
         else if(a=="--threaded")engine=MVM_ENGINE_THREADED;
+        else if(a=="--bytecode")engine=MVM_ENGINE_BYTECODE;
+        else if(a=="--xvm")engine=MVM_ENGINE_XVM;
         else if(a=="--help") {
-            std::cout<<"Usage: dvi-run [--metrics FONT_WIDTHS.tsv] [--threaded] FILE.dvi\n"
+            std::cout<<"Usage: dvi-run [--metrics FONT_WIDTHS.tsv] [--xvm|--bytecode|--threaded] FILE.dvi\n"
                 "Metrics: decimal FONT CHARACTER WIDTH (scaled DVI units), one row per character.\n";
             return 0;
         } else if(a.empty()||a[0]=='-'||!input.empty()) {
-            std::cerr<<"Usage: dvi-run [--metrics FONT_WIDTHS.tsv] [--threaded] FILE.dvi\n";return 2;
+            std::cerr<<"Usage: dvi-run [--metrics FONT_WIDTHS.tsv] [--xvm|--bytecode|--threaded] FILE.dvi\n";return 2;
         } else input=a;
     }
     if(input.empty()){std::cerr<<"DVI input path required; use --help\n";return 2;}

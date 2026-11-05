@@ -55,6 +55,8 @@ struct mvm_vm {
     mvm_value result;
     uint64_t steps;
     int busy;
+    mvm_xvm_options xvm_options;
+    mvm_xvm_statistics xvm_stats;
 };
 mvm_status mvm_fail(mvm_error *, mvm_status, const char *format, ...);
 int mvm_name_valid(const char *);

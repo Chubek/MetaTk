@@ -13,7 +13,7 @@ int main(void) {
     for(i=0;i<16;++i)REQUIRE(mvm_array_set(vm,rr,i,mvm_int(0))==MVM_OK);
     for(i=0;i<256;++i)REQUIRE(mvm_array_set(vm,mem,i,mvm_int(0))==MVM_OK);
     args[0]=rr;args[1]=mem;
-    for(engine=MVM_ENGINE_BYTECODE;engine<=MVM_ENGINE_THREADED;++engine) {
+    for(engine=MVM_ENGINE_BYTECODE;engine<=MVM_ENGINE_XVM;++engine) {
         REQUIRE(mvm_run(vm,module,0,args,2,(mvm_engine)engine,&result,&error)==MVM_OK);
         REQUIRE(result.kind==MVM_INT&&result.as.integer==42);
         REQUIRE(mvm_array_get(vm,mem,3,&pixel)==MVM_OK);

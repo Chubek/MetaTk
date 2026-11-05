@@ -10,5 +10,11 @@ int main(void) {
     vm=mvm_create(NULL,&error);
     if(vm&&mvm_run_bytecode(vm,module,0,NULL,0,&result,&error)==MVM_OK)
         failed=result.kind!=MVM_INT||result.as.integer!=42;
+    if(!failed) {
+        mvm_xvm_statistics stats;
+        if(mvm_run_default(vm,module,0,NULL,0,&result,&error)!=MVM_OK)failed=1;
+        stats=mvm_xvm_stats(vm);
+        if(result.kind!=MVM_INT||result.as.integer!=42||!stats.blocks||!stats.executed_blocks)failed=1;
+    }
     mvm_destroy(vm);mvm_module_destroy(module);return failed;
 }

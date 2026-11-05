@@ -27,6 +27,7 @@
 #pragma once
 
 #include "DSLtk.hpp"
+#include "XVMNative.hpp"
 
 #include <cmath>
 #include <atomic>
@@ -1565,14 +1566,21 @@ dump_item (const ItemP &it)
 
 } // namespace detail
 
-/// Canonical S-expression dump of a program (identical in MetaML.d).
-inline std::string
-dump_ast (const Program &prog)
+/// Structural program AST (identical in MetaML.d).
+inline dsl::ASTNode
+program_ast (const Program &prog)
 {
   std::vector<dsl::ASTNode> items;
   for (auto &i : prog.items)
     items.push_back (detail::dump_item (i));
-  return dsl::ast_to_sexpr (dsl::ASTNode ("Program", std::move (items))).dump ();
+  return dsl::ASTNode ("Program", std::move (items));
+}
+
+/// Canonical S-expression dump of a program (identical in MetaML.d).
+inline std::string
+dump_ast (const Program &prog)
+{
+  return dsl::ast_to_sexpr (program_ast (prog)).dump ();
 }
 
 // ============================================================
@@ -6375,6 +6383,17 @@ public:
 
 class Session;
 class Interp;
+struct XvmCode;
+struct XvmState;
+enum class ExecutionEngine { XVM, PortableXVM, Tree, NativeXVM };
+inline std::optional<ExecutionEngine> execution_engine_from_name(std::string_view name)
+{
+  if (name == "xvm") return ExecutionEngine::XVM;
+  if (name == "portable") return ExecutionEngine::PortableXVM;
+  if (name == "tree") return ExecutionEngine::Tree;
+  if (name == "jit") return ExecutionEngine::NativeXVM;
+  return std::nullopt;
+}
 
 struct StrObj : Obj
 {
@@ -6412,6 +6431,7 @@ struct AggObj : Obj
 
 struct Frame;
 using FrameP = std::shared_ptr<Frame>;
+Value eval_xvm (Interp &, ExprP, FrameP, bool);
 struct ModuleObj;
 using ModuleP = std::shared_ptr<ModuleObj>;
 
@@ -6910,6 +6930,12 @@ struct Primitive
 class Interp
 {
 public:
+  ExecutionEngine engine = ExecutionEngine::XVM;
+  std::size_t xvm_code_limit = 1000000, xvm_stack_limit = 1000000;
+  std::size_t xvm_native_limit = 64 * 1024 * 1024;
+  std::uint64_t xvm_instructions = 0, xvm_native_blocks = 0;
+  std::uint64_t xvm_revision = 0;
+  std::unordered_map<const Expr *, std::shared_ptr<XvmCode>> xvm_cache;
   int max_depth = 10000;
   int call_depth = 0;
   int eval_depth = 0;
@@ -7536,6 +7562,14 @@ public:
   Value
   eval (ExprP e, FrameP env, bool counted = false)
   {
+    if (engine != ExecutionEngine::Tree)
+      return eval_xvm (*this, std::move (e), std::move (env), counted);
+    return eval_tree (std::move (e), std::move (env), counted);
+  }
+
+  Value
+  eval_tree (ExprP e, FrameP env, bool counted = false)
+  {
     struct Guard
     {
       Interp &in;
@@ -7824,6 +7858,7 @@ public:
   }
 
 private:
+  friend struct XvmState;
   std::map<std::string, std::unique_ptr<Primitive>> op_prims_{};
 
   /// If `f args` saturates a closure exactly, rebinds e/env for a tail call.
@@ -8380,13 +8415,27 @@ public:
     return run_program (parsed.program, mode);
   }
 
+  /// The innermost executing source, restored after nested imports/evaluation.
+  const Program *current_program () const { return active_program_; }
+
   /// Checks and executes a parsed program unit by unit.
   RunReport
   run_program (const Program &prog, RunMode mode)
   {
     RunReport rep;
+    const int entry_eval_depth = interp_.eval_depth;
+    const int entry_call_depth = interp_.call_depth;
+    const auto saved_stack = entry_eval_depth ? interp_.stack : std::vector<Value>{};
+    const auto saved_stack_types = entry_eval_depth ? stack_types_ : std::vector<std::string>{};
     auto keep = std::make_shared<Program> (prog);
     programs_.push_back (keep);
+    struct RestoreProgram
+    {
+      const Program *&slot;
+      const Program *saved;
+      ~RestoreProgram () { slot = saved; }
+    } restore_program{ active_program_, active_program_ };
+    active_program_ = keep.get ();
     sources_[prog.file] = prog.source;
     const auto &items = keep->items;
     for (auto [b, e] : Checker::units (items))
@@ -8418,6 +8467,7 @@ public:
         UnitInfo info;
         try
           {
+            if (++interp_.xvm_revision == 0) interp_.xvm_cache.clear ();
             info = checker_.check_unit (items, b, e, unit_scope, nullptr, true);
           }
         catch (const detail::MetaError &err)
@@ -8443,10 +8493,12 @@ public:
           }
         catch (const detail::MetaError &err)
           {
-            interp_.stack.clear ();
-            stack_types_.clear ();
-            interp_.call_depth = 0;
-            interp_.eval_depth = 0;
+            // A runtime-call backend may evaluate inside a host primitive.
+            // Recover that activation, not the still-running caller's stack.
+            interp_.stack = saved_stack;
+            stack_types_ = saved_stack_types;
+            interp_.call_depth = entry_call_depth;
+            interp_.eval_depth = entry_eval_depth;
             rep.errors.push_back (err.diag);
             return rep;
           }
@@ -8605,6 +8657,8 @@ public:
         // Checker/loader APIs mutate or inspect the foreground session.
         if (p->name.compare (0, 7, "Loader.") == 0 || p->name.compare (0, 7, "Module.") == 0)
           return false;
+        if (p->name.compare (0, 4, "XVM.") == 0 || p->name == "Absyn.current" || p->name == "Chunk.current")
+          return false;
         if (background && (p->name == "Threading.spawn" || p->name == "Fiber.create")) return false;
         if (p->core || all) return true;
         for (const auto &n : allow)
@@ -8619,6 +8673,10 @@ public:
         return it == globals->end () ? nullptr : it->second.get ();
       };
     in->max_depth = interp_.max_depth < 20000 ? interp_.max_depth : 20000;
+    in->engine = interp_.engine;
+    in->xvm_code_limit = interp_.xvm_code_limit;
+    in->xvm_stack_limit = interp_.xvm_stack_limit;
+    in->xvm_native_limit = interp_.xvm_native_limit;
     in->module_lock = &module_lock_;
     return in;
   }
@@ -8904,6 +8962,7 @@ private:
   std::vector<std::unique_ptr<Primitive>> retired_prims_{};
   std::unordered_map<std::string, CellP> globals_{};
   std::vector<std::shared_ptr<Program>> programs_{};
+  const Program *active_program_ = nullptr;
   std::map<std::string, std::string> sources_{};
   std::set<std::string> imported_{};
   std::vector<std::string> search_path_{};
@@ -9885,3 +9944,5 @@ install_repl_directives (dsl::repl::Session<ReplLanguage> &repl, Session &s)
 }
 
 } // namespace metaml
+
+#include "XVMCode.hpp"

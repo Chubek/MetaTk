@@ -1,0 +1,13 @@
+import "visitor"
+module AbsynVisitor := Visitor
+{- Absyn.of_source/of_file/current return actual Ast values, not AST text. -}
+module Absyn := struct
+  module Visitor := AbsynVisitor
+  val of_source source := Absyn.of_source(source)
+  val of_file path := Absyn.of_file(path)
+  val current _ := Absyn.current(())
+  val tag tree := ASTBuilder.tag(tree)
+  val text tree := ASTBuilder.text(tree)
+  val children tree := ASTBuilder.children(tree)
+  val dump tree := ASTBuilder.dump(tree)
+end

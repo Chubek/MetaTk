@@ -34,7 +34,7 @@ int main(int argc,char**argv) {
             auto assembly=base;assembly+=".mvm";
             auto module=vmweave::compile(read(source),16*1024*1024,source.string());
             CHECK(bytes(module)==bytes(metavm::Module::compile(read(assembly))));
-            for(auto engine:{MVM_ENGINE_BYTECODE,MVM_ENGINE_THREADED}) {
+            for(auto engine:{MVM_ENGINE_BYTECODE,MVM_ENGINE_THREADED,MVM_ENGINE_XVM}) {
                 metavm::machines::Graphics surface(4,4);metavm::VM vm;mvm_error error{};
                 if(dir.path().filename()=="DRMVM")CHECK(surface.bind(vm.get(),&error)==MVM_OK);
                 CHECK(vm.run(module,0,{},engine).as.integer==42);
@@ -52,7 +52,7 @@ int main(int argc,char**argv) {
             "val _ := vm_const 2 1\nval _ := vm_const 3 0\nval _ := emit_loop \"loop\"\n"
             "val _ := vm_return 0\nval _ := vm_end ()\n");
         CHECK(bytes(generated)==bytes(factorial));
-        for(auto engine:{MVM_ENGINE_BYTECODE,MVM_ENGINE_THREADED}) {
+        for(auto engine:{MVM_ENGINE_BYTECODE,MVM_ENGINE_THREADED,MVM_ENGINE_XVM}) {
             metavm::VM vm;CHECK(vm.run(factorial,0,{},engine).as.integer==3628800);
         }
         const auto toy_source=read(root/"vmweave/examples/ToyR16.vmweave");
@@ -61,7 +61,7 @@ int main(int argc,char**argv) {
             {0x10,40,0x11,2,0x20,0x10,0x30,3,0x50,0},
             {0x10,3,0x11,1,0x60,0x10,0x40,4,0x50,0}}) {
             CHECK(bytes(definition.lower(code))==bytes(vmweave::examples::toy_r16().lower(code)));
-            for(auto engine:{MVM_ENGINE_BYTECODE,MVM_ENGINE_THREADED}) {
+            for(auto engine:{MVM_ENGINE_BYTECODE,MVM_ENGINE_THREADED,MVM_ENGINE_XVM}) {
                 auto actual=definition.execute(code,{},{},mvm_default_limits(),engine);
                 auto expected=vmweave::examples::toy_r16().execute(code,{},{},mvm_default_limits(),engine);
                 CHECK(actual.value==expected.value&&actual.registers==expected.registers&&actual.memory==expected.memory);
@@ -76,7 +76,7 @@ int main(int argc,char**argv) {
             mvm_opcode opcode=MVM_OP_ADD;
             for(int k=0;k<MVM_OP_COUNT;++k)if(std::string(mvm_opcode_name(mvm_opcode(k)))==op)opcode=mvm_opcode(k);
             CHECK(mvm_integer_eval(opcode,7,2,&expected)==MVM_OK);
-            for(auto engine:{MVM_ENGINE_BYTECODE,MVM_ENGINE_THREADED})CHECK(d.execute({2},{},{},mvm_default_limits(),engine).value==expected);
+            for(auto engine:{MVM_ENGINE_BYTECODE,MVM_ENGINE_THREADED,MVM_ENGINE_XVM})CHECK(d.execute({2},{},{},mvm_default_limits(),engine).value==expected);
         }
         auto memory=vmweave::compile_definition(head+
             "val index := vd_const 0\nval value := vd_field 0 8 true\n"

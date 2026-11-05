@@ -1,0 +1,63 @@
+import "ast"
+import "posix"
+import "win32"
+import "macos"
+import "elf"
+import "pe"
+import "coff"
+import "macho"
+import "amd64"
+import "riscv64"
+import "aarch64"
+import "xvm"
+
+val tc_assert message condition := if condition then () else Core.error(message)
+val tc_tree := ASTBuilder.node("root", [ASTBuilder.leaf("left", "a"), ASTBuilder.leaf("right", "b")])
+val tc_record tree := IO.print(Absyn.tag tree)
+val _ := Visitor.preorder tc_record tc_tree
+val _ := Visitor.postorder tc_record tc_tree
+val _ := Visitor.walk {enter := fn _ -> false, leave := tc_record} tc_tree
+val _ := tc_assert "visitor fold" (Visitor.fold (fn count _ -> count + 1) 0 tc_tree == 3)
+val tc_rewrite tree := if Absyn.tag tree == "left" then ASTBuilder.leaf("changed", "c") else tree
+val _ := tc_assert "bottom-up transform"
+  (Absyn.dump (Visitor.transform tc_rewrite tc_tree) == Absyn.dump (ASTBuilder.node("root", [ASTBuilder.leaf("changed", "c"), ASTBuilder.leaf("right", "b")])))
+val _ := tc_assert "attached visitor"
+  (Absyn.Visitor.fold (fn count _ -> count + 1) 0 tc_tree == 3)
+
+module TC_Windows := System(Win32)
+module TC_Mac := System(MacOS)
+module TC_Riscv := Arch(Riscv64)
+module TC_Arm := Arch(Aarch64)
+module TC_PE := Objfile(PE)
+module TC_COFF := Objfile(COFF)
+module TC_MachO := Objfile(MachO)
+module TC_VM := XVM(Amd64)
+val _ := tc_assert "windows separator" (TC_Windows.separator () == "\\")
+val _ := tc_assert "mac separator" (TC_Mac.separator () == "/")
+val _ := tc_assert "riscv architecture" (TC_Riscv.name () == "riscv64")
+val _ := tc_assert "arm architecture" (TC_Arm.name () == "aarch64")
+val _ := tc_assert "PE image" (match TC_PE.of_code "amd64" (Amd64.return_int 42) with | Ok bytes -> TC_PE.matches bytes | Err _ -> false)
+val _ := tc_assert "COFF object" (match TC_COFF.of_code "riscv64" (TC_Riscv.return_int 42) with | Ok bytes -> TC_COFF.matches bytes | Err _ -> false)
+val _ := tc_assert "Mach-O object" (match TC_MachO.of_code "aarch64" (TC_Arm.return_int 42) with | Ok bytes -> TC_MachO.matches bytes | Err _ -> false)
+val _ := tc_assert "unsupported Mach-O architecture" (match TC_MachO.of_code "riscv64" "code" with | Err _ -> true | Ok _ -> false)
+val _ := tc_assert "truncated ELF" (match ELF.inspect "\u{7f}ELF" with | Err _ -> true | Ok _ -> false)
+val _ := tc_assert "invalid PE" (not (PE.matches "MZ"))
+
+val _ := tc_assert "nested runtime error" (match Chunk.of_source "1 / 0" with
+  | Ok chunk -> (match TC_VM.run chunk with | Err _ -> true | Ok _ -> false)
+  | Err _ -> false)
+val _ := tc_assert "nested checker error" (match Chunk.of_source "true + 1" with
+  | Ok chunk -> (match TC_VM.run chunk with | Err _ -> true | Ok _ -> false)
+  | Err _ -> false)
+val _ := tc_assert "execution after nested error" (match Chunk.of_source "40 + 2" with
+  | Ok chunk -> (match TC_VM.run chunk with | Ok value -> TC_VM.show value == "42" | Err _ -> false)
+  | Err _ -> false)
+val _ := tc_assert "current program after nested error" (match Chunk.current () with
+  | Ok chunk -> Chunk.filename chunk != "<xvm>"
+  | Err _ -> false)
+
+{- Runtime values remain opaque at the language boundary; no unsound
+   polymorphic cast from strings to arbitrary MetaML types is provided. -}
+val _ := tc_assert "closure result" (match Chunk.of_source "fn x -> x + 1" with
+  | Ok chunk -> (match TC_VM.run chunk with | Ok _ -> true | Err _ -> false)
+  | Err _ -> false)

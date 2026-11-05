@@ -1,3 +1,8 @@
+> **XVM is now the default Machinery executor.** It compiles verified programs
+> to portable/native helper-call blocks while retaining both previous engines.
+> Current MetaML is also compiled by default. See [XVM.md](docs/XVM.md) for APIs,
+> tier selection, resource limits and unchanged catalog/runtime boundaries.
+
 **[Read the complete 40-chapter manual](manual/README.md)** for build instructions,
 API contracts, generation workflows, native profiles, and runnable SDK examples.
 

@@ -61,7 +61,7 @@ public:
     metavm::Module lower(const std::vector<uint8_t>&code,std::size_t max_source=16*1024*1024)const;
     Result execute(const std::vector<uint8_t>&code,const std::vector<int64_t>&registers={},
         const std::vector<uint8_t>&memory={},const mvm_limits&limits=mvm_default_limits(),
-        mvm_engine engine=MVM_ENGINE_BYTECODE)const;
+        mvm_engine engine=MVM_ENGINE_DEFAULT)const;
 private:
     static bool produces(Op op){return op<=Op::less;}
     static bool terminal(Op op){return op==Op::jump||op==Op::branch||op==Op::halt;}

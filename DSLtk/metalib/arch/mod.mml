@@ -1,0 +1,31 @@
+module type ARCH := sig
+  val name : Unit -> String
+  val word_bits : Unit -> Int
+  val endian : Unit -> String
+  val native : Unit -> Bool
+  val return_int : Int -> String
+end
+module Amd64 : ARCH := struct
+  val name _ := "amd64"
+  val word_bits _ := 64
+  val endian _ := "little"
+  val native _ := Amd64.native(())
+  val return_int value := Amd64.return_int(value)
+end
+module Riscv64 : ARCH := struct
+  val name _ := "riscv64"
+  val word_bits _ := 64
+  val endian _ := "little"
+  val native _ := Riscv64.native(())
+  val return_int value := Riscv64.return_int(value)
+end
+module Aarch64 : ARCH := struct
+  val name _ := "aarch64"
+  val word_bits _ := 64
+  val endian _ := "little"
+  val native _ := Aarch64.native(())
+  val return_int value := Aarch64.return_int(value)
+end
+module Arch (Target : ARCH) : ARCH := struct
+  include Target
+end

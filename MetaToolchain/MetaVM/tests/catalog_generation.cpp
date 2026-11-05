@@ -21,7 +21,7 @@ static std::vector<uint8_t> binary(const mvm_module*module) {
     } catch(...) {mvm_buffer_dispose(&buffer);throw;}
 }
 static void execute(const mvm_module*module) {
-    for(auto engine:{MVM_ENGINE_BYTECODE,MVM_ENGINE_THREADED}) {
+    for(auto engine:{MVM_ENGINE_BYTECODE,MVM_ENGINE_THREADED,MVM_ENGINE_XVM}) {
         metavm::machines::Graphics surface(4,4);metavm::VM vm;mvm_error error{};
         metavm::check(surface.bind(vm.get(),&error),error);
         mvm_value result{};

@@ -1,0 +1,34 @@
+type ObjInfo := {format : String, arch : String, bits : Int, sections : Int}
+module type OBJFILE := sig
+  val name : Unit -> String
+  val matches : String -> Bool
+  val inspect : String -> Result ObjInfo String
+  val of_code : String -> String -> Result String String
+end
+module ELF : OBJFILE := struct
+  val name _ := "elf"
+  val matches bytes := ELF.matches(bytes)
+  val inspect bytes := ELF.inspect(bytes)
+  val of_code arch code := ELF.of_code(arch, code)
+end
+module PE : OBJFILE := struct
+  val name _ := "pe"
+  val matches bytes := PE.matches(bytes)
+  val inspect bytes := PE.inspect(bytes)
+  val of_code arch code := PE.of_code(arch, code)
+end
+module COFF : OBJFILE := struct
+  val name _ := "coff"
+  val matches bytes := COFF.matches(bytes)
+  val inspect bytes := COFF.inspect(bytes)
+  val of_code arch code := COFF.of_code(arch, code)
+end
+module MachO : OBJFILE := struct
+  val name _ := "macho"
+  val matches bytes := MachO.matches(bytes)
+  val inspect bytes := MachO.inspect(bytes)
+  val of_code arch code := MachO.of_code(arch, code)
+end
+module Objfile (Format : OBJFILE) : OBJFILE := struct
+  include Format
+end

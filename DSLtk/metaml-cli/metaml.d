@@ -43,6 +43,7 @@ private struct Options
     bool list_primitives;
     bool interactive_after;
     string stdlib;
+    string engine = "xvm";
     string dump_ast;
     string[] disabled;
     string[] exprs;
@@ -53,6 +54,7 @@ private enum usage_text = "usage: metaml [options] [file.mml ...]\n"
     ~ "  --no-tty          never print prompts\n"
     ~ "  --no-history      do not read or write the history file\n"
     ~ "  --no-stdlib       do not load metalib\n"
+    ~ "  --engine NAME     xvm (default), portable, jit, or tree\n"
     ~ "  --stdlib DIR      use DIR as the metalib directory\n"
     ~ "  --dump-ast FILE   print the AST of FILE and exit\n"
     ~ "  --list-primitives print registered name, arity and type (TSV)\n"
@@ -145,6 +147,7 @@ private int run(string[] argv)
         else if (a == "--no-stdlib") opt.no_stdlib = true;
         else if (a == "--list-primitives") opt.list_primitives = true;
         else if (a == "--stdlib") opt.stdlib = need();
+        else if (a == "--engine") opt.engine = need();
         else if (a == "--dump-ast") opt.dump_ast = need();
         else if (a == "--disable") opt.disabled ~= need();
         else if (a == "-e") opt.exprs ~= need();
@@ -182,7 +185,10 @@ private int run(string[] argv)
         return parsed.ok() ? 0 : 1;
     }
 
+    auto engine = execution_engine_from_name(opt.engine);
+    if (engine.isNull) { stderr.writeln("metaml: invalid execution engine " ~ opt.engine); return 2; }
     auto session = new MetaML.Session();
+    session.interp().engine = engine.get();
     scope (exit) session.close();
     session.allow_all_primitives();
     session.set_max_depth(100000);

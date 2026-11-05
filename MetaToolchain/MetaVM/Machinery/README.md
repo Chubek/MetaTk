@@ -1,10 +1,10 @@
 # MetaVM Machinery
 
-A dependency-free, register-based virtual machine. The implementation, public
-`.h` interfaces, tests and example runner are ISO C11. `MetaVM.hpp` provides an
-optional C++11 RAII interface. Only the C standard library is linked by the VM;
-the wrapper uses the C++ standard library. There is no dependency on MetaIL,
-MetaArch, LLVM, Lua, POSIX, executable-memory APIs or platform threading APIs.
+A register-based VM with ISO C11 public interfaces, tests and runner, and an
+optional C++11 RAII wrapper. XVM is the default executor, compiling portable/native
+helper-call blocks. Its optional native tier uses platform executable-memory
+APIs; `METAVM_XVM_NATIVE=OFF` keeps execution standard-library-only. There is no
+required MetaIL, MetaArch, LLVM, Lua, C++ or threading dependency.
 The target requires 8-bit bytes and exact-width `int64_t`/`uint64_t` types.
 
 ## Build and run
@@ -27,6 +27,7 @@ The default build needs only a C compiler. Options:
 | `METAVM_TEST_CPP` | OFF | Compile and test the optional C++11 wrapper |
 | `METAVM_WARNINGS_AS_ERRORS` | ON | GCC/Clang warning checks |
 | `METAVM_SANITIZE` | OFF | GCC/Clang AddressSanitizer + UndefinedBehaviorSanitizer |
+| `METAVM_XVM_NATIVE` | ON | Native XVM blocks; OFF retains portable compiled XVM |
 | `BUILD_SHARED_LIBS` | OFF | Build shared instead of static library |
 
 For embedding, `add_subdirectory(MetaVM/Machinery)` and link
@@ -60,7 +61,7 @@ int main(void) {
     if (status != MVM_OK) { puts(error.message); return 1; }
     vm = mvm_create(NULL, &error);
     if (!vm) { puts(error.message); mvm_module_destroy(module); return 1; }
-    status = mvm_run_bytecode(vm, module, 0, NULL, 0, &result, &error);
+    status = mvm_run_default(vm, module, 0, NULL, 0, &result, &error);
     if (status != MVM_OK) puts(error.message);
     mvm_destroy(vm);
     mvm_module_destroy(module);
@@ -125,6 +126,11 @@ fallthrough at the end of a function (including unreachable instructions).
 Type checks happen during execution.
 
 ### Engines
+
+`MVM_ENGINE_DEFAULT` / `MVM_ENGINE_XVM` compile verified instructions into blocks,
+using native code where available and portable compiled execution otherwise.
+`mvm_run_default` selects it; explicit old-engine APIs are unchanged. See
+[XVM](../docs/XVM.md) for native policies, code/plan limits and statistics.
 
 `MVM_ENGINE_BYTECODE` selects handlers using a switch for each instruction.
 `MVM_ENGINE_THREADED` predecodes instructions into C function pointers for the

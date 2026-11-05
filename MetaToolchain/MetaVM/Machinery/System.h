@@ -1,4 +1,4 @@
-/* MetaVM: ISO C11, standard-library-only. See README.md for ownership rules. */
+/* MetaVM: ISO C11 public API; optional native XVM. See README.md for ownership. */
 #ifndef METAVM_SYSTEM_H
 #define METAVM_SYSTEM_H
 #include <stddef.h>

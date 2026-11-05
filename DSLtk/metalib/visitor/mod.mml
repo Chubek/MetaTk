@@ -1,0 +1,25 @@
+{- A visitor has enter/leave callbacks. Returning false from enter prunes a
+   subtree; leave still runs for that node. Transform is bottom-up. -}
+module Visitor := struct
+  val walk visitor tree :=
+    let descend := visitor.enter tree in
+    let _ := if descend then visit_children visitor (ASTBuilder.children(tree)) else () in
+    visitor.leave tree
+  val visit_children visitor children := match children with
+    | [] -> ()
+    | child :: rest -> let _ := walk visitor child in visit_children visitor rest
+
+  val preorder callback tree := walk {enter := fn n -> let _ := callback n in true, leave := fn _ -> ()} tree
+  val postorder callback tree := walk {enter := fn _ -> true, leave := callback} tree
+  val fold step state tree :=
+    fold_children step (step state tree) (ASTBuilder.children(tree))
+  val fold_children step state children := match children with
+    | [] -> state
+    | child :: rest -> fold_children step (fold step state child) rest
+  val transform rewrite tree :=
+    if ASTBuilder.is_leaf(tree) then rewrite tree
+    else rewrite (ASTBuilder.with_children(map_children rewrite (ASTBuilder.children(tree)), tree))
+  val map_children rewrite children := match children with
+    | [] -> []
+    | child :: rest -> transform rewrite child :: map_children rewrite rest
+end

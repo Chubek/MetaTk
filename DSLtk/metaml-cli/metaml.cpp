@@ -42,6 +42,7 @@ struct Options
   bool list_primitives = false;
   bool interactive_after = false;
   std::string stdlib;
+  std::string engine = "xvm";
   std::string dump_ast;
   std::vector<std::string> disabled;
   std::vector<std::string> exprs;
@@ -53,6 +54,7 @@ const char *usage_text
       "  --no-tty          never print prompts\n"
       "  --no-history      do not read or write the history file\n"
       "  --no-stdlib       do not load metalib\n"
+      "  --engine NAME     xvm (default), portable, jit, or tree\n"
       "  --stdlib DIR      use DIR as the metalib directory\n"
       "  --dump-ast FILE   print the AST of FILE and exit\n"
       "  --list-primitives print registered name, arity and type (TSV)\n"
@@ -140,6 +142,8 @@ run (int argc, char **argv)
         opt.list_primitives = true;
       else if (a == "--stdlib")
         opt.stdlib = need ();
+      else if (a == "--engine")
+        opt.engine = need ();
       else if (a == "--dump-ast")
         opt.dump_ast = need ();
       else if (a == "--disable")
@@ -182,7 +186,10 @@ run (int argc, char **argv)
       return parsed.ok () ? 0 : 1;
     }
 
+  auto engine = metaml::execution_engine_from_name(opt.engine);
+  if (!engine) { std::cerr << "metaml: invalid execution engine " << opt.engine << "\n"; return 2; }
   metaml::Session session;
+  session.interp().engine = *engine;
   session.allow_all_primitives ();
   session.set_max_depth (100000);
   for (auto &c : opt.disabled)

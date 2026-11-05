@@ -1,0 +1,11 @@
+module Chunk := struct
+  type t := XvmChunk
+  val of_source source := Chunk.of_source(source)
+  {- of_file reads an encoded XVM chunk or compiles a MetaML source file. -}
+  val of_file path := Chunk.of_file(path)
+  val current _ := Chunk.current(())
+  val encode chunk := Chunk.encode(chunk)
+  val decode bytes := Chunk.decode(bytes)
+  val source chunk := Chunk.source(chunk)
+  val filename chunk := Chunk.filename(chunk)
+end

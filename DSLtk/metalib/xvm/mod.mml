@@ -1,0 +1,7 @@
+import "arch"
+import "chunk"
+module XVM (Target : ARCH) := struct
+  val run chunk := XVM.run(Target.name (), chunk)
+  val jit chunk := XVM.jit(Target.name (), chunk)
+  val show value := XVM.show(value)
+end

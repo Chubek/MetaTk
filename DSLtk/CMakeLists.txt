@@ -80,7 +80,7 @@ if(BUILD_EXAMPLES)
 endif()
 
 install(
-    FILES DSLtk.hpp DSLtk.d MetaML.hpp MetaML.d
+    FILES DSLtk.hpp DSLtk.d MetaML.hpp MetaML.d XVMNative.hpp XVMCode.hpp XVMNative.d XVMCode.d
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
@@ -100,7 +100,11 @@ install(DIRECTORY metalib/ DESTINATION share/metaml/stdlib/cpp)
 install(DIRECTORY metalib/ DESTINATION share/metaml/stdlib/d)
 install(DIRECTORY metalib/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/metalib
         FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp" PATTERN "*.c" PATTERN "*.d")
+install(DIRECTORY metaml-backends/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/metaml-backends
+        FILES_MATCHING PATTERN "*.hpp" PATTERN "*.d")
 install(DIRECTORY metaml-manual/ DESTINATION share/doc/metaml)
+install(FILES XVM.md DESTINATION share/doc/metaml)
+install(FILES XVM.md DESTINATION share/metaml/stdlib)
 
 if (DSLtk_BUILD_GENERATOR AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generator/DSLtk-ParserGenerator.d")
     find_program(DSLtk_D_COMPILER NAMES ldc2 dmd gdc

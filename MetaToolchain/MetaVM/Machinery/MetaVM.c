@@ -1,4 +1,15 @@
+#if defined(__linux__) && !defined(_DEFAULT_SOURCE)
+#define _DEFAULT_SOURCE
+#endif
 #include "Internal.h"
+#if !defined(METAVM_NO_JIT) && defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#elif !defined(METAVM_NO_JIT) && (defined(__unix__) || defined(__APPLE__))
+#include <sys/mman.h>
+#endif
 
 mvm_vm *mvm_create(const mvm_limits *limits, mvm_error *e) {
     mvm_limits l = limits ? *limits : mvm_default_limits();
@@ -11,6 +22,7 @@ mvm_vm *mvm_create(const mvm_limits *limits, mvm_error *e) {
     vm = calloc(1, sizeof(*vm));
     if (!vm) { (void)mvm_fail(e, MVM_OOM, "VM allocation failed"); return NULL; }
     vm->limits = l; vm->result = mvm_nil();
+    vm->xvm_options = mvm_xvm_default_options();
     return vm;
 }
 static void unwind(mvm_vm *vm) {
@@ -131,6 +143,7 @@ typedef struct execution {
     mvm_vm *vm;
     const mvm_binding **imports;
     mvm_error *error;
+    mvm_status xvm_status;
 } execution;
 typedef mvm_status (*handler)(execution *, const mvm_instruction *, mvm_value *);
 
@@ -269,15 +282,18 @@ static mvm_status resolve_imports(execution *x) {
     }
     return MVM_OK;
 }
+#include "XVM.inc"
+
 mvm_status mvm_run(mvm_vm *vm, const mvm_module *m, uint32_t fn,
     const mvm_value *args, size_t count, mvm_engine engine, mvm_value *out, mvm_error *e) {
     mvm_status s;
     execution x;
     handler **plan = NULL;
+    xvm_plan compiled;
     size_t i, j, total = 0;
     mvm_error_clear(e);
     if (!vm || !m || !out || (count && !args) ||
-        (engine != MVM_ENGINE_BYTECODE && engine != MVM_ENGINE_THREADED)) {
+        (engine != MVM_ENGINE_BYTECODE && engine != MVM_ENGINE_THREADED && engine != MVM_ENGINE_XVM)) {
         if (out) *out = mvm_nil();
         return mvm_fail(e, MVM_INVALID, "invalid execution arguments");
     }
@@ -301,14 +317,22 @@ mvm_status mvm_run(mvm_vm *vm, const mvm_module *m, uint32_t fn,
         }
         total += n * sizeof(mvm_instruction);
     }
+    memset(&compiled, 0, sizeof(compiled));
+    memset(&vm->xvm_stats, 0, sizeof(vm->xvm_stats));
     vm->busy = 1; vm->module = m;
     x.vm = vm; x.imports = NULL; x.error = e;
+    x.xvm_status = MVM_OK;
     s = push_frame(vm, fn, 0, args); /* Copy before clearing possibly aliased out. */
     *out = mvm_nil();
     vm->result = mvm_nil();
     if (s != MVM_OK) goto done;
     s = resolve_imports(&x);
     if (s != MVM_OK) goto done;
+    if (engine == MVM_ENGINE_XVM) {
+        s = xvm_compile(&x, &compiled);
+        if (s == MVM_OK) s = xvm_execute(&x, &compiled);
+        goto done;
+    }
     if (engine == MVM_ENGINE_THREADED) {
         if (m->function_count > SIZE_MAX / sizeof(*plan)) { s = MVM_LIMIT; goto done; }
         plan = calloc(m->function_count, sizeof(*plan));
@@ -338,6 +362,7 @@ mvm_status mvm_run(mvm_vm *vm, const mvm_module *m, uint32_t fn,
         }
     }
 done:
+    xvm_release(&compiled, m->function_count);
     if (plan) {
         for (i = 0; i < m->function_count; ++i) free(plan[i]);
         free(plan);
@@ -360,4 +385,12 @@ mvm_status mvm_run_bytecode(mvm_vm *vm, const mvm_module *m, uint32_t f,
 mvm_status mvm_run_threaded(mvm_vm *vm, const mvm_module *m, uint32_t f,
     const mvm_value *a, size_t n, mvm_value *out, mvm_error *e) {
     return mvm_run(vm, m, f, a, n, MVM_ENGINE_THREADED, out, e);
+}
+mvm_status mvm_run_xvm(mvm_vm *vm, const mvm_module *m, uint32_t f,
+    const mvm_value *a, size_t n, mvm_value *out, mvm_error *e) {
+    return mvm_run(vm, m, f, a, n, MVM_ENGINE_XVM, out, e);
+}
+mvm_status mvm_run_default(mvm_vm *vm, const mvm_module *m, uint32_t f,
+    const mvm_value *a, size_t n, mvm_value *out, mvm_error *e) {
+    return mvm_run_xvm(vm, m, f, a, n, out, e);
 }

@@ -5,7 +5,11 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-private-field"
 #endif
+#if defined(METAVM_LEGACY_METAML)
 #include "../third_party/MetaML.hpp"
+#else
+#include <metaml-backends/XVM.hpp>
+#endif
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif

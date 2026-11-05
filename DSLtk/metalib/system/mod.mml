@@ -1,0 +1,41 @@
+module type OS := sig
+  val name : Unit -> String
+  val available : Unit -> Bool
+  val separator : Unit -> String
+  val cwd : Unit -> Result String String
+  val getenv : String -> Result (Option String) String
+  val read_file : String -> Result String String
+  val write_file : String -> String -> Result Unit String
+end
+
+module Posix : OS := struct
+  val name _ := "posix"
+  val available _ := Posix.available(())
+  val separator _ := "/"
+  val cwd _ := Posix.cwd(())
+  val getenv key := Posix.getenv(key)
+  val read_file path := Posix.read_file(path)
+  val write_file path bytes := Posix.write_file(path, bytes)
+end
+module Win32 : OS := struct
+  val name _ := "win32"
+  val available _ := Win32.available(())
+  val separator _ := "\\"
+  val cwd _ := Win32.cwd(())
+  val getenv key := Win32.getenv(key)
+  val read_file path := Win32.read_file(path)
+  val write_file path bytes := Win32.write_file(path, bytes)
+end
+module MacOS : OS := struct
+  val name _ := "macos"
+  val available _ := MacOS.available(())
+  val separator _ := "/"
+  val cwd _ := MacOS.cwd(())
+  val getenv key := MacOS.getenv(key)
+  val read_file path := MacOS.read_file(path)
+  val write_file path bytes := MacOS.write_file(path, bytes)
+end
+
+module System (Platform : OS) : OS := struct
+  include Platform
+end

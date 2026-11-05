@@ -94,7 +94,7 @@ public:
     VM &operator=(const VM &) = delete;
     mvm_vm *get() const noexcept { return vm_.get(); }
     mvm_value run(const Module &m, std::uint32_t entry = 0,
-                  const std::vector<mvm_value> &args = {}, mvm_engine engine = MVM_ENGINE_BYTECODE) {
+                  const std::vector<mvm_value> &args = {}, mvm_engine engine = MVM_ENGINE_DEFAULT) {
         mvm_error e{};
         mvm_value result = mvm_nil();
         check(mvm_run(get(), m.get(), entry, args.data(), args.size(), engine, &result, &e), e);

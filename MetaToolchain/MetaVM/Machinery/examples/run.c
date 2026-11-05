@@ -10,12 +10,13 @@ int main(int argc, char **argv) {
     mvm_status status;
     mvm_value result;
     uint32_t entry;
-    mvm_engine engine = MVM_ENGINE_BYTECODE;
-    if (argc < 2 || argc > 3 || (argc == 3 && strcmp(argv[2], "--threaded"))) {
-        fprintf(stderr, "usage: %s MODULE [--threaded]\n", argv[0]);
+    mvm_engine engine = MVM_ENGINE_DEFAULT;
+    if (argc < 2 || argc > 3 || (argc == 3 && strcmp(argv[2], "--threaded") && strcmp(argv[2], "--bytecode") && strcmp(argv[2], "--xvm"))) {
+        fprintf(stderr, "usage: %s MODULE [--xvm|--bytecode|--threaded]\n", argv[0]);
         return 2;
     }
-    if (argc == 3) engine = MVM_ENGINE_THREADED;
+    if (argc == 3 && !strcmp(argv[2], "--threaded")) engine = MVM_ENGINE_THREADED;
+    if (argc == 3 && !strcmp(argv[2], "--bytecode")) engine = MVM_ENGINE_BYTECODE;
     status = mvm_load_file(argv[1], 0, &module, &error);
     if (status != MVM_OK) {
         fprintf(stderr, "%s:%zu: %s\n", argv[1], error.line, error.message);

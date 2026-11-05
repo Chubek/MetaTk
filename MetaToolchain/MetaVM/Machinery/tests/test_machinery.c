@@ -47,6 +47,8 @@ static void test_execution(void) {
     b = run(vm, m, MVM_ENGINE_THREADED);
     CHECK(a.kind == MVM_INT && a.as.integer == 3628800);
     CHECK(mvm_value_equal(a, b)); CHECK(steps == mvm_steps(vm) && steps > 50);
+    b = run(vm, m, MVM_ENGINE_XVM);
+    CHECK(mvm_value_equal(a, b)); CHECK(steps == mvm_steps(vm));
     CHECK(mvm_module_function_count(m) == 2);
     OK(mvm_module_find(m, "fact", &index)); CHECK(index == 1);
     CHECK(mvm_module_find(m, "missing", &index) == MVM_NOT_FOUND);
@@ -90,7 +92,7 @@ static void test_arithmetic(void) {
         (void)snprintf(source, sizeof(source), ".function main 0 3\nconst r0 %" PRId64
             "\nconst r1 %" PRId64 "\n%s r2 r0 r1\nret r2\n.end\n", c->a, c->b, mvm_opcode_name(c->op));
         m = compile(source);
-        for (engine = 0; engine < 2; ++engine) {
+        for (engine = 0; engine < 3; ++engine) {
             mvm_value result;
             CHECK(mvm_run(vm, m, 0, NULL, 0, (mvm_engine)engine, &result, &e) == c->status);
             if (c->status == MVM_OK) {
@@ -125,11 +127,11 @@ static void test_control_and_objects(void) {
         "bad:\nconst r6 -1\njmp end\ngood:\nnop\nend:\nret r6\n.end\n");
     mvm_vm *vm = new_vm();
     unsigned engine;
-    for (engine = 0; engine < 2; ++engine) {
+    for (engine = 0; engine < 3; ++engine) {
         mvm_value v = run(vm, m, (mvm_engine)engine);
         CHECK(v.kind == MVM_INT && v.as.integer == 42);
     }
-    CHECK(mvm_collect(vm) == 2);
+    CHECK(mvm_collect(vm) == 3); /* One array allocated by each of three engines. */
     CHECK(!mvm_value_truthy(mvm_nil())); CHECK(!mvm_value_truthy(mvm_bool(0)));
     CHECK(mvm_value_truthy(mvm_int(0)));
     mvm_module_destroy(m); mvm_destroy(vm);
@@ -157,7 +159,7 @@ static void test_limits_and_traps(void) {
         mvm_module *m;
         (void)snprintf(source, sizeof(source), ".function main 0 3\n%s\n.end", cases[i].body);
         m = compile(source);
-        for (engine = 0; engine < 2; ++engine) {
+        for (engine = 0; engine < 3; ++engine) {
             mvm_value v;
             CHECK(mvm_run(vm, m, 0, NULL, 0, (mvm_engine)engine, &v, &e) == cases[i].status);
             CHECK(e.message[0] && e.status == cases[i].status && v.kind == MVM_NIL);
@@ -260,16 +262,19 @@ static void test_host(void) {
     CHECK(mvm_run_bytecode(vm, m, 0, NULL, 0, &v, &e) == MVM_NOT_FOUND);
     OK(mvm_register_native(vm, "echo", 1, native_echo, &ctx, &e));
     CHECK(mvm_register_native(vm, "echo", 1, native_echo, &ctx, &e) == MVM_INVALID);
-    for (engine = 0; engine < 2; ++engine) {
+    for (engine = 0; engine < 3; ++engine) {
         v = run(vm, m, (mvm_engine)engine);
         (void)mvm_collect(vm); /* last result retained */
         OK(mvm_array_get(vm, v, 0, &a)); CHECK(a.kind == MVM_INT && a.as.integer == 42);
     }
-    CHECK(ctx.calls == 2);
+    CHECK(ctx.calls == 3); /* Each engine must perform exactly one host effect. */
     mvm_module_destroy(m); mvm_destroy(vm);
     m = compile(".import fail 0\n.function main 0 1\nhost r0 fail r1\nret r0\n.end");
     vm = new_vm(); OK(mvm_register_native(vm, "fail", 0, native_fail, NULL, &e));
     CHECK(mvm_run_threaded(vm, m, 0, NULL, 0, &v, &e) == MVM_HOST_ERROR);
+    CHECK(e.status == MVM_HOST_ERROR && strstr(e.message, "deliberate") != NULL);
+    CHECK(e.function == 0 && e.instruction == 0);
+    CHECK(mvm_run_xvm(vm, m, 0, NULL, 0, &v, &e) == MVM_HOST_ERROR);
     CHECK(e.status == MVM_HOST_ERROR && strstr(e.message, "deliberate") != NULL);
     CHECK(e.function == 0 && e.instruction == 0);
     mvm_module_destroy(m); mvm_destroy(vm);
@@ -416,11 +421,16 @@ static void test_mutations(void) {
         unsigned char old = b.data[index];
         b.data[index] ^= (unsigned char)(1u << (random_next(&state) % 8));
         if (mvm_deserialize(b.data, b.size, 0, &copy, &e) == MVM_OK) {
-            mvm_value a, c;
+            mvm_value a, c, native;
             mvm_status sa = mvm_run_bytecode(vm, copy, 0, NULL, 0, &a, &e);
+            uint64_t steps = mvm_steps(vm);
             mvm_status sc = mvm_run_threaded(vm, copy, 0, NULL, 0, &c, &e);
             CHECK(sa == sc);
             if (sa == MVM_OK && a.kind != MVM_OBJECT) CHECK(mvm_value_equal(a, c));
+            CHECK(mvm_steps(vm) == steps);
+            CHECK(mvm_run_xvm(vm, copy, 0, NULL, 0, &native, &e) == sa);
+            CHECK(mvm_steps(vm) == steps);
+            if (sa == MVM_OK && a.kind != MVM_OBJECT) CHECK(mvm_value_equal(a, native));
             mvm_module_destroy(copy);
         } else CHECK(copy == NULL);
         b.data[index] = old;

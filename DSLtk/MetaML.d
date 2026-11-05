@@ -1046,12 +1046,18 @@ private ASTNode dump_item(Item it)
     }
 }
 
-/// Canonical S-expression dump of a program (identical in MetaML.hpp).
-string dump_ast(ref const Program prog)
+/// Structural program AST (identical in MetaML.hpp).
+ASTNode program_ast(ref const Program prog)
 {
     ASTNode[] items;
     foreach (i; prog.items) items ~= dump_item(cast(Item) i);
-    return ast_to_sexpr(ASTNode("Program", items)).dump();
+    return ASTNode("Program", items);
+}
+
+/// Canonical S-expression dump of a program (identical in MetaML.hpp).
+string dump_ast(ref const Program prog)
+{
+    return ast_to_sexpr(program_ast(prog)).dump();
 }
 
 // ============================================================
@@ -5330,8 +5336,30 @@ final class Primitive
 
 // ---- the evaluator ----
 
+enum ExecutionEngine { XVM, PortableXVM, Tree, NativeXVM }
+Nullable!ExecutionEngine execution_engine_from_name(string name)
+{
+    if (name == "xvm") return nullable(ExecutionEngine.XVM);
+    if (name == "portable") return nullable(ExecutionEngine.PortableXVM);
+    if (name == "tree") return nullable(ExecutionEngine.Tree);
+    if (name == "jit") return nullable(ExecutionEngine.NativeXVM);
+    return Nullable!ExecutionEngine.init;
+}
+
 final class Interp
 {
+    import XVMCode : XVMEngine;
+    ExecutionEngine engine = ExecutionEngine.XVM;
+    size_t xvm_code_limit = 1_000_000, xvm_stack_limit = 1_000_000;
+    size_t xvm_native_limit = 64 * 1024 * 1024;
+    ulong xvm_instructions, xvm_native_blocks;
+    ulong xvm_revision;
+    XVMEngine!().Code[Expr] xvm_cache;
+    void clear_xvm_cache() {
+        if (eval_depth) fail("M0404", "cannot clear executing XVM code", Span.init);
+        foreach (code; xvm_cache) foreach (block; code.blocks) if (block !is null) destroy(block);
+        xvm_cache = null;
+    }
     int max_depth = 10000;
     int call_depth = 0;
     int eval_depth = 0;
@@ -5842,6 +5870,17 @@ final class Interp
     // ---- evaluation (with tail calls) ----
     Value eval(Expr e, Frame env, bool counted = false)
     {
+        if (engine != ExecutionEngine.Tree) return XVMEngine!().evaluate(this, e, env, counted);
+        return eval_tree(e, env, counted);
+    }
+
+    bool xvm_tail_call(Value f, Value[] args, ref Expr e, ref Frame env, ref bool counted)
+    { return tail_call(f, args, e, env, counted); }
+    void xvm_comprehension(Expr e, size_t idx, Frame env, ref Value[] result)
+    { comprehension(e, idx, env, result); }
+
+    Value eval_tree(Expr e, Frame env, bool counted = false)
+    {
         ++eval_depth;
         scope (exit)
         {
@@ -6242,6 +6281,7 @@ final class Session
     private Primitive[string] prims_;
     private Cell[string] globals_;
     private Program[] programs_;
+    private Program* active_program_;
     private string[string] sources_;
     private bool[string] imported_;
     private string[] search_path_;
@@ -6300,6 +6340,7 @@ final class Session
         resource_mutex_.unlock();
         foreach (r; resources) try { if (r.stop !is null) r.stop(); } catch (Exception) {}
         foreach (r; resources) try { if (r.wait !is null) r.wait(); } catch (Exception) {}
+        if (!interp_.eval_depth) interp_.clear_xvm_cache();
     }
 
     /// MetaML source evaluated by every fresh session (identical in MetaML.hpp).
@@ -6434,11 +6475,21 @@ final class Session
         return run_program(parsed.program, mode);
     }
 
+    /// The innermost executing source, restored after nested imports/evaluation.
+    Program* current_program() { return active_program_; }
+
     /// Checks and executes a parsed program unit by unit.
     RunReport run_program(Program prog, RunMode mode)
     {
         RunReport rep;
+        auto entry_eval_depth = interp_.eval_depth;
+        auto entry_call_depth = interp_.call_depth;
+        auto saved_stack = entry_eval_depth ? interp_.stack.dup : null;
+        auto saved_stack_types = entry_eval_depth ? stack_types_.dup : null;
         programs_ ~= prog;
+        auto previous_program = active_program_;
+        active_program_ = &prog;
+        scope(exit) active_program_ = previous_program;
         sources_[prog.file] = prog.source;
         auto items = prog.items;
         foreach (r; Checker.units(items))
@@ -6460,7 +6511,10 @@ final class Session
             auto unit_scope = Scope.child(checker_.global);
             checker_.warnings = null;
             UnitInfo info;
-            try info = checker_.check_unit(items, r.b, r.e, unit_scope, null, true);
+            try {
+                if (++interp_.xvm_revision == 0) interp_.xvm_cache = null;
+                info = checker_.check_unit(items, r.b, r.e, unit_scope, null, true);
+            }
             catch (MetaError err)
             {
                 checker_.u.commit();
@@ -6479,10 +6533,10 @@ final class Session
             try exec_unit(items, r.b, r.e, info, mode, rep);
             catch (MetaError err)
             {
-                interp_.stack = null;
-                stack_types_ = null;
-                interp_.call_depth = 0;
-                interp_.eval_depth = 0;
+                interp_.stack = saved_stack;
+                stack_types_ = saved_stack_types;
+                interp_.call_depth = entry_call_depth;
+                interp_.eval_depth = entry_eval_depth;
                 rep.errors ~= err.diag;
                 return rep;
             }
@@ -6601,6 +6655,7 @@ final class Session
         it.allowed = (Primitive p) {
             import std.algorithm : startsWith, endsWith;
             if (p.name.startsWith("Loader.") || p.name.startsWith("Module.")) return false;
+            if (p.name.startsWith("XVM.") || p.name == "Absyn.current" || p.name == "Chunk.current") return false;
             if (background && (p.name == "Threading.spawn" || p.name == "Fiber.create")) return false;
             if (p.core || all) return true;
             foreach (n; allow)
@@ -6610,6 +6665,10 @@ final class Session
         auto globals = globals_.dup;
         it.global_lookup = (string n) { auto p = n in globals; return p is null ? null : *p; };
         it.max_depth = interp_.max_depth < 20000 ? interp_.max_depth : 20000;
+        it.engine = interp_.engine;
+        it.xvm_code_limit = interp_.xvm_code_limit;
+        it.xvm_stack_limit = interp_.xvm_stack_limit;
+        it.xvm_native_limit = interp_.xvm_native_limit;
         it.module_lock = module_lock_;
         return it;
     }
