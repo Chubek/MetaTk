@@ -12,6 +12,7 @@ metaml --engine xvm -e '40 + 2'       # default: native blocks when available
 metaml --engine portable -e '40 + 2'  # compiled bytecode without executable pages
 metaml --engine jit -e '40 + 2'       # require native execution
 metaml --engine tree -e '40 + 2'      # retained tree evaluator
+metaml --engine qbe -e '40 + 2'       # optional QBE backend (see QBE.md)
 ```
 
 C++ embedders select `session.interp().engine` using
@@ -19,6 +20,10 @@ C++ embedders select `session.interp().engine` using
 enum names in `MetaML`. `execution_engine_from_name` returns an optional/Nullable
 enum for CLI names. New worker interpreters inherit the selected engine and
 limits but have independent code caches and operand stacks.
+
+The opt-in `ExecutionEngine::QBE` / `ExecutionEngine.QBE` engine uses QBE to
+compile the runtime-call blocks instead of the built-in emitter. See [QBE.md](QBE.md)
+for build flags, compiler requirements, limits and embedding APIs.
 
 `XVM` automatically uses portable **compiled XVM**, not the tree evaluator, when
 native executable memory or a supported native ABI is unavailable. `NativeXVM`

@@ -17,6 +17,9 @@ Use `--help` for all options and `%help` or `%help type` for directive help.
 The replxx source location can be overridden with `-DMETAML_REPLXX_DIR=DIR`.
 The older `metaml-repl-cpp` executable retains its original CLI contract.
 
+An optional QBE native backend is available with `-DMETAML_ENABLE_QBE=ON` and
+`--engine qbe` in both C++ CLIs and the D CLI; see [QBE.md](../QBE.md).
+
 ## Files and output
 
 Source files and imports are searched in the current directory, repeated `-I`

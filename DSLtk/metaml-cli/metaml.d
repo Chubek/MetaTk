@@ -55,7 +55,7 @@ private enum usage_text = "usage: metaml [options] [file.mml | file.mmli | file.
     ~ "  --no-tty          never print prompts\n"
     ~ "  --no-history      do not read or write the history file\n"
     ~ "  --no-stdlib       do not load metalib\n"
-    ~ "  --engine NAME     xvm (default), portable, jit, or tree\n"
+    ~ "  --engine NAME     xvm (default), portable, jit, tree, or qbe (opt-in)\n"
     ~ "  --stdlib DIR      use DIR as the metalib directory\n"
     ~ "  --dump-ast FILE   print the AST of FILE and exit\n"
     ~ "  --list-primitives print registered name, arity and type (TSV)\n"

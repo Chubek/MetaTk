@@ -21,6 +21,11 @@ struct XvmCode {
   std::vector<std::shared_ptr<native::Executable>> blocks;
   std::size_t native_bytes = 0;
   bool native_attempted = false;
+#ifdef METAML_ENABLE_QBE
+  std::shared_ptr<void> qbe_module;
+  std::vector<std::size_t> qbe_blocks;
+  std::size_t qbe_bytes = 0;
+#endif
 };
 struct XvmCompiler {
   Interp &in;
@@ -359,6 +364,53 @@ inline void xvm_native(Interp &in, const std::shared_ptr<XvmCode> &code)
   code->native_attempted = true;
   code->blocks = std::move(blocks); code->native_bytes = bytes;
 }
+inline void xvm_qbe(Interp &in, const std::shared_ptr<XvmCode> &code)
+{
+#if defined(METAML_ENABLE_QBE) && !defined(METAML_NO_JIT)
+  const auto &span = code->instructions.front().node->span;
+  if (!in.xvm_native_limit || native::host() == native::Target::Unsupported)
+    in.fail("M0409", "QBE native execution is unavailable", span);
+  if (!code->qbe_module) {
+    auto n = code->instructions.size();
+    std::vector<bool> leader(n, false); leader[0] = true;
+    for (std::size_t i = 0; i < n; ++i) {
+      const auto &instruction = code->instructions[i];
+      if (instruction.op == Xop::Jump || instruction.op == Xop::Branch || instruction.op == Xop::ShortCircuit)
+        leader.at(instruction.arg) = true;
+      if (xvm_terminator(instruction) && i + 1 < n) leader[i + 1] = true;
+    }
+    std::vector<MetamlQbeCall> calls;
+    std::vector<std::size_t> offsets{0}, blocks(n, SIZE_MAX);
+    for (std::size_t begin = 0; begin < n;) {
+      blocks[begin] = offsets.size() - 1;
+      auto end = begin;
+      do {
+        const auto &i = code->instructions[end];
+        calls.push_back({reinterpret_cast<std::uintptr_t>(xvm_handler(i.op)), reinterpret_cast<std::uintptr_t>(&i)});
+        ++end;
+        if (xvm_terminator(i)) break;
+      } while (end < n && !leader[end] && end - begin < 32);
+      offsets.push_back(calls.size()); begin = end;
+    }
+    void *module = nullptr;
+    char error[4096]{};
+    auto status = metaml_qbe_compile(calls.data(), offsets.data(), offsets.size() - 1,
+                                    in.xvm_native_limit, &module, error, sizeof error);
+    if (status == 2) in.fail("M0406", "QBE native code limit exceeded", span);
+    if (status) in.fail("M0409", error[0] ? error : "QBE compilation failed", span);
+    std::shared_ptr<void> owner(module, metaml_qbe_release);
+    code->qbe_bytes = metaml_qbe_size(module);
+    code->qbe_blocks = std::move(blocks);
+    code->qbe_module = std::move(owner);
+  }
+  if (code->qbe_bytes > in.xvm_native_limit)
+    in.fail("M0406", "QBE native code limit exceeded", span);
+#elif defined(METAML_NO_JIT)
+  in.fail("M0409", "QBE native execution is unavailable", code->instructions.front().node->span);
+#else
+  in.fail("M0409", "QBE backend is not enabled in this build", code->instructions.front().node->span);
+#endif
+}
 inline Value eval_xvm(Interp &in, ExprP e, FrameP env, bool counted)
 {
   XvmState state{in, std::move(env), counted, {}};
@@ -371,17 +423,27 @@ inline Value eval_xvm(Interp &in, ExprP e, FrameP env, bool counted)
   state.code = xvm_code(in, e);
   while (!state.done) {
     auto code = state.code; // retain native instructions across tail transfers
-    if (in.engine != ExecutionEngine::PortableXVM) xvm_native(in, code);
-    if (in.engine == ExecutionEngine::NativeXVM && (code->blocks.empty() || !in.xvm_native_limit))
-      in.fail("M0409", "XVM native executable memory is unavailable", e->span);
-    if (!code->blocks.empty() && in.xvm_native_limit && in.engine != ExecutionEngine::PortableXVM) {
-      if (code->native_bytes > in.xvm_native_limit) in.fail("M0406", "XVM native code limit exceeded", e->span);
-      auto block = code->blocks.at(state.pc);
-      if (!block) throw std::runtime_error("invalid XVM block entry");
-      ++in.xvm_native_blocks; block->entry<int (*)(void *)>()(&state);
+    if (in.engine == ExecutionEngine::QBE) {
+      xvm_qbe(in, code);
+#ifdef METAML_ENABLE_QBE
+      auto entry = metaml_qbe_entry(code->qbe_module.get(), code->qbe_blocks.at(state.pc));
+      if (!entry) throw std::runtime_error("invalid QBE block entry");
+      ++in.xvm_native_blocks; ++in.qbe_native_blocks;
+      reinterpret_cast<int (*)(void *)>(entry)(&state);
+#endif
     } else {
-      const auto &i = code->instructions.at(state.pc);
-      xvm_handler(i.op)(&state, &i);
+      if (in.engine != ExecutionEngine::PortableXVM) xvm_native(in, code);
+      if (in.engine == ExecutionEngine::NativeXVM && (code->blocks.empty() || !in.xvm_native_limit))
+        in.fail("M0409", "XVM native executable memory is unavailable", e->span);
+      if (!code->blocks.empty() && in.xvm_native_limit && in.engine != ExecutionEngine::PortableXVM) {
+        if (code->native_bytes > in.xvm_native_limit) in.fail("M0406", "XVM native code limit exceeded", e->span);
+        auto block = code->blocks.at(state.pc);
+        if (!block) throw std::runtime_error("invalid XVM block entry");
+        ++in.xvm_native_blocks; block->entry<int (*)(void *)>()(&state);
+      } else {
+        const auto &i = code->instructions.at(state.pc);
+        xvm_handler(i.op)(&state, &i);
+      }
     }
     if (state.exception) std::rethrow_exception(state.exception);
   }

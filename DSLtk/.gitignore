@@ -1,5 +1,9 @@
 !DSLtk.d
 !MetaML.d
+!XVMCode.d
+!XVMNative.d
+!QBENative.d
+!metaml-backends/QBE.d
 !metaml-cli/*.d
 !metalib/d/*.d
 !examples/*.d

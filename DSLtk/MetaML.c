@@ -102,7 +102,7 @@ const char usage[] = R"(Usage: metaml [OPTIONS] [FILE] [-- PROGRAM_ARGS...]
   -I, --module-path DIR        Add a search directory (repeatable)
       --stdlib DIR             Select the standard-library directory
       --no-stdlib              Use only the built-in environment
-      --engine NAME            xvm (default), portable, jit, or tree
+      --engine NAME            xvm (default), portable, jit, tree, or qbe (opt-in)
       --history-file FILE      Select persistent REPL history
       --no-history             Disable persistent history
       --no-init                Skip ~/.metamlrc
@@ -167,7 +167,7 @@ Options parse_options (int argc, char **argv)
   if (o.color != "auto" && o.color != "always" && o.color != "never")
     throw std::invalid_argument ("--color must be auto, always, or never");
   if (!metaml::execution_engine_from_name(o.engine))
-    throw std::invalid_argument ("--engine must be xvm, portable, jit, or tree");
+    throw std::invalid_argument ("--engine must be xvm, portable, jit, tree, or qbe");
   if (o.diagnostic_format != "text" && o.diagnostic_format != "json")
     throw std::invalid_argument ("--diagnostic-format must be text or json");
   if (o.ast && o.check) throw std::invalid_argument ("--ast and --check are mutually exclusive");

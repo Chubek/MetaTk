@@ -28,6 +28,9 @@
 
 #include "DSLtk.hpp"
 #include "XVMNative.hpp"
+#ifdef METAML_ENABLE_QBE
+#include "QBENative.hpp"
+#endif
 
 #include <cmath>
 #include <atomic>
@@ -6470,13 +6473,14 @@ class Session;
 class Interp;
 struct XvmCode;
 struct XvmState;
-enum class ExecutionEngine { XVM, PortableXVM, Tree, NativeXVM };
+enum class ExecutionEngine { XVM, PortableXVM, Tree, NativeXVM, QBE };
 inline std::optional<ExecutionEngine> execution_engine_from_name(std::string_view name)
 {
   if (name == "xvm") return ExecutionEngine::XVM;
   if (name == "portable") return ExecutionEngine::PortableXVM;
   if (name == "tree") return ExecutionEngine::Tree;
   if (name == "jit") return ExecutionEngine::NativeXVM;
+  if (name == "qbe") return ExecutionEngine::QBE;
   return std::nullopt;
 }
 
@@ -7019,6 +7023,7 @@ public:
   std::size_t xvm_code_limit = 1000000, xvm_stack_limit = 1000000;
   std::size_t xvm_native_limit = 64 * 1024 * 1024;
   std::uint64_t xvm_instructions = 0, xvm_native_blocks = 0;
+  std::uint64_t qbe_native_blocks = 0;
   std::uint64_t xvm_revision = 0;
   std::unordered_map<const Expr *, std::shared_ptr<XvmCode>> xvm_cache;
   int max_depth = 10000;

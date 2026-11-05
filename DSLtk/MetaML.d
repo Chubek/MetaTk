@@ -5419,13 +5419,14 @@ final class Primitive
 
 // ---- the evaluator ----
 
-enum ExecutionEngine { XVM, PortableXVM, Tree, NativeXVM }
+enum ExecutionEngine { XVM, PortableXVM, Tree, NativeXVM, QBE }
 Nullable!ExecutionEngine execution_engine_from_name(string name)
 {
     if (name == "xvm") return nullable(ExecutionEngine.XVM);
     if (name == "portable") return nullable(ExecutionEngine.PortableXVM);
     if (name == "tree") return nullable(ExecutionEngine.Tree);
     if (name == "jit") return nullable(ExecutionEngine.NativeXVM);
+    if (name == "qbe") return nullable(ExecutionEngine.QBE);
     return Nullable!ExecutionEngine.init;
 }
 
@@ -5436,11 +5437,15 @@ final class Interp
     size_t xvm_code_limit = 1_000_000, xvm_stack_limit = 1_000_000;
     size_t xvm_native_limit = 64 * 1024 * 1024;
     ulong xvm_instructions, xvm_native_blocks;
+    ulong qbe_native_blocks;
     ulong xvm_revision;
     XVMEngine!().Code[Expr] xvm_cache;
     void clear_xvm_cache() {
         if (eval_depth) fail("M0404", "cannot clear executing XVM code", Span.init);
-        foreach (code; xvm_cache) foreach (block; code.blocks) if (block !is null) destroy(block);
+        foreach (code; xvm_cache) {
+            foreach (block; code.blocks) if (block !is null) destroy(block);
+            code.releaseQBE();
+        }
         xvm_cache = null;
     }
     int max_depth = 10000;

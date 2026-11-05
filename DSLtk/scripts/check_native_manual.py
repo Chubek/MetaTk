@@ -17,6 +17,7 @@ def main():
     parser.add_argument("--cxx", required=True)
     parser.add_argument("--cc", required=True)
     parser.add_argument("--library", required=True)
+    parser.add_argument("--extra-library", action="append", default=[])
     parser.add_argument("--d-compiler")
     args = parser.parse_args()
     base = "/tmp/opencode" if Path("/tmp/opencode").is_dir() else None
@@ -38,7 +39,7 @@ def main():
             else:
                 obj = temp / "example43.o"
                 command([args.cc, "-std=c99", "-Werror", f"-I{ROOT}", "-c", path, "-o", obj])
-                command([args.cxx, obj, Path(args.library).resolve(), "-pthread", "-o", binary])
+                command([args.cxx, obj, Path(args.library).resolve(), *args.extra_library, "-pthread", "-o", binary])
             result = subprocess.run([str(binary)], cwd=ROOT, capture_output=True, timeout=30, check=True)
             if result.stdout.strip() != b"42":
                 raise SystemExit(f"unexpected output from {chapter.name}: {result.stdout!r}")

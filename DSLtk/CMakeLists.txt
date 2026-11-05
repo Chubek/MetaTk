@@ -22,6 +22,7 @@ set(METAML_THIRD_PARTY_DIR "/mnt/warble/metatk/third_party" CACHE PATH "MetaML t
 if(NOT EXISTS "${METAML_THIRD_PARTY_DIR}" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../third_party")
     set(METAML_THIRD_PARTY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../third_party")
 endif()
+include(cmake/QBE.cmake)
 if(METAML_BUILD_SERVICES)
     find_package(SQLite3 REQUIRED)
     if(TARGET SQLite3::SQLite3)
@@ -83,7 +84,7 @@ if(BUILD_EXAMPLES)
 endif()
 
 install(
-    FILES DSLtk.hpp DSLtk.d MetaML.hpp MetaML.d XVMNative.hpp XVMCode.hpp XVMNative.d XVMCode.d
+    FILES DSLtk.hpp DSLtk.d MetaML.hpp MetaML.d XVMNative.hpp XVMCode.hpp XVMNative.d XVMCode.d QBENative.hpp QBENative.d
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
@@ -107,7 +108,7 @@ install(DIRECTORY metaml-backends/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/metam
         FILES_MATCHING PATTERN "*.hpp" PATTERN "*.d")
 install(DIRECTORY metaml-manual/ DESTINATION share/doc/metaml)
 install(FILES metaml-cli/README.md DESTINATION share/doc/metaml RENAME command-line.md)
-install(FILES XVM.md XVM_VALIDATION.md DESTINATION share/doc/metaml)
+install(FILES XVM.md XVM_VALIDATION.md QBE.md DESTINATION share/doc/metaml)
 install(FILES XVM.md XVM_VALIDATION.md DESTINATION share/metaml/stdlib)
 
 if (DSLtk_BUILD_GENERATOR AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generator/DSLtk-ParserGenerator.d")

@@ -7,6 +7,8 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     add_library(DSLtk INTERFACE)
     target_include_directories(DSLtk INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/..)
     target_compile_features(DSLtk INTERFACE cxx_std_20)
+    include(GNUInstallDirs)
+    include(../cmake/QBE.cmake)
 endif()
 
 # MetaML language, portable host modules, and a genuinely C-compiled client.
@@ -35,6 +37,10 @@ add_executable(metalib_toolchain_tests test_metalib_toolchain.cpp)
 target_link_libraries(metalib_toolchain_tests PRIVATE DSLtk Threads::Threads)
 add_test(NAME metalib_toolchain COMMAND metalib_toolchain_tests
     ${CMAKE_CURRENT_SOURCE_DIR}/../metalib ${CMAKE_CURRENT_BINARY_DIR})
+
+add_executable(metaml_qbe_tests test_metaml_qbe.cpp)
+target_link_libraries(metaml_qbe_tests PRIVATE DSLtk Threads::Threads)
+add_test(NAME metaml_qbe COMMAND metaml_qbe_tests)
 
 if(NOT TARGET metaml-c)
     add_library(metaml-c STATIC ../metalib/c/MetaML.cpp)
@@ -66,6 +72,30 @@ add_test(NAME metaml_cli COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/check_cli.py --binary $<TARGET_FILE:metaml-repl-cpp>)
 set(_metaml_xvm_args --cpp $<TARGET_FILE:metaml-repl-cpp>)
 find_program(METAML_D_COMPILER NAMES ldc2 dmd gdc)
+set(_metaml_d_qbe_flags)
+set(_metaml_d_qbe_deps)
+if(METAML_ENABLE_QBE)
+    set(_metaml_d_qbe_deps metaml-qbe)
+    set(_metaml_d_qbe_cxx_runtime stdc++)
+    if("c++" IN_LIST CMAKE_CXX_IMPLICIT_LINK_LIBRARIES)
+        set(_metaml_d_qbe_cxx_runtime c++)
+    endif()
+    if(METAML_D_COMPILER MATCHES "gdc")
+        set(_metaml_d_qbe_flags -fversion=METAML_ENABLE_QBE $<TARGET_FILE:metaml-qbe>)
+        foreach(_lib IN ITEMS ${_metaml_d_qbe_cxx_runtime} ${CMAKE_DL_LIBS})
+            list(APPEND _metaml_d_qbe_flags -l${_lib})
+        endforeach()
+    elseif(METAML_D_COMPILER MATCHES "ldc")
+        set(_metaml_d_qbe_flags -d-version=METAML_ENABLE_QBE $<TARGET_FILE:metaml-qbe>)
+    else()
+        set(_metaml_d_qbe_flags -version=METAML_ENABLE_QBE $<TARGET_FILE:metaml-qbe>)
+    endif()
+    if(NOT METAML_D_COMPILER MATCHES "gdc")
+        foreach(_lib IN ITEMS ${_metaml_d_qbe_cxx_runtime} ${CMAKE_DL_LIBS})
+            list(APPEND _metaml_d_qbe_flags -L-l${_lib})
+        endforeach()
+    endif()
+endif()
 if(METAML_D_COMPILER AND DSLtk_TEST_D)
     file(GLOB _metaml_d_modules CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../metalib/d/*.d)
     # Some reserved module files are still empty placeholders, not D modules.
@@ -78,7 +108,8 @@ if(METAML_D_COMPILER AND DSLtk_TEST_D)
     file(GLOB _metaml_d_adapters CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/../metalib/*/*.d)
     list(FILTER _metaml_d_adapters EXCLUDE REGEX "/metalib/d/")
     list(APPEND _metaml_d_sources ${_metaml_d_adapters})
-    foreach(_kind IN ITEMS repl tests extensions toolchain)
+    list(APPEND _metaml_d_sources ${CMAKE_CURRENT_SOURCE_DIR}/../metaml-backends/QBE.d)
+    foreach(_kind IN ITEMS repl tests extensions toolchain qbe)
         if(_kind STREQUAL repl)
             set(_main ${CMAKE_CURRENT_SOURCE_DIR}/../metaml-cli/metaml.d)
             set(_bin ${CMAKE_CURRENT_BINARY_DIR}/metaml-repl-d)
@@ -88,9 +119,12 @@ if(METAML_D_COMPILER AND DSLtk_TEST_D)
         elseif(_kind STREQUAL extensions)
             set(_main ${CMAKE_CURRENT_SOURCE_DIR}/test_metalib_extensions.d)
             set(_bin ${CMAKE_CURRENT_BINARY_DIR}/metalib_extensions_d_tests)
-        else()
+        elseif(_kind STREQUAL toolchain)
             set(_main ${CMAKE_CURRENT_SOURCE_DIR}/test_metalib_toolchain.d)
             set(_bin ${CMAKE_CURRENT_BINARY_DIR}/metalib_toolchain_d_tests)
+        else()
+            set(_main ${CMAKE_CURRENT_SOURCE_DIR}/test_metaml_qbe.d)
+            set(_bin ${CMAKE_CURRENT_BINARY_DIR}/metaml_qbe_d_tests)
         endif()
         if(METAML_D_COMPILER MATCHES "gdc")
             set(_flags -o ${_bin})
@@ -99,9 +133,11 @@ if(METAML_D_COMPILER AND DSLtk_TEST_D)
         endif()
         add_custom_command(OUTPUT ${_bin}
             COMMAND ${METAML_D_COMPILER} ${_flags} -I${CMAKE_CURRENT_SOURCE_DIR}/..
+                ${_metaml_d_qbe_flags}
                 ${_main} ${CMAKE_CURRENT_SOURCE_DIR}/../MetaML.d
                 ${CMAKE_CURRENT_SOURCE_DIR}/../DSLtk.d ${_metaml_d_sources}
-            DEPENDS ${_main} ../MetaML.d ../DSLtk.d ../XVMCode.d ../XVMNative.d ${_metaml_d_sources}
+            DEPENDS ${_main} ../MetaML.d ../DSLtk.d ../XVMCode.d ../XVMNative.d ../QBENative.d
+                ${_metaml_d_sources} ${_metaml_d_qbe_deps}
             VERBATIM)
         add_custom_target(metaml_d_${_kind}_build ALL DEPENDS ${_bin})
     endforeach()
@@ -111,6 +147,7 @@ if(METAML_D_COMPILER AND DSLtk_TEST_D)
         ${CMAKE_CURRENT_SOURCE_DIR}/../metalib)
     add_test(NAME metalib_toolchain_d COMMAND ${CMAKE_CURRENT_BINARY_DIR}/metalib_toolchain_d_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/../metalib ${CMAKE_CURRENT_BINARY_DIR})
+    add_test(NAME metaml_qbe_d COMMAND ${CMAKE_CURRENT_BINARY_DIR}/metaml_qbe_d_tests)
     add_test(NAME metaml_cli_d COMMAND ${Python3_EXECUTABLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/check_cli.py
         --binary ${CMAKE_CURRENT_BINARY_DIR}/metaml-repl-d)
@@ -130,6 +167,14 @@ if(METAML_D_COMPILER AND DSLtk_TEST_D)
 endif()
 add_test(NAME metaml_xvm_differential COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/check_xvm.py ${_metaml_xvm_args})
+if(METAML_ENABLE_QBE)
+    set(_metaml_qbe_cli_args ${_metaml_xvm_args})
+    if(TARGET metaml)
+        list(APPEND _metaml_qbe_cli_args --metaml $<TARGET_FILE:metaml>)
+    endif()
+    add_test(NAME metaml_qbe_cli COMMAND ${Python3_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/check_qbe.py ${_metaml_qbe_cli_args})
+endif()
 add_test(NAME metaml_library_tests COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/run_tests.py --cpp $<TARGET_FILE:metaml-repl-cpp>)
 add_test(NAME metaml_manual COMMAND ${Python3_EXECUTABLE}
@@ -138,6 +183,12 @@ add_test(NAME metaml_manual_generated COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/generate_manual.py --check)
 set(_manual_native_args --cxx ${CMAKE_CXX_COMPILER} --cc ${CMAKE_C_COMPILER}
     --library $<TARGET_FILE:metaml-c>)
+if(METAML_ENABLE_QBE)
+    list(APPEND _manual_native_args --extra-library $<TARGET_FILE:metaml-qbe>)
+    foreach(_lib IN ITEMS ${CMAKE_DL_LIBS})
+        list(APPEND _manual_native_args --extra-library=-l${_lib})
+    endforeach()
+endif()
 if(METAML_D_COMPILER AND DSLtk_TEST_D)
     list(APPEND _manual_native_args --d-compiler ${METAML_D_COMPILER})
 endif()
