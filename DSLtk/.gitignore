@@ -4,3 +4,4 @@
 !metalib/d/*.d
 !examples/*.d
 !tests/*.d
+_mammal/

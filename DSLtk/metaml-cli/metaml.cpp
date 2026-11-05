@@ -50,7 +50,8 @@ struct Options
 };
 
 const char *usage_text
-    = "usage: metaml [options] [file.mml ...]\n"
+    = "usage: metaml [options] [file.mml | file.mmli | file.mlli ...]\n"
+      "  .mml programs are checked against sibling .mmli/.mlli interfaces\n"
       "  --no-tty          never print prompts\n"
       "  --no-history      do not read or write the history file\n"
       "  --no-stdlib       do not load metalib\n"

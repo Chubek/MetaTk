@@ -26,6 +26,41 @@ variables contain colon-separated directories; empty components mean the current
 directory. Files may be specified exactly, as `name` for `name.mml`, or as a
 directory containing `mod.mml`. Quote paths with spaces in directives.
 
+### Programs and interfaces
+
+`.mml` files contain runnable code. A sibling `foo.mmli` declares the contract
+for `foo.mml`; `.mlli` is accepted as an alternate spelling. Having both sibling
+spellings is an error. Interfaces contain only type declarations, value
+signatures (`name :: Type`), and module-type signatures, never definitions,
+expressions, imports, or directives. This applies to the C++ and D frontends.
+
+```metaml
+{- counter.mmli -}
+type Count := Int
+increment :: Count -> Count
+```
+
+```metaml
+{- counter.mml -}
+increment n := n + 1
+increment 41
+```
+
+Concrete types and module-type declarations in the interface are available to
+the implementation without repeating them. Abstract declarations (`type Token`)
+require a concrete implementation declaration. Repeated concrete declarations
+must match. Every value signature requires an implementation with a compatible
+type, including polymorphism. Extra implementation bindings are allowed and
+remain visible; file interfaces are contracts, not opaque module boundaries.
+Use the language's `:>` module ascription for hiding/abstraction.
+
+Pairing applies to command-line loads, imports, reloads, and `--check`/`%check`.
+The complete paired implementation is checked before its own code executes;
+its imports are loaded first and may execute in normal (non-check) mode.
+Passing an interface alone validates and loads its declarations without running
+an implementation. `--ast` validates and shows the file and, for a program,
+includes concrete declarations supplied by its companion.
+
 `--stdlib DIR` selects a library containing `prelude/mod.mml`. Otherwise the first
 such directory in `METAML_LIBPATH` is selected, followed by MetaML's installed and
 build-tree defaults. `--no-stdlib` uses just the built-in language environment.
@@ -86,6 +121,70 @@ such values are reported as not materialized. `%reset` preserves history, progra
 arguments and configured search directories, and does not replay `.metamlrc`.
 
 Tests: `ctest --test-dir build -R metaml_replxx --output-on-failure`.
+
+## MAMMAL project manager
+
+CMake also builds and installs **metaml-mammal** with `METAML_BUILD_REPL=ON`.
+`MAMMAL` is an ordinary executable MetaML file, not JSON or a separate settings
+language. It can use functions, conditionals, computed strings, and imports.
+The configuration session has the built-in language environment and the
+`Mammal` host primitives below; it does not automatically load metalib.
+Project descriptions are trusted code, not a security sandbox.
+
+```metaml
+Mammal.project("hello")
+Mammal.directory("src")
+Mammal.module_path("src")
+Mammal.main("src/main.mml")
+Mammal.test("tests/main.mml")
+Mammal.fixture("fixtures/input.txt", "input.txt")
+Mammal.artifact("assets/message.txt", "share/message.txt")
+Mammal.install("share/message.txt", "share/hello/message.txt")
+```
+
+| MetaML call | Meaning |
+|---|---|
+| `Mammal.project(name)` | Required project name |
+| `Mammal.file(path)` | Add one `.mml`, `.mmli`, or `.mlli` source |
+| `Mammal.directory(path)` | Recursively add sources in sorted order |
+| `Mammal.module_path(path)` | Add an import search directory |
+| `Mammal.main(path)` | Select and include the runnable entry point |
+| `Mammal.test(path)` | Include a test program; nonzero exit means failure |
+| `Mammal.build_dir(path)` | Select staging directory (default `_mammal`) |
+| `Mammal.fixture(source, destination)` | Copy a project file into staging |
+| `Mammal.artifact(source, destination)` | Publish a project file into staging |
+| `Mammal.install(source, destination)` | Install a staged file relative to prefix |
+
+All arguments are strings. File/directory/test/path/copy calls accumulate;
+project/main/build_dir select their last supplied value. Main and tests are
+automatically included, as are companion interfaces. Paths are project-relative
+(installation sources are staging-relative, destinations prefix-relative).
+Absolute paths, traversal outside these roots, symlink escapes, duplicate staging
+destinations, and installation of undeclared/stale outputs are rejected. Fixtures
+and artifacts currently copy individual files, not directories.
+
+```sh
+metaml-mammal init             # create MAMMAL without replacing an existing one
+metaml-mammal show             # evaluate settings and list the resolved project
+metaml-mammal check            # type-check sources; no staging or source execution
+metaml-mammal build            # check, then stage sources, fixtures, and artifacts
+metaml-mammal run -- arg1      # build, run main from the staging directory
+metaml-mammal test             # build, run tests; stop at first failure
+metaml-mammal --prefix /usr --destdir ./package install
+metaml-mammal -C path/to/project show
+```
+
+Discovery searches from the current directory (or `-C`) upwards for `MAMMAL`.
+Project commands use the sibling `metaml` executable, falling back to `PATH`;
+`--metaml FILE` overrides it. Installation rebuilds first and copies only explicit
+`Mammal.install` entries; it never implicitly installs fixtures. Build is currently
+a checked, runnable source distribution, not a native compiler or dependency
+download system. Staging is updated in place; unrelated existing files are not
+deleted. Process launching currently requires POSIX; Windows reports an error.
+Exit codes are 0 for success, 1 for project/I/O/language errors, 2 for invalid
+arguments, or the failing child program's status.
+
+Tests: `ctest --test-dir build -R metaml_mammal --output-on-failure`.
 
 ## Legacy C++ and D frontends
 

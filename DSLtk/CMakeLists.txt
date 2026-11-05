@@ -60,6 +60,9 @@ if(METAML_BUILD_REPL)
     add_executable(metaml-repl-cpp metaml-cli/metaml.cpp)
     target_link_libraries(metaml-repl-cpp PRIVATE DSLtk Threads::Threads)
     install(TARGETS metaml-repl-cpp RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    add_executable(metaml-mammal metaml-cli/mammal.cpp)
+    target_link_libraries(metaml-mammal PRIVATE DSLtk Threads::Threads)
+    install(TARGETS metaml-mammal RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 if(METAML_BUILD_C_API)
     add_library(metaml-c STATIC metalib/c/MetaML.cpp)
@@ -103,8 +106,9 @@ install(DIRECTORY metalib/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/metalib
 install(DIRECTORY metaml-backends/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/metaml-backends
         FILES_MATCHING PATTERN "*.hpp" PATTERN "*.d")
 install(DIRECTORY metaml-manual/ DESTINATION share/doc/metaml)
-install(FILES XVM.md DESTINATION share/doc/metaml)
-install(FILES XVM.md DESTINATION share/metaml/stdlib)
+install(FILES metaml-cli/README.md DESTINATION share/doc/metaml RENAME command-line.md)
+install(FILES XVM.md XVM_VALIDATION.md DESTINATION share/doc/metaml)
+install(FILES XVM.md XVM_VALIDATION.md DESTINATION share/metaml/stdlib)
 
 if (DSLtk_BUILD_GENERATOR AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/generator/DSLtk-ParserGenerator.d")
     find_program(DSLtk_D_COMPILER NAMES ldc2 dmd gdc

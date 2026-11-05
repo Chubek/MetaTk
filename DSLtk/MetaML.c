@@ -112,6 +112,8 @@ const char usage[] = R"(Usage: metaml [OPTIONS] [FILE] [-- PROGRAM_ARGS...]
       --                      Pass remaining arguments to Process.args ()
 
 Search paths: current directory, -I, METAML_PATH, METAML_LIBPATH, stdlib.
+.mml files are programs; sibling .mmli (or .mlli) files declare their interfaces.
+Interfaces contain only types and signatures and never runnable definitions.
 METAML_PATH and METAML_LIBPATH are colon-separated directory lists.
 METAML_SINK redirects language output and results to a file (truncated once).
 With no supplied code, read submissions from stdin. Use %help for directives.
@@ -352,12 +354,24 @@ public:
     snapshot.retain (checker.global, seen);
   }
 
-  RunReport source (const std::string &text, const std::string &file)
+  RunReport source (const std::string &text, const std::string &file, bool disk = false)
   {
     sources[file] = text;
-    auto parsed = metaml::parse (text, file);
+    auto parsed = disk ? metaml::parse_file (file) : metaml::parse (text, file);
     RunReport result;
     if (!parsed.ok ()) { result.errors = parsed.diagnostics; return result; }
+    auto original_global = checker.global;
+    if (parsed.program.interface)
+      {
+        sources[parsed.program.interface_file] = parsed.program.interface_source;
+        checker.global = metaml::Scope::child (original_global);
+      }
+    struct Restore
+    {
+      metaml::Checker &checker;
+      metaml::ScopeP saved;
+      ~Restore () { checker.global = saved; }
+    } restore{ checker, original_global };
     for (auto [b, e] : metaml::Checker::units (parsed.program.items))
       {
         auto item = parsed.program.items[b];
@@ -392,6 +406,16 @@ public:
         result.warnings.insert (result.warnings.end (), checker.warnings.begin (), checker.warnings.end ());
         if (!result.ok ()) break;
       }
+    if (result.ok () && parsed.program.interface)
+      try
+        {
+          checker.check_ascription (checker.global, parsed.program.interface, original_global,
+                                    metaml::Asc::Transparent, "", parsed.program.interface->span);
+          checker.u.commit ();
+          metaml::Checker::commit_scope (checker.global, original_global);
+        }
+      catch (const metaml::detail::MetaError &err)
+        { checker.u.commit (); result.errors.push_back (err.diag); }
     return result;
   }
 
@@ -406,7 +430,7 @@ public:
       }
     std::error_code ec;
     imported.insert (fs::weakly_canonical (path, ec).string ());
-    return source (text.unwrap (), path);
+    return source (text.unwrap (), path, true);
   }
 
   RunReport type (const std::string &text)
@@ -607,7 +631,7 @@ class Frontend
   {
     sources[file] = source;
     if (opt.check) return report (static_check->source (source, file));
-    auto parsed = metaml::parse (source, file);
+    auto parsed = from_file ? metaml::parse_file (file) : metaml::parse (source, file);
     if (!parsed.ok ()) { for (const auto &d : parsed.diagnostics) diagnostic (d); return false; }
     if (opt.ast) { *out << metaml::dump_ast (parsed.program) << '\n'; return true; }
     auto start = std::chrono::steady_clock::now ();

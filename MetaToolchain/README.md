@@ -20,6 +20,12 @@ The [generated DSL database](MetaArchDB/README.md) contains all 28 architectures
 at `MetaArchDB/<architecture>/<architecture>.march`.
 The C library and `archdb` remain available without C++ (`ARCHDB_BUILD_DSL=OFF`).
 
+**[MetaBURG](MetaBURG/README.md)** provides optional Lua-driven BURS instruction
+selection for MetaIL ASTs, MetaArchDB-backed form validation, and an RV64 assembly
+backend. Enable `ARCHDB_BUILD_METABURG=ON` or build `MetaBURG` independently.
+Its [manual](MetaBURG/manual/README.md) includes twelve runnable `.mburg` examples;
+[MetaMIR](MetaMIR.md) remains documentation-only.
+
 **[ArchAS](ArchAS/README.md)** adds the `domas` assembler and `MetaArch::as` library:
 `domas -T amd64 --intel-syntax foo.mair` produces `foo.o`. It combines GAS syntax,
 MetaArchIR's checked encoders, Lua templates, macros, and Lua/shared-library

@@ -46,9 +46,21 @@ set_target_properties(metaml_c_tests PROPERTIES C_STANDARD 99 C_STANDARD_REQUIRE
 add_test(NAME metaml_c_api COMMAND metaml_c_tests ${CMAKE_CURRENT_SOURCE_DIR}/../metalib)
 
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(_metaml_editor_test_args)
+if(TARGET metaml)
+    list(APPEND _metaml_editor_test_args --metaml $<TARGET_FILE:metaml>)
+endif()
+add_test(NAME metaml_editor_addons COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/../addons/tests/check_addons.py ${_metaml_editor_test_args})
 if(TARGET metaml)
     add_test(NAME metaml_replxx COMMAND ${Python3_EXECUTABLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/check_replxx.py --binary $<TARGET_FILE:metaml>)
+    if(TARGET metaml-mammal)
+        add_test(NAME metaml_mammal COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/check_mammal.py
+            --metaml $<TARGET_FILE:metaml> --mammal $<TARGET_FILE:metaml-mammal>
+            --legacy $<TARGET_FILE:metaml-repl-cpp>)
+    endif()
 endif()
 add_test(NAME metaml_cli COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/check_cli.py --binary $<TARGET_FILE:metaml-repl-cpp>)
@@ -102,6 +114,12 @@ if(METAML_D_COMPILER AND DSLtk_TEST_D)
     add_test(NAME metaml_cli_d COMMAND ${Python3_EXECUTABLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/check_cli.py
         --binary ${CMAKE_CURRENT_BINARY_DIR}/metaml-repl-d)
+    if(TARGET metaml AND TARGET metaml-mammal)
+        add_test(NAME metaml_mammal_d COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/check_mammal.py
+            --metaml $<TARGET_FILE:metaml> --mammal $<TARGET_FILE:metaml-mammal>
+            --legacy ${CMAKE_CURRENT_BINARY_DIR}/metaml-repl-d)
+    endif()
     add_test(NAME metaml_parity COMMAND ${Python3_EXECUTABLE}
         ${CMAKE_CURRENT_SOURCE_DIR}/../scripts/parity_check.py
         --cpp $<TARGET_FILE:metaml-repl-cpp> --d ${CMAKE_CURRENT_BINARY_DIR}/metaml-repl-d)

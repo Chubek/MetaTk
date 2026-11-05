@@ -1,0 +1,7 @@
+program -name "GCD" -entrypoint :main
+
+
+subroutine -name :main
+{
+    
+}

@@ -1,0 +1,10 @@
+{- Executable MetaML project configuration. -}
+Mammal.project("mammal-example")
+Mammal.directory("src")
+Mammal.main("src/main.mml")
+Mammal.test("tests/smoke.mml")
+Mammal.fixture("fixtures/input.txt", "input.txt")
+Mammal.artifact("fixtures/input.txt", "share/example.txt")
+Mammal.install("src/main.mml", "share/mammal-example/src/main.mml")
+Mammal.install("src/main.mmli", "share/mammal-example/src/main.mmli")
+Mammal.install("share/example.txt", "share/mammal-example/example.txt")

@@ -1,0 +1,2 @@
+answer := 42
+IO.println("Hello from MAMMAL: " ^ Core.show(answer))

@@ -1,3 +1,20 @@
+# XVM default execution — 2026-11-05
+
+See [XVM.md](XVM.md) for the added C11 APIs, native/portable block compiler,
+default changes and unchanged guest-coverage boundaries. GCC and Clang Release
+with current MetaML pass **25/25** CTest cases. GCC shared/lib64 packaging passes
+**23/23**; Clang ASan/UBSan without MetaML passes **23/23** with default leak
+detection. Standalone GCC Machinery sanitizer and native-disabled builds each
+pass **5/5**. Machinery now performs **8,446** checks, plus **153** dedicated XVM
+checks, retaining the original coverage and adding the third engine.
+
+DSLtk's current MetaML C++/D suite passes **28/28**, including **270** comparisons
+against the retained tree evaluator. Its two Clang runtime/toolchain sanitizer
+tests pass with leak detection disabled; this is not a complete sanitizer or
+leak-clean claim. Installed C++ and D SDK consumers compile and execute XVM.
+See `../../../DSLtk/XVM_VALIDATION.md` for the full matrix and reproduction.
+Native execution validation is Linux amd64 only. Historical records follow.
+
 # Generation repair — 2026-11-04
 
 See [GENERATION.md](GENERATION.md) for the failed baseline, repair scope,

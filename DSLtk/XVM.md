@@ -130,3 +130,6 @@ ctest --test-dir build --output-on-failure
 See MetaVM's `docs/XVM.md` for the separate C11 Machinery integration. Sharing the
 block-compilation design does not conflate the two languages' value models or
 instruction sets.
+
+[XVM_VALIDATION.md](XVM_VALIDATION.md) records the observed test matrix,
+reproduction commands and remaining platform/sanitizer limitations.

@@ -1243,6 +1243,8 @@ struct Program
   std::vector<ItemP> items;
   std::string file;
   std::string source;
+  SigExprP interface{}; ///< Companion .mmli/.mlli contract, if present.
+  std::string interface_file{}, interface_source{};
 };
 
 // ---- AST dump (S-expressions through dsl::ASTNode / dsl::SExpr) ----
@@ -3794,6 +3796,63 @@ parse (std::string_view source, const std::string &file = "<input>")
     {
       out.diagnostics.push_back (e.diag);
     }
+  auto ext = std::filesystem::path (file).extension ().string ();
+  if (ext == ".mmli" || ext == ".mlli")
+    for (const auto &it : out.program.items)
+      if (it->kind != IK::Sig && it->kind != IK::Type && it->kind != IK::ModType)
+        out.diagnostics.push_back (detail::make_diag (
+            "M0506", "interface files may contain only types and signatures", it->span));
+  return out;
+}
+
+/// Parse a source file and its optional sibling interface. Both interface spellings
+/// are supported, but an ambiguous pair is an error rather than silently ignored.
+inline ParseOutput
+parse_file (const std::string &file)
+{
+  auto text = dsl::load_parse_input_file (file);
+  if (text.is_err ())
+    {
+      ParseOutput out;
+      out.diagnostics.push_back (detail::make_diag ("M0603", "cannot read file `" + file + "`", {}));
+      return out;
+    }
+  auto out = parse (text.unwrap (), file);
+  auto path = std::filesystem::path (file);
+  if (!out.ok () || path.extension () != ".mml") return out;
+  std::vector<std::string> companions;
+  for (auto ext : { ".mmli", ".mlli" })
+    {
+      path.replace_extension (ext);
+      std::error_code ec;
+      if (std::filesystem::is_regular_file (path, ec)) companions.push_back (path.string ());
+    }
+  if (companions.size () > 1)
+    out.diagnostics.push_back (detail::make_diag ("M0506", "both .mmli and .mlli interfaces exist for `" + file + "`", {}));
+  else if (!companions.empty ())
+    {
+      auto iface = parse_file (companions.front ());
+      out.diagnostics = iface.diagnostics;
+      if (iface.ok ())
+        {
+          auto sig = std::make_shared<SigExpr> ();
+          sig->items = iface.program.items;
+          if (!sig->items.empty ()) sig->span = sig->items.front ()->span;
+          out.program.interface = sig;
+          out.program.interface_file = iface.program.file;
+          out.program.interface_source = iface.program.source;
+          std::vector<ItemP> declarations;
+          for (const auto &it : sig->items)
+            if ((it->kind == IK::Type && it->tkind != 0) || it->kind == IK::ModType)
+              {
+                bool defined = false;
+                for (const auto &impl : out.program.items)
+                  if (impl->kind == it->kind && impl->name == it->name) defined = true;
+                if (!defined) declarations.push_back (it);
+              }
+          out.program.items.insert (out.program.items.begin (), declarations.begin (), declarations.end ());
+        }
+    }
   return out;
 }
 
@@ -6300,6 +6359,32 @@ public:
                   error ("M0502", "the constructors of type `" + it->name
                                       + "` do not match the signature",
                          sp);
+                actual->types.set (it->name, *sd);
+                for (std::size_t c = 0; c < it->ctors.size (); ++c)
+                  {
+                    auto expected = std::make_shared<TypeExpr> ();
+                    expected->kind = TEK::Name;
+                    expected->name = it->name;
+                    for (const auto &param : it->tparams)
+                      {
+                        auto v = std::make_shared<TypeExpr> ();
+                        v->kind = TEK::Var; v->name = param;
+                        expected->kids.push_back (v);
+                      }
+                    for (auto a = it->ctors[c].args.rbegin (); a != it->ctors[c].args.rend (); ++a)
+                      {
+                        auto fn = std::make_shared<TypeExpr> ();
+                        fn->kind = TEK::Fun; fn->kids = { *a, expected }; expected = fn;
+                      }
+                    auto want = skolemize (sig_scheme (expected, actual));
+                    auto have = instantiate ((*sd)->ctors[c]->scheme);
+                    auto snap = u.snapshot ();
+                    if (!u.unify (want, have))
+                      {
+                        u.rollback (snap);
+                        error ("M0502", "constructor `" + it->ctors[c].name + "` does not match the signature", sp);
+                      }
+                  }
               }
             actual->types.set (it->name, *sd);
             if (asc == Asc::Opaque)
@@ -8395,7 +8480,11 @@ public:
     auto key = ec ? path : canon;
     bool was_imported = imported_.count (key) != 0;
     imported_.insert (key);
-    auto result = run_source (text.unwrap (), path, mode);
+    auto parsed = parse_file (path);
+    sources_[path] = text.unwrap ();
+    RunReport result;
+    if (!parsed.ok ()) result.errors = parsed.diagnostics;
+    else result = run_program (parsed.program, mode);
     if (!result.ok () && !was_imported)
       imported_.erase (key);
     return result;
@@ -8437,6 +8526,19 @@ public:
     } restore_program{ active_program_, active_program_ };
     active_program_ = keep.get ();
     sources_[prog.file] = prog.source;
+    if (prog.interface)
+      sources_[prog.interface_file] = prog.interface_source;
+    // Check the complete implementation against its contract before executing
+    // any of its units. Keep its own declarations separate from ambient ones.
+    auto original_global = checker_.global;
+    if (prog.interface) checker_.global = Scope::child (original_global);
+    struct RestoreGlobal
+    {
+      Checker &checker;
+      ScopeP saved;
+      ~RestoreGlobal () { checker.global = saved; }
+    } restore_global{ checker_, original_global };
+    std::vector<std::tuple<std::size_t, std::size_t, UnitInfo>> deferred;
     const auto &items = keep->items;
     for (auto [b, e] : Checker::units (items))
       {
@@ -8453,6 +8555,11 @@ public:
           }
         if (it->kind == IK::Directive)
           {
+            if (prog.interface)
+              {
+                rep.errors.push_back (detail::make_diag ("M0506", "directives are not allowed in paired implementations", it->span));
+                return rep;
+              }
             auto r = directive (it->name, it->text);
             rep.text += r.text;
             if (!r.ok ())
@@ -8487,6 +8594,11 @@ public:
               rep.text += render (w);
           }
         checker_.warnings.clear ();
+        if (prog.interface)
+          {
+            deferred.emplace_back (b, e, info);
+            continue;
+          }
         try
           {
             exec_unit (items, b, e, info, mode, rep);
@@ -8503,6 +8615,25 @@ public:
             return rep;
           }
       }
+    if (prog.interface)
+      try
+        {
+          checker_.check_ascription (checker_.global, prog.interface, original_global,
+                                    Asc::Transparent, "", prog.interface->span);
+          checker_.u.commit ();
+          Checker::commit_scope (checker_.global, original_global);
+          checker_.global = original_global;
+          for (auto &[b, e, info] : deferred) exec_unit (items, b, e, info, mode, rep);
+        }
+      catch (const detail::MetaError &err)
+        {
+          checker_.u.commit ();
+          interp_.stack = saved_stack;
+          stack_types_ = saved_stack_types;
+          interp_.call_depth = entry_call_depth;
+          interp_.eval_depth = entry_eval_depth;
+          rep.errors.push_back (err.diag);
+        }
     return rep;
   }
 
@@ -9150,15 +9281,11 @@ private:
             detail::make_diag ("M0505", "cannot read the module file `" + found + "`", sp));
         return rep;
       }
-    std::string label = found;
-    if (!stdlib_dir_.empty ())
-      {
-        std::error_code ec;
-        auto base = std::filesystem::weakly_canonical (stdlib_dir_, ec).string ();
-        if (!ec && found.compare (0, base.size (), base) == 0)
-          label = "metalib" + found.substr (base.size ());
-      }
-    auto result = run_source (text.unwrap (), label, RunMode::Quiet);
+    sources_[found] = text.unwrap ();
+    auto parsed = parse_file (found);
+    RunReport result;
+    if (!parsed.ok ()) result.errors = parsed.diagnostics;
+    else result = run_program (parsed.program, RunMode::Quiet);
     if (!result.ok ())
       imported_.erase (found);
     return result;

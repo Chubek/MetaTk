@@ -1,0 +1,2 @@
+type Answer := Int
+answer :: Answer

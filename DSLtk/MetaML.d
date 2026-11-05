@@ -823,6 +823,8 @@ struct Program
     Item[] items;
     string file;
     string source;
+    SigExpr file_signature;
+    string interface_file, interface_source;
 }
 
 // ---- AST dump (S-expressions through DSLtk ASTNode / SExpr) ----
@@ -2887,6 +2889,61 @@ ParseOutput parse(string source, string file = "<input>")
         result.incomplete = f.at_eof;
     }
     catch (MetaError e) result.diagnostics ~= e.diag;
+    import std.path : extension;
+    auto ext = extension(file);
+    if (ext == ".mmli" || ext == ".mlli")
+        foreach (it; result.program.items)
+            if (it.kind != IK.Sig && it.kind != IK.Type && it.kind != IK.ModType)
+                result.diagnostics ~= make_diag("M0506", "interface files may contain only types and signatures", it.span);
+    return result;
+}
+
+/// Parse a file and its optional sibling declaration-only interface.
+ParseOutput parse_file(string file)
+{
+    import std.path : extension, setExtension;
+    import std.file : exists, isFile;
+    auto text = load_parse_input_file(file);
+    if (text.is_err())
+    {
+        ParseOutput result;
+        result.diagnostics ~= make_diag("M0603", "cannot read file `" ~ file ~ "`", Span.init);
+        return result;
+    }
+    auto result = parse(text.unwrap(), file);
+    if (!result.ok() || extension(file) != ".mml") return result;
+    string[] companions;
+    foreach (ext; [".mmli", ".mlli"])
+    {
+        auto path = setExtension(file, ext);
+        if (exists(path) && isFile(path)) companions ~= path;
+    }
+    if (companions.length > 1)
+        result.diagnostics ~= make_diag("M0506", "both .mmli and .mlli interfaces exist for `" ~ file ~ "`", Span.init);
+    else if (companions.length)
+    {
+        auto iface = parse_file(companions[0]);
+        result.diagnostics = iface.diagnostics;
+        if (iface.ok())
+        {
+            auto sig = new SigExpr;
+            sig.items = iface.program.items;
+            if (sig.items.length) sig.span = sig.items[0].span;
+            result.program.file_signature = sig;
+            result.program.interface_file = iface.program.file;
+            result.program.interface_source = iface.program.source;
+            Item[] declarations;
+            foreach (it; sig.items)
+                if ((it.kind == IK.Type && it.tkind != 0) || it.kind == IK.ModType)
+                {
+                    bool defined;
+                    foreach (impl; result.program.items)
+                        if (impl.kind == it.kind && impl.name == it.name) defined = true;
+                    if (!defined) declarations ~= it;
+                }
+            result.program.items = declarations ~ result.program.items;
+        }
+    }
     return result;
 }
 
@@ -4839,6 +4896,32 @@ final class Checker
                     bool ok = (*sd).ctors.length == it.ctors.length;
                     for (size_t c = 0; ok && c < it.ctors.length; ++c) ok = (*sd).ctors[c].name == it.ctors[c].name;
                     if (!ok) error("M0502", "the constructors of type `" ~ it.name ~ "` do not match the signature", sp);
+                    actual.types.set(it.name, *sd);
+                    foreach (c, ctor; it.ctors)
+                    {
+                        auto expected = new TypeExpr;
+                        expected.kind = TEK.Name;
+                        expected.name = it.name;
+                        foreach (param; it.tparams)
+                        {
+                            auto v = new TypeExpr;
+                            v.kind = TEK.Var; v.name = param;
+                            expected.kids ~= v;
+                        }
+                        foreach_reverse (arg; ctor.args)
+                        {
+                            auto fn = new TypeExpr;
+                            fn.kind = TEK.Fun; fn.kids = [arg, expected]; expected = fn;
+                        }
+                        auto want = skolemize(sig_scheme(expected, actual));
+                        auto have = instantiate((*sd).ctors[c].scheme);
+                        auto snap = u.snapshot();
+                        if (!u.unify(want, have))
+                        {
+                            u.rollback(snap);
+                            error("M0502", "constructor `" ~ ctor.name ~ "` does not match the signature", sp);
+                        }
+                    }
                 }
                 actual.types.set(it.name, *sd);
                 if (asc == Asc.Opaque)
@@ -6457,7 +6540,11 @@ final class Session
         auto key = canonical(path);
         bool was_imported = (key in imported_) !is null;
         imported_[key] = true;
-        auto result = run_source(text.unwrap(), path, mode);
+        auto parsed = parse_file(path);
+        sources_[path] = text.unwrap();
+        RunReport result;
+        if (!parsed.ok()) result.errors = parsed.diagnostics;
+        else result = run_program(parsed.program, mode);
         if (!result.ok() && !was_imported) imported_.remove(key);
         return result;
     }
@@ -6491,6 +6578,12 @@ final class Session
         active_program_ = &prog;
         scope(exit) active_program_ = previous_program;
         sources_[prog.file] = prog.source;
+        if (prog.file_signature) sources_[prog.interface_file] = prog.interface_source;
+        auto original_global = checker_.global;
+        if (prog.file_signature) checker_.global = Scope.child(original_global);
+        scope(exit) checker_.global = original_global;
+        struct Deferred { size_t b, e; UnitInfo info; }
+        Deferred[] deferred;
         auto items = prog.items;
         foreach (r; Checker.units(items))
         {
@@ -6503,6 +6596,11 @@ final class Session
             }
             if (it.kind == IK.Directive)
             {
+                if (prog.file_signature)
+                {
+                    rep.errors ~= make_diag("M0506", "directives are not allowed in paired implementations", it.span);
+                    return rep;
+                }
                 auto dr = directive(it.name, it.text);
                 rep.text ~= dr.text;
                 if (!dr.ok()) { rep.errors ~= dr.errors; return rep; }
@@ -6530,6 +6628,11 @@ final class Session
                 if (mode != RunMode.Eval) rep.text ~= render(w);
             }
             checker_.warnings = null;
+            if (prog.file_signature)
+            {
+                deferred ~= Deferred(r.b, r.e, info);
+                continue;
+            }
             try exec_unit(items, r.b, r.e, info, mode, rep);
             catch (MetaError err)
             {
@@ -6541,6 +6644,25 @@ final class Session
                 return rep;
             }
         }
+        if (prog.file_signature)
+            try
+            {
+                checker_.check_ascription(checker_.global, prog.file_signature, original_global,
+                                          Asc.Transparent, "", prog.file_signature.span);
+                checker_.u.commit();
+                Checker.commit_scope(checker_.global, original_global);
+                checker_.global = original_global;
+                foreach (d; deferred) exec_unit(items, d.b, d.e, d.info, mode, rep);
+            }
+            catch (MetaError err)
+            {
+                checker_.u.commit();
+                interp_.stack = saved_stack;
+                stack_types_ = saved_stack_types;
+                interp_.call_depth = entry_call_depth;
+                interp_.eval_depth = entry_eval_depth;
+                rep.errors ~= err.diag;
+            }
         return rep;
     }
 
@@ -6998,14 +7120,11 @@ private:
             rep.errors ~= make_diag("M0505", "cannot read the module file `" ~ found ~ "`", sp);
             return rep;
         }
-        string label = found;
-        if (stdlib_dir_.length)
-        {
-            import std.algorithm : startsWith;
-            auto base = canonical(stdlib_dir_);
-            if (found.startsWith(base)) label = "metalib" ~ found[base.length .. $];
-        }
-        auto result = run_source(text.unwrap(), label, RunMode.Quiet);
+        sources_[found] = text.unwrap();
+        auto parsed = parse_file(found);
+        RunReport result;
+        if (!parsed.ok()) result.errors = parsed.diagnostics;
+        else result = run_program(parsed.program, RunMode.Quiet);
         if (!result.ok()) imported_.remove(found);
         return result;
     }

@@ -1,0 +1,1 @@
+if 6 * 7 == 42 then () else Core.error("arithmetic smoke test failed")

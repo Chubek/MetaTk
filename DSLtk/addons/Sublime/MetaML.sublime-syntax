@@ -1,0 +1,125 @@
+%YAML 1.2
+---
+name: MetaML
+file_extensions:
+  - mml
+  - mmli
+  - mlli
+  - MAMMAL
+first_line_match: '^#!.*\bmetaml\b'
+scope: source.metaml
+version: 2
+
+variables:
+  lower: '[a-z_][A-Za-z0-9_'']*'
+  upper: '[A-Z][A-Za-z0-9_'']*'
+  decimal: '[0-9](?:_?[0-9])*'
+
+contexts:
+  main:
+    - include: comments
+    - include: strings
+    - match: '\b(module)(\s+)(type)(\s+)({{upper}})'
+      captures:
+        1: keyword.declaration.module.metaml
+        3: keyword.declaration.type.metaml
+        5: entity.name.type.interface.metaml
+    - match: '\b(module)(\s+)({{upper}})'
+      captures:
+        1: keyword.declaration.module.metaml
+        3: entity.name.namespace.metaml
+    - match: '\b(type)(\s+)({{upper}})'
+      captures:
+        1: keyword.declaration.type.metaml
+        3: entity.name.type.metaml
+    - match: '\b({{lower}})(?=\s*(?:::|:=))'
+      scope: entity.name.function.metaml
+    - match: '\b(?:module|type|val|let|rec|and|of|import|include|open)(?![A-Za-z0-9_''])'
+      scope: keyword.declaration.metaml
+    - match: '\b(?:sig|struct|end|in|do)(?![A-Za-z0-9_''])'
+      scope: keyword.control.block.metaml
+    - match: '\b(?:if|then|else|match|with|when|for)(?![A-Za-z0-9_''])'
+      scope: keyword.control.metaml
+    - match: '\b(?:fn|fun)(?![A-Za-z0-9_''])'
+      scope: keyword.declaration.function.metaml
+    - match: '\b(?:true|false)(?![A-Za-z0-9_''])'
+      scope: constant.language.boolean.metaml
+    - match: '\b(?:Int|Float|Bool|String|Unit|Option|Result|Num)(?![A-Za-z0-9_''])'
+      scope: support.type.metaml
+    - match: "(?<![A-Za-z0-9_'])'[a-z_][A-Za-z0-9_']*"
+      scope: variable.parameter.type.metaml
+    - match: '[$#][0-9]+'
+      scope: variable.parameter.positional.metaml
+    - match: '#[A-Za-z_][A-Za-z0-9_'']*|^\s*%[A-Za-z_][A-Za-z0-9_'']*'
+      scope: keyword.control.directive.metaml
+    - include: numbers
+    - match: '\b{{upper}}(?=\.)'
+      scope: entity.name.namespace.metaml
+    - match: '\b{{upper}}(?![A-Za-z0-9_''])'
+      scope: entity.name.type.constructor.metaml
+    - match: '\b{{lower}}(?![A-Za-z0-9_''])'
+      scope: variable.other.metaml
+    - match: ':=|::|:>|->|<-|=>|\|>|>>|<<|∘|[-!%&*+./:<=>?@\\^|~]+'
+      scope: keyword.operator.metaml
+    - match: '[()\[\]{},;]'
+      scope: punctuation.separator.metaml
+
+  numbers:
+    - match: '\b0[xX][0-9A-Fa-f](?:_?[0-9A-Fa-f])*\b'
+      scope: constant.numeric.integer.hexadecimal.metaml
+    - match: '\b0[bB][01](?:_?[01])*\b'
+      scope: constant.numeric.integer.binary.metaml
+    - match: '\b{{decimal}}(?:\.{{decimal}}(?:[eE][+-]?{{decimal}})?|[eE][+-]?{{decimal}})\b'
+      scope: constant.numeric.float.metaml
+    - match: '\b{{decimal}}\b'
+      scope: constant.numeric.integer.decimal.metaml
+
+  strings:
+    - match: '\br"'
+      scope: punctuation.definition.string.begin.metaml
+      push: raw-string
+    - match: '"'
+      scope: punctuation.definition.string.begin.metaml
+      push: string
+
+  string:
+    - meta_scope: string.quoted.double.metaml
+    - match: '\\(?:[ntr0"\\]|u\{[0-9A-Fa-f]{1,6}\})'
+      scope: constant.character.escape.metaml
+    - match: '\\.'
+      scope: invalid.illegal.escape.metaml
+    - match: '"'
+      scope: punctuation.definition.string.end.metaml
+      pop: true
+
+  raw-string:
+    - meta_scope: string.quoted.double.raw.metaml
+    - match: '"'
+      scope: punctuation.definition.string.end.metaml
+      pop: true
+
+  comments:
+    - match: '--|#(?![A-Za-z_0-9])'
+      scope: punctuation.definition.comment.metaml
+      push: line-comment
+    - match: '\{-'
+      scope: punctuation.definition.comment.begin.metaml
+      push: block-comment
+
+  line-comment:
+    - meta_scope: comment.line.metaml
+    - match: '\b(?:TODO|FIXME|XXX|NOTE)\b'
+      scope: keyword.other.todo.metaml
+    - match: '$'
+      pop: true
+
+  block-comment:
+    - meta_scope: comment.block.metaml
+    - match: '\{-'
+      scope: punctuation.definition.comment.begin.metaml
+      push: block-comment
+    - match: '-\}'
+      scope: punctuation.definition.comment.end.metaml
+      pop: true
+    - match: '\b(?:TODO|FIXME|XXX|NOTE)\b'
+      scope: keyword.other.todo.metaml
