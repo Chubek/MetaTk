@@ -1,4 +1,0 @@
-schema GBIN {
-  magic "GBIN"
-  version 1
-}

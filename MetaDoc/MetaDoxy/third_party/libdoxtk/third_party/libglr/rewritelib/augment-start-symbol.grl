@@ -1,4 +1,0 @@
-(rewrite
-  (name "augment-start-symbol")
-  (rules
-    (augment-start-symbol)))

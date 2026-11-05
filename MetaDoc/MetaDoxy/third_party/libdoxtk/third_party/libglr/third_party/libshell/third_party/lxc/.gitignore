@@ -1,8 +1,0 @@
-# Temporarily files.
-*~
-*.swp
-*.orig
-*.rej
-
-# Release tarballs.
-lxc-*.tar.gz*

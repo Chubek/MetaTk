@@ -1,5 +1,0 @@
-[
-  # gtest only
-  { "include": [ "@<gtest/internal/.*>", "private", "<gtest/gtest.h>", "public" ] },
-  { "include": [ "@<gtest/gtest-.*>", "private", "<gtest/gtest.h>", "public" ] },
-]

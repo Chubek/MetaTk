@@ -1,1 +1,0 @@
-chomsky3/chomsky3.h

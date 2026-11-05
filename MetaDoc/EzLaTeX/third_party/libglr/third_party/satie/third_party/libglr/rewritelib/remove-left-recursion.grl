@@ -1,5 +1,0 @@
-(rewrite
-  (name "remove-left-recursion")
-  (rules
-    (remove-left-recursion)
-    (eliminate-useless-symbols)))

@@ -1,4 +1,0 @@
-c1 != c2: false
-c1 != c3: true
-c3 != c4: false
-c3 != c5: true

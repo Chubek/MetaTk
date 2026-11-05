@@ -1,2 +1,0 @@
-@emitln(&hash(sha256, hello))
-@emitln(&checksum(hello))

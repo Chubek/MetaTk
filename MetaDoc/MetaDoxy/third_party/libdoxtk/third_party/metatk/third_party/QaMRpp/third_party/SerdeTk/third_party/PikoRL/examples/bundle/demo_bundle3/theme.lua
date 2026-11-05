@@ -1,2 +1,0 @@
--- theme feature hook
-return {}

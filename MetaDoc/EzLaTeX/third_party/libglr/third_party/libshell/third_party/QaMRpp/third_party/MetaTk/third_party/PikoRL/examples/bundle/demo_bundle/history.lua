@@ -1,2 +1,0 @@
--- history feature hook
-return {}

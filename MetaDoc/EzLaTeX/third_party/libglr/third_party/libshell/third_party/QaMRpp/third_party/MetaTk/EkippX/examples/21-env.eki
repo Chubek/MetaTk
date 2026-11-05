@@ -1,2 +1,0 @@
-@emitln(&envget(HOME, /tmp))
-@emitln(&envhas(HOME))

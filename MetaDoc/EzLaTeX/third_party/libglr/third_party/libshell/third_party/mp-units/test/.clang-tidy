@@ -1,7 +1,0 @@
-Checks: '
-    -bugprone-chained-comparison,
-    -cppcoreguidelines-avoid-magic-numbers,
-    -google-build-using-namespace,
-    -readability-function-cognitive-complexity
-'
-InheritParentConfig: true

@@ -1,1 +1,0 @@
-@emitln(&replace(`one two one`, `one`, `1`))

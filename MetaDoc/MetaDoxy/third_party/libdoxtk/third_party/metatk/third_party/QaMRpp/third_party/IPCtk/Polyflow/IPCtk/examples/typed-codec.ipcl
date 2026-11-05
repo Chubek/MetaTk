@@ -1,3 +1,0 @@
-socket s = uds.connect("/tmp/typed.sock");
-
-pipe codec = recv(s) -> decode(user_msg) -> encode(user_msg) -> send(s);

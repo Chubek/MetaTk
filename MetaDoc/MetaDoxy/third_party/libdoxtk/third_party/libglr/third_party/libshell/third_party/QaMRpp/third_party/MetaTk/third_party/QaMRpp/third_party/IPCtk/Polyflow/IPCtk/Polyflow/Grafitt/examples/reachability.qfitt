@@ -1,4 +1,0 @@
-reachable in "my-graphs/friendship-graph.gbin" {
-  from "Alice"
-  to "Carol"
-}

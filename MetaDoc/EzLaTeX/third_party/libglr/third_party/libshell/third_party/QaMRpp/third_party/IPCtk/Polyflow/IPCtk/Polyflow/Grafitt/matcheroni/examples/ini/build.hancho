@@ -1,6 +1,0 @@
-lib = hancho(
-    hancho.base_rules.cpp_lib,
-    in_srcs = "ini_parser.cpp",
-    out_lib = "ini_parser.a",
-)
-

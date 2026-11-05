@@ -1,5 +1,0 @@
-queue q = mpmc.ring(128);
-signal ready = eventfd();
-
-pipe produce = enqueue(q) -> notify(ready);
-pipe consume = wait(ready) -> dequeue(q);

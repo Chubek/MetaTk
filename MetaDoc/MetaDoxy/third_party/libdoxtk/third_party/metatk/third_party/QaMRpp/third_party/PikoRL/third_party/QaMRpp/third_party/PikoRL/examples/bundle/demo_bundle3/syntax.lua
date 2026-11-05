@@ -1,2 +1,0 @@
--- syntax feature hook
-return {}

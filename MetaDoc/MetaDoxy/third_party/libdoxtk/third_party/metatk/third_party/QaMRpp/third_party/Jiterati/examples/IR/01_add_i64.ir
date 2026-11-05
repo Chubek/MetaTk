@@ -1,3 +1,0 @@
-terse module ir_add_i64_details
-fn add(x: i64, y: i64) -> i64 = (+ (+ x y) 7)
-fn add_then_double(x: i64, y: i64) -> i64 = (* (add x y) 2)

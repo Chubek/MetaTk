@@ -1,2 +1,0 @@
-@plugin(datetime)
-@emitln($YEAR{})

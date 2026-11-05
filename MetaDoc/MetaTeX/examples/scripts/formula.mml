@@ -1,3 +1,0 @@
-import "sequence"
-val total := List.sum [1, 2, 3, 4]
-"\\textbf{Sum: " ^ String.of_int total ^ "}"

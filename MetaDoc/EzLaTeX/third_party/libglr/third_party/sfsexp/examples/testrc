@@ -1,5 +1,0 @@
-(
- (parameter1	(some data here))
- (unusedparam (this is unused and will be ignored))
- (parameter2 ("some \"other" data))
-)

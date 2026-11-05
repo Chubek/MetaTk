@@ -1,5 +1,0 @@
-@parser:name(Arithmetic)
-@parser:start(expr)
-WS: [ \t\r\n]+ -> @IGNORE;
-NUMBER: [0-9]+ when $0 != '0';
-expr: NUMBER (("+" | "-") ~ NUMBER)*;

@@ -1,4 +1,0 @@
-(rewrite
-  (name "remove-duplicate-productions")
-  (rules
-    (remove-duplicate-productions)))

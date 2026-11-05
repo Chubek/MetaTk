@@ -1,4 +1,0 @@
-#ifndef JITERATI_BE_WASM_ISEL_HPP_INCLUDED
-#define JITERATI_BE_WASM_ISEL_HPP_INCLUDED
-#include "WASM.hpp"
-#endif

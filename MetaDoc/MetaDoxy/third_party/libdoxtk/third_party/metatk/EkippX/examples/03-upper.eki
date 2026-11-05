@@ -1,1 +1,0 @@
-@emitln(&upper(hello))

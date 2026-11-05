@@ -1,5 +1,0 @@
-from . import prefix as prefix, prefixabc as prefixabc
-from .prefixabc import Type as Type
-
-
-def func() -> prefixabc.Type: ...

@@ -1,1 +1,0 @@
-@if(`IfEq?(a, a)`, `@emitln(equal)`, `@emitln(nope)`)

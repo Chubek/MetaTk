@@ -1,4 +1,0 @@
-(rewrite
-  (name "eliminate-useless-symbols")
-  (rules
-    (eliminate-useless-symbols)))

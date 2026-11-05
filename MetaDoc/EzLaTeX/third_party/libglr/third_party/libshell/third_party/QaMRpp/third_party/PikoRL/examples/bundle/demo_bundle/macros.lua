@@ -1,2 +1,0 @@
--- macros feature hook
-return {}

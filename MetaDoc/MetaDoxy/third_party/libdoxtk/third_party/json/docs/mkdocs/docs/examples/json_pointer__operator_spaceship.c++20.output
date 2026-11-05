@@ -1,3 +1,0 @@
-"/a/b" <=> "/a/c": less
-"/a/b" <=> "/a/b/c": less
-"/a/b" <=> "/a/b": equal

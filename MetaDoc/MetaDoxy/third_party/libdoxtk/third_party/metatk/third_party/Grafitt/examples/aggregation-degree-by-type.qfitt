@@ -1,4 +1,0 @@
-aggregate in "my-graphs/friendship-graph.gbin" {
-  avg degree
-  by vertex_type
-}

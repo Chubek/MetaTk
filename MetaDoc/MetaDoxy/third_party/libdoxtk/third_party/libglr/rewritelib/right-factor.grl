@@ -1,4 +1,0 @@
-(rewrite
-  (name "right-factor")
-  (rules
-    (right-factor)))

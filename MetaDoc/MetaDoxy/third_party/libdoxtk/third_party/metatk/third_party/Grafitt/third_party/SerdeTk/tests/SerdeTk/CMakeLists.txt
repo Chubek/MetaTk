@@ -1,3 +1,0 @@
-add_executable(serdetk_regression_tests unit/test_serdetk_regressions.cpp)
-target_link_libraries(serdetk_regression_tests PRIVATE SerdeTk SerdeTkSemver)
-target_compile_features(serdetk_regression_tests PRIVATE cxx_std_20)

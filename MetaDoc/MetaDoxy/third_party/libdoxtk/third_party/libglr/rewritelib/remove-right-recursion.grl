@@ -1,4 +1,0 @@
-(rewrite
-  (name "remove-right-recursion")
-  (rules
-    (remove-right-recursion)))

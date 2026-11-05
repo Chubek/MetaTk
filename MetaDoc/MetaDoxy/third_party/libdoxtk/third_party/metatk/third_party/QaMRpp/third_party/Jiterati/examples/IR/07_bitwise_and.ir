@@ -1,3 +1,0 @@
-terse module ir_bitwise_and_details
-fn low_byte(x: i64) -> i64 = (& x 255)
-fn merge_flags(x: i64, y: i64) -> i64 = (| (& x 15) (<< (& y 15) 4))

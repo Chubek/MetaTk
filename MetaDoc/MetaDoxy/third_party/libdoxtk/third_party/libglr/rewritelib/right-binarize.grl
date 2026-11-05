@@ -1,4 +1,0 @@
-(rewrite
-  (name "right-binarize")
-  (rules
-    (right-binarize)))

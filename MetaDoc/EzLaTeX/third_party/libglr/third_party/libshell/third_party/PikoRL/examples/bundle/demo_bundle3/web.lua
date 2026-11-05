@@ -1,2 +1,0 @@
--- web feature hook
-return {}
