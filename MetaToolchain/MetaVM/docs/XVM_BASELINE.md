@@ -26,6 +26,5 @@ cmake --build /tmp/opencode/metavm-xvm-baseline-sanitize -j4
 ctest --test-dir /tmp/opencode/metavm-xvm-baseline-sanitize --output-on-failure
 ```
 
-The independent MetaArch data/codec instructions in the ancestor AGENTS file do
-not describe this XVM task; no architecture specs, generated backend data or
-MetaArch library code were changed.
+Scope: XVM only. Architecture specs, generated backend data and preserved
+third-party dependency bytes are unchanged.
